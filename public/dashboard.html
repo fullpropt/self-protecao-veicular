@@ -2,925 +2,248 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dashboard | SELF Proteção Veicular</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle | SELF Proteção Veicular</title>
     <meta name="robots" content="noindex, nofollow">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/app.css">
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        :root {
-            --primary: #5a2a6b;
-            --primary-light: #7a3a8b;
-            --primary-dark: #4a1a5b;
-            --success: #10b981;
-            --success-light: #34d399;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --info: #3b82f6;
-            --dark: #1e293b;
-            --gray: #64748b;
-            --light: #f1f5f9;
-            --lighter: #f8fafc;
-            --white: #ffffff;
-            --border: #e2e8f0;
-            --whatsapp: #25D366;
-            --shadow: 0 4px 25px rgba(0,0,0,0.08);
-            --shadow-lg: 0 10px 40px rgba(0,0,0,0.12);
-        }
-        
-        html { scroll-behavior: smooth; }
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
-            min-height: 100vh; 
-            overflow-x: hidden; 
-        }
-        
-        /* SIDEBAR */
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 280px;
-            height: 100vh;
-            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
-            padding: 25px;
-            z-index: 1000;
-            transition: transform 0.3s ease;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .sidebar-logo {
-            padding: 15px 0 25px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 25px;
-            text-align: center;
-        }
-        
-        .sidebar-logo img {
-            height: 55px;
-            border-radius: 12px;
-        }
-        
-        .sidebar-menu {
-            list-style: none;
-            flex: 1;
-        }
-        
-        .sidebar-menu li {
-            margin-bottom: 8px;
-        }
-        
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 14px 18px;
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            border-radius: 12px;
-            transition: all 0.3s;
-            font-size: 15px;
-            font-weight: 500;
-        }
-        
-        .sidebar-menu a:hover,
-        .sidebar-menu a.active {
-            background: rgba(255,255,255,0.15);
-            color: white;
-            transform: translateX(5px);
-        }
-        
-        .sidebar-menu .icon {
-            font-size: 20px;
-            width: 24px;
-            text-align: center;
-        }
-        
-        .sidebar-footer {
-            padding-top: 20px;
-            border-top: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .btn-logout {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            width: 100%;
-            padding: 14px 18px;
-            background: rgba(239, 68, 68, 0.2);
-            border: none;
-            border-radius: 12px;
-            color: #fca5a5;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .btn-logout:hover {
-            background: rgba(239, 68, 68, 0.4);
-            color: white;
-        }
-        
-        /* MOBILE MENU */
-        .mobile-menu-toggle {
-            display: none;
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 1100;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 14px 18px;
-            font-size: 22px;
-            cursor: pointer;
-            box-shadow: var(--shadow);
-        }
-        
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.6);
-            z-index: 999;
-        }
-        
-        /* MAIN CONTENT */
-        .main-content {
-            margin-left: 280px;
-            padding: 30px;
-            transition: margin-left 0.3s ease;
-            min-height: 100vh;
-        }
-        
-        /* HEADER */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        
-        .header-title h1 {
-            color: var(--dark);
-            font-size: 32px;
-            font-weight: 800;
-            margin-bottom: 5px;
-        }
-        
-        .header-title p {
-            color: var(--gray);
-            font-size: 15px;
-        }
-        
-        .header-actions {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        
-        .btn {
-            padding: 14px 24px;
-            border: none;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.3s;
-            white-space: nowrap;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(90, 42, 107, 0.3);
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(90, 42, 107, 0.4);
-        }
-        
-        .btn-whatsapp {
-            background: linear-gradient(135deg, var(--whatsapp) 0%, #20BA5A 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
-        }
-        
-        .btn-whatsapp:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
-        }
-        
-        .btn-outline {
-            background: white;
-            border: 2px solid var(--border);
-            color: var(--dark);
-        }
-        
-        .btn-outline:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-        }
-        
-        /* WHATSAPP STATUS */
-        .whatsapp-status {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 20px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-        }
-        
-        .whatsapp-status .dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-        
-        .whatsapp-status.connected .dot {
-            background: var(--success);
-        }
-        
-        .whatsapp-status.disconnected .dot {
-            background: var(--danger);
-        }
-        
-        .whatsapp-status span {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--dark);
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.7; transform: scale(0.95); }
-        }
-        
-        /* STATS CARDS */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 24px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 28px;
-            border-radius: 20px;
-            box-shadow: var(--shadow);
-            transition: all 0.3s;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-        }
-        
-        .stat-card.blue::before { background: linear-gradient(90deg, var(--info), #60a5fa); }
-        .stat-card.green::before { background: linear-gradient(90deg, var(--success), var(--success-light)); }
-        .stat-card.yellow::before { background: linear-gradient(90deg, var(--warning), #fbbf24); }
-        .stat-card.purple::before { background: linear-gradient(90deg, var(--primary), var(--primary-light)); }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: var(--shadow-lg);
-        }
-        
-        .stat-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 15px;
-        }
-        
-        .stat-card-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-        }
-        
-        .stat-card.blue .stat-card-icon { background: rgba(59, 130, 246, 0.1); }
-        .stat-card.green .stat-card-icon { background: rgba(16, 185, 129, 0.1); }
-        .stat-card.yellow .stat-card-icon { background: rgba(245, 158, 11, 0.1); }
-        .stat-card.purple .stat-card-icon { background: rgba(90, 42, 107, 0.1); }
-        
-        .stat-card-change {
-            font-size: 12px;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-weight: 600;
-        }
-        
-        .stat-card-change.positive {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-        }
-        
-        .stat-card-change.negative {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--danger);
-        }
-        
-        .stat-card-value {
-            font-size: 36px;
-            font-weight: 800;
-            color: var(--dark);
-            line-height: 1;
-        }
-        
-        .stat-card-label {
-            color: var(--gray);
-            font-size: 14px;
-            margin-top: 8px;
-            font-weight: 500;
-        }
-        
-        /* FUNNEL SECTION */
-        .funnel-section {
-            background: white;
-            padding: 28px;
-            border-radius: 20px;
-            box-shadow: var(--shadow);
-            margin-bottom: 30px;
-        }
-        
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 25px;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        
-        .section-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--dark);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .funnel-stages {
-            display: flex;
-            gap: 20px;
-        }
-        
-        .funnel-stage {
-            flex: 1;
-            text-align: center;
-            padding: 25px 20px;
-            background: linear-gradient(135deg, var(--lighter) 0%, var(--light) 100%);
-            border-radius: 16px;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.3s;
-            border: 2px solid transparent;
-        }
-        
-        .funnel-stage:hover {
-            transform: translateY(-5px);
-            box-shadow: var(--shadow);
-            border-color: var(--primary);
-        }
-        
-        .funnel-stage::after {
-            content: '→';
-            position: absolute;
-            right: -15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--gray);
-            font-size: 24px;
-            font-weight: bold;
-        }
-        
-        .funnel-stage:last-child::after {
-            display: none;
-        }
-        
-        .funnel-stage-icon {
-            font-size: 32px;
-            margin-bottom: 12px;
-        }
-        
-        .funnel-stage-value {
-            font-size: 32px;
-            font-weight: 800;
-            color: var(--primary);
-        }
-        
-        .funnel-stage-label {
-            color: var(--gray);
-            font-size: 14px;
-            margin-top: 5px;
-            font-weight: 500;
-        }
-        
-        .funnel-stage-rate {
-            font-size: 12px;
-            color: var(--success);
-            margin-top: 10px;
-            font-weight: 600;
-        }
-        
-        /* TABLE SECTION */
-        .table-section {
-            background: white;
-            border-radius: 20px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-        }
-        
-        .table-header {
-            padding: 24px 28px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        
-        .table-search {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        
-        .search-input {
-            padding: 12px 18px;
-            padding-left: 45px;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            font-size: 14px;
-            width: 320px;
-            max-width: 100%;
-            transition: all 0.3s;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: 15px center;
-        }
-        
-        .search-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(90, 42, 107, 0.1);
-        }
-        
-        .filter-select {
-            padding: 12px 18px;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            font-size: 14px;
-            background: white;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .filter-select:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-        
-        .table-wrapper {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 900px;
-        }
-        
-        th, td {
-            padding: 18px 24px;
-            text-align: left;
-        }
-        
-        th {
-            background: var(--lighter);
-            font-weight: 600;
-            color: var(--dark);
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            white-space: nowrap;
-        }
-        
-        td {
-            border-bottom: 1px solid var(--border);
-            color: var(--dark);
-            font-size: 14px;
-        }
-        
-        tr:hover {
-            background: rgba(90, 42, 107, 0.02);
-        }
-        
-        .lead-name {
-            font-weight: 600;
-            color: var(--dark);
-        }
-        
-        .lead-phone {
-            color: var(--gray);
-            font-size: 13px;
-        }
-        
-        .status-badge {
-            padding: 8px 16px;
-            border-radius: 25px;
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-            display: inline-block;
-        }
-        
-        .status-badge.etapa1 {
-            background: rgba(59, 130, 246, 0.1);
-            color: var(--info);
-        }
-        
-        .status-badge.etapa2 {
-            background: rgba(245, 158, 11, 0.1);
-            color: var(--warning);
-        }
-        
-        .status-badge.etapa3 {
-            background: rgba(90, 42, 107, 0.1);
-            color: var(--primary);
-        }
-        
-        .status-badge.concluido {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-        }
-        
-        .action-btn {
-            width: 42px;
-            height: 42px;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s;
-            margin: 3px;
-            font-size: 18px;
-        }
-        
-        .action-btn.whatsapp {
-            background: var(--whatsapp);
-            color: white;
-        }
-        
-        .action-btn.whatsapp:hover {
-            background: #20BA5A;
-            transform: scale(1.1);
-        }
-        
-        .action-btn.view {
-            background: var(--light);
-            color: var(--gray);
-        }
-        
-        .action-btn.view:hover {
-            background: var(--primary);
-            color: white;
-        }
-        
-        /* PAGINATION */
-        .table-footer {
-            padding: 20px 28px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-top: 1px solid var(--border);
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        
-        .pagination {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
-        
-        .pagination button {
-            padding: 10px 16px;
-            border: 2px solid var(--border);
-            background: white;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 14px;
-            font-weight: 500;
-            min-width: 44px;
-        }
-        
-        .pagination button:hover,
-        .pagination button.active {
-            border-color: var(--primary);
-            background: var(--primary);
-            color: white;
-        }
-        
-        .pagination button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .pagination-info {
-            color: var(--gray);
-            font-size: 14px;
-        }
-        
-        /* RESPONSIVE */
-        @media (max-width: 1400px) {
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .mobile-menu-toggle {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .sidebar {
-                transform: translateX(-100%);
-                width: 85%;
-                max-width: 320px;
-            }
-            
-            .sidebar.active {
-                transform: translateX(0);
-            }
-            
-            .sidebar-overlay.active {
-                display: block;
-            }
-            
-            .main-content {
-                margin-left: 0;
-                padding: 80px 16px 20px;
-            }
-            
-            .header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .header-title h1 {
-                font-size: 24px;
-            }
-            
-            .header-actions {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .funnel-stages {
-                flex-direction: column;
-            }
-            
-            .funnel-stage::after {
-                display: none;
-            }
-            
-            .table-header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .search-input {
-                width: 100%;
-            }
-        }
-    </style>
 </head>
 <body>
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-logo">
-            <img src="img/logo-self.png" alt="SELF Proteção Veicular">
+    <!-- Mobile Menu Toggle -->
+    <button class="mobile-menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open'); document.querySelector('.sidebar-overlay').classList.toggle('active')">
+        ☰
+    </button>
+    <div class="sidebar-overlay"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <a href="dashboard.html" class="sidebar-logo">
+                <img src="img/logo-self.png" alt="SELF">
+                <span>SELF</span>
+            </a>
         </div>
         
-        <ul class="sidebar-menu">
-            <li>
-                <a href="dashboard.html" class="active">
-                    <span class="icon">📊</span>
-                    Dashboard
-                </a>
-            </li>
-            <li>
-                <a href="funil.html">
-                    <span class="icon">📈</span>
-                    Funil de Vendas
-                </a>
-            </li>
-            <li>
-                <a href="whatsapp.html">
-                    <span class="icon">💬</span>
-                    WhatsApp
-                </a>
-            </li>
-            <li>
-                <a href="conversas.html">
-                    <span class="icon">💭</span>
-                    Conversas
-                </a>
-            </li>
-            <li>
-                <a href="configuracoes.html">
-                    <span class="icon">⚙️</span>
-                    Configurações
-                </a>
-            </li>
-        </ul>
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a href="dashboard.html" class="nav-link active">
+                            <span class="icon">🏠</span>
+                            Painel de Controle
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="contatos.html" class="nav-link">
+                            <span class="icon">👥</span>
+                            Contatos
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="campanhas.html" class="nav-link">
+                            <span class="icon">📢</span>
+                            Campanhas
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="transmissao.html" class="nav-link">
+                            <span class="icon">📡</span>
+                            Transmissão
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Conversas</div>
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a href="inbox.html" class="nav-link">
+                            <span class="icon">💬</span>
+                            Inbox
+                            <span class="badge" style="display: none;">0</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Automação</div>
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a href="automacao.html" class="nav-link">
+                            <span class="icon">🤖</span>
+                            Automação
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="fluxos.html" class="nav-link">
+                            <span class="icon">🔄</span>
+                            Fluxos de Conversa
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="funil.html" class="nav-link">
+                            <span class="icon">📊</span>
+                            Funil de Vendas
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="nav-section">
+                <div class="nav-section-title">Sistema</div>
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a href="whatsapp.html" class="nav-link">
+                            <span class="icon">📱</span>
+                            WhatsApp
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="configuracoes.html" class="nav-link">
+                            <span class="icon">⚙️</span>
+                            Configurações
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
         
         <div class="sidebar-footer">
+            <div class="whatsapp-status">
+                <span class="status-indicator disconnected"></span>
+                <span class="whatsapp-status-text">Desconectado</span>
+            </div>
             <button class="btn-logout" onclick="logout()">
                 <span>🚪</span>
                 Sair
             </button>
         </div>
     </aside>
-    
-    <!-- MOBILE MENU TOGGLE -->
-    <button class="mobile-menu-toggle" onclick="toggleSidebar()">☰</button>
-    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-    
-    <!-- MAIN CONTENT -->
+
+    <!-- Main Content -->
     <main class="main-content">
-        <!-- HEADER -->
-        <div class="header">
-            <div class="header-title">
-                <h1>📊 Dashboard</h1>
-                <p>Bem-vindo ao painel de controle da SELF Proteção Veicular</p>
+        <!-- Header -->
+        <div class="page-header">
+            <div class="page-title">
+                <h1>Dashboard de Leads</h1>
+                <p>Bem-vindo, <span class="user-name">thyago</span> | <span class="current-date"></span></p>
             </div>
-            
-            <div class="header-actions">
-                <div class="whatsapp-status disconnected" id="whatsapp-status">
-                    <span class="dot"></span>
-                    <span id="whatsapp-status-text">WhatsApp Desconectado</span>
-                </div>
-                <a href="whatsapp.html" class="btn btn-whatsapp">
-                    <span>💬</span>
-                    Conectar WhatsApp
-                </a>
-                <a href="conversas.html" class="btn btn-primary">
-                    <span>💭</span>
-                    Conversas
-                </a>
+            <div class="page-actions">
+                <button class="btn btn-outline" onclick="loadDashboardData()">
+                    🔄 Atualizar
+                </button>
+                <button class="btn btn-outline" onclick="openModal('importModal')">
+                    📥 Importar
+                </button>
+                <button class="btn btn-success" onclick="exportLeads()">
+                    📤 Exportar
+                </button>
+                <button class="btn btn-whatsapp" onclick="window.location.href='transmissao.html'">
+                    📱 Lote
+                </button>
+                <button class="btn btn-outline-danger" onclick="confirmReset()">
+                    🔄 Reset
+                </button>
             </div>
         </div>
-        
-        <!-- STATS CARDS -->
+
+        <!-- Stats Cards -->
         <div class="stats-grid">
-            <div class="stat-card blue">
-                <div class="stat-card-header">
-                    <div class="stat-card-icon">👥</div>
-                    <span class="stat-card-change positive">+12%</span>
+            <div class="stat-card">
+                <div class="stat-icon primary">👥</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="totalLeads">0</div>
+                    <div class="stat-label">Total de Leads</div>
+                    <div class="stat-change positive" id="leadsChange">+0%</div>
                 </div>
-                <div class="stat-card-value" id="total-leads">0</div>
-                <div class="stat-card-label">Total de Leads</div>
             </div>
-            
-            <div class="stat-card green">
-                <div class="stat-card-header">
-                    <div class="stat-card-icon">✅</div>
-                    <span class="stat-card-change positive">+8%</span>
+            <div class="stat-card">
+                <div class="stat-icon success">✅</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="completedLeads">0</div>
+                    <div class="stat-label">Concluídos</div>
+                    <div class="stat-change positive" id="completedChange">+0%</div>
                 </div>
-                <div class="stat-card-value" id="leads-convertidos">0</div>
-                <div class="stat-card-label">Leads Convertidos</div>
             </div>
-            
-            <div class="stat-card yellow">
-                <div class="stat-card-header">
-                    <div class="stat-card-icon">⏳</div>
-                    <span class="stat-card-change negative">-3%</span>
+            <div class="stat-card">
+                <div class="stat-icon warning">⏳</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="pendingLeads">0</div>
+                    <div class="stat-label">Em Andamento</div>
+                    <div class="stat-change negative" id="pendingChange">-0%</div>
                 </div>
-                <div class="stat-card-value" id="leads-pendentes">0</div>
-                <div class="stat-card-label">Em Negociação</div>
             </div>
-            
-            <div class="stat-card purple">
-                <div class="stat-card-header">
-                    <div class="stat-card-icon">📈</div>
-                    <span class="stat-card-change positive">+15%</span>
-                </div>
-                <div class="stat-card-value" id="taxa-conversao">0%</div>
-                <div class="stat-card-label">Taxa de Conversão</div>
-            </div>
-        </div>
-        
-        <!-- FUNNEL SECTION -->
-        <div class="funnel-section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <span>📈</span>
-                    Funil de Vendas
-                </h2>
-                <a href="funil.html" class="btn btn-outline">Ver detalhes →</a>
-            </div>
-            
-            <div class="funnel-stages">
-                <div class="funnel-stage" onclick="filterByStatus(1)">
-                    <div class="funnel-stage-icon">📥</div>
-                    <div class="funnel-stage-value" id="funnel-etapa1">0</div>
-                    <div class="funnel-stage-label">Novos Leads</div>
-                    <div class="funnel-stage-rate">Etapa 1</div>
-                </div>
-                
-                <div class="funnel-stage" onclick="filterByStatus(2)">
-                    <div class="funnel-stage-icon">📞</div>
-                    <div class="funnel-stage-value" id="funnel-etapa2">0</div>
-                    <div class="funnel-stage-label">Em Contato</div>
-                    <div class="funnel-stage-rate">Etapa 2</div>
-                </div>
-                
-                <div class="funnel-stage" onclick="filterByStatus(3)">
-                    <div class="funnel-stage-icon">💼</div>
-                    <div class="funnel-stage-value" id="funnel-etapa3">0</div>
-                    <div class="funnel-stage-label">Negociação</div>
-                    <div class="funnel-stage-rate">Etapa 3</div>
-                </div>
-                
-                <div class="funnel-stage" onclick="filterByStatus(4)">
-                    <div class="funnel-stage-icon">🎉</div>
-                    <div class="funnel-stage-value" id="funnel-concluido">0</div>
-                    <div class="funnel-stage-label">Convertidos</div>
-                    <div class="funnel-stage-rate">Concluído</div>
+            <div class="stat-card">
+                <div class="stat-icon info">📊</div>
+                <div class="stat-content">
+                    <div class="stat-value" id="conversionRate">0.0%</div>
+                    <div class="stat-label">Conversão</div>
+                    <div class="stat-change positive" id="conversionChange">+0%</div>
                 </div>
             </div>
         </div>
-        
-        <!-- TABLE SECTION -->
-        <div class="table-section">
+
+        <!-- Funil de Conversão -->
+        <div class="funnel-container">
+            <div class="funnel-title">📈 Funil de Conversão</div>
+            <div class="funnel-stages" id="funnelStages">
+                <div class="funnel-stage" data-stage="1">
+                    <div class="funnel-value" id="funnel1">0</div>
+                    <div class="funnel-label">Etapa 1</div>
+                    <div class="funnel-percent">100%</div>
+                </div>
+                <div class="funnel-arrow">→</div>
+                <div class="funnel-stage" data-stage="2">
+                    <div class="funnel-value" id="funnel2">0</div>
+                    <div class="funnel-label">Etapa 2</div>
+                    <div class="funnel-percent" id="funnel2Percent">0%</div>
+                </div>
+                <div class="funnel-arrow">→</div>
+                <div class="funnel-stage" data-stage="3">
+                    <div class="funnel-value" id="funnel3">0</div>
+                    <div class="funnel-label">Etapa 3</div>
+                    <div class="funnel-percent" id="funnel3Percent">0%</div>
+                </div>
+                <div class="funnel-arrow">→</div>
+                <div class="funnel-stage" data-stage="4">
+                    <div class="funnel-value" id="funnel4">0</div>
+                    <div class="funnel-label">Concluído</div>
+                    <div class="funnel-percent" id="funnel4Percent">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leads Recentes -->
+        <div class="table-container">
             <div class="table-header">
-                <h2 class="section-title">
-                    <span>👥</span>
-                    Leads Recentes
-                </h2>
-                
-                <div class="table-search">
-                    <input type="text" class="search-input" placeholder="Buscar por nome, telefone..." id="search-input" oninput="searchLeads()">
-                    <select class="filter-select" id="status-filter" onchange="filterLeads()">
+                <div class="table-title">👥 Leads Recentes</div>
+                <div class="table-filters">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchLeads" placeholder="Buscar por nome, telefone..." onkeyup="filterLeads()">
+                    </div>
+                    <select class="form-select" id="filterStatus" onchange="filterLeads()" style="width: auto;">
                         <option value="">Todos os Status</option>
-                        <option value="1">Etapa 1</option>
-                        <option value="2">Etapa 2</option>
-                        <option value="3">Etapa 3</option>
-                        <option value="4">Concluído</option>
+                        <option value="1">Novo</option>
+                        <option value="2">Em Andamento</option>
+                        <option value="3">Concluído</option>
+                        <option value="4">Perdido</option>
                     </select>
                 </div>
             </div>
-            
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
+                            <th>
+                                <label class="checkbox-wrapper">
+                                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                                    <span class="checkbox-custom"></span>
+                                </label>
+                            </th>
                             <th>Data/Hora</th>
                             <th>Nome</th>
                             <th>WhatsApp</th>
@@ -930,298 +253,500 @@
                             <th>Ações</th>
                         </tr>
                     </thead>
-                    <tbody id="leads-table">
-                        <!-- Leads serão carregados via JavaScript -->
+                    <tbody id="leadsTableBody">
+                        <tr>
+                            <td colspan="8" class="table-empty">
+                                <div class="table-empty-icon">📋</div>
+                                <p>Carregando leads...</p>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
-            
-            <div class="table-footer">
-                <div class="pagination-info" id="pagination-info">
-                    Mostrando 0 de 0 leads
-                </div>
-                <div class="pagination" id="pagination">
-                    <!-- Paginação será gerada via JavaScript -->
-                </div>
-            </div>
         </div>
     </main>
-    
-    <!-- TOAST CONTAINER -->
-    <div class="toast-container" id="toast-container"></div>
-    
+
+    <!-- Modal: Importar Leads -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3 class="modal-title">📥 Importar Leads</h3>
+                <button class="modal-close" onclick="closeModal('importModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Arquivo CSV</label>
+                    <input type="file" class="form-input" id="importFile" accept=".csv,.txt">
+                    <p class="form-help">Formato esperado: nome, telefone, veiculo, placa (separados por vírgula)</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ou cole os dados aqui</label>
+                    <textarea class="form-textarea" id="importText" rows="10" placeholder="nome,telefone,veiculo,placa
+João Silva,27999999999,Honda Civic 2020,ABC1234
+Maria Santos,27988888888,Toyota Corolla 2021,XYZ5678"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('importModal')">Cancelar</button>
+                <button class="btn btn-primary" onclick="importLeads()">Importar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Adicionar Lead -->
+    <div class="modal-overlay" id="addLeadModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">➕ Adicionar Lead</h3>
+                <button class="modal-close" onclick="closeModal('addLeadModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="addLeadForm">
+                    <div class="form-group">
+                        <label class="form-label required">Nome</label>
+                        <input type="text" class="form-input" id="leadName" required placeholder="Nome completo">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label required">WhatsApp</label>
+                        <input type="tel" class="form-input" id="leadPhone" required placeholder="27999999999">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Veículo</label>
+                            <input type="text" class="form-input" id="leadVehicle" placeholder="Ex: Honda Civic 2020">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Placa</label>
+                            <input type="text" class="form-input" id="leadPlate" placeholder="ABC1234">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-input" id="leadEmail" placeholder="email@exemplo.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Status Inicial</label>
+                        <select class="form-select" id="leadStatus">
+                            <option value="1">Novo</option>
+                            <option value="2">Em Andamento</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('addLeadModal')">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveLead()">Salvar Lead</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Lead -->
+    <div class="modal-overlay" id="editLeadModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">✏️ Editar Lead</h3>
+                <button class="modal-close" onclick="closeModal('editLeadModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="editLeadForm">
+                    <input type="hidden" id="editLeadId">
+                    <div class="form-group">
+                        <label class="form-label required">Nome</label>
+                        <input type="text" class="form-input" id="editLeadName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label required">WhatsApp</label>
+                        <input type="tel" class="form-input" id="editLeadPhone" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Veículo</label>
+                            <input type="text" class="form-input" id="editLeadVehicle">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Placa</label>
+                            <input type="text" class="form-input" id="editLeadPlate">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-input" id="editLeadEmail">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="editLeadStatus">
+                            <option value="1">Novo</option>
+                            <option value="2">Em Andamento</option>
+                            <option value="3">Concluído</option>
+                            <option value="4">Perdido</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('editLeadModal')">Cancelar</button>
+                <button class="btn btn-primary" onclick="updateLead()">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button class="btn btn-whatsapp btn-icon" style="position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; font-size: 24px; box-shadow: var(--shadow-lg);" onclick="openModal('addLeadModal')" title="Adicionar Lead">
+        ➕
+    </button>
+
+    <script src="js/app.js"></script>
     <script>
-        // Configurações
-        const CONFIG = {
-            SOCKET_URL: window.location.origin,
-            SESSION_ID: 'self_whatsapp_session',
-            STORAGE_KEYS: {
-                LEADS: 'self_leads'
-            }
-        };
-        
-        // Dados iniciais
-        const INITIAL_LEADS = [
-            { id: 1, data: '04/01/2026, 21:08:17', nome: 'Vanderlei Dazilio', telefone: '27988117501', placa: 'MTD7021', veiculo: '🚗 Vectra Elegan. 2.0 MPFI 8V FlexPower Mec (2011)', status: 3 },
-            { id: 2, data: '04/01/2026, 21:08:17', nome: 'Dkdkdkdk', telefone: '99999999999', placa: '-', veiculo: '🚗 CITY Sedan EXL 1.5 Flex 16V 4p Aut. (2015)', status: 1 },
-            { id: 3, data: '04/01/2026, 21:08:17', nome: 'Izabel Carlinda Alves', telefone: '28999560503', placa: 'QRE9C41', veiculo: '🚗 SANDERO STEPWAY Dynamiq. Flex 1.6 16V 5p (2019)', status: 2 },
-            { id: 4, data: '04/01/2026, 21:08:17', nome: 'Oziel', telefone: '27996403141', placa: 'MTE9813', veiculo: '🏍️ NXR 150 BROS ESD MIX/FLEX (2010)', status: 2 },
-            { id: 5, data: '04/01/2026, 21:08:17', nome: 'Pedro Henrique', telefone: '27988242959', placa: '-', veiculo: '🏍️ YS 250 FAZER/ FAZER L. EDITION /BLUEFLEX (2017)', status: 2 },
-            { id: 6, data: '04/01/2026, 21:08:17', nome: 'Thiago', telefone: '27997622522', placa: 'ODC3979', veiculo: '🚗 Grand Vitara 2.0 16V 4x2/4x4 5p Aut. (2012)', status: 2 }
-        ];
-        
-        // Estado
-        let leads = [];
-        let filteredLeads = [];
-        let currentPage = 1;
-        const itemsPerPage = 10;
-        let socket = null;
-        
-        // Inicialização
-        document.addEventListener('DOMContentLoaded', function() {
-            loadLeads();
-            initSocket();
-            updateStats();
-            renderTable();
+        // Dados dos leads
+        let allLeads = [];
+        let selectedLeads = [];
+
+        // Carregar dados ao iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboardData();
         });
-        
-        // Inicializar Socket
-        function initSocket() {
-            socket = io(CONFIG.SOCKET_URL, {
-                transports: ['websocket', 'polling'],
-                reconnection: true
-            });
-            
-            socket.on('connect', function() {
-                socket.emit('check-session', { sessionId: CONFIG.SESSION_ID });
-            });
-            
-            socket.on('session-status', function(data) {
-                updateWhatsAppStatus(data.status === 'connected', data.user);
-            });
-            
-            socket.on('connected', function(data) {
-                updateWhatsAppStatus(true, data.user);
-            });
-            
-            socket.on('disconnected', function() {
-                updateWhatsAppStatus(false);
-            });
-            
-            socket.on('whatsapp-status', function(data) {
-                updateWhatsAppStatus(data.status === 'connected', data.user);
-            });
-        }
-        
-        // Atualizar status do WhatsApp
-        function updateWhatsAppStatus(connected, user) {
-            const statusEl = document.getElementById('whatsapp-status');
-            const textEl = document.getElementById('whatsapp-status-text');
-            
-            if (connected) {
-                statusEl.classList.remove('disconnected');
-                statusEl.classList.add('connected');
-                textEl.textContent = user?.name ? `WhatsApp: ${user.name}` : 'WhatsApp Conectado';
-            } else {
-                statusEl.classList.remove('connected');
-                statusEl.classList.add('disconnected');
-                textEl.textContent = 'WhatsApp Desconectado';
+
+        // Carregar dados do dashboard
+        async function loadDashboardData() {
+            try {
+                showLoading('Carregando dados...');
+                
+                const response = await api.get('/api/leads');
+                allLeads = response.leads || [];
+                
+                updateStats();
+                updateFunnel();
+                renderLeadsTable();
+                
+                hideLoading();
+            } catch (error) {
+                hideLoading();
+                showToast('error', 'Erro', 'Não foi possível carregar os dados');
+                console.error(error);
             }
         }
-        
-        // Carregar leads
-        function loadLeads() {
-            const stored = localStorage.getItem(CONFIG.STORAGE_KEYS.LEADS);
-            leads = stored ? JSON.parse(stored) : INITIAL_LEADS;
-            filteredLeads = [...leads];
-            
-            // Salvar se não existir
-            if (!stored) {
-                localStorage.setItem(CONFIG.STORAGE_KEYS.LEADS, JSON.stringify(leads));
-            }
-        }
-        
+
         // Atualizar estatísticas
         function updateStats() {
-            const total = leads.length;
-            const etapa1 = leads.filter(l => l.status === 1).length;
-            const etapa2 = leads.filter(l => l.status === 2).length;
-            const etapa3 = leads.filter(l => l.status === 3).length;
-            const concluido = leads.filter(l => l.status === 4).length;
-            const taxaConversao = total > 0 ? Math.round((concluido / total) * 100) : 0;
-            
-            document.getElementById('total-leads').textContent = total;
-            document.getElementById('leads-convertidos').textContent = concluido;
-            document.getElementById('leads-pendentes').textContent = etapa2 + etapa3;
-            document.getElementById('taxa-conversao').textContent = taxaConversao + '%';
-            
-            document.getElementById('funnel-etapa1').textContent = etapa1;
-            document.getElementById('funnel-etapa2').textContent = etapa2;
-            document.getElementById('funnel-etapa3').textContent = etapa3;
-            document.getElementById('funnel-concluido').textContent = concluido;
+            const total = allLeads.length;
+            const completed = allLeads.filter(l => l.status === 3).length;
+            const pending = allLeads.filter(l => l.status === 1 || l.status === 2).length;
+            const conversion = total > 0 ? (completed / total * 100) : 0;
+
+            document.getElementById('totalLeads').textContent = formatNumber(total);
+            document.getElementById('completedLeads').textContent = formatNumber(completed);
+            document.getElementById('pendingLeads').textContent = formatNumber(pending);
+            document.getElementById('conversionRate').textContent = formatPercent(conversion);
         }
-        
-        // Renderizar tabela
-        function renderTable() {
-            const tbody = document.getElementById('leads-table');
-            const start = (currentPage - 1) * itemsPerPage;
-            const end = start + itemsPerPage;
-            const pageLeads = filteredLeads.slice(start, end);
-            
-            if (pageLeads.length === 0) {
+
+        // Atualizar funil
+        function updateFunnel() {
+            const total = allLeads.length;
+            const stage1 = allLeads.filter(l => l.status === 1).length;
+            const stage2 = allLeads.filter(l => l.status === 2).length;
+            const stage3 = allLeads.filter(l => l.status === 3).length;
+            const stage4 = allLeads.filter(l => l.status === 4).length;
+
+            document.getElementById('funnel1').textContent = formatNumber(stage1 + stage2 + stage3);
+            document.getElementById('funnel2').textContent = formatNumber(stage2 + stage3);
+            document.getElementById('funnel3').textContent = formatNumber(stage3);
+            document.getElementById('funnel4').textContent = formatNumber(stage3);
+
+            if (total > 0) {
+                document.getElementById('funnel2Percent').textContent = formatPercent((stage2 + stage3) / total * 100);
+                document.getElementById('funnel3Percent').textContent = formatPercent(stage3 / total * 100);
+                document.getElementById('funnel4Percent').textContent = formatPercent(stage3 / total * 100);
+            }
+        }
+
+        // Renderizar tabela de leads
+        function renderLeadsTable(leads = null) {
+            const tbody = document.getElementById('leadsTableBody');
+            const data = leads || allLeads;
+
+            if (data.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="7" style="text-align: center; padding: 40px; color: var(--gray);">
-                            Nenhum lead encontrado
+                        <td colspan="8" class="table-empty">
+                            <div class="table-empty-icon">📋</div>
+                            <p>Nenhum lead encontrado</p>
+                            <button class="btn btn-primary mt-3" onclick="openModal('addLeadModal')">Adicionar Lead</button>
                         </td>
                     </tr>
                 `;
-            } else {
-                tbody.innerHTML = pageLeads.map(lead => `
-                    <tr>
-                        <td>${lead.data}</td>
-                        <td>
-                            <div class="lead-name">${lead.nome}</div>
-                        </td>
-                        <td>
-                            <div class="lead-phone">${formatPhone(lead.telefone)}</div>
-                        </td>
-                        <td>${lead.placa}</td>
-                        <td>${lead.veiculo}</td>
-                        <td>
-                            <span class="status-badge ${getStatusClass(lead.status)}">
-                                ${getStatusLabel(lead.status)}
-                            </span>
-                        </td>
-                        <td>
-                            <button class="action-btn whatsapp" onclick="openChat('${lead.telefone}', '${lead.nome}')" title="Conversar">
+                return;
+            }
+
+            tbody.innerHTML = data.map(lead => `
+                <tr data-id="${lead.id}">
+                    <td>
+                        <label class="checkbox-wrapper">
+                            <input type="checkbox" class="lead-checkbox" value="${lead.id}" onchange="updateSelection()">
+                            <span class="checkbox-custom"></span>
+                        </label>
+                    </td>
+                    <td>${formatDate(lead.created_at, 'datetime')}</td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="avatar" style="background: ${getAvatarColor(lead.name)}">
+                                ${getInitials(lead.name)}
+                            </div>
+                            <span>${lead.name || 'Sem nome'}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <a href="https://wa.me/55${lead.phone}" target="_blank" style="color: var(--whatsapp); text-decoration: none;">
+                            ${formatPhone(lead.phone)}
+                        </a>
+                    </td>
+                    <td>${lead.plate || '-'}</td>
+                    <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${lead.vehicle || ''}">
+                        ${lead.vehicle || '-'}
+                    </td>
+                    <td>${getStatusBadge(lead.status)}</td>
+                    <td>
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn btn-sm btn-whatsapp btn-icon" onclick="sendWhatsApp('${lead.phone}')" title="Enviar WhatsApp">
                                 💬
                             </button>
-                            <button class="action-btn view" onclick="viewLead(${lead.id})" title="Ver detalhes">
-                                👁️
+                            <button class="btn btn-sm btn-outline btn-icon" onclick="editLead(${lead.id})" title="Editar">
+                                ✏️
                             </button>
-                        </td>
-                    </tr>
-                `).join('');
-            }
-            
-            updatePagination();
+                            <button class="btn btn-sm btn-outline-danger btn-icon" onclick="deleteLead(${lead.id})" title="Excluir">
+                                🗑️
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
         }
-        
-        // Atualizar paginação
-        function updatePagination() {
-            const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
-            const paginationEl = document.getElementById('pagination');
-            const infoEl = document.getElementById('pagination-info');
-            
-            const start = (currentPage - 1) * itemsPerPage + 1;
-            const end = Math.min(currentPage * itemsPerPage, filteredLeads.length);
-            
-            infoEl.textContent = filteredLeads.length > 0 
-                ? `Mostrando ${start}-${end} de ${filteredLeads.length} leads`
-                : 'Nenhum lead encontrado';
-            
-            let html = '';
-            
-            html += `<button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>←</button>`;
-            
-            for (let i = 1; i <= totalPages; i++) {
-                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-                    html += `<button onclick="goToPage(${i})" class="${i === currentPage ? 'active' : ''}">${i}</button>`;
-                } else if (i === currentPage - 2 || i === currentPage + 2) {
-                    html += `<span style="padding: 0 8px;">...</span>`;
-                }
-            }
-            
-            html += `<button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}>→</button>`;
-            
-            paginationEl.innerHTML = html;
-        }
-        
-        // Ir para página
-        function goToPage(page) {
-            const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
-            if (page >= 1 && page <= totalPages) {
-                currentPage = page;
-                renderTable();
-            }
-        }
-        
-        // Buscar leads
-        function searchLeads() {
-            const term = document.getElementById('search-input').value.toLowerCase();
-            const status = document.getElementById('status-filter').value;
-            
-            filteredLeads = leads.filter(lead => {
-                const matchSearch = !term || 
-                    lead.nome.toLowerCase().includes(term) ||
-                    lead.telefone.includes(term) ||
-                    lead.placa.toLowerCase().includes(term);
-                
-                const matchStatus = !status || lead.status === parseInt(status);
-                
-                return matchSearch && matchStatus;
-            });
-            
-            currentPage = 1;
-            renderTable();
-        }
-        
+
         // Filtrar leads
         function filterLeads() {
-            searchLeads();
+            const search = document.getElementById('searchLeads').value.toLowerCase();
+            const status = document.getElementById('filterStatus').value;
+
+            let filtered = allLeads;
+
+            if (search) {
+                filtered = filtered.filter(l => 
+                    (l.name && l.name.toLowerCase().includes(search)) ||
+                    (l.phone && l.phone.includes(search)) ||
+                    (l.vehicle && l.vehicle.toLowerCase().includes(search)) ||
+                    (l.plate && l.plate.toLowerCase().includes(search))
+                );
+            }
+
+            if (status) {
+                filtered = filtered.filter(l => l.status == status);
+            }
+
+            renderLeadsTable(filtered);
         }
-        
-        // Filtrar por status (do funil)
-        function filterByStatus(status) {
-            document.getElementById('status-filter').value = status;
-            filterLeads();
+
+        // Selecionar todos
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll').checked;
+            const checkboxes = document.querySelectorAll('.lead-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll);
+            updateSelection();
         }
-        
-        // Abrir chat
-        function openChat(phone, name) {
-            const params = new URLSearchParams({ phone, name });
-            window.location.href = `conversas.html?${params.toString()}`;
+
+        // Atualizar seleção
+        function updateSelection() {
+            const checkboxes = document.querySelectorAll('.lead-checkbox:checked');
+            selectedLeads = Array.from(checkboxes).map(cb => parseInt(cb.value));
         }
-        
-        // Ver lead
-        function viewLead(id) {
-            const lead = leads.find(l => l.id === id);
-            if (lead) {
-                alert(`Lead: ${lead.nome}\nTelefone: ${lead.telefone}\nVeículo: ${lead.veiculo}\nPlaca: ${lead.placa}`);
+
+        // Salvar novo lead
+        async function saveLead() {
+            const name = document.getElementById('leadName').value.trim();
+            const phone = document.getElementById('leadPhone').value.replace(/\D/g, '');
+            const vehicle = document.getElementById('leadVehicle').value.trim();
+            const plate = document.getElementById('leadPlate').value.trim().toUpperCase();
+            const email = document.getElementById('leadEmail').value.trim();
+            const status = parseInt(document.getElementById('leadStatus').value);
+
+            if (!name || !phone) {
+                showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
+                return;
+            }
+
+            if (!validatePhone(phone)) {
+                showToast('error', 'Erro', 'Telefone inválido');
+                return;
+            }
+
+            try {
+                showLoading('Salvando...');
+                
+                await api.post('/api/leads', {
+                    name, phone, vehicle, plate, email, status
+                });
+
+                closeModal('addLeadModal');
+                document.getElementById('addLeadForm').reset();
+                
+                await loadDashboardData();
+                showToast('success', 'Sucesso', 'Lead adicionado com sucesso!');
+            } catch (error) {
+                hideLoading();
+                showToast('error', 'Erro', error.message || 'Não foi possível salvar o lead');
             }
         }
-        
-        // Helpers
-        function formatPhone(phone) {
-            if (!phone) return '';
-            const cleaned = phone.replace(/[^0-9]/g, '');
-            if (cleaned.length === 11) {
-                return `(${cleaned.slice(0,2)}) ${cleaned.slice(2,7)}-${cleaned.slice(7)}`;
-            } else if (cleaned.length === 10) {
-                return `(${cleaned.slice(0,2)}) ${cleaned.slice(2,6)}-${cleaned.slice(6)}`;
+
+        // Editar lead
+        function editLead(id) {
+            const lead = allLeads.find(l => l.id === id);
+            if (!lead) return;
+
+            document.getElementById('editLeadId').value = lead.id;
+            document.getElementById('editLeadName').value = lead.name || '';
+            document.getElementById('editLeadPhone').value = lead.phone || '';
+            document.getElementById('editLeadVehicle').value = lead.vehicle || '';
+            document.getElementById('editLeadPlate').value = lead.plate || '';
+            document.getElementById('editLeadEmail').value = lead.email || '';
+            document.getElementById('editLeadStatus').value = lead.status || 1;
+
+            openModal('editLeadModal');
+        }
+
+        // Atualizar lead
+        async function updateLead() {
+            const id = document.getElementById('editLeadId').value;
+            const name = document.getElementById('editLeadName').value.trim();
+            const phone = document.getElementById('editLeadPhone').value.replace(/\D/g, '');
+            const vehicle = document.getElementById('editLeadVehicle').value.trim();
+            const plate = document.getElementById('editLeadPlate').value.trim().toUpperCase();
+            const email = document.getElementById('editLeadEmail').value.trim();
+            const status = parseInt(document.getElementById('editLeadStatus').value);
+
+            if (!name || !phone) {
+                showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
+                return;
             }
-            return phone;
+
+            try {
+                showLoading('Salvando...');
+                
+                await api.put(`/api/leads/${id}`, {
+                    name, phone, vehicle, plate, email, status
+                });
+
+                closeModal('editLeadModal');
+                await loadDashboardData();
+                showToast('success', 'Sucesso', 'Lead atualizado com sucesso!');
+            } catch (error) {
+                hideLoading();
+                showToast('error', 'Erro', error.message || 'Não foi possível atualizar o lead');
+            }
         }
-        
-        function getStatusClass(status) {
-            const classes = { 1: 'etapa1', 2: 'etapa2', 3: 'etapa3', 4: 'concluido' };
-            return classes[status] || 'etapa1';
+
+        // Excluir lead
+        async function deleteLead(id) {
+            if (!confirm('Tem certeza que deseja excluir este lead?')) return;
+
+            try {
+                showLoading('Excluindo...');
+                await api.delete(`/api/leads/${id}`);
+                await loadDashboardData();
+                showToast('success', 'Sucesso', 'Lead excluído com sucesso!');
+            } catch (error) {
+                hideLoading();
+                showToast('error', 'Erro', error.message || 'Não foi possível excluir o lead');
+            }
         }
-        
-        function getStatusLabel(status) {
-            const labels = { 1: 'Etapa 1', 2: 'Etapa 2', 3: 'Etapa 3', 4: 'Concluído' };
-            return labels[status] || 'Etapa 1';
+
+        // Enviar WhatsApp
+        function sendWhatsApp(phone) {
+            const cleanPhone = phone.replace(/\D/g, '');
+            window.open(`https://wa.me/55${cleanPhone}`, '_blank');
         }
-        
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('active');
-            document.querySelector('.sidebar-overlay').classList.toggle('active');
+
+        // Importar leads
+        async function importLeads() {
+            const fileInput = document.getElementById('importFile');
+            const textInput = document.getElementById('importText').value.trim();
+
+            let data = [];
+
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const text = await file.text();
+                data = parseCSV(text);
+            } else if (textInput) {
+                data = parseCSV(textInput);
+            } else {
+                showToast('error', 'Erro', 'Selecione um arquivo ou cole os dados');
+                return;
+            }
+
+            if (data.length === 0) {
+                showToast('error', 'Erro', 'Nenhum dado válido encontrado');
+                return;
+            }
+
+            try {
+                showLoading(`Importando ${data.length} leads...`);
+                
+                let imported = 0;
+                for (const row of data) {
+                    const phone = (row.telefone || row.phone || row.whatsapp || '').replace(/\D/g, '');
+                    if (!phone) continue;
+
+                    try {
+                        await api.post('/api/leads', {
+                            name: row.nome || row.name || 'Sem nome',
+                            phone: phone,
+                            vehicle: row.veiculo || row.vehicle || '',
+                            plate: row.placa || row.plate || '',
+                            status: 1
+                        });
+                        imported++;
+                    } catch (e) {
+                        console.error('Erro ao importar:', e);
+                    }
+                }
+
+                closeModal('importModal');
+                document.getElementById('importFile').value = '';
+                document.getElementById('importText').value = '';
+                
+                await loadDashboardData();
+                showToast('success', 'Sucesso', `${imported} leads importados com sucesso!`);
+            } catch (error) {
+                hideLoading();
+                showToast('error', 'Erro', 'Falha na importação');
+            }
         }
-        
-        function logout() {
-            localStorage.removeItem('isLoggedIn');
-            window.location.href = 'login.html';
+
+        // Exportar leads
+        function exportLeads() {
+            if (allLeads.length === 0) {
+                showToast('warning', 'Aviso', 'Nenhum lead para exportar');
+                return;
+            }
+
+            const data = allLeads.map(l => ({
+                nome: l.name,
+                telefone: l.phone,
+                veiculo: l.vehicle,
+                placa: l.plate,
+                email: l.email,
+                status: getStatusLabel(l.status),
+                data: formatDate(l.created_at, 'datetime')
+            }));
+
+            exportToCSV(data, `leads_self_${formatDate(new Date(), 'short').replace(/\//g, '-')}.csv`);
+            showToast('success', 'Sucesso', 'Leads exportados com sucesso!');
+        }
+
+        // Confirmar reset
+        function confirmReset() {
+            if (!confirm('ATENÇÃO: Esta ação irá excluir TODOS os leads. Deseja continuar?')) return;
+            if (!confirm('Tem certeza absoluta? Esta ação não pode ser desfeita!')) return;
+            
+            showToast('info', 'Info', 'Função de reset desabilitada por segurança');
         }
     </script>
 </body>
