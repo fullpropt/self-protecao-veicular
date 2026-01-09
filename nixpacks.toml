@@ -1,23 +1,24 @@
+# ============================================
 # Nixpacks Configuration - SELF Proteção Veicular v4.0
 # Configuração otimizada para Railway com Node.js 20 LTS
+# ============================================
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm", "python311", "gcc", "gnumake"]
-aptPkgs = ["build-essential", "python3"]
 
 [phases.install]
 cmds = [
-    "npm install --omit=dev --legacy-peer-deps --build-from-source"
+    "npm ci --omit=dev --legacy-peer-deps"
 ]
 
 [phases.build]
 cmds = [
     "mkdir -p sessions data uploads",
-    "npm run db:migrate || true"
+    "chmod 755 sessions data uploads"
 ]
 
 [start]
-cmd = "node server/index.js"
+cmd = "npm run db:migrate && node server/index.js"
 
 [variables]
 NODE_ENV = "production"

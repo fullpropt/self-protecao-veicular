@@ -6,11 +6,15 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
-    "build": "mkdir -p sessions data uploads && npm run db:migrate",
+    "build": "npm run db:migrate",
     "postinstall": "mkdir -p sessions data uploads",
     "db:migrate": "node server/database/migrate.js",
     "db:seed": "node server/database/seed.js",
-    "test": "jest"
+    "db:reset": "rm -rf data/self.db && npm run db:migrate && npm run db:seed",
+    "test": "jest",
+    "lint": "eslint server/ --ext .js",
+    "clean": "rm -rf node_modules sessions data uploads",
+    "health": "curl -s http://localhost:3001/health | jq"
   },
   "keywords": [
     "whatsapp",
@@ -19,10 +23,15 @@
     "baileys",
     "chatbot",
     "automation",
-    "flow-builder"
+    "flow-builder",
+    "bot-conversa"
   ],
   "author": "SELF Proteção Veicular",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fullpropt/self-protecao-veicular.git"
+  },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.16",
     "bcryptjs": "^2.4.3",

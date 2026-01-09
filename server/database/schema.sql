@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS leads (
     vehicle TEXT,
     plate TEXT,
     status INTEGER DEFAULT 1 CHECK(status BETWEEN 1 AND 5),
-    tags TEXT, -- JSON array de tags
-    custom_fields TEXT, -- JSON object para campos customizados
-    source TEXT DEFAULT 'manual', -- manual, webhook, import, whatsapp
+    tags TEXT,
+    custom_fields TEXT,
+    source TEXT DEFAULT 'manual',
     assigned_to INTEGER REFERENCES users(id),
     is_blocked INTEGER DEFAULT 0,
     last_message_at TEXT,
@@ -40,11 +40,23 @@ CREATE TABLE IF NOT EXISTS leads (
     updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Índices para leads
-CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
-CREATE INDEX IF NOT EXISTS idx_leads_jid ON leads(jid);
-CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
-CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
+-- Tabela de Fluxos de Automação (criada antes de conversations por causa da FK)
+CREATE TABLE IF NOT EXISTS flows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    trigger_type TEXT NOT NULL CHECK(trigger_type IN ('keyword', 'new_contact', 'webhook', 'schedule', 'manual')),
+    trigger_value TEXT,
+    nodes TEXT NOT NULL,
+    edges TEXT,
+    is_active INTEGER DEFAULT 1,
+    priority INTEGER DEFAULT 0,
+    stats TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
 
 -- Tabela de Conversas
 CREATE TABLE IF NOT EXISTS conversations (
@@ -59,27 +71,22 @@ CREATE TABLE IF NOT EXISTS conversations (
     is_bot_active INTEGER DEFAULT 1,
     current_flow_id INTEGER REFERENCES flows(id),
     current_flow_step TEXT,
-    metadata TEXT, -- JSON object
+    metadata TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
 );
-
--- Índices para conversas
-CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
-CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
 
 -- Tabela de Mensagens
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid TEXT UNIQUE NOT NULL,
-    message_id TEXT UNIQUE, -- ID do WhatsApp
+    message_id TEXT UNIQUE,
     conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     lead_id INTEGER NOT NULL REFERENCES leads(id),
     sender_type TEXT NOT NULL CHECK(sender_type IN ('lead', 'agent', 'bot', 'system')),
-    sender_id INTEGER, -- user_id se for agent
+    sender_id INTEGER,
     content TEXT,
-    content_encrypted TEXT, -- Conteúdo criptografado
+    content_encrypted TEXT,
     media_type TEXT DEFAULT 'text' CHECK(media_type IN ('text', 'image', 'video', 'audio', 'document', 'sticker', 'location', 'contact')),
     media_url TEXT,
     media_mime_type TEXT,
@@ -87,19 +94,12 @@ CREATE TABLE IF NOT EXISTS messages (
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'sent', 'delivered', 'read', 'failed')),
     is_from_me INTEGER DEFAULT 0,
     reply_to_id INTEGER REFERENCES messages(id),
-    metadata TEXT, -- JSON object
+    metadata TEXT,
     sent_at TEXT,
     delivered_at TEXT,
     read_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
-
--- Índices para mensagens
-CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id);
-CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
-CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
-CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 
 -- Tabela de Templates de Mensagem
 CREATE TABLE IF NOT EXISTS templates (
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS templates (
     name TEXT NOT NULL,
     category TEXT DEFAULT 'general',
     content TEXT NOT NULL,
-    variables TEXT, -- JSON array de variáveis disponíveis
+    variables TEXT,
     media_url TEXT,
     media_type TEXT,
     is_active INTEGER DEFAULT 1,
@@ -118,28 +118,6 @@ CREATE TABLE IF NOT EXISTS templates (
     updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Tabela de Fluxos de Automação
-CREATE TABLE IF NOT EXISTS flows (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    uuid TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    description TEXT,
-    trigger_type TEXT NOT NULL CHECK(trigger_type IN ('keyword', 'new_contact', 'webhook', 'schedule', 'manual')),
-    trigger_value TEXT, -- Palavra-chave ou configuração do trigger
-    nodes TEXT NOT NULL, -- JSON com os nós do fluxo
-    edges TEXT, -- JSON com as conexões entre nós
-    is_active INTEGER DEFAULT 1,
-    priority INTEGER DEFAULT 0,
-    stats TEXT, -- JSON com estatísticas de uso
-    created_by INTEGER REFERENCES users(id),
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-);
-
--- Índices para fluxos
-CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
-CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
-
 -- Tabela de Execuções de Fluxo
 CREATE TABLE IF NOT EXISTS flow_executions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,7 +126,7 @@ CREATE TABLE IF NOT EXISTS flow_executions (
     conversation_id INTEGER REFERENCES conversations(id),
     lead_id INTEGER NOT NULL REFERENCES leads(id),
     current_node TEXT,
-    variables TEXT, -- JSON com variáveis do contexto
+    variables TEXT,
     status TEXT DEFAULT 'running' CHECK(status IN ('running', 'paused', 'completed', 'failed', 'cancelled')),
     started_at TEXT DEFAULT (datetime('now')),
     completed_at TEXT,
@@ -174,11 +152,6 @@ CREATE TABLE IF NOT EXISTS message_queue (
     processed_at TEXT
 );
 
--- Índices para fila
-CREATE INDEX IF NOT EXISTS idx_queue_status ON message_queue(status);
-CREATE INDEX IF NOT EXISTS idx_queue_scheduled ON message_queue(scheduled_at);
-CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority DESC);
-
 -- Tabela de Webhooks
 CREATE TABLE IF NOT EXISTS webhooks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -186,8 +159,8 @@ CREATE TABLE IF NOT EXISTS webhooks (
     name TEXT NOT NULL,
     url TEXT NOT NULL,
     secret TEXT,
-    events TEXT NOT NULL, -- JSON array de eventos
-    headers TEXT, -- JSON object de headers customizados
+    events TEXT NOT NULL,
+    headers TEXT,
     is_active INTEGER DEFAULT 1,
     retry_count INTEGER DEFAULT 3,
     last_triggered_at TEXT,
@@ -232,17 +205,6 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Inserir configurações padrão
-INSERT OR IGNORE INTO settings (key, value, type, description) VALUES
-    ('company_name', 'SELF Proteção Veicular', 'string', 'Nome da empresa'),
-    ('bulk_message_delay', '3000', 'number', 'Delay entre mensagens em massa (ms)'),
-    ('max_messages_per_minute', '30', 'number', 'Máximo de mensagens por minuto'),
-    ('bot_enabled', 'true', 'boolean', 'Bot de automação ativo'),
-    ('working_hours_start', '08:00', 'string', 'Início do horário de atendimento'),
-    ('working_hours_end', '18:00', 'string', 'Fim do horário de atendimento'),
-    ('away_message', 'Olá! No momento estamos fora do horário de atendimento. Retornaremos em breve!', 'string', 'Mensagem de ausência'),
-    ('welcome_message', 'Olá! Bem-vindo à SELF Proteção Veicular! Como posso ajudar?', 'string', 'Mensagem de boas-vindas');
-
 -- Tabela de Logs de Auditoria
 CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -250,17 +212,12 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     action TEXT NOT NULL,
     entity_type TEXT,
     entity_id INTEGER,
-    old_values TEXT, -- JSON
-    new_values TEXT, -- JSON
+    old_values TEXT,
+    new_values TEXT,
     ip_address TEXT,
     user_agent TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
-
--- Índices para auditoria
-CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
 
 -- Tabela de Tags
 CREATE TABLE IF NOT EXISTS tags (
@@ -279,7 +236,40 @@ CREATE TABLE IF NOT EXISTS lead_tags (
     PRIMARY KEY (lead_id, tag_id)
 );
 
--- View para conversas com informações completas
+-- ============================================
+-- ÍNDICES
+-- ============================================
+
+CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
+CREATE INDEX IF NOT EXISTS idx_leads_jid ON leads(jid);
+CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
+CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id);
+CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
+CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
+CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
+CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
+
+CREATE INDEX IF NOT EXISTS idx_queue_status ON message_queue(status);
+CREATE INDEX IF NOT EXISTS idx_queue_scheduled ON message_queue(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority DESC);
+
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+
+-- ============================================
+-- VIEWS
+-- ============================================
+
 CREATE VIEW IF NOT EXISTS v_conversations AS
 SELECT 
     c.id,
@@ -302,3 +292,17 @@ SELECT
 FROM conversations c
 LEFT JOIN leads l ON c.lead_id = l.id
 LEFT JOIN users u ON c.assigned_to = u.id;
+
+-- ============================================
+-- DADOS PADRÃO
+-- ============================================
+
+INSERT OR IGNORE INTO settings (key, value, type, description) VALUES
+    ('company_name', 'SELF Proteção Veicular', 'string', 'Nome da empresa'),
+    ('bulk_message_delay', '3000', 'number', 'Delay entre mensagens em massa (ms)'),
+    ('max_messages_per_minute', '30', 'number', 'Máximo de mensagens por minuto'),
+    ('bot_enabled', 'true', 'boolean', 'Bot de automação ativo'),
+    ('working_hours_start', '08:00', 'string', 'Início do horário de atendimento'),
+    ('working_hours_end', '18:00', 'string', 'Fim do horário de atendimento'),
+    ('away_message', 'Olá! No momento estamos fora do horário de atendimento. Retornaremos em breve!', 'string', 'Mensagem de ausência'),
+    ('welcome_message', 'Olá! Bem-vindo à SELF Proteção Veicular! Como posso ajudar?', 'string', 'Mensagem de boas-vindas');

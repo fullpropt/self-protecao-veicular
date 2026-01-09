@@ -1,12 +1,14 @@
+# ============================================
 # Railway Configuration - SELF Proteção Veicular v4.0
 # Sistema de automação de mensagens WhatsApp
+# ============================================
 
 [build]
 builder = "NIXPACKS"
 nixpacksConfigPath = "nixpacks.toml"
 
 [deploy]
-startCommand = "node server/index.js"
+startCommand = "npm run db:migrate && node server/index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

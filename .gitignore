@@ -1,13 +1,20 @@
 # Dependencies
 node_modules/
+package-lock.json
 
-# Sessions (contém dados sensíveis do WhatsApp)
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Data directories (auto-generated, contain sensitive data)
 sessions/
-
-# Data files (mensagens e contatos)
 data/
+uploads/
 
 # Logs
+logs/
 *.log
 npm-debug.log*
 
@@ -16,14 +23,20 @@ npm-debug.log*
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
-
-# Environment
-.env
-.env.local
-.env.production
+.vscode/
+*.swp
+*.swo
 
 # Build
 dist/
 build/
+
+# Test
+coverage/
+.nyc_output/
+
+# Temp
+tmp/
+temp/
+*.tmp
