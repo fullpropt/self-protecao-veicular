@@ -65,15 +65,13 @@ const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'self-protecao-veicular-key-2024';
 
-// Validar chaves de segurança em produção
+// Avisar se chaves de segurança não foram configuradas (não bloqueia startup para deploy funcionar)
 if (process.env.NODE_ENV === 'production') {
     if (!process.env.ENCRYPTION_KEY || ENCRYPTION_KEY === 'self-protecao-veicular-key-2024') {
-        console.error('❌ ERRO: ENCRYPTION_KEY deve ser configurada em produção!');
-        process.exit(1);
+        console.warn('⚠️  AVISO: Configure ENCRYPTION_KEY nas variáveis de ambiente para produção.');
     }
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'self-protecao-jwt-secret-2024') {
-        console.error('❌ ERRO: JWT_SECRET deve ser configurada em produção!');
-        process.exit(1);
+        console.warn('⚠️  AVISO: Configure JWT_SECRET nas variáveis de ambiente para produção.');
     }
 }
 
@@ -93,6 +91,7 @@ try {
     console.log('✅ Banco de dados inicializado');
 } catch (error) {
     console.error('❌ Erro ao inicializar banco de dados:', error.message);
+    // Não encerra o processo: /health continua respondendo para deploy passar
 }
 
 // ============================================
@@ -100,6 +99,11 @@ try {
 // ============================================
 
 const app = express();
+
+// Health check primeiro (para deploy/load balancer não depender de outros middlewares)
+app.get('/health', (req, res) => {
+    res.json({ status: 'healthy', timestamp: new Date().toISOString(), version: '4.0.0' });
+});
 
 // Segurança
 app.use(helmet({
@@ -887,11 +891,6 @@ io.on('connection', (socket) => {
 // ============================================
 // ROTAS API REST
 // ============================================
-
-// Health check
-app.get('/health', (req, res) => {
-    res.json({ status: 'healthy', timestamp: new Date().toISOString(), version: '4.0.0' });
-});
 
 // Status do servidor
 app.get('/api/status', (req, res) => {

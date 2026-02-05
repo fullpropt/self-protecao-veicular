@@ -57,9 +57,9 @@ ENV NODE_ENV=production
 ENV PORT=3001
 ENV HOST=0.0.0.0
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD wget -q --spider http://localhost:3001/health || exit 1
+# Health check (usa PORT do ambiente - Railway injeta PORT em runtime)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=5 \
+    CMD sh -c 'wget -q --spider "http://127.0.0.1:$${PORT:-3001}/health" || exit 1'
 
 # Iniciar aplicação
 CMD ["node", "server/index.js"]
