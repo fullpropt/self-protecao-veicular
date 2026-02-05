@@ -1,22 +1,9 @@
 /**
  * SELF PROTEÇÃO VEICULAR - SERVIDOR PRINCIPAL v4.1
- * Sistema de automação de mensagens WhatsApp estilo BotConversa
- * 
- * Recursos:
- * - Integração WhatsApp via Baileys
- * - Banco de dados SQLite
- * - Sistema de filas para envio em massa
- * - Webhooks para integrações
- * - Construtor de fluxos de automação
- * - Multi-agentes com atribuição de conversas
- * - Criptografia de mensagens
+ * Carregado por server/start.js (bootstrap) após listen - app e server já criados.
  */
 
-require('dotenv').config();
-
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
+module.exports = function init(app, server) {
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -82,24 +69,17 @@ if (process.env.NODE_ENV === 'production') {
     }
 });
 
-// Migração roda DEPOIS do listen (veja fim do arquivo) para healthcheck passar no Railway
+// Migração roda aqui (servidor já está ouvindo via start.js)
+try {
+    migrate();
+    console.log('✅ Banco de dados inicializado');
+} catch (error) {
+    console.error('❌ Erro ao inicializar banco de dados:', error.message);
+}
 
 // ============================================
-// EXPRESS APP
+// MIDDLEWARES E ROTAS (app já tem /health do start.js)
 // ============================================
-
-const app = express();
-
-// Health check primeiro (para deploy/load balancer não depender de outros middlewares)
-// IMPORTANTE: Este endpoint DEVE responder rapidamente com status 200
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'healthy', 
-        timestamp: new Date().toISOString(), 
-        version: '4.1.0',
-        uptime: process.uptime()
-    });
-});
 
 // Segurança
 app.use(helmet({
@@ -163,11 +143,10 @@ const upload = multer({
 });
 
 // ============================================
-// SERVIDOR HTTP E SOCKET.IO
+// SOCKET.IO
 // ============================================
 
-const server = http.createServer(app);
-
+const { Server } = require('socket.io');
 const io = new Server(server, {
     cors: {
         origin: '*',
@@ -1360,17 +1339,8 @@ process.on('uncaughtException', (error) => {
 });
 
 // ============================================
-// INICIAR SERVIDOR
+// LOG DE INICIALIZAÇÃO
 // ============================================
-
-server.listen(PORT, HOST, () => {
-    // Migração após listen para /health responder imediatamente (Railway/load balancer)
-    try {
-        migrate();
-        console.log('✅ Banco de dados inicializado');
-    } catch (error) {
-        console.error('❌ Erro ao inicializar banco de dados:', error.message);
-    }
 
     console.log('');
     console.log('╔════════════════════════════════════════════════════════════╗');
@@ -1387,31 +1357,22 @@ server.listen(PORT, HOST, () => {
     console.log('');
     console.log('✅ Servidor pronto para receber conexões!');
     console.log('');
-});
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('⚠️  SIGTERM recebido, encerrando servidor...');
-    
-    queueService.stopProcessing();
-    
-    for (const [sessionId, session] of sessions.entries()) {
-        try {
-            await session.socket.end();
-        } catch (error) {}
-    }
-    
-    closeDatabase();
-    
-    server.close(() => {
-        console.log('✅ Servidor encerrado');
+    // Graceful shutdown (referências em closure)
+    process.on('SIGTERM', async () => {
+        console.log('⚠️  SIGTERM recebido, encerrando servidor...');
+        queueService.stopProcessing();
+        for (const [sessionId, session] of sessions.entries()) {
+            try { await session.socket.end(); } catch (e) {}
+        }
+        closeDatabase();
+        server.close(() => { console.log('✅ Servidor encerrado'); process.exit(0); });
+    });
+
+    process.on('SIGINT', async () => {
+        console.log('⚠️  SIGINT recebido, encerrando servidor...');
+        queueService.stopProcessing();
+        closeDatabase();
         process.exit(0);
     });
-});
-
-process.on('SIGINT', async () => {
-    console.log('⚠️  SIGINT recebido, encerrando servidor...');
-    queueService.stopProcessing();
-    closeDatabase();
-    process.exit(0);
-});
+};

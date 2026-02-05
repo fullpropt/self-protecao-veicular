@@ -61,4 +61,4 @@ ENV HOST=0.0.0.0
 # Não usar HEALTHCHECK interno do Docker para evitar conflitos
 
 # Iniciar aplicação
-CMD ["node", "server/index.js"]
+CMD ["node", "server/start.js"]
