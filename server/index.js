@@ -1,5 +1,5 @@
 /**
- * SELF PROTEÇÃO VEICULAR - SERVIDOR PRINCIPAL v4.0
+ * SELF PROTEÇÃO VEICULAR - SERVIDOR PRINCIPAL v4.1
  * Sistema de automação de mensagens WhatsApp estilo BotConversa
  * 
  * Recursos:
@@ -101,8 +101,14 @@ try {
 const app = express();
 
 // Health check primeiro (para deploy/load balancer não depender de outros middlewares)
+// IMPORTANTE: Este endpoint DEVE responder rapidamente com status 200
 app.get('/health', (req, res) => {
-    res.json({ status: 'healthy', timestamp: new Date().toISOString(), version: '4.0.0' });
+    res.status(200).json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(), 
+        version: '4.1.0',
+        uptime: process.uptime()
+    });
 });
 
 // Segurança
@@ -1370,7 +1376,7 @@ process.on('uncaughtException', (error) => {
 server.listen(PORT, HOST, () => {
     console.log('');
     console.log('╔════════════════════════════════════════════════════════════╗');
-    console.log('║     SELF PROTEÇÃO VEICULAR - SERVIDOR v4.0                 ║');
+    console.log('║     SELF PROTEÇÃO VEICULAR - SERVIDOR v4.1                 ║');
     console.log('║     Sistema de Automação de Mensagens WhatsApp             ║');
     console.log('╠════════════════════════════════════════════════════════════╣');
     console.log(`║  🚀 Servidor rodando na porta ${PORT}                          ║`);

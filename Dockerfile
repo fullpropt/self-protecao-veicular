@@ -1,6 +1,6 @@
 # ============================================
 # SELF Proteção Veicular - Dockerfile
-# VERSÃO: 4.0.0
+# VERSÃO: 4.1.0
 # ============================================
 
 # OBRIGATÓRIO: Node.js 20 (Baileys requer >=20.0.0)
@@ -8,7 +8,7 @@ FROM node:20-alpine
 
 # Metadados
 LABEL maintainer="SELF Proteção Veicular"
-LABEL version="4.0.0"
+LABEL version="4.1.0"
 LABEL description="Sistema CRM com integração WhatsApp"
 
 # Verificar versão do Node imediatamente
@@ -57,9 +57,8 @@ ENV NODE_ENV=production
 ENV PORT=3001
 ENV HOST=0.0.0.0
 
-# Health check (usa PORT do ambiente - Railway injeta PORT em runtime)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=5 \
-    CMD sh -c 'wget -q --spider "http://127.0.0.1:$${PORT:-3001}/health" || exit 1'
+# NOTA: Healthcheck gerenciado pelo Railway via railway.toml
+# Não usar HEALTHCHECK interno do Docker para evitar conflitos
 
 # Iniciar aplicação
 CMD ["node", "server/index.js"]

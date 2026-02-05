@@ -1,6 +1,6 @@
 {
   "name": "self-protecao-veicular",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Sistema de CRM com integração WhatsApp para SELF Proteção Veicular - Plataforma de automação de mensagens estilo BotConversa",
   "main": "server/index.js",
   "scripts": {
