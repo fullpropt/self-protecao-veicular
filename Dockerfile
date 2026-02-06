@@ -46,8 +46,9 @@ RUN mkdir -p sessions data uploads && \
     chown -R nodejs:nodejs sessions data uploads && \
     chmod 755 sessions data uploads
 
-# Mudar para usuário não-root
-USER nodejs
+#
+# Nota: manter usuário root para escrever em /mnt/data (volume Railway)
+#
 
 # Expor porta
 EXPOSE 3001
