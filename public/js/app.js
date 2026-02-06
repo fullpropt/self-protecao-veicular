@@ -96,8 +96,20 @@ function initSocket() {
         console.warn('Socket.IO não carregado');
         return;
     }
-    
-    APP.socket = io(APP.socketUrl, {
+
+    const token = sessionStorage.getItem('selfDashboardToken');
+    const socketOptions = {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 2000
+    };
+
+    if (token) {
+        socketOptions.auth = { token };
+    }
+
+    APP.socket = io(APP.socketUrl, socketOptions);
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionAttempts: 10,
