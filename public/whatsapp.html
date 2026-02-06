@@ -11,29 +11,29 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         :root {
-            --primary: #5a2a6b;
-            --primary-light: #7a3a8b;
-            --primary-dark: #4a1a5b;
+            --primary: #6d28d9;
+            --primary-light: #7c3aed;
+            --primary-dark: #5b21b6;
             --success: #10b981;
             --success-light: #34d399;
             --warning: #f59e0b;
             --danger: #ef4444;
             --info: #3b82f6;
-            --dark: #1e293b;
+            --dark: #0f172a;
             --gray: #64748b;
-            --light: #f1f5f9;
+            --light: #f5f6fb;
             --lighter: #f8fafc;
             --white: #ffffff;
-            --border: #e2e8f0;
+            --border: #e5e7eb;
             --whatsapp: #25D366;
-            --shadow: 0 4px 25px rgba(0,0,0,0.08);
-            --shadow-lg: 0 10px 40px rgba(0,0,0,0.12);
+            --shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.2);
         }
         
         html { scroll-behavior: smooth; }
         body { 
             font-family: 'Inter', sans-serif; 
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+            background: var(--light);
             min-height: 100vh; 
             overflow-x: hidden; 
         }
@@ -45,7 +45,7 @@
             top: 0;
             width: 280px;
             height: 100vh;
-            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(180deg, #4c1d95 0%, #3b136f 100%);
             color: white;
             padding: 25px;
             z-index: 1000;
@@ -90,16 +90,31 @@
         
         .sidebar-menu a:hover,
         .sidebar-menu a.active {
-            background: rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.16);
             color: white;
-            transform: translateX(5px);
+            transform: translateX(2px);
         }
         
         .sidebar-menu .icon {
-            font-size: 20px;
-            width: 24px;
-            text-align: center;
+            width: 18px;
+            height: 18px;
+            display: inline-block;
+            background-color: currentColor;
+            -webkit-mask-size: contain;
+            -webkit-mask-repeat: no-repeat;
+            -webkit-mask-position: center;
+            mask-size: contain;
+            mask-repeat: no-repeat;
+            mask-position: center;
+            font-size: 0;
         }
+
+        .icon-dashboard { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 3L3 10h2v10h6v-6h2v6h6V10h2z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 3L3 10h2v10h6v-6h2v6h6V10h2z'/%3E%3C/svg%3E"); }
+        .icon-funnel { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M3 5h18l-7 8v5l-4 2v-7L3 5z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M3 5h18l-7 8v5l-4 2v-7L3 5z'/%3E%3C/svg%3E"); }
+        .icon-whatsapp { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 5h16v10H8l-4 4V5z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 5h16v10H8l-4 4V5z'/%3E%3C/svg%3E"); }
+        .icon-message { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 4h16v12H7l-3 3V4z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 4h16v12H7l-3 3V4z'/%3E%3C/svg%3E"); }
+        .icon-settings { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 4l-2.1-.7a7.9 7.9 0 0 0-.7-1.7l1.2-1.9-1.4-1.4-1.9 1.2a7.9 7.9 0 0 0-1.7-.7L12 3 9.4 3.8a7.9 7.9 0 0 0-1.7.7L5.8 3.3 4.4 4.7l1.2 1.9a7.9 7.9 0 0 0-.7 1.7L3 12l2.1.7c.2.6.4 1.2.7 1.7l-1.2 1.9 1.4 1.4 1.9-1.2c.5.3 1.1.5 1.7.7L12 21l2.6-.8c.6-.2 1.2-.4 1.7-.7l1.9 1.2 1.4-1.4-1.2-1.9c.3-.5.5-1.1.7-1.7L21 12z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 4l-2.1-.7a7.9 7.9 0 0 0-.7-1.7l1.2-1.9-1.4-1.4-1.9 1.2a7.9 7.9 0 0 0-1.7-.7L12 3 9.4 3.8a7.9 7.9 0 0 0-1.7.7L5.8 3.3 4.4 4.7l1.2 1.9a7.9 7.9 0 0 0-.7 1.7L3 12l2.1.7c.2.6.4 1.2.7 1.7l-1.2 1.9 1.4 1.4 1.9-1.2c.5.3 1.1.5 1.7.7L12 21l2.6-.8c.6-.2 1.2-.4 1.7-.7l1.9 1.2 1.4-1.4-1.2-1.9c.3-.5.5-1.1.7-1.7L21 12z'/%3E%3C/svg%3E"); }
+        .icon-contacts { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M16 14c2.2 0 4 1.8 4 4v3H4v-3c0-2.2 1.8-4 4-4h8zM12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M16 14c2.2 0 4 1.8 4 4v3H4v-3c0-2.2 1.8-4 4-4h8zM12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'/%3E%3C/svg%3E"); }
         
         .sidebar-footer {
             padding-top: 20px;
@@ -112,7 +127,7 @@
             gap: 12px;
             width: 100%;
             padding: 14px 18px;
-            background: rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.18);
             border: none;
             border-radius: 12px;
             color: #fca5a5;
@@ -236,6 +251,7 @@
         .card {
             background: white;
             border-radius: 24px;
+            border: 1px solid var(--border);
             box-shadow: var(--shadow);
             overflow: hidden;
         }
@@ -255,15 +271,26 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            color: var(--primary);
+            border: 1px solid var(--border);
+            background: var(--lighter);
+        }
+
+        .card-header-icon .icon {
+            width: 20px;
+            height: 20px;
         }
         
         .card-header-icon.green {
-            background: rgba(37, 211, 102, 0.1);
+            color: var(--success);
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.18);
         }
         
         .card-header-icon.blue {
-            background: rgba(59, 130, 246, 0.1);
+            color: var(--info);
+            background: rgba(59, 130, 246, 0.08);
+            border-color: rgba(59, 130, 246, 0.18);
         }
         
         .card-header h2 {
@@ -287,7 +314,7 @@
             padding: 25px;
             border-radius: 20px;
             display: inline-block;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
             margin-bottom: 25px;
             position: relative;
             min-width: 280px;
@@ -355,14 +382,16 @@
         .connected-avatar {
             width: 100px;
             height: 100px;
-            background: linear-gradient(135deg, var(--whatsapp) 0%, #20BA5A 100%);
+            background: var(--success);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 50px;
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
             margin: 0 auto 25px;
-            box-shadow: 0 10px 30px rgba(37, 211, 102, 0.3);
+            box-shadow: 0 10px 24px rgba(16, 185, 129, 0.3);
         }
         
         .connected-state h3 {
@@ -423,14 +452,14 @@
         }
         
         .btn-whatsapp {
-            background: linear-gradient(135deg, var(--whatsapp) 0%, #20BA5A 100%);
+            background: var(--whatsapp);
             color: white;
-            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+            box-shadow: 0 6px 14px rgba(37, 211, 102, 0.2);
         }
         
         .btn-whatsapp:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(37, 211, 102, 0.25);
         }
         
         .btn-whatsapp:disabled {
@@ -441,19 +470,19 @@
         }
         
         .btn-danger {
-            background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+            background: var(--danger);
             color: white;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+            box-shadow: 0 6px 14px rgba(239, 68, 68, 0.2);
         }
         
         .btn-danger:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(239, 68, 68, 0.25);
         }
         
         .btn-outline {
             background: white;
-            border: 2px solid var(--border);
+            border: 1px solid var(--border);
             color: var(--dark);
         }
         
@@ -463,14 +492,14 @@
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            background: var(--primary);
             color: white;
-            box-shadow: 0 4px 15px rgba(90, 42, 107, 0.3);
+            box-shadow: 0 6px 14px rgba(109, 40, 217, 0.2);
         }
         
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(90, 42, 107, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(109, 40, 217, 0.25);
         }
         
         /* INSTRUCTIONS */
@@ -597,14 +626,15 @@
             background: var(--whatsapp);
             color: white;
             border: none;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
+            padding: 8px 12px;
+            border-radius: 10px;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
             transition: all 0.2s;
         }
         
@@ -619,10 +649,18 @@
         }
         
         .contacts-empty .icon {
-            font-size: 60px;
-            display: block;
-            margin-bottom: 15px;
-            opacity: 0.4;
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 15px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: var(--lighter);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray);
+            font-size: 14px;
+            font-weight: 600;
         }
         
         /* TOAST */
@@ -732,41 +770,38 @@
         <ul class="sidebar-menu">
             <li>
                 <a href="dashboard.html">
-                    <span class="icon">📊</span>
+                    <span class="icon icon-dashboard"></span>
                     Dashboard
                 </a>
             </li>
             <li>
                 <a href="funil.html">
-                    <span class="icon">📈</span>
+                    <span class="icon icon-funnel"></span>
                     Funil de Vendas
                 </a>
             </li>
             <li>
                 <a href="whatsapp.html" class="active">
-                    <span class="icon">💬</span>
+                    <span class="icon icon-whatsapp"></span>
                     WhatsApp
                 </a>
             </li>
             <li>
                 <a href="conversas.html">
-                    <span class="icon">💭</span>
+                    <span class="icon icon-message"></span>
                     Conversas
                 </a>
             </li>
             <li>
                 <a href="configuracoes.html">
-                    <span class="icon">⚙️</span>
+                    <span class="icon icon-settings"></span>
                     Configurações
                 </a>
             </li>
         </ul>
         
         <div class="sidebar-footer">
-            <button class="btn-logout" onclick="logout()">
-                <span>🚪</span>
-                Sair
-            </button>
+            <button class="btn-logout" onclick="logout()">Sair</button>
         </div>
     </aside>
     
@@ -779,7 +814,7 @@
         <!-- HEADER -->
         <div class="header">
             <div class="header-title">
-                <h1>💬 WhatsApp</h1>
+                <h1>WhatsApp</h1>
                 <p>Conecte e gerencie suas mensagens</p>
             </div>
             
@@ -794,7 +829,7 @@
             <!-- QR CODE CARD -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-header-icon green">🔗</div>
+                    <div class="card-header-icon green"><span class="icon icon-whatsapp"></span></div>
                     <h2>Conexão WhatsApp</h2>
                 </div>
                 
@@ -815,14 +850,11 @@
                                 Por segurança, o QR Code será atualizado em <strong id="timer-countdown">30</strong> segundos
                             </p>
                             
-                            <button class="btn btn-whatsapp" id="connect-btn" onclick="startConnection()">
-                                <span>🔌</span>
-                                Conectar WhatsApp
-                            </button>
+                            <button class="btn btn-whatsapp" id="connect-btn" onclick="startConnection()">Conectar WhatsApp</button>
                         </div>
                         
                         <div class="instructions">
-                            <h3>📱 Como conectar:</h3>
+                            <h3>Como conectar</h3>
                             <div class="instruction-step">
                                 <span class="step-number">1</span>
                                 <span class="step-text">Clique em "Conectar WhatsApp" acima</span>
@@ -848,8 +880,8 @@
                     
                     <!-- CONNECTED STATE -->
                     <div id="connected-state" style="display: none;">
-                        <div class="connected-state">
-                            <div class="connected-avatar">✓</div>
+                            <div class="connected-state">
+                                <div class="connected-avatar">OK</div>
                             <h3>WhatsApp Conectado!</h3>
                             <p>Seu WhatsApp está conectado e pronto para uso</p>
                             
@@ -864,19 +896,13 @@
                                 </div>
                                 <div class="connected-info-row">
                                     <span class="connected-info-label">Status</span>
-                                    <span class="connected-info-value" style="color: var(--success);">🟢 Online</span>
+                                    <span class="connected-info-value" style="color: var(--success);">Online</span>
                                 </div>
                             </div>
                             
                             <div style="display: flex; gap: 15px; flex-direction: column;">
-                                <a href="conversas.html" class="btn btn-primary">
-                                    <span>💭</span>
-                                    Ir para Conversas
-                                </a>
-                                <button class="btn btn-danger" onclick="disconnect()">
-                                    <span>🔌</span>
-                                    Desconectar
-                                </button>
+                                <a href="conversas.html" class="btn btn-primary">Ir para Conversas</a>
+                                <button class="btn btn-danger" onclick="disconnect()">Desconectar</button>
                             </div>
                         </div>
                     </div>
@@ -886,14 +912,14 @@
             <!-- CONTACTS CARD -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-header-icon blue">👥</div>
+                    <div class="card-header-icon blue"><span class="icon icon-contacts"></span></div>
                     <h2>Contatos Recentes</h2>
                 </div>
                 
                 <div class="card-body">
                     <div id="contacts-container">
                         <div class="contacts-empty" id="contacts-empty">
-                            <span class="icon">👥</span>
+                            <span class="icon icon-contacts"></span>
                             <h3>Conecte o WhatsApp</h3>
                             <p>Conecte seu WhatsApp para ver os contatos recentes</p>
                         </div>
@@ -901,7 +927,6 @@
                         <div id="contacts-list-wrapper" style="display: none;">
                             <div class="contacts-header">
                                 <h3>
-                                    <span>📋</span>
                                     Lista de Contatos
                                 </h3>
                                 <span class="contacts-count" id="contacts-count">0</span>
@@ -937,20 +962,39 @@
         
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
-            initSocket();
+            if (checkAuth()) {
+                initSocket();
+            }
         });
+
+        function checkAuth() {
+            const token = sessionStorage.getItem('selfDashboardToken');
+            const expiry = sessionStorage.getItem('selfDashboardExpiry');
+            if (!token || !expiry || Date.now() > parseInt(expiry)) {
+                window.location.href = 'login.html';
+                return false;
+            }
+            return true;
+        }
         
         // Inicializar Socket.IO
         function initSocket() {
             console.log('🔌 Conectando ao servidor:', CONFIG.SOCKET_URL);
-            
-            socket = io(CONFIG.SOCKET_URL, {
+
+            const token = sessionStorage.getItem('selfDashboardToken');
+            const socketOptions = {
                 transports: ['websocket', 'polling'],
                 reconnection: true,
                 reconnectionAttempts: 10,
                 reconnectionDelay: 1000,
                 timeout: 20000
-            });
+            };
+
+            if (token) {
+                socketOptions.auth = { token };
+            }
+
+            socket = io(CONFIG.SOCKET_URL, socketOptions);
             
             socket.on('connect', function() {
                 console.log('✅ Socket conectado');
@@ -1173,7 +1217,7 @@
                 btn.innerHTML = '<span class="spinner" style="width: 20px; height: 20px; border-width: 2px; margin: 0;"></span> Conectando...';
             } else {
                 btn.disabled = false;
-                btn.innerHTML = '<span>🔌</span> Conectar WhatsApp';
+                btn.textContent = 'Conectar WhatsApp';
             }
         }
         
@@ -1197,14 +1241,14 @@
             listEl.innerHTML = contacts.slice(0, 20).map(contact => `
                 <div class="contact-item" onclick="openChat('${contact.number}', '${contact.name || contact.number}')">
                     <div class="contact-avatar">
-                        ${contact.name ? contact.name.charAt(0).toUpperCase() : '👤'}
+                        ${contact.name ? contact.name.charAt(0).toUpperCase() : 'U'}
                     </div>
                     <div class="contact-info">
                         <div class="contact-name">${contact.name || contact.number}</div>
                         <div class="contact-phone">${formatPhone(contact.number)}</div>
                     </div>
                     <button class="contact-action" onclick="event.stopPropagation(); openChat('${contact.number}', '${contact.name || contact.number}')">
-                        💬
+                        CHAT
                     </button>
                 </div>
             `).join('');
@@ -1234,9 +1278,9 @@
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
             
-            const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+            const icons = { success: 'OK', error: 'ERR', warning: 'WARN', info: 'INFO' };
             toast.innerHTML = `
-                <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+                <span class="toast-icon">${icons[type] || 'INFO'}</span>
                 <span class="toast-message">${message}</span>
             `;
             
@@ -1259,6 +1303,9 @@
         // Logout
         function logout() {
             localStorage.removeItem('isLoggedIn');
+            sessionStorage.removeItem('selfDashboardToken');
+            sessionStorage.removeItem('selfDashboardExpiry');
+            sessionStorage.removeItem('selfDashboardUser');
             window.location.href = 'login.html';
         }
     </script>
