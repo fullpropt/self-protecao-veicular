@@ -342,7 +342,7 @@ async function createSession(sessionId, socket, attempt = 0) {
         const sock = makeWASocket({
             version,
             logger,
-            printQRInTerminal: false,
+// printQRInTerminal: true, // Depreciado no Baileys
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger)

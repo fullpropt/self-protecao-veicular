@@ -984,6 +984,9 @@
                 console.log('📷 QR Code recebido');
                 displayQRCode(data.qr);
                 startQRTimer();
+                // Garantir que o botão de conectar suma e o timer apareça
+                document.getElementById('connect-btn').style.display = 'none';
+                document.getElementById('qr-timer').style.display = 'block';
             });
             
             socket.on('connecting', function(data) {
@@ -1051,7 +1054,13 @@
         
         // Exibir QR Code
         function displayQRCode(qrData) {
+            console.log('🖼️ Renderizando QR Code...');
             const qrContainer = document.getElementById('qr-code');
+            
+            if (!qrData) {
+                console.error('❌ Dados do QR Code vazios');
+                return;
+            }
             
             // Criar imagem do QR Code
             const img = document.createElement('img');
