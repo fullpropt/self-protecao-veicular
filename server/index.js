@@ -46,8 +46,12 @@ const { encrypt, decrypt } = require('./utils/encryption');
 
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
-const SESSIONS_DIR = process.env.SESSIONS_DIR || path.join(__dirname, '..', 'sessions');
-const UPLOADS_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
+const DEFAULT_SESSIONS_DIR = path.join(__dirname, '..', 'sessions');
+const DEFAULT_UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'data');
+let SESSIONS_DIR = process.env.SESSIONS_DIR || DEFAULT_SESSIONS_DIR;
+let UPLOADS_DIR = process.env.UPLOAD_DIR || DEFAULT_UPLOADS_DIR;
+let DATA_DIR = process.env.DATA_DIR || DEFAULT_DATA_DIR;
 const MAX_RECONNECT_ATTEMPTS = parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 5;
 const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
@@ -63,12 +67,28 @@ if (process.env.NODE_ENV === 'production') {
     }
 }
 
-// Criar diretórios necessários
-[SESSIONS_DIR, UPLOADS_DIR, path.join(__dirname, '..', 'data')].forEach(dir => {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+function ensureDir(targetDir, fallbackDir, label) {
+    try {
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+        return targetDir;
+    } catch (error) {
+        const fallback = fallbackDir || targetDir;
+        console.warn(`[Warn] Could not create ${label} dir at ${targetDir}: ${error.message}`);
+        if (fallback !== targetDir) {
+            if (!fs.existsSync(fallback)) {
+                fs.mkdirSync(fallback, { recursive: true });
+            }
+        }
+        return fallback;
     }
-});
+}
+
+// Criar diretórios necessários (com fallback para evitar crash em paths sem permissão)
+SESSIONS_DIR = ensureDir(SESSIONS_DIR, DEFAULT_SESSIONS_DIR, 'sessions');
+UPLOADS_DIR = ensureDir(UPLOADS_DIR, DEFAULT_UPLOADS_DIR, 'uploads');
+DATA_DIR = ensureDir(DATA_DIR, DEFAULT_DATA_DIR, 'data');
 
 // Migração roda aqui (servidor já está ouvindo via start.js)
 try {

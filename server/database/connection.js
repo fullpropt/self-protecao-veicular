@@ -8,15 +8,39 @@ const path = require('path');
 const fs = require('fs');
 
 // Diretório de dados
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
+const DEFAULT_DATA_DIR = path.join(__dirname, '..', '..', 'data');
+let DATA_DIR = process.env.DATA_DIR || DEFAULT_DATA_DIR;
 
-// Garantir que o diretório existe
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+function ensureDir(targetDir, fallbackDir, label) {
+    try {
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+        return targetDir;
+    } catch (error) {
+        const fallback = fallbackDir || targetDir;
+        console.warn(`[Warn] Could not create ${label} dir at ${targetDir}: ${error.message}`);
+        if (!fs.existsSync(fallback)) {
+            fs.mkdirSync(fallback, { recursive: true });
+        }
+        return fallback;
+    }
 }
 
+DATA_DIR = ensureDir(DATA_DIR, DEFAULT_DATA_DIR, 'data');
+
 // Caminho do banco de dados
-const DB_PATH = process.env.DATABASE_PATH || path.join(DATA_DIR, 'self.db');
+const DEFAULT_DB_PATH = path.join(DEFAULT_DATA_DIR, 'self.db');
+let DB_PATH = process.env.DATABASE_PATH || path.join(DATA_DIR, 'self.db');
+try {
+    const dbDir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+    }
+} catch (error) {
+    console.warn(`[Warn] Could not create database dir for ${DB_PATH}: ${error.message}`);
+    DB_PATH = DEFAULT_DB_PATH;
+}
 
 // Instância do banco de dados
 let db = null;
