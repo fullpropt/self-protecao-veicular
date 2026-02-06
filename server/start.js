@@ -17,9 +17,8 @@ function resolveVolumeBase() {
     const envBase = process.env.RAILWAY_VOLUME_MOUNT_PATH
         || process.env.RAILWAY_VOLUME
         || process.env.VOLUME_MOUNT_PATH;
-    if (envBase && fs.existsSync(envBase)) return envBase;
-    if (fs.existsSync('/mnt/data')) return '/mnt/data';
-    return null;
+    if (envBase) return envBase;
+    return '/mnt/data';
 }
 
 const volumeBase = process.env.NODE_ENV === 'production' ? resolveVolumeBase() : null;
