@@ -46,12 +46,11 @@ const { encrypt, decrypt } = require('./utils/encryption');
 
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
-const DEFAULT_SESSIONS_DIR = path.join(__dirname, '..', 'sessions');
-const DEFAULT_UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
-const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'data');
-let SESSIONS_DIR = process.env.SESSIONS_DIR || DEFAULT_SESSIONS_DIR;
-let UPLOADS_DIR = process.env.UPLOAD_DIR || DEFAULT_UPLOADS_DIR;
-let DATA_DIR = process.env.DATA_DIR || DEFAULT_DATA_DIR;
+const SESSIONS_DIR = process.env.SESSIONS_DIR || path.join(__dirname, '..', 'sessions');
+const UPLOADS_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
+const STATIC_DIR = process.env.NODE_ENV === 'production'
+    ? path.join(__dirname, '..', 'dist')
+    : path.join(__dirname, '..', 'public');
 const MAX_RECONNECT_ATTEMPTS = parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 5;
 const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
@@ -67,28 +66,12 @@ if (process.env.NODE_ENV === 'production') {
     }
 }
 
-function ensureDir(targetDir, fallbackDir, label) {
-    try {
-        if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
-        }
-        return targetDir;
-    } catch (error) {
-        const fallback = fallbackDir || targetDir;
-        console.warn(`[Warn] Could not create ${label} dir at ${targetDir}: ${error.message}`);
-        if (fallback !== targetDir) {
-            if (!fs.existsSync(fallback)) {
-                fs.mkdirSync(fallback, { recursive: true });
-            }
-        }
-        return fallback;
+// Criar diretórios necessários
+[SESSIONS_DIR, UPLOADS_DIR, path.join(__dirname, '..', 'data')].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
     }
-}
-
-// Criar diretórios necessários (com fallback para evitar crash em paths sem permissão)
-SESSIONS_DIR = ensureDir(SESSIONS_DIR, DEFAULT_SESSIONS_DIR, 'sessions');
-UPLOADS_DIR = ensureDir(UPLOADS_DIR, DEFAULT_UPLOADS_DIR, 'uploads');
-DATA_DIR = ensureDir(DATA_DIR, DEFAULT_DATA_DIR, 'data');
+});
 
 // Migração roda aqui (servidor já está ouvindo via start.js)
 try {
@@ -107,9 +90,6 @@ app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
 }));
-
-// Railway/Proxy: confiar no proxy para X-Forwarded-For
-app.set('trust proxy', 1);
 
 // Rate limiting
 const limiter = rateLimit({
@@ -159,7 +139,7 @@ app.use('/api', (req, res, next) => {
 });
 
 // Arquivos estáticos
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(STATIC_DIR));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Upload de arquivos
@@ -548,7 +528,7 @@ async function createSession(sessionId, socket, attempt = 0) {
             for (const update of updates) {
                 if (update.update.status) {
                     const statusMap = { 1: 'pending', 2: 'sent', 3: 'delivered', 4: 'read' };
-                    const status = statusMap[update.update.status] || 'pending';
+                    const status = statusMap[update.update.status] || 'unknown';
                     
                     // Atualizar no banco
                     Message.updateStatus(update.key.id, status, new Date().toISOString());
@@ -661,7 +641,7 @@ async function processIncomingMessage(sessionId, msg) {
         content: text,
         content_encrypted: encryptMessage(text),
         media_type: mediaType,
-        status: isFromMe ? 'sent' : 'delivered',
+        status: isFromMe ? 'sent' : 'received',
         is_from_me: isFromMe,
         sent_at: msg.messageTimestamp ? new Date(Number(msg.messageTimestamp) * 1000).toISOString() : new Date().toISOString()
     };
@@ -686,7 +666,7 @@ async function processIncomingMessage(sessionId, msg) {
         mediaType,
         timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now(),
         pushName: msg.pushName || '',
-        status: isFromMe ? 'sent' : 'delivered',
+        status: isFromMe ? 'sent' : 'received',
         leadId: lead.id,
         leadName: lead.name,
         conversationId: conversation.id
@@ -1483,15 +1463,15 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
 // ============================================
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+    res.sendFile(path.join(STATIC_DIR, 'login.html'));
 });
 
 app.get('*', (req, res) => {
-    const requestedFile = path.join(__dirname, '..', 'public', req.path);
+    const requestedFile = path.join(STATIC_DIR, req.path);
     if (fs.existsSync(requestedFile)) {
         res.sendFile(requestedFile);
     } else {
-        res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+        res.sendFile(path.join(STATIC_DIR, 'login.html'));
     }
 });
 

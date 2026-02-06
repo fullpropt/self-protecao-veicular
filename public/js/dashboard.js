@@ -119,17 +119,17 @@ function renderLeads() {
                                 onclick="openSendModal(${lead.id})"
                                 title="Enviar WhatsApp"
                                 ${!isConnected ? 'disabled' : ''}>
-                            <span class="icon icon-whatsapp icon-sm"></span>
+                            📱
                         </button>
                         <button class="btn-action btn-edit" 
                                 onclick="editLead(${lead.id})"
                                 title="Editar">
-                            <span class="icon icon-edit icon-sm"></span>
+                            ✏️
                         </button>
                         <button class="btn-action btn-delete" 
                                 onclick="deleteLead(${lead.id})"
                                 title="Excluir">
-                            <span class="icon icon-delete icon-sm"></span>
+                            🗑️
                         </button>
                     </div>
                 </td>
@@ -206,7 +206,7 @@ function editLead(id) {
     
     // Alterar função do botão salvar
     const modal = document.getElementById('add-lead-modal');
-    modal.querySelector('.modal-header h2').textContent = 'Editar Lead';
+    modal.querySelector('.modal-header h2').textContent = '✏️ Editar Lead';
     
     const saveBtn = modal.querySelector('.modal-footer .btn-primary');
     saveBtn.onclick = function() {
@@ -247,7 +247,7 @@ function updateLead(id) {
     
     // Restaurar modal
     const modal = document.getElementById('add-lead-modal');
-    modal.querySelector('.modal-header h2').textContent = 'Novo Lead';
+    modal.querySelector('.modal-header h2').textContent = '➕ Novo Lead';
     modal.querySelector('.modal-footer .btn-primary').onclick = saveLead;
     
     showToast('success', 'Lead atualizado com sucesso!');
@@ -408,7 +408,7 @@ function resetSendButton() {
     const sendBtn = document.getElementById('send-btn');
     if (sendBtn) {
         sendBtn.disabled = false;
-    sendBtn.innerHTML = '<span class="icon icon-send icon-sm"></span> Enviar WhatsApp';
+        sendBtn.innerHTML = '<span>📤</span> Enviar WhatsApp';
     }
 }
 
@@ -459,17 +459,17 @@ function renderFilteredLeads(filteredLeads) {
                                 onclick="openSendModal(${lead.id})"
                                 title="Enviar WhatsApp"
                                 ${!isConnected ? 'disabled' : ''}>
-                            <span class="icon icon-whatsapp icon-sm"></span>
+                            📱
                         </button>
                         <button class="btn-action btn-edit" 
                                 onclick="editLead(${lead.id})"
                                 title="Editar">
-                            <span class="icon icon-edit icon-sm"></span>
+                            ✏️
                         </button>
                         <button class="btn-action btn-delete" 
                                 onclick="deleteLead(${lead.id})"
                                 title="Excluir">
-                            <span class="icon icon-delete icon-sm"></span>
+                            🗑️
                         </button>
                     </div>
                 </td>
@@ -525,10 +525,10 @@ function showToast(type, message) {
     const container = document.getElementById('toast-container');
     
     const icons = {
-        success: 'OK',
-        error: 'ERRO',
-        warning: 'AVISO',
-        info: 'INFO'
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
     };
     
     const toast = document.createElement('div');
