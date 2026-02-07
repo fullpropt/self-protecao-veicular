@@ -11,7 +11,7 @@
     <style>
         .inbox-container {
             display: grid;
-            grid-template-columns: 350px 1fr;
+            grid-template-columns: 350px 1fr 320px;
             height: calc(100vh - 120px);
             gap: 0;
             background: white;
@@ -19,11 +19,16 @@
             box-shadow: var(--shadow-lg);
             overflow: hidden;
         }
+        @media (max-width: 1024px) {
+            .inbox-container { grid-template-columns: 350px 1fr; }
+            .inbox-right-panel { display: none; }
+        }
         @media (max-width: 768px) {
             .inbox-container { grid-template-columns: 1fr; }
             .chat-panel { display: none; }
             .chat-panel.active { display: flex; }
             .conversations-panel.hidden { display: none; }
+            .inbox-right-panel { display: none; }
         }
         .conversations-panel {
             border-right: 1px solid var(--border-color);
@@ -255,13 +260,19 @@
             0%, 60%, 100% { transform: translateY(0); }
             30% { transform: translateY(-5px); }
         }
-        .contact-info-panel {
-            width: 300px;
+        .contact-info-panel { display: none; }
+        .inbox-right-panel {
             background: white;
             border-left: 1px solid var(--border-color);
-            display: none;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
         }
-        .contact-info-panel.active { display: block; }
+        .inbox-right-panel-content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .inbox-right-panel-robot { font-size: 64px; margin-bottom: 20px; opacity: 0.6; }
+        .inbox-right-panel p { color: var(--gray-600); line-height: 1.5; margin: 0 0 16px; font-size: 14px; }
+        .inbox-right-panel .btn-register-user { background: var(--whatsapp, #25d366); color: white; padding: 12px 24px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; font-size: 14px; }
+        .inbox-right-panel .btn-register-user:hover { opacity: 0.9; }
     </style>
 </head>
 <body>
@@ -277,31 +288,32 @@
         <nav class="sidebar-nav">
             <div class="nav-section">
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="dashboard.html" class="nav-link"><span class="icon">🏠</span>Painel de Controle</a></li>
-                    <li class="nav-item"><a href="contatos.html" class="nav-link"><span class="icon">👥</span>Contatos</a></li>
-                    <li class="nav-item"><a href="campanhas.html" class="nav-link"><span class="icon">📢</span>Campanhas</a></li>
-                    <li class="nav-item"><a href="transmissao.html" class="nav-link"><span class="icon">📡</span>Transmissão</a></li>
+                    <li class="nav-item"><a href="dashboard.html" class="nav-link"><span class="icon icon-dashboard"></span>Painel de Controle</a></li>
+                    <li class="nav-item"><a href="contatos.html" class="nav-link"><span class="icon icon-contacts"></span>Contatos</a></li>
+                    <li class="nav-item"><a href="campanhas.html" class="nav-link"><span class="icon icon-campaigns"></span>Campanhas</a></li>
+                    <li class="nav-item"><a href="transmissao.html" class="nav-link"><span class="icon icon-broadcast"></span>Transmissão</a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Conversas</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="inbox.html" class="nav-link active"><span class="icon">💬</span>Inbox<span class="badge" id="unreadBadge" style="display:none;">0</span></a></li>
+                    <li class="nav-item"><a href="inbox.html" class="nav-link active"><span class="icon icon-inbox"></span>Inbox<span class="badge" id="unreadBadge" style="display:none;">0</span></a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Automação</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="automacao.html" class="nav-link"><span class="icon">🤖</span>Automação</a></li>
-                    <li class="nav-item"><a href="fluxos.html" class="nav-link"><span class="icon">🔄</span>Fluxos de Conversa</a></li>
-                    <li class="nav-item"><a href="funil.html" class="nav-link"><span class="icon">📊</span>Funil de Vendas</a></li>
+                    <li class="nav-item"><a href="automacao.html" class="nav-link"><span class="icon icon-automation"></span>Automação</a></li>
+                    <li class="nav-item"><a href="fluxos.html" class="nav-link"><span class="icon icon-flows"></span>Fluxos de Conversa</a></li>
+                    <li class="nav-item"><a href="funil.html" class="nav-link"><span class="icon icon-funnel"></span>Funil de Vendas</a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Sistema</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="whatsapp.html" class="nav-link"><span class="icon">📱</span>WhatsApp</a></li>
-                    <li class="nav-item"><a href="configuracoes.html" class="nav-link"><span class="icon">⚙️</span>Configurações</a></li>
+                    <li class="nav-item"><a href="whatsapp.html" class="nav-link"><span class="icon icon-whatsapp"></span>WhatsApp</a></li>
+                    <li class="nav-item"><a href="configuracoes.html" class="nav-link"><span class="icon icon-settings"></span>Configurações</a></li>
+                    <li class="nav-item"><a href="configuracoes.html#copys" class="nav-link" title="Copys e Mensagens"><span class="icon icon-templates"></span>Modelos</a></li>
                 </ul>
             </div>
         </nav>
@@ -310,7 +322,7 @@
                 <span class="status-indicator disconnected"></span>
                 <span class="whatsapp-status-text">Desconectado</span>
             </div>
-            <button class="btn-logout" onclick="logout()"><span>🚪</span>Sair</button>
+            <button class="btn-logout" onclick="logout()">Sair</button>
         </div>
     </aside>
 
@@ -319,19 +331,19 @@
             <!-- Lista de Conversas -->
             <div class="conversations-panel" id="conversationsPanel">
                 <div class="conversations-header">
-                    <h2>💬 Inbox</h2>
+                    <h2><span class="icon icon-inbox icon-sm"></span> Inbox</h2>
                     <div class="conversations-tabs">
                         <button class="active" onclick="filterConversations('all')">Todos</button>
                         <button onclick="filterConversations('unread')">Não lidos</button>
                     </div>
                     <div class="search-box" style="max-width: 100%;">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon icon icon-search icon-sm"></span>
                         <input type="text" id="searchConversations" placeholder="Buscar conversa..." onkeyup="searchConversations()">
                     </div>
                 </div>
                 <div class="conversations-list" id="conversationsList">
                     <div class="empty-state" style="padding: 40px;">
-                        <div class="empty-state-icon">💬</div>
+                        <div class="empty-state-icon icon icon-empty icon-lg"></div>
                         <p>Carregando conversas...</p>
                     </div>
                 </div>
@@ -340,340 +352,25 @@
             <!-- Painel de Chat -->
             <div class="chat-panel" id="chatPanel">
                 <div class="chat-empty">
-                    <div class="chat-empty-icon">💬</div>
+                    <div class="chat-empty-icon icon icon-empty icon-lg"></div>
                     <h3>Nenhum chat selecionado</h3>
                     <p>Selecione uma conversa da lista ao lado para começar a conversar</p>
+                </div>
+            </div>
+
+            <!-- Painel Lateral Direito (estilo BotConversa) -->
+            <div class="inbox-right-panel" id="inboxRightPanel">
+                <div class="inbox-right-panel-content" id="inboxRightContent">
+                    <span class="inbox-right-panel-robot icon icon-automation icon-lg"></span>
+                    <p><strong>Este cliente ainda não está cadastrado na sua audiência.</strong></p>
+                    <p>Vamos cadastrá-lo para que o cartão do usuário dele apareça aqui?</p>
+                    <button class="btn-register-user" onclick="registerCurrentUser()">SIM! Cadastrar este usuário</button>
                 </div>
             </div>
         </div>
     </main>
 
-    <script src="js/app.js"></script>
-    <script>
-        let conversations = [];
-        let currentConversation = null;
-        let messages = [];
-        let socket = null;
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadConversations();
-            initSocket();
-        });
-
-        function initSocket() {
-            try {
-                socket = io();
-                
-                socket.on('new-message', (data) => {
-                    if (currentConversation && data.leadId === currentConversation.id) {
-                        messages.push({
-                            id: data.id || Date.now(),
-                            content: data.text || '',
-                            direction: data.isFromMe ? 'outgoing' : 'incoming',
-                            status: data.status || (data.isFromMe ? 'sent' : 'received'),
-                            created_at: new Date(data.timestamp || Date.now()).toISOString()
-                        });
-                        document.getElementById('chatMessages').innerHTML = renderMessages();
-                        scrollToBottom();
-                    }
-                    loadConversations();
-                });
-
-                socket.on('message-status', (data) => {
-                    // Atualizar status da mensagem
-                });
-            } catch (e) {
-                console.log('Socket não disponível');
-            }
-        }
-
-        async function loadConversations() {
-            try {
-                const response = await api.get('/api/leads');
-                const leads = response.leads || [];
-                conversations = leads.map(l => ({
-                    id: l.id,
-                    name: l.name || l.phone,
-                    phone: l.phone,
-                    lastMessage: l.last_message || 'Clique para iniciar conversa',
-                    lastMessageAt: l.last_message_at || l.updated_at || l.created_at,
-                    unread: l.unread_count || 0,
-                    status: l.status
-                }));
-
-                renderConversations();
-                updateUnreadBadge();
-            } catch (error) {
-                console.error(error);
-                showToast('error', 'Erro', 'Não foi possível carregar as conversas');
-            }
-        }
-
-        function renderConversations() {
-            const list = document.getElementById('conversationsList');
-            
-            if (conversations.length === 0) {
-                list.innerHTML = `
-                    <div class="empty-state" style="padding: 40px;">
-                        <div class="empty-state-icon">💬</div>
-                        <p>Nenhuma conversa</p>
-                    </div>
-                `;
-                return;
-            }
-
-            list.innerHTML = conversations.map(c => `
-                <div class="conversation-item ${c.unread > 0 ? 'unread' : ''} ${currentConversation?.id === c.id ? 'active' : ''}" 
-                     onclick="selectConversation(${c.id})">
-                    <div class="conversation-avatar" style="background: ${getAvatarColor(c.name)}">
-                        ${getInitials(c.name)}
-                    </div>
-                    <div class="conversation-info">
-                        <div class="conversation-name">${c.name || 'Sem nome'}</div>
-                        <div class="conversation-preview">${c.lastMessage || 'Sem mensagens'}</div>
-                    </div>
-                    <div class="conversation-meta">
-                        <div class="conversation-time">${c.lastMessageAt ? timeAgo(c.lastMessageAt) : ''}</div>
-                        ${c.unread > 0 ? `<div class="conversation-badge">${c.unread}</div>` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function filterConversations(filter) {
-            document.querySelectorAll('.conversations-tabs button').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            if (filter === 'unread') {
-                const filtered = conversations.filter(c => c.unread > 0);
-                renderFilteredConversations(filtered);
-            } else {
-                renderConversations();
-            }
-        }
-
-        function renderFilteredConversations(filtered) {
-            const list = document.getElementById('conversationsList');
-            if (filtered.length === 0) {
-                list.innerHTML = `<div class="empty-state" style="padding: 40px;"><p>Nenhuma conversa encontrada</p></div>`;
-                return;
-            }
-            // Usar mesma lógica de renderConversations
-            list.innerHTML = filtered.map(c => `
-                <div class="conversation-item ${c.unread > 0 ? 'unread' : ''}" onclick="selectConversation(${c.id})">
-                    <div class="conversation-avatar" style="background: ${getAvatarColor(c.name)}">${getInitials(c.name)}</div>
-                    <div class="conversation-info">
-                        <div class="conversation-name">${c.name || 'Sem nome'}</div>
-                        <div class="conversation-preview">${c.lastMessage || ''}</div>
-                    </div>
-                    <div class="conversation-meta">
-                        <div class="conversation-time">${c.lastMessageAt ? timeAgo(c.lastMessageAt) : ''}</div>
-                        ${c.unread > 0 ? `<div class="conversation-badge">${c.unread}</div>` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function searchConversations() {
-            const search = document.getElementById('searchConversations').value.toLowerCase();
-            const filtered = conversations.filter(c => 
-                (c.name && c.name.toLowerCase().includes(search)) ||
-                (c.phone && c.phone.includes(search))
-            );
-            renderFilteredConversations(filtered);
-        }
-
-        async function selectConversation(id) {
-            currentConversation = conversations.find(c => c.id === id);
-            if (!currentConversation) return;
-
-            // Marcar como ativo
-            document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('active'));
-            document.querySelector(`.conversation-item[onclick="selectConversation(${id})"]`)?.classList.add('active');
-
-            // Carregar mensagens
-            await loadMessages(id);
-
-            // Renderizar chat
-            renderChat();
-        }
-
-        async function loadMessages(leadId) {
-            try {
-                const response = await api.get(`/api/messages/${leadId}`);
-                messages = (response.messages || []).map(m => ({
-                    ...m,
-                    direction: m.direction || (m.is_from_me ? 'outgoing' : 'incoming'),
-                    created_at: m.created_at || m.sent_at || new Date().toISOString()
-                }));
-            } catch (error) {
-                messages = [];
-            }
-        }
-
-        function renderChat() {
-            const panel = document.getElementById('chatPanel');
-            
-            panel.innerHTML = `
-                <div class="chat-header">
-                    <button class="btn btn-sm btn-outline btn-icon" onclick="backToList()" style="display: none;" id="backBtn">←</button>
-                    <div class="conversation-avatar" style="background: ${getAvatarColor(currentConversation.name)}; width: 40px; height: 40px; font-size: 14px;">
-                        ${getInitials(currentConversation.name)}
-                    </div>
-                    <div class="chat-header-info">
-                        <div class="chat-header-name">${currentConversation.name || 'Sem nome'}</div>
-                        <div class="chat-header-status">${formatPhone(currentConversation.phone)}</div>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-sm btn-outline btn-icon" onclick="openWhatsApp()" title="Abrir no WhatsApp">📱</button>
-                        <button class="btn btn-sm btn-outline btn-icon" onclick="viewContact()" title="Ver contato">👤</button>
-                        <button class="btn btn-sm btn-outline btn-icon" onclick="toggleContactInfo()" title="Mais opções">⋮</button>
-                    </div>
-                </div>
-                
-                <div class="chat-messages" id="chatMessages">
-                    ${renderMessages()}
-                </div>
-
-                <div class="quick-replies">
-                    <div class="quick-reply" onclick="insertQuickReply('Olá! Tudo bem?')">Olá! Tudo bem?</div>
-                    <div class="quick-reply" onclick="insertQuickReply('Posso ajudar?')">Posso ajudar?</div>
-                    <div class="quick-reply" onclick="insertQuickReply('Obrigado pelo contato!')">Obrigado!</div>
-                    <div class="quick-reply" onclick="insertQuickReply('Vou verificar e retorno em breve.')">Vou verificar</div>
-                </div>
-
-                <div class="chat-input">
-                    <textarea id="messageInput" placeholder="Digite uma mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
-                    <button onclick="sendMessage()" title="Enviar">📤</button>
-                </div>
-            `;
-
-            // Mostrar botão voltar em mobile
-            if (window.innerWidth <= 768) {
-                document.getElementById('backBtn').style.display = 'block';
-                document.getElementById('conversationsPanel').classList.add('hidden');
-                panel.classList.add('active');
-            }
-
-            scrollToBottom();
-        }
-
-        function renderMessages() {
-            if (messages.length === 0) {
-                return `
-                    <div style="text-align: center; padding: 40px; color: var(--gray-500);">
-                        <p>Nenhuma mensagem ainda</p>
-                        <p style="font-size: 12px;">Envie uma mensagem para iniciar a conversa</p>
-                    </div>
-                `;
-            }
-
-            return messages.map(m => `
-                <div class="message ${m.direction === 'outgoing' ? 'sent' : 'received'}">
-                    <div class="message-content">${m.content}</div>
-                    <div class="message-time">
-                        ${formatDate(m.created_at, 'time')}
-                        ${m.direction === 'outgoing' ? `<span class="message-status">${m.status === 'read' ? '✓✓' : m.status === 'delivered' ? '✓✓' : '✓'}</span>` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function scrollToBottom() {
-            const container = document.getElementById('chatMessages');
-            if (container) {
-                container.scrollTop = container.scrollHeight;
-            }
-        }
-
-        function insertQuickReply(text) {
-            document.getElementById('messageInput').value = text;
-            document.getElementById('messageInput').focus();
-        }
-
-        function handleKeyDown(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const content = input.value.trim();
-            
-            if (!content || !currentConversation) return;
-
-            if (APP.whatsappStatus !== 'connected') {
-                showToast('warning', 'Aviso', 'WhatsApp não está conectado');
-            }
-
-            // Adicionar mensagem localmente
-            const newMessage = {
-                id: Date.now(),
-                content,
-                direction: 'outgoing',
-                status: 'pending',
-                created_at: new Date().toISOString()
-            };
-            messages.push(newMessage);
-            
-            // Atualizar UI
-            document.getElementById('chatMessages').innerHTML = renderMessages();
-            scrollToBottom();
-            input.value = '';
-
-            try {
-                await api.post('/api/send', {
-                    sessionId: APP.sessionId,
-                    to: currentConversation.phone,
-                    message: content,
-                    type: 'text'
-                });
-                
-                newMessage.status = 'sent';
-                document.getElementById('chatMessages').innerHTML = renderMessages();
-            } catch (error) {
-                newMessage.status = 'failed';
-                document.getElementById('chatMessages').innerHTML = renderMessages();
-                showToast('error', 'Erro', 'Não foi possível enviar a mensagem');
-            }
-        }
-
-        function openWhatsApp() {
-            if (currentConversation?.phone) {
-                window.open(`https://wa.me/55${currentConversation.phone}`, '_blank');
-            }
-        }
-
-        function viewContact() {
-            if (currentConversation) {
-                window.location.href = `contatos.html?id=${currentConversation.id}`;
-            }
-        }
-
-        function toggleContactInfo() {
-            showToast('info', 'Info', 'Painel de informações em desenvolvimento');
-        }
-
-        function backToList() {
-            document.getElementById('conversationsPanel').classList.remove('hidden');
-            document.getElementById('chatPanel').classList.remove('active');
-        }
-
-        function updateUnreadBadge() {
-            const unread = conversations.reduce((sum, c) => sum + (c.unread || 0), 0);
-            const badge = document.getElementById('unreadBadge');
-            if (unread > 0) {
-                badge.textContent = unread;
-                badge.style.display = 'inline';
-            } else {
-                badge.style.display = 'none';
-            }
-        }
-
-        // Atualizar conversas a cada 10 segundos
-        setInterval(loadConversations, 10000);
-    </script>
+    <script type="module" src="/src/core/app.ts"></script>
+    <script type="module" src="/src/pages/inbox.ts"></script>
 </body>
 </html>

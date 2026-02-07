@@ -1,0 +1,281 @@
+// Configuracoes page logic migrated to module
+
+type Settings = {
+    company?: { name?: string; cnpj?: string; phone?: string; email?: string };
+    copys?: { welcome?: string; quote?: string; followup?: string; closing?: string };
+    funnel?: Array<{ name?: string; color?: string; description?: string }>;
+    whatsapp?: { interval?: string; messagesPerHour?: string; workStart?: string; workEnd?: string };
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
+    checkWhatsAppStatus();
+    const hash = window.location.hash?.slice(1);
+    if (hash) {
+        const panel = document.getElementById(`panel-${hash}`);
+        if (panel) {
+            document.querySelectorAll('.settings-nav-item').forEach(i => i.classList.remove('active'));
+            document.querySelector(`[onclick="showPanel('${hash}')"]`)?.classList.add('active');
+            document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+            panel.classList.add('active');
+        }
+    }
+});
+
+function showPanel(panelId: string) {
+    document.querySelectorAll('.settings-nav-item').forEach(item => item.classList.remove('active'));
+    const target = (window as any).event?.target as HTMLElement | undefined;
+    target?.closest('.settings-nav-item')?.classList.add('active');
+    document.querySelectorAll('.settings-panel').forEach(panel => panel.classList.remove('active'));
+    document.getElementById(`panel-${panelId}`).classList.add('active');
+}
+
+function loadSettings() {
+    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    if (settings.company) {
+        const companyName = document.getElementById('companyName') as HTMLInputElement | null;
+        const companyCnpj = document.getElementById('companyCnpj') as HTMLInputElement | null;
+        const companyPhone = document.getElementById('companyPhone') as HTMLInputElement | null;
+        const companyEmail = document.getElementById('companyEmail') as HTMLInputElement | null;
+        if (companyName) companyName.value = settings.company.name || '';
+        if (companyCnpj) companyCnpj.value = settings.company.cnpj || '';
+        if (companyPhone) companyPhone.value = settings.company.phone || '';
+        if (companyEmail) companyEmail.value = settings.company.email || '';
+    }
+    if (settings.copys) {
+        const copyWelcome = document.getElementById('copyWelcome') as HTMLTextAreaElement | null;
+        const copyQuote = document.getElementById('copyQuote') as HTMLTextAreaElement | null;
+        const copyFollowup = document.getElementById('copyFollowup') as HTMLTextAreaElement | null;
+        const copyClosing = document.getElementById('copyClosing') as HTMLTextAreaElement | null;
+        if (copyWelcome) copyWelcome.value = settings.copys.welcome || copyWelcome.value;
+        if (copyQuote) copyQuote.value = settings.copys.quote || copyQuote.value;
+        if (copyFollowup) copyFollowup.value = settings.copys.followup || copyFollowup.value;
+        if (copyClosing) copyClosing.value = settings.copys.closing || copyClosing.value;
+    }
+}
+
+function saveGeneralSettings() {
+    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    settings.company = {
+        name: (document.getElementById('companyName') as HTMLInputElement | null)?.value || '',
+        cnpj: (document.getElementById('companyCnpj') as HTMLInputElement | null)?.value || '',
+        phone: (document.getElementById('companyPhone') as HTMLInputElement | null)?.value || '',
+        email: (document.getElementById('companyEmail') as HTMLInputElement | null)?.value || ''
+    };
+    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    showToast('success', 'Sucesso', 'Configurações salvas!');
+}
+
+function saveFunnelSettings() {
+    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    settings.funnel = [];
+    for (let i = 1; i <= 4; i++) {
+        settings.funnel.push({
+            name: (document.getElementById(`funnel${i}Name`) as HTMLInputElement | null)?.value || '',
+            color: (document.getElementById(`funnel${i}Color`) as HTMLInputElement | null)?.value || '',
+            description: (document.getElementById(`funnel${i}Desc`) as HTMLInputElement | null)?.value || ''
+        });
+    }
+    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    showToast('success', 'Sucesso', 'Funil salvo!');
+}
+
+function saveCopysSettings() {
+    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    settings.copys = {
+        welcome: (document.getElementById('copyWelcome') as HTMLTextAreaElement | null)?.value || '',
+        quote: (document.getElementById('copyQuote') as HTMLTextAreaElement | null)?.value || '',
+        followup: (document.getElementById('copyFollowup') as HTMLTextAreaElement | null)?.value || '',
+        closing: (document.getElementById('copyClosing') as HTMLTextAreaElement | null)?.value || ''
+    };
+    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    showToast('success', 'Sucesso', 'Templates salvos!');
+}
+
+function insertVariable(variable: string) {
+    const focused = document.activeElement as HTMLTextAreaElement | null;
+    if (focused && focused.tagName === 'TEXTAREA') {
+        const start = focused.selectionStart || 0;
+        const end = focused.selectionEnd || 0;
+        const text = focused.value || '';
+        focused.value = text.substring(0, start) + variable + text.substring(end);
+        focused.selectionStart = focused.selectionEnd = start + variable.length;
+        focused.focus();
+    }
+}
+
+function testCopy(type: 'welcome' | 'quote' | 'followup' | 'closing') {
+    const testData = { nome: 'João Silva', telefone: '(11) 99999-9999', veiculo: 'Honda Civic 2020', placa: 'ABC-1234', empresa: 'SELF Proteção Veicular' };
+    let message = '';
+    switch (type) {
+        case 'welcome': message = (document.getElementById('copyWelcome') as HTMLTextAreaElement | null)?.value || ''; break;
+        case 'quote': message = (document.getElementById('copyQuote') as HTMLTextAreaElement | null)?.value || ''; break;
+        case 'followup': message = (document.getElementById('copyFollowup') as HTMLTextAreaElement | null)?.value || ''; break;
+        case 'closing': message = (document.getElementById('copyClosing') as HTMLTextAreaElement | null)?.value || ''; break;
+    }
+    Object.keys(testData).forEach(key => { message = message.replace(new RegExp(`{{${key}}}`, 'g'), testData[key]); });
+    alert('Preview da mensagem:\n\n' + message);
+}
+
+function saveNewTemplate() {
+    const name = (document.getElementById('newTemplateName') as HTMLInputElement | null)?.value.trim() || '';
+    const message = (document.getElementById('newTemplateMessage') as HTMLTextAreaElement | null)?.value.trim() || '';
+    if (!name || !message) { showToast('error', 'Erro', 'Preencha todos os campos'); return; }
+    const container = document.querySelector('#panel-copys .settings-section') as HTMLElement | null;
+    if (!container) return;
+    const newCard = document.createElement('div');
+    newCard.className = 'copy-card';
+    newCard.innerHTML = `<div class="copy-card-header"><span class="copy-card-title">${name}</span><button class="btn btn-sm btn-outline-danger" onclick="this.closest('.copy-card').remove()"><span class="icon icon-delete icon-sm"></span></button></div><textarea class="form-textarea" rows="4">${message}</textarea>`;
+    const target = container.querySelector('button.w-100');
+    if (target) container.insertBefore(newCard, target);
+    closeModal('addTemplateModal');
+    const newTemplateName = document.getElementById('newTemplateName') as HTMLInputElement | null;
+    const newTemplateMessage = document.getElementById('newTemplateMessage') as HTMLTextAreaElement | null;
+    if (newTemplateName) newTemplateName.value = '';
+    if (newTemplateMessage) newTemplateMessage.value = '';
+    showToast('success', 'Sucesso', 'Template adicionado!');
+}
+
+async function checkWhatsAppStatus() {
+    try {
+        const response = await api.get('/api/whatsapp/status');
+        const txt = document.getElementById('whatsappStatusText');
+        if (txt) txt.textContent = response.connected ? 'Conectado' : 'Desconectado';
+        const success = document.getElementById('connectionSuccess');
+        const disc = document.getElementById('connectionDisconnected');
+        const phoneEl = document.getElementById('connectedPhone');
+        if (success && disc) {
+            if (response.connected) {
+                success.style.display = 'block';
+                disc.style.display = 'none';
+                if (phoneEl) phoneEl.textContent = response.phone || '+55...';
+            } else {
+                success.style.display = 'none';
+                disc.style.display = 'block';
+            }
+        }
+    } catch (error) {
+        const txt = document.getElementById('whatsappStatusText');
+        if (txt) txt.textContent = 'Desconectado';
+        const success = document.getElementById('connectionSuccess');
+        const disc = document.getElementById('connectionDisconnected');
+        if (success && disc) { success.style.display = 'none'; disc.style.display = 'block'; }
+    }
+}
+
+async function connectWhatsApp() {
+    try {
+        showLoading('Gerando QR Code...');
+        const response = await api.get('/api/whatsapp/qr');
+        hideLoading();
+        if (response.qr) {
+            const qrContainer = document.getElementById('qrCodeContainer') as HTMLElement | null;
+            const qrCode = document.getElementById('qrCode') as HTMLElement | null;
+            if (qrContainer) qrContainer.style.display = 'block';
+            if (qrCode) qrCode.innerHTML = `<img src="${response.qr}" alt="QR Code" style="max-width: 250px;">`;
+        }
+    } catch (error) { hideLoading(); showToast('error', 'Erro', 'Não foi possível gerar o QR Code'); }
+}
+
+async function disconnectWhatsApp() {
+    if (!confirm('Deseja realmente desconectar o WhatsApp?')) return;
+    try { await api.post('/api/whatsapp/disconnect'); checkWhatsAppStatus(); showToast('success', 'Sucesso', 'WhatsApp desconectado!'); } catch (error) { showToast('error', 'Erro', 'Não foi possível desconectar'); }
+}
+
+function saveWhatsAppSettings() {
+    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    settings.whatsapp = {
+        interval: (document.getElementById('messageInterval') as HTMLInputElement | null)?.value || '',
+        messagesPerHour: (document.getElementById('messagesPerHour') as HTMLInputElement | null)?.value || '',
+        workStart: (document.getElementById('workStart') as HTMLInputElement | null)?.value || '',
+        workEnd: (document.getElementById('workEnd') as HTMLInputElement | null)?.value || ''
+    };
+    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    showToast('success', 'Sucesso', 'Configurações salvas!');
+}
+
+function saveNotificationSettings() { showToast('success', 'Sucesso', 'Notificações salvas!'); }
+
+function addUser() {
+    const name = (document.getElementById('newUserName') as HTMLInputElement | null)?.value.trim() || '';
+    const email = (document.getElementById('newUserEmail') as HTMLInputElement | null)?.value.trim() || '';
+    const password = (document.getElementById('newUserPassword') as HTMLInputElement | null)?.value || '';
+    const role = (document.getElementById('newUserRole') as HTMLSelectElement | null)?.value || '';
+    if (!name || !email || !password) { showToast('error', 'Erro', 'Preencha todos os campos'); return; }
+    const tbody = document.getElementById('usersTableBody') as HTMLElement | null;
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${name}</td><td>${email}</td><td><span class="badge badge-${role === 'admin' ? 'primary' : 'secondary'}">${role === 'admin' ? 'Administrador' : 'Usuário'}</span></td><td><span class="badge badge-success">Ativo</span></td><td><button class="btn btn-sm btn-outline"><span class="icon icon-edit icon-sm"></span></button><button class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()"><span class="icon icon-delete icon-sm"></span></button></td>`;
+    tbody.appendChild(tr);
+    closeModal('addUserModal');
+    showToast('success', 'Sucesso', 'Usuário adicionado!');
+}
+
+function changePassword() {
+    const current = (document.getElementById('currentPassword') as HTMLInputElement | null)?.value || '';
+    const newPass = (document.getElementById('newPassword') as HTMLInputElement | null)?.value || '';
+    const confirm = (document.getElementById('confirmPassword') as HTMLInputElement | null)?.value || '';
+    if (!current || !newPass || !confirm) { showToast('error', 'Erro', 'Preencha todos os campos'); return; }
+    if (newPass !== confirm) { showToast('error', 'Erro', 'As senhas não conferem'); return; }
+    if (newPass.length < 6) { showToast('error', 'Erro', 'A senha deve ter pelo menos 6 caracteres'); return; }
+    showToast('success', 'Sucesso', 'Senha alterada!');
+    const currentPassword = document.getElementById('currentPassword') as HTMLInputElement | null;
+    const newPassword = document.getElementById('newPassword') as HTMLInputElement | null;
+    const confirmPassword = document.getElementById('confirmPassword') as HTMLInputElement | null;
+    if (currentPassword) currentPassword.value = '';
+    if (newPassword) newPassword.value = '';
+    if (confirmPassword) confirmPassword.value = '';
+}
+
+function copyApiKey() {
+    const apiKey = (document.getElementById('apiKey') as HTMLInputElement | null)?.value || '';
+    navigator.clipboard.writeText(apiKey);
+    showToast('success', 'Copiado', 'API Key copiada!');
+}
+function regenerateApiKey() {
+    if (!confirm('Regenerar a API Key?')) return;
+    const apiKey = document.getElementById('apiKey') as HTMLInputElement | null;
+    if (apiKey) apiKey.value = 'sk_live_' + Math.random().toString(36).substring(2, 15);
+    showToast('success', 'Sucesso', 'Nova API Key gerada!');
+}
+function testWebhook() { showToast('info', 'Testando', 'Enviando requisição de teste...'); setTimeout(() => { showToast('success', 'Sucesso', 'Webhook respondeu corretamente!'); }, 1500); }
+function saveApiSettings() { showToast('success', 'Sucesso', 'Configurações de API salvas!'); }
+
+const windowAny = window as Window & {
+    showPanel?: (panelId: string) => void;
+    saveGeneralSettings?: () => void;
+    saveFunnelSettings?: () => void;
+    saveCopysSettings?: () => void;
+    insertVariable?: (variable: string) => void;
+    testCopy?: (type: 'welcome' | 'quote' | 'followup' | 'closing') => void;
+    saveNewTemplate?: () => void;
+    connectWhatsApp?: () => Promise<void>;
+    disconnectWhatsApp?: () => Promise<void>;
+    saveWhatsAppSettings?: () => void;
+    saveNotificationSettings?: () => void;
+    addUser?: () => void;
+    changePassword?: () => void;
+    copyApiKey?: () => void;
+    regenerateApiKey?: () => void;
+    testWebhook?: () => void;
+    saveApiSettings?: () => void;
+};
+windowAny.showPanel = showPanel;
+windowAny.saveGeneralSettings = saveGeneralSettings;
+windowAny.saveFunnelSettings = saveFunnelSettings;
+windowAny.saveCopysSettings = saveCopysSettings;
+windowAny.insertVariable = insertVariable;
+windowAny.testCopy = testCopy;
+windowAny.saveNewTemplate = saveNewTemplate;
+windowAny.connectWhatsApp = connectWhatsApp;
+windowAny.disconnectWhatsApp = disconnectWhatsApp;
+windowAny.saveWhatsAppSettings = saveWhatsAppSettings;
+windowAny.saveNotificationSettings = saveNotificationSettings;
+windowAny.addUser = addUser;
+windowAny.changePassword = changePassword;
+windowAny.copyApiKey = copyApiKey;
+windowAny.regenerateApiKey = regenerateApiKey;
+windowAny.testWebhook = testWebhook;
+windowAny.saveApiSettings = saveApiSettings;
+
+export {};

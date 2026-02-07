@@ -1,22 +1,10 @@
 /**
  * SELF PROTEÇÃO VEICULAR - SERVIDOR PRINCIPAL v4.1
- * Sistema de automação de mensagens WhatsApp estilo BotConversa
- * 
- * Recursos:
- * - Integração WhatsApp via Baileys
- * - Banco de dados SQLite
- * - Sistema de filas para envio em massa
- * - Webhooks para integrações
- * - Construtor de fluxos de automação
- * - Multi-agentes com atribuição de conversas
- * - Criptografia de mensagens
+ * Carregado por server/start.js (bootstrap) após listen - app e server já criados.
  */
 
-require('dotenv').config();
-
+module.exports = function init(app, server) {
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -24,20 +12,13 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 
-// Baileys
-const { 
-    default: makeWASocket, 
-    DisconnectReason, 
-    useMultiFileAuthState,
-    fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore,
-    delay
-} = require('@whiskeysockets/baileys');
+// Baileys (loader dinâmico - ESM)
+const baileysLoader = require('./services/whatsapp/baileysLoader');
 const pino = require('pino');
 const qrcode = require('qrcode');
 
 // Database
-const { getDatabase, close: closeDatabase } = require('./database/connection');
+const { getDatabase, close: closeDatabase, query, run } = require('./database/connection');
 const { migrate } = require('./database/migrate');
 const { Lead, Conversation, Message, Template, Flow, Settings, User } = require('./database/models');
 
@@ -46,8 +27,15 @@ const webhookService = require('./services/webhookService');
 const queueService = require('./services/queueService');
 const flowService = require('./services/flowService');
 
+// Utils - Fixers (correções automáticas baseadas em análise de projetos GitHub)
+const audioFixer = require('./utils/audioFixer');
+const connectionFixer = require('./utils/connectionFixer');
+
+// WhatsApp Service (engine Baileys modular)
+const whatsappService = require('./services/whatsapp');
+
 // Middleware
-const { authenticate, optionalAuth, requestLogger } = require('./middleware/auth');
+const { authenticate, optionalAuth, requestLogger, verifyToken } = require('./middleware/auth');
 
 // Encryption
 const { encrypt, decrypt } = require('./utils/encryption');
@@ -60,6 +48,9 @@ const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
 const SESSIONS_DIR = process.env.SESSIONS_DIR || path.join(__dirname, '..', 'sessions');
 const UPLOADS_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
+const STATIC_DIR = process.env.NODE_ENV === 'production'
+    ? path.join(__dirname, '..', 'dist')
+    : path.join(__dirname, '..', 'public');
 const MAX_RECONNECT_ATTEMPTS = parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 5;
 const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
@@ -82,40 +73,26 @@ if (process.env.NODE_ENV === 'production') {
     }
 });
 
-// ============================================
-// INICIALIZAÇÃO DO BANCO DE DADOS
-// ============================================
-
+// Migração roda aqui (servidor já está ouvindo via start.js)
 try {
     migrate();
     console.log('✅ Banco de dados inicializado');
 } catch (error) {
     console.error('❌ Erro ao inicializar banco de dados:', error.message);
-    // Não encerra o processo: /health continua respondendo para deploy passar
 }
 
 // ============================================
-// EXPRESS APP
+// MIDDLEWARES E ROTAS (app já tem /health do start.js)
 // ============================================
-
-const app = express();
-
-// Health check primeiro (para deploy/load balancer não depender de outros middlewares)
-// IMPORTANTE: Este endpoint DEVE responder rapidamente com status 200
-app.get('/health', (req, res) => {
-    res.status(200).json({ 
-        status: 'healthy', 
-        timestamp: new Date().toISOString(), 
-        version: '4.1.0',
-        uptime: process.uptime()
-    });
-});
 
 // Segurança
 app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
 }));
+
+// Railway/Proxy: confiar no proxy para X-Forwarded-For
+app.set('trust proxy', 1);
 
 // Rate limiting
 const limiter = rateLimit({
@@ -155,8 +132,17 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Autenticação obrigatória para /api (exceto login/refresh)
+app.use('/api', (req, res, next) => {
+    const path = req.path || '';
+    if (path.startsWith('/auth/login') || path.startsWith('/auth/refresh')) {
+        return next();
+    }
+    return authenticate(req, res, next);
+});
+
 // Arquivos estáticos
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(STATIC_DIR));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Upload de arquivos
@@ -173,11 +159,10 @@ const upload = multer({
 });
 
 // ============================================
-// SERVIDOR HTTP E SOCKET.IO
+// SOCKET.IO
 // ============================================
 
-const server = http.createServer(app);
-
+const { Server } = require('socket.io');
 const io = new Server(server, {
     cors: {
         origin: '*',
@@ -188,16 +173,68 @@ const io = new Server(server, {
     transports: ['websocket', 'polling']
 });
 
+// Autenticação via JWT no handshake do Socket.IO
+io.use((socket, next) => {
+    try {
+        const headerToken = socket.handshake.headers?.authorization;
+        const token = socket.handshake.auth?.token || (headerToken ? headerToken.replace(/Bearer\s+/i, '') : null);
+        if (!token) {
+            return next(new Error('unauthorized'));
+        }
+        const decoded = verifyToken(token);
+        if (!decoded) {
+            return next(new Error('unauthorized'));
+        }
+        socket.user = decoded;
+        return next();
+    } catch (error) {
+        return next(new Error('unauthorized'));
+    }
+});
+
 // ============================================
-// WHATSAPP - GERENCIAMENTO DE SESSÕES
+// WHATSAPP - GERENCIAMENTO DE SESSÕES (via whatsapp service)
 // ============================================
 
-const sessions = new Map();
-const reconnectAttempts = new Map();
-const qrTimeouts = new Map();
-const typingStatus = new Map();
-
+const sessions = whatsappService.sessions;
+const reconnectAttempts = whatsappService.reconnectAttempts;
+const qrTimeouts = whatsappService.qrTimeouts;
 const logger = pino({ level: 'silent' });
+
+function persistWhatsappSession(sessionId, status, options = {}) {
+    try {
+        const qr_code = options.qr_code || null;
+        const last_connected_at = options.last_connected_at || null;
+        run(`
+            INSERT INTO whatsapp_sessions (session_id, status, qr_code, last_connected_at, updated_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(session_id) DO UPDATE SET
+                status = excluded.status,
+                qr_code = excluded.qr_code,
+                last_connected_at = excluded.last_connected_at,
+                updated_at = datetime('now')
+        `, [sessionId, status, qr_code, last_connected_at]);
+    } catch (error) {
+        console.error(`[${sessionId}] Erro ao persistir sessão:`, error.message);
+    }
+}
+
+async function rehydrateSessions(ioInstance) {
+    try {
+        const stored = query(`SELECT session_id FROM whatsapp_sessions`);
+        for (const row of stored) {
+            const sessionId = row.session_id;
+            if (sessionExists(sessionId)) {
+                console.log(`[${sessionId}] Reidratando sessão armazenada...`);
+                await createSession(sessionId, null);
+            } else {
+                console.log(`[${sessionId}] Sessão no banco sem arquivos locais, ignorando.`);
+            }
+        }
+    } catch (error) {
+        console.error('❌ Erro ao reidratar sessões:', error.message);
+    }
+}
 
 /**
  * Criptografar mensagem
@@ -215,37 +252,22 @@ function decryptMessage(encrypted) {
     return decrypt(encrypted);
 }
 
-/**
- * Formatar número para JID
- */
-function formatJid(phone) {
-    let cleaned = phone.replace(/[^0-9]/g, '');
-    if (!cleaned.startsWith('55') && cleaned.length <= 11) {
-        cleaned = '55' + cleaned;
-    }
-    return cleaned + '@s.whatsapp.net';
-}
-
-/**
- * Extrair número do JID
- */
-function extractNumber(jid) {
-    if (!jid) return '';
-    return jid.replace('@s.whatsapp.net', '').replace('@g.us', '');
-}
+const formatJid = whatsappService.formatJid;
+const extractNumber = whatsappService.extractNumber;
 
 /**
  * Função de envio de mensagem (usada pelos serviços)
  */
 async function sendMessageToWhatsApp(options) {
     const { to, jid, content, mediaType, mediaUrl, sessionId } = options;
-    const targetJid = jid || formatJid(to);
-    const session = sessions.get(sessionId || 'self_whatsapp_session');
+    const sid = sessionId || 'self_whatsapp_session';
+    const session = whatsappService.getSession(sid);
     
     if (!session || !session.isConnected) {
         throw new Error('WhatsApp não está conectado');
     }
     
+    const targetJid = jid || formatJid(to);
     let result;
     
     if (mediaType === 'image' && mediaUrl) {
@@ -260,11 +282,24 @@ async function sendMessageToWhatsApp(options) {
             fileName: options.fileName || 'documento'
         });
     } else if (mediaType === 'audio' && mediaUrl) {
-        result = await session.socket.sendMessage(targetJid, {
-            audio: { url: mediaUrl },
-            mimetype: 'audio/mp4',
-            ptt: true
-        });
+        try {
+            const audioOptions = await audioFixer.prepareAudioForSend(mediaUrl, {
+                mimetype: options.mimetype || 'audio/ogg; codecs=opus',
+                ptt: options.ptt !== undefined ? options.ptt : true,
+                duration: options.duration || null
+            });
+            result = await session.socket.sendMessage(targetJid, {
+                audio: { url: audioOptions.path || mediaUrl },
+                ...audioOptions.options
+            });
+        } catch (error) {
+            console.error('[SendMessage] Erro ao preparar áudio, usando método padrão:', error.message);
+            result = await session.socket.sendMessage(targetJid, {
+                audio: { url: mediaUrl },
+                mimetype: options.mimetype || 'audio/ogg; codecs=opus',
+                ptt: options.ptt !== undefined ? options.ptt : true
+            });
+        }
     } else {
         result = await session.socket.sendMessage(targetJid, { text: content });
     }
@@ -276,6 +311,7 @@ async function sendMessageToWhatsApp(options) {
  * Criar sessão WhatsApp
  */
 async function createSession(sessionId, socket, attempt = 0) {
+    const clientSocket = socket || { emit: () => {} };
     const sessionPath = path.join(SESSIONS_DIR, sessionId);
     
     if (qrTimeouts.has(sessionId)) {
@@ -283,8 +319,26 @@ async function createSession(sessionId, socket, attempt = 0) {
         qrTimeouts.delete(sessionId);
     }
     
+    const baileys = await baileysLoader.getBaileys();
+    const {
+        default: makeWASocket,
+        DisconnectReason,
+        useMultiFileAuthState,
+        fetchLatestBaileysVersion,
+        makeCacheableSignalKeyStore,
+        delay
+    } = baileys;
+    
     try {
         console.log(`[${sessionId}] Criando sessão... (Tentativa ${attempt + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+        persistWhatsappSession(sessionId, 'connecting');
+        
+        // Validar e corrigir sessão se necessário
+        const sessionValidation = await connectionFixer.validateSession(sessionPath);
+        if (!sessionValidation.valid && attempt === 0) {
+            console.log(`[${sessionId}] Problemas na sessão detectados, corrigindo...`);
+            await connectionFixer.fixSession(sessionPath);
+        }
         
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
         const { version } = await fetchLatestBaileysVersion();
@@ -294,7 +348,7 @@ async function createSession(sessionId, socket, attempt = 0) {
         const sock = makeWASocket({
             version,
             logger,
-            printQRInTerminal: false,
+// printQRInTerminal: true, // Depreciado no Baileys
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger)
@@ -317,7 +371,7 @@ async function createSession(sessionId, socket, attempt = 0) {
         
         sessions.set(sessionId, {
             socket: sock,
-            clientSocket: socket,
+            clientSocket,
             isConnected: false,
             user: null,
             reconnecting: false,
@@ -341,18 +395,19 @@ async function createSession(sessionId, socket, attempt = 0) {
                     
                     if (session) session.qrGenerated = true;
                     
-                    socket.emit('qr', { qr: qrDataUrl, sessionId, expiresIn: 30 });
+                    clientSocket.emit('qr', { qr: qrDataUrl, sessionId, expiresIn: 30 });
                     io.emit('whatsapp-qr', { qr: qrDataUrl, sessionId });
                     
                     // Webhook
                     webhookService.trigger('whatsapp.qr_generated', { sessionId });
+                    persistWhatsappSession(sessionId, 'qr_pending', { qr_code: qrDataUrl });
                     
                     console.log(`[${sessionId}] ✅ QR Code gerado`);
                     
                     const timeout = setTimeout(() => {
                         const currentSession = sessions.get(sessionId);
                         if (currentSession && !currentSession.isConnected) {
-                            socket.emit('qr-expired', { sessionId });
+                            clientSocket.emit('qr-expired', { sessionId });
                         }
                     }, QR_TIMEOUT);
                     
@@ -360,7 +415,7 @@ async function createSession(sessionId, socket, attempt = 0) {
                     
                 } catch (qrError) {
                     console.error(`[${sessionId}] ❌ Erro ao gerar QR:`, qrError.message);
-                    socket.emit('error', { message: 'Erro ao gerar QR Code' });
+                    clientSocket.emit('error', { message: 'Erro ao gerar QR Code' });
                 }
             }
             
@@ -374,9 +429,19 @@ async function createSession(sessionId, socket, attempt = 0) {
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 
                 console.log(`[${sessionId}] Conexão fechada. Status: ${statusCode}`);
+                persistWhatsappSession(sessionId, 'disconnected');
+                
+                // Detectar tipo de erro e aplicar correção
+                const errorInfo = connectionFixer.detectDisconnectReason(lastDisconnect?.error);
+                console.log(`[${sessionId}] Tipo de erro: ${errorInfo.type}, Ação: ${errorInfo.action}`);
+                
+                // Aplicar correção se necessário
+                if (errorInfo.action === 'clean_session' || errorInfo.action === 'regenerate_keys') {
+                    await connectionFixer.applyFixAction(sessionPath, errorInfo.action);
+                }
                 
                 // Webhook
-                webhookService.trigger('whatsapp.disconnected', { sessionId, statusCode });
+                webhookService.trigger('whatsapp.disconnected', { sessionId, statusCode, errorType: errorInfo.type });
                 
                 if (shouldReconnect) {
                     const currentAttempt = reconnectAttempts.get(sessionId) || 0;
@@ -389,20 +454,21 @@ async function createSession(sessionId, socket, attempt = 0) {
                             session.isConnected = false;
                         }
                         
-                        socket.emit('reconnecting', { sessionId, attempt: currentAttempt + 1 });
+                        clientSocket.emit('reconnecting', { sessionId, attempt: currentAttempt + 1 });
                         io.emit('whatsapp-status', { sessionId, status: 'reconnecting' });
                         
                         await delay(RECONNECT_DELAY);
-                        await createSession(sessionId, socket, currentAttempt + 1);
+                        await createSession(sessionId, clientSocket, currentAttempt + 1);
                     } else {
                         sessions.delete(sessionId);
                         reconnectAttempts.delete(sessionId);
-                        socket.emit('reconnect-failed', { sessionId });
+                        clientSocket.emit('reconnect-failed', { sessionId });
                     }
                 } else {
                     sessions.delete(sessionId);
                     reconnectAttempts.delete(sessionId);
-                    socket.emit('disconnected', { sessionId, reason: 'logged_out' });
+                    clientSocket.emit('disconnected', { sessionId, reason: 'logged_out' });
+                    persistWhatsappSession(sessionId, 'disconnected');
                     
                     if (fs.existsSync(sessionPath)) {
                         fs.rmSync(sessionPath, { recursive: true, force: true });
@@ -411,7 +477,7 @@ async function createSession(sessionId, socket, attempt = 0) {
             }
             
             if (connection === 'connecting') {
-                socket.emit('connecting', { sessionId });
+                clientSocket.emit('connecting', { sessionId });
                 io.emit('whatsapp-status', { sessionId, status: 'connecting' });
             }
             
@@ -433,13 +499,18 @@ async function createSession(sessionId, socket, attempt = 0) {
                     
                     reconnectAttempts.set(sessionId, 0);
                     
-                    socket.emit('connected', { sessionId, user: session.user });
+                    clientSocket.emit('connected', { sessionId, user: session.user });
                     io.emit('whatsapp-status', { sessionId, status: 'connected', user: session.user });
+                    persistWhatsappSession(sessionId, 'connected', { last_connected_at: new Date().toISOString() });
                     
                     // Webhook
                     webhookService.trigger('whatsapp.connected', { sessionId, user: session.user });
                     
                     console.log(`[${sessionId}] ✅ WhatsApp conectado: ${session.user.name}`);
+                    
+                    // Criar monitor de saúde da conexão
+                    const healthMonitor = connectionFixer.createHealthMonitor(sock, sessionId);
+                    session.healthMonitor = healthMonitor;
                 }
             }
         });
@@ -460,7 +531,7 @@ async function createSession(sessionId, socket, attempt = 0) {
             for (const update of updates) {
                 if (update.update.status) {
                     const statusMap = { 1: 'pending', 2: 'sent', 3: 'delivered', 4: 'read' };
-                    const status = statusMap[update.update.status] || 'unknown';
+                    const status = statusMap[update.update.status] || 'pending';
                     
                     // Atualizar no banco
                     Message.updateStatus(update.key.id, status, new Date().toISOString());
@@ -499,7 +570,7 @@ async function createSession(sessionId, socket, attempt = 0) {
         
         sock.ev.on('error', (error) => {
             console.error(`[${sessionId}] ❌ Erro:`, error.message);
-            socket.emit('error', { message: error.message });
+            clientSocket.emit('error', { message: error.message });
         });
         
         return sock;
@@ -510,10 +581,10 @@ async function createSession(sessionId, socket, attempt = 0) {
         const currentAttempt = reconnectAttempts.get(sessionId) || 0;
         if (currentAttempt < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttempts.set(sessionId, currentAttempt + 1);
-            await delay(RECONNECT_DELAY);
-            return await createSession(sessionId, socket, currentAttempt + 1);
+            await baileys.delay(RECONNECT_DELAY);
+            return await createSession(sessionId, clientSocket, currentAttempt + 1);
         } else {
-            socket.emit('error', { message: 'Erro ao criar sessão WhatsApp' });
+            clientSocket.emit('error', { message: 'Erro ao criar sessão WhatsApp' });
             return null;
         }
     }
@@ -565,6 +636,7 @@ async function processIncomingMessage(sessionId, msg) {
     });
     
     // Salvar mensagem
+    const normalizedStatus = isFromMe ? 'sent' : 'delivered';
     const messageData = {
         message_id: msg.key.id,
         conversation_id: conversation.id,
@@ -573,7 +645,7 @@ async function processIncomingMessage(sessionId, msg) {
         content: text,
         content_encrypted: encryptMessage(text),
         media_type: mediaType,
-        status: isFromMe ? 'sent' : 'received',
+        status: normalizedStatus,
         is_from_me: isFromMe,
         sent_at: msg.messageTimestamp ? new Date(Number(msg.messageTimestamp) * 1000).toISOString() : new Date().toISOString()
     };
@@ -598,7 +670,7 @@ async function processIncomingMessage(sessionId, msg) {
         mediaType,
         timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now(),
         pushName: msg.pushName || '',
-        status: isFromMe ? 'sent' : 'received',
+        status: normalizedStatus,
         leadId: lead.id,
         leadName: lead.name,
         conversationId: conversation.id
@@ -712,8 +784,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
  * Verificar se sessão existe
  */
 function sessionExists(sessionId) {
-    const sessionPath = path.join(SESSIONS_DIR, sessionId);
-    return fs.existsSync(sessionPath) && fs.existsSync(path.join(sessionPath, 'creds.json'));
+    return whatsappService.hasSession(sessionId, SESSIONS_DIR);
 }
 
 // ============================================
@@ -736,6 +807,9 @@ flowService.init(async (options) => {
     });
 });
 
+// Reidratar sessões armazenadas (após restart)
+rehydrateSessions(io);
+
 // ============================================
 // SOCKET.IO EVENTOS
 // ============================================
@@ -747,6 +821,7 @@ io.on('connection', (socket) => {
         const session = sessions.get(sessionId);
         
         if (session && session.isConnected) {
+            session.clientSocket = socket;
             socket.emit('session-status', { status: 'connected', sessionId, user: session.user });
         } else if (sessionExists(sessionId)) {
             socket.emit('session-status', { status: 'reconnecting', sessionId });
@@ -759,6 +834,7 @@ io.on('connection', (socket) => {
     socket.on('start-session', async ({ sessionId }) => {
         const existingSession = sessions.get(sessionId);
         if (existingSession && existingSession.isConnected) {
+            existingSession.clientSocket = socket;
             socket.emit('session-status', { status: 'connected', sessionId, user: existingSession.user });
             return;
         }
@@ -897,6 +973,30 @@ io.on('connection', (socket) => {
 // ============================================
 // ROTAS API REST
 // ============================================
+
+// Status do WhatsApp (para Configurações > Conexão)
+app.get('/api/whatsapp/status', optionalAuth, (req, res) => {
+    const sessionId = 'self_whatsapp_session';
+    const session = sessions.get(sessionId);
+    const connected = !!(session && session.isConnected);
+    let phone = null;
+    if (session && session.user && session.user.id) {
+        const jid = String(session.user.id);
+        phone = '+' + jid.replace(/@s\.whatsapp\.net|@c\.us/g, '').trim();
+    }
+    res.json({ connected, phone });
+});
+
+app.post('/api/whatsapp/disconnect', authenticate, async (req, res) => {
+    try {
+        const sessionId = 'self_whatsapp_session';
+        await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
+        io.emit('whatsapp-status', { sessionId, status: 'disconnected' });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // Status do servidor
 app.get('/api/status', (req, res) => {
@@ -1367,15 +1467,15 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
 // ============================================
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+    res.sendFile(path.join(STATIC_DIR, 'login.html'));
 });
 
 app.get('*', (req, res) => {
-    const requestedFile = path.join(__dirname, '..', 'public', req.path);
+    const requestedFile = path.join(STATIC_DIR, req.path);
     if (fs.existsSync(requestedFile)) {
         res.sendFile(requestedFile);
     } else {
-        res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+        res.sendFile(path.join(STATIC_DIR, 'login.html'));
     }
 });
 
@@ -1434,10 +1534,9 @@ process.on('uncaughtException', (error) => {
 });
 
 // ============================================
-// INICIAR SERVIDOR
+// LOG DE INICIALIZAÇÃO
 // ============================================
 
-server.listen(PORT, HOST, () => {
     console.log('');
     console.log('╔════════════════════════════════════════════════════════════╗');
     console.log('║     SELF PROTEÇÃO VEICULAR - SERVIDOR v4.1                 ║');
@@ -1453,31 +1552,22 @@ server.listen(PORT, HOST, () => {
     console.log('');
     console.log('✅ Servidor pronto para receber conexões!');
     console.log('');
-});
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('⚠️  SIGTERM recebido, encerrando servidor...');
-    
-    queueService.stopProcessing();
-    
-    for (const [sessionId, session] of sessions.entries()) {
-        try {
-            await session.socket.end();
-        } catch (error) {}
-    }
-    
-    closeDatabase();
-    
-    server.close(() => {
-        console.log('✅ Servidor encerrado');
+    // Graceful shutdown (referências em closure)
+    process.on('SIGTERM', async () => {
+        console.log('⚠️  SIGTERM recebido, encerrando servidor...');
+        queueService.stopProcessing();
+        for (const [sessionId, session] of sessions.entries()) {
+            try { await session.socket.end(); } catch (e) {}
+        }
+        closeDatabase();
+        server.close(() => { console.log('✅ Servidor encerrado'); process.exit(0); });
+    });
+
+    process.on('SIGINT', async () => {
+        console.log('⚠️  SIGINT recebido, encerrando servidor...');
+        queueService.stopProcessing();
+        closeDatabase();
         process.exit(0);
     });
-});
-
-process.on('SIGINT', async () => {
-    console.log('⚠️  SIGINT recebido, encerrando servidor...');
-    queueService.stopProcessing();
-    closeDatabase();
-    process.exit(0);
-});
+};

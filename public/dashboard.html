@@ -8,6 +8,27 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/app.css">
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .dashboard-botconversa { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
+        @media (max-width: 900px) { .dashboard-botconversa { grid-template-columns: 1fr; } }
+        .stats-period-card, .stats-general-card, .events-personalized-card { background: white; border-radius: var(--border-radius-lg); box-shadow: var(--shadow-md); padding: 24px; border: 1px solid var(--border-color); }
+        .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 600; }
+        .stats-period-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
+        .stats-period-controls .form-input, .stats-period-controls .form-select { height: 38px; padding: 0 12px; }
+        .chart-type-toggle { display: flex; gap: 4px; }
+        .chart-type-toggle .chart-btn { padding: 8px 12px; border: 1px solid var(--border-color); background: white; border-radius: 8px; cursor: pointer; }
+        .chart-type-toggle .chart-btn.active { background: rgba(var(--primary-rgb), 0.1); border-color: var(--primary); color: var(--primary); }
+        .stats-general-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--gray-100); }
+        .stats-general-item:last-child { border-bottom: none; }
+        .stats-general-label { font-size: 13px; color: var(--gray-600); }
+        .stats-general-value { font-weight: 700; font-size: 18px; }
+        .events-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .events-header h3 { margin: 0; }
+        .info-icon { cursor: help; opacity: 0.7; }
+        .events-empty { text-align: center; padding: 40px 20px; color: var(--gray-500); }
+        .events-empty-emoji { width: 48px; height: 48px; display: block; margin-bottom: 16px; opacity: 0.6; background-color: var(--gray-400); }
+    </style>
 </head>
 <body>
     <!-- Mobile Menu Toggle -->
@@ -30,25 +51,25 @@
                 <ul class="nav-menu">
                     <li class="nav-item">
                         <a href="dashboard.html" class="nav-link active">
-                            <span class="icon">🏠</span>
+                            <span class="icon icon-dashboard"></span>
                             Painel de Controle
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="contatos.html" class="nav-link">
-                            <span class="icon">👥</span>
+                            <span class="icon icon-contacts"></span>
                             Contatos
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="campanhas.html" class="nav-link">
-                            <span class="icon">📢</span>
+                            <span class="icon icon-campaigns"></span>
                             Campanhas
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="transmissao.html" class="nav-link">
-                            <span class="icon">📡</span>
+                            <span class="icon icon-broadcast"></span>
                             Transmissão
                         </a>
                     </li>
@@ -60,7 +81,7 @@
                 <ul class="nav-menu">
                     <li class="nav-item">
                         <a href="inbox.html" class="nav-link">
-                            <span class="icon">💬</span>
+                            <span class="icon icon-inbox"></span>
                             Inbox
                             <span class="badge" style="display: none;">0</span>
                         </a>
@@ -73,19 +94,19 @@
                 <ul class="nav-menu">
                     <li class="nav-item">
                         <a href="automacao.html" class="nav-link">
-                            <span class="icon">🤖</span>
+                            <span class="icon icon-automation"></span>
                             Automação
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="fluxos.html" class="nav-link">
-                            <span class="icon">🔄</span>
+                            <span class="icon icon-flows"></span>
                             Fluxos de Conversa
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="funil.html" class="nav-link">
-                            <span class="icon">📊</span>
+                            <span class="icon icon-funnel"></span>
                             Funil de Vendas
                         </a>
                     </li>
@@ -97,14 +118,20 @@
                 <ul class="nav-menu">
                     <li class="nav-item">
                         <a href="whatsapp.html" class="nav-link">
-                            <span class="icon">📱</span>
+                            <span class="icon icon-whatsapp"></span>
                             WhatsApp
                         </a>
                     </li>
                     <li class="nav-item">
                         <a href="configuracoes.html" class="nav-link">
-                            <span class="icon">⚙️</span>
+                            <span class="icon icon-settings"></span>
                             Configurações
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="configuracoes.html#copys" class="nav-link">
+                            <span class="icon icon-templates"></span>
+                            Modelos
                         </a>
                     </li>
                 </ul>
@@ -116,10 +143,7 @@
                 <span class="status-indicator disconnected"></span>
                 <span class="whatsapp-status-text">Desconectado</span>
             </div>
-            <button class="btn-logout" onclick="logout()">
-                <span>🚪</span>
-                Sair
-            </button>
+            <button class="btn-logout" onclick="logout()">Sair</button>
         </div>
     </aside>
 
@@ -128,32 +152,95 @@
         <!-- Header -->
         <div class="page-header">
             <div class="page-title">
-                <h1>Dashboard de Leads</h1>
+                <h1>Painel de Controle</h1>
                 <p>Bem-vindo, <span class="user-name">thyago</span> | <span class="current-date"></span></p>
             </div>
             <div class="page-actions">
                 <button class="btn btn-outline" onclick="loadDashboardData()">
-                    🔄 Atualizar
+                    <span class="icon icon-refresh icon-sm"></span>
+                    Atualizar
                 </button>
                 <button class="btn btn-outline" onclick="openModal('importModal')">
-                    📥 Importar
+                    <span class="icon icon-import icon-sm"></span>
+                    Importar
                 </button>
                 <button class="btn btn-success" onclick="exportLeads()">
-                    📤 Exportar
+                    <span class="icon icon-export icon-sm"></span>
+                    Exportar
                 </button>
                 <button class="btn btn-whatsapp" onclick="window.location.href='transmissao.html'">
-                    📱 Lote
+                    <span class="icon icon-batch icon-sm"></span>
+                    Lote
                 </button>
                 <button class="btn btn-outline-danger" onclick="confirmReset()">
-                    🔄 Reset
+                    <span class="icon icon-reset icon-sm"></span>
+                    Reset
                 </button>
+            </div>
+        </div>
+
+        <!-- Estatísticas por período (estilo BotConversa) -->
+        <div class="dashboard-botconversa">
+            <div class="stats-period-card">
+                <h3>Estatísticas por período</h3>
+                <div class="stats-period-controls">
+                    <input type="date" class="form-input" id="statsStartDate">
+                    <input type="date" class="form-input" id="statsEndDate">
+                    <select class="form-select" id="statsMetric" style="width: auto;">
+                        <option value="novos_contatos">Novos Contatos</option>
+                        <option value="mensagens">Mensagens</option>
+                        <option value="interacoes">Interações</option>
+                    </select>
+                    <div class="chart-type-toggle">
+                        <button type="button" class="chart-btn active" title="Gráfico de linhas">
+                            <span class="icon icon-chart-line icon-sm"></span>
+                        </button>
+                        <button type="button" class="chart-btn" title="Gráfico de barras">
+                            <span class="icon icon-chart-bar icon-sm"></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="stats-period-chart" id="statsPeriodChart">
+                    <canvas id="statsChart" style="max-height: 200px;"></canvas>
+                </div>
+            </div>
+            <div class="stats-general-card">
+                <h3>Estatísticas gerais</h3>
+                <div class="stats-general-item">
+                    <span class="stats-general-label">Contatos que interagiram</span>
+                    <span class="stats-general-value" id="statsContacts">0</span>
+                </div>
+                <div class="stats-general-item">
+                    <span class="stats-general-label">Mensagem enviada pelo contato</span>
+                    <span class="stats-general-value" id="statsMessages">0</span>
+                </div>
+                <div class="stats-general-item">
+                    <span class="stats-general-label">Interações/Inscrito</span>
+                    <span class="stats-general-value" id="statsInteractionsPer">0</span>
+                </div>
+            </div>
+        </div>
+        <div class="events-personalized-card" style="margin-bottom: 24px;">
+            <div class="events-header">
+                <h3>Eventos personalizados <span class="info-icon" title="Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas."><span class="icon icon-info icon-sm"></span></span></h3>
+                <select class="form-select" style="width: auto;">
+                    <option>Este mês</option>
+                    <option>Semana</option>
+                    <option>Ano</option>
+                </select>
+                <button class="btn btn-primary btn-sm">Criar</button>
+            </div>
+            <div class="events-empty">
+                <span class="events-empty-emoji icon icon-empty"></span>
+                <p><strong>Nenhum evento personalizado ainda</strong></p>
+                <p class="text-muted">Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas.</p>
             </div>
         </div>
 
         <!-- Stats Cards -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon primary">👥</div>
+                <div class="stat-icon primary"><span class="icon icon-contacts"></span></div>
                 <div class="stat-content">
                     <div class="stat-value" id="totalLeads">0</div>
                     <div class="stat-label">Total de Leads</div>
@@ -161,7 +248,7 @@
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon success">✅</div>
+                <div class="stat-icon success"><span class="icon icon-check"></span></div>
                 <div class="stat-content">
                     <div class="stat-value" id="completedLeads">0</div>
                     <div class="stat-label">Concluídos</div>
@@ -169,7 +256,7 @@
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon warning">⏳</div>
+                <div class="stat-icon warning"><span class="icon icon-clock"></span></div>
                 <div class="stat-content">
                     <div class="stat-value" id="pendingLeads">0</div>
                     <div class="stat-label">Em Andamento</div>
@@ -177,7 +264,7 @@
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon info">📊</div>
+                <div class="stat-icon info"><span class="icon icon-chart-bar"></span></div>
                 <div class="stat-content">
                     <div class="stat-value" id="conversionRate">0.0%</div>
                     <div class="stat-label">Conversão</div>
@@ -188,7 +275,7 @@
 
         <!-- Funil de Conversão -->
         <div class="funnel-container">
-            <div class="funnel-title">📈 Funil de Conversão</div>
+            <div class="funnel-title"><span class="icon icon-funnel icon-sm"></span> Funil de Conversão</div>
             <div class="funnel-stages" id="funnelStages">
                 <div class="funnel-stage" data-stage="1">
                     <div class="funnel-value" id="funnel1">0</div>
@@ -219,10 +306,10 @@
         <!-- Leads Recentes -->
         <div class="table-container">
             <div class="table-header">
-                <div class="table-title">👥 Leads Recentes</div>
+                <div class="table-title"><span class="icon icon-contacts icon-sm"></span> Leads Recentes</div>
                 <div class="table-filters">
                     <div class="search-box">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon icon icon-search icon-sm"></span>
                         <input type="text" id="searchLeads" placeholder="Buscar por nome, telefone..." onkeyup="filterLeads()">
                     </div>
                     <select class="form-select" id="filterStatus" onchange="filterLeads()" style="width: auto;">
@@ -256,7 +343,7 @@
                     <tbody id="leadsTableBody">
                         <tr>
                             <td colspan="8" class="table-empty">
-                                <div class="table-empty-icon">📋</div>
+                                <div class="table-empty-icon icon icon-empty icon-lg"></div>
                                 <p>Carregando leads...</p>
                             </td>
                         </tr>
@@ -270,7 +357,7 @@
     <div class="modal-overlay" id="importModal">
         <div class="modal modal-lg">
             <div class="modal-header">
-                <h3 class="modal-title">📥 Importar Leads</h3>
+                <h3 class="modal-title"><span class="icon icon-import icon-sm"></span> Importar Leads</h3>
                 <button class="modal-close" onclick="closeModal('importModal')">×</button>
             </div>
             <div class="modal-body">
@@ -297,7 +384,7 @@ Maria Santos,27988888888,Toyota Corolla 2021,XYZ5678"></textarea>
     <div class="modal-overlay" id="addLeadModal">
         <div class="modal">
             <div class="modal-header">
-                <h3 class="modal-title">➕ Adicionar Lead</h3>
+                <h3 class="modal-title"><span class="icon icon-add icon-sm"></span> Adicionar Lead</h3>
                 <button class="modal-close" onclick="closeModal('addLeadModal')">×</button>
             </div>
             <div class="modal-body">
@@ -344,7 +431,7 @@ Maria Santos,27988888888,Toyota Corolla 2021,XYZ5678"></textarea>
     <div class="modal-overlay" id="editLeadModal">
         <div class="modal">
             <div class="modal-header">
-                <h3 class="modal-title">✏️ Editar Lead</h3>
+                <h3 class="modal-title"><span class="icon icon-edit icon-sm"></span> Editar Lead</h3>
                 <button class="modal-close" onclick="closeModal('editLeadModal')">×</button>
             </div>
             <div class="modal-body">
@@ -391,363 +478,11 @@ Maria Santos,27988888888,Toyota Corolla 2021,XYZ5678"></textarea>
     </div>
 
     <!-- Floating Action Button -->
-    <button class="btn btn-whatsapp btn-icon" style="position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; font-size: 24px; box-shadow: var(--shadow-lg);" onclick="openModal('addLeadModal')" title="Adicionar Lead">
-        ➕
+    <button class="btn btn-whatsapp btn-icon" style="position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; box-shadow: var(--shadow-lg);" onclick="openModal('addLeadModal')" title="Adicionar Lead">
+        <span class="icon icon-add icon-lg"></span>
     </button>
 
-    <script src="js/app.js"></script>
-    <script>
-        // Dados dos leads
-        let allLeads = [];
-        let selectedLeads = [];
-
-        // Carregar dados ao iniciar
-        document.addEventListener('DOMContentLoaded', () => {
-            loadDashboardData();
-        });
-
-        // Carregar dados do dashboard
-        async function loadDashboardData() {
-            try {
-                showLoading('Carregando dados...');
-                
-                const response = await api.get('/api/leads');
-                allLeads = response.leads || [];
-                
-                updateStats();
-                updateFunnel();
-                renderLeadsTable();
-                
-                hideLoading();
-            } catch (error) {
-                hideLoading();
-                showToast('error', 'Erro', 'Não foi possível carregar os dados');
-                console.error(error);
-            }
-        }
-
-        // Atualizar estatísticas
-        function updateStats() {
-            const total = allLeads.length;
-            const completed = allLeads.filter(l => l.status === 3).length;
-            const pending = allLeads.filter(l => l.status === 1 || l.status === 2).length;
-            const conversion = total > 0 ? (completed / total * 100) : 0;
-
-            document.getElementById('totalLeads').textContent = formatNumber(total);
-            document.getElementById('completedLeads').textContent = formatNumber(completed);
-            document.getElementById('pendingLeads').textContent = formatNumber(pending);
-            document.getElementById('conversionRate').textContent = formatPercent(conversion);
-        }
-
-        // Atualizar funil
-        function updateFunnel() {
-            const total = allLeads.length;
-            const stage1 = allLeads.filter(l => l.status === 1).length;
-            const stage2 = allLeads.filter(l => l.status === 2).length;
-            const stage3 = allLeads.filter(l => l.status === 3).length;
-            const stage4 = allLeads.filter(l => l.status === 4).length;
-
-            document.getElementById('funnel1').textContent = formatNumber(stage1 + stage2 + stage3);
-            document.getElementById('funnel2').textContent = formatNumber(stage2 + stage3);
-            document.getElementById('funnel3').textContent = formatNumber(stage3);
-            document.getElementById('funnel4').textContent = formatNumber(stage3);
-
-            if (total > 0) {
-                document.getElementById('funnel2Percent').textContent = formatPercent((stage2 + stage3) / total * 100);
-                document.getElementById('funnel3Percent').textContent = formatPercent(stage3 / total * 100);
-                document.getElementById('funnel4Percent').textContent = formatPercent(stage3 / total * 100);
-            }
-        }
-
-        // Renderizar tabela de leads
-        function renderLeadsTable(leads = null) {
-            const tbody = document.getElementById('leadsTableBody');
-            const data = leads || allLeads;
-
-            if (data.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="8" class="table-empty">
-                            <div class="table-empty-icon">📋</div>
-                            <p>Nenhum lead encontrado</p>
-                            <button class="btn btn-primary mt-3" onclick="openModal('addLeadModal')">Adicionar Lead</button>
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            tbody.innerHTML = data.map(lead => `
-                <tr data-id="${lead.id}">
-                    <td>
-                        <label class="checkbox-wrapper">
-                            <input type="checkbox" class="lead-checkbox" value="${lead.id}" onchange="updateSelection()">
-                            <span class="checkbox-custom"></span>
-                        </label>
-                    </td>
-                    <td>${formatDate(lead.created_at, 'datetime')}</td>
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div class="avatar" style="background: ${getAvatarColor(lead.name)}">
-                                ${getInitials(lead.name)}
-                            </div>
-                            <span>${lead.name || 'Sem nome'}</span>
-                        </div>
-                    </td>
-                    <td>
-                        <a href="https://wa.me/55${lead.phone}" target="_blank" style="color: var(--whatsapp); text-decoration: none;">
-                            ${formatPhone(lead.phone)}
-                        </a>
-                    </td>
-                    <td>${lead.plate || '-'}</td>
-                    <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${lead.vehicle || ''}">
-                        ${lead.vehicle || '-'}
-                    </td>
-                    <td>${getStatusBadge(lead.status)}</td>
-                    <td>
-                        <div style="display: flex; gap: 5px;">
-                            <button class="btn btn-sm btn-whatsapp btn-icon" onclick="sendWhatsApp('${lead.phone}')" title="Enviar WhatsApp">
-                                💬
-                            </button>
-                            <button class="btn btn-sm btn-outline btn-icon" onclick="editLead(${lead.id})" title="Editar">
-                                ✏️
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger btn-icon" onclick="deleteLead(${lead.id})" title="Excluir">
-                                🗑️
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        // Filtrar leads
-        function filterLeads() {
-            const search = document.getElementById('searchLeads').value.toLowerCase();
-            const status = document.getElementById('filterStatus').value;
-
-            let filtered = allLeads;
-
-            if (search) {
-                filtered = filtered.filter(l => 
-                    (l.name && l.name.toLowerCase().includes(search)) ||
-                    (l.phone && l.phone.includes(search)) ||
-                    (l.vehicle && l.vehicle.toLowerCase().includes(search)) ||
-                    (l.plate && l.plate.toLowerCase().includes(search))
-                );
-            }
-
-            if (status) {
-                filtered = filtered.filter(l => l.status == status);
-            }
-
-            renderLeadsTable(filtered);
-        }
-
-        // Selecionar todos
-        function toggleSelectAll() {
-            const selectAll = document.getElementById('selectAll').checked;
-            const checkboxes = document.querySelectorAll('.lead-checkbox');
-            checkboxes.forEach(cb => cb.checked = selectAll);
-            updateSelection();
-        }
-
-        // Atualizar seleção
-        function updateSelection() {
-            const checkboxes = document.querySelectorAll('.lead-checkbox:checked');
-            selectedLeads = Array.from(checkboxes).map(cb => parseInt(cb.value));
-        }
-
-        // Salvar novo lead
-        async function saveLead() {
-            const name = document.getElementById('leadName').value.trim();
-            const phone = document.getElementById('leadPhone').value.replace(/\D/g, '');
-            const vehicle = document.getElementById('leadVehicle').value.trim();
-            const plate = document.getElementById('leadPlate').value.trim().toUpperCase();
-            const email = document.getElementById('leadEmail').value.trim();
-            const status = parseInt(document.getElementById('leadStatus').value);
-
-            if (!name || !phone) {
-                showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
-                return;
-            }
-
-            if (!validatePhone(phone)) {
-                showToast('error', 'Erro', 'Telefone inválido');
-                return;
-            }
-
-            try {
-                showLoading('Salvando...');
-                
-                await api.post('/api/leads', {
-                    name, phone, vehicle, plate, email, status
-                });
-
-                closeModal('addLeadModal');
-                document.getElementById('addLeadForm').reset();
-                
-                await loadDashboardData();
-                showToast('success', 'Sucesso', 'Lead adicionado com sucesso!');
-            } catch (error) {
-                hideLoading();
-                showToast('error', 'Erro', error.message || 'Não foi possível salvar o lead');
-            }
-        }
-
-        // Editar lead
-        function editLead(id) {
-            const lead = allLeads.find(l => l.id === id);
-            if (!lead) return;
-
-            document.getElementById('editLeadId').value = lead.id;
-            document.getElementById('editLeadName').value = lead.name || '';
-            document.getElementById('editLeadPhone').value = lead.phone || '';
-            document.getElementById('editLeadVehicle').value = lead.vehicle || '';
-            document.getElementById('editLeadPlate').value = lead.plate || '';
-            document.getElementById('editLeadEmail').value = lead.email || '';
-            document.getElementById('editLeadStatus').value = lead.status || 1;
-
-            openModal('editLeadModal');
-        }
-
-        // Atualizar lead
-        async function updateLead() {
-            const id = document.getElementById('editLeadId').value;
-            const name = document.getElementById('editLeadName').value.trim();
-            const phone = document.getElementById('editLeadPhone').value.replace(/\D/g, '');
-            const vehicle = document.getElementById('editLeadVehicle').value.trim();
-            const plate = document.getElementById('editLeadPlate').value.trim().toUpperCase();
-            const email = document.getElementById('editLeadEmail').value.trim();
-            const status = parseInt(document.getElementById('editLeadStatus').value);
-
-            if (!name || !phone) {
-                showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
-                return;
-            }
-
-            try {
-                showLoading('Salvando...');
-                
-                await api.put(`/api/leads/${id}`, {
-                    name, phone, vehicle, plate, email, status
-                });
-
-                closeModal('editLeadModal');
-                await loadDashboardData();
-                showToast('success', 'Sucesso', 'Lead atualizado com sucesso!');
-            } catch (error) {
-                hideLoading();
-                showToast('error', 'Erro', error.message || 'Não foi possível atualizar o lead');
-            }
-        }
-
-        // Excluir lead
-        async function deleteLead(id) {
-            if (!confirm('Tem certeza que deseja excluir este lead?')) return;
-
-            try {
-                showLoading('Excluindo...');
-                await api.delete(`/api/leads/${id}`);
-                await loadDashboardData();
-                showToast('success', 'Sucesso', 'Lead excluído com sucesso!');
-            } catch (error) {
-                hideLoading();
-                showToast('error', 'Erro', error.message || 'Não foi possível excluir o lead');
-            }
-        }
-
-        // Enviar WhatsApp
-        function sendWhatsApp(phone) {
-            const cleanPhone = phone.replace(/\D/g, '');
-            window.open(`https://wa.me/55${cleanPhone}`, '_blank');
-        }
-
-        // Importar leads
-        async function importLeads() {
-            const fileInput = document.getElementById('importFile');
-            const textInput = document.getElementById('importText').value.trim();
-
-            let data = [];
-
-            if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                const text = await file.text();
-                data = parseCSV(text);
-            } else if (textInput) {
-                data = parseCSV(textInput);
-            } else {
-                showToast('error', 'Erro', 'Selecione um arquivo ou cole os dados');
-                return;
-            }
-
-            if (data.length === 0) {
-                showToast('error', 'Erro', 'Nenhum dado válido encontrado');
-                return;
-            }
-
-            try {
-                showLoading(`Importando ${data.length} leads...`);
-                
-                let imported = 0;
-                for (const row of data) {
-                    const phone = (row.telefone || row.phone || row.whatsapp || '').replace(/\D/g, '');
-                    if (!phone) continue;
-
-                    try {
-                        await api.post('/api/leads', {
-                            name: row.nome || row.name || 'Sem nome',
-                            phone: phone,
-                            vehicle: row.veiculo || row.vehicle || '',
-                            plate: row.placa || row.plate || '',
-                            status: 1
-                        });
-                        imported++;
-                    } catch (e) {
-                        console.error('Erro ao importar:', e);
-                    }
-                }
-
-                closeModal('importModal');
-                document.getElementById('importFile').value = '';
-                document.getElementById('importText').value = '';
-                
-                await loadDashboardData();
-                showToast('success', 'Sucesso', `${imported} leads importados com sucesso!`);
-            } catch (error) {
-                hideLoading();
-                showToast('error', 'Erro', 'Falha na importação');
-            }
-        }
-
-        // Exportar leads
-        function exportLeads() {
-            if (allLeads.length === 0) {
-                showToast('warning', 'Aviso', 'Nenhum lead para exportar');
-                return;
-            }
-
-            const data = allLeads.map(l => ({
-                nome: l.name,
-                telefone: l.phone,
-                veiculo: l.vehicle,
-                placa: l.plate,
-                email: l.email,
-                status: getStatusLabel(l.status),
-                data: formatDate(l.created_at, 'datetime')
-            }));
-
-            exportToCSV(data, `leads_self_${formatDate(new Date(), 'short').replace(/\//g, '-')}.csv`);
-            showToast('success', 'Sucesso', 'Leads exportados com sucesso!');
-        }
-
-        // Confirmar reset
-        function confirmReset() {
-            if (!confirm('ATENÇÃO: Esta ação irá excluir TODOS os leads. Deseja continuar?')) return;
-            if (!confirm('Tem certeza absoluta? Esta ação não pode ser desfeita!')) return;
-            
-            showToast('info', 'Info', 'Função de reset desabilitada por segurança');
-        }
-    </script>
+    <script type="module" src="/src/core/app.ts"></script>
+    <script type="module" src="/src/pages/dashboard.ts"></script>
 </body>
 </html>

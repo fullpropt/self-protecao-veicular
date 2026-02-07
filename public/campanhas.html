@@ -90,31 +90,31 @@
         <nav class="sidebar-nav">
             <div class="nav-section">
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="dashboard.html" class="nav-link"><span class="icon">🏠</span>Painel de Controle</a></li>
-                    <li class="nav-item"><a href="contatos.html" class="nav-link"><span class="icon">👥</span>Contatos</a></li>
-                    <li class="nav-item"><a href="campanhas.html" class="nav-link active"><span class="icon">📢</span>Campanhas</a></li>
-                    <li class="nav-item"><a href="transmissao.html" class="nav-link"><span class="icon">📡</span>Transmissão</a></li>
+                    <li class="nav-item"><a href="dashboard.html" class="nav-link"><span class="icon icon-dashboard"></span>Painel de Controle</a></li>
+                    <li class="nav-item"><a href="contatos.html" class="nav-link"><span class="icon icon-contacts"></span>Contatos</a></li>
+                    <li class="nav-item"><a href="campanhas.html" class="nav-link active"><span class="icon icon-campaigns"></span>Campanhas</a></li>
+                    <li class="nav-item"><a href="transmissao.html" class="nav-link"><span class="icon icon-broadcast"></span>Transmissão</a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Conversas</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="inbox.html" class="nav-link"><span class="icon">💬</span>Inbox<span class="badge" style="display:none;">0</span></a></li>
+                    <li class="nav-item"><a href="inbox.html" class="nav-link"><span class="icon icon-inbox"></span>Inbox<span class="badge" style="display:none;">0</span></a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Automação</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="automacao.html" class="nav-link"><span class="icon">🤖</span>Automação</a></li>
-                    <li class="nav-item"><a href="fluxos.html" class="nav-link"><span class="icon">🔄</span>Fluxos de Conversa</a></li>
-                    <li class="nav-item"><a href="funil.html" class="nav-link"><span class="icon">📊</span>Funil de Vendas</a></li>
+                    <li class="nav-item"><a href="automacao.html" class="nav-link"><span class="icon icon-automation"></span>Automação</a></li>
+                    <li class="nav-item"><a href="fluxos.html" class="nav-link"><span class="icon icon-flows"></span>Fluxos de Conversa</a></li>
+                    <li class="nav-item"><a href="funil.html" class="nav-link"><span class="icon icon-funnel"></span>Funil de Vendas</a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Sistema</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="whatsapp.html" class="nav-link"><span class="icon">📱</span>WhatsApp</a></li>
-                    <li class="nav-item"><a href="configuracoes.html" class="nav-link"><span class="icon">⚙️</span>Configurações</a></li>
+                    <li class="nav-item"><a href="whatsapp.html" class="nav-link"><span class="icon icon-whatsapp"></span>WhatsApp</a></li>
+                    <li class="nav-item"><a href="configuracoes.html" class="nav-link"><span class="icon icon-settings"></span>Configurações</a></li>
                 </ul>
             </div>
         </nav>
@@ -123,47 +123,47 @@
                 <span class="status-indicator disconnected"></span>
                 <span class="whatsapp-status-text">Desconectado</span>
             </div>
-            <button class="btn-logout" onclick="logout()"><span>🚪</span>Sair</button>
+            <button class="btn-logout" onclick="logout()">Sair</button>
         </div>
     </aside>
 
     <main class="main-content">
         <div class="page-header">
             <div class="page-title">
-                <h1>📢 Campanhas</h1>
+                <h1><span class="icon icon-campaigns icon-sm"></span> Campanhas</h1>
                 <p>Gerencie suas campanhas de marketing</p>
             </div>
             <div class="page-actions">
-                <button class="btn btn-outline" onclick="loadCampaigns()">🔄 Atualizar</button>
-                <button class="btn btn-primary" onclick="openModal('newCampaignModal')">➕ Nova Campanha</button>
+                <button class="btn btn-outline" onclick="loadCampaigns()"><span class="icon icon-refresh icon-sm"></span> Atualizar</button>
+                <button class="btn btn-primary" onclick="openModal('newCampaignModal')"><span class="icon icon-add icon-sm"></span> Nova Campanha</button>
             </div>
         </div>
 
         <!-- Stats -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon primary">📢</div>
+                <div class="stat-icon primary"><span class="icon icon-campaigns"></span></div>
                 <div class="stat-content">
                     <div class="stat-value" id="totalCampaigns">0</div>
                     <div class="stat-label">Total de Campanhas</div>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon success">✅</div>
+                <div class="stat-icon success"><span class="icon icon-check"></span></div>
                 <div class="stat-content">
                     <div class="stat-value" id="activeCampaigns">0</div>
                     <div class="stat-label">Ativas</div>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon info">📤</div>
+                <div class="stat-icon info"><span class="icon icon-export"></span></div>
                 <div class="stat-content">
                     <div class="stat-value" id="totalSent">0</div>
                     <div class="stat-label">Mensagens Enviadas</div>
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon warning">📊</div>
+                <div class="stat-icon warning"><span class="icon icon-chart-bar"></span></div>
                 <div class="stat-content">
                     <div class="stat-value" id="avgResponse">0%</div>
                     <div class="stat-label">Taxa de Resposta</div>
@@ -174,7 +174,7 @@
         <!-- Lista de Campanhas -->
         <div class="campaigns-grid" id="campaignsList">
             <div class="empty-state" style="grid-column: 1 / -1;">
-                <div class="empty-state-icon">📢</div>
+                <div class="empty-state-icon icon icon-empty icon-lg"></div>
                 <p>Carregando campanhas...</p>
             </div>
         </div>
@@ -184,7 +184,7 @@
     <div class="modal-overlay" id="newCampaignModal">
         <div class="modal modal-lg">
             <div class="modal-header">
-                <h3 class="modal-title">➕ Nova Campanha</h3>
+                <h3 class="modal-title"><span class="icon icon-add icon-sm"></span> Nova Campanha</h3>
                 <button class="modal-close" onclick="closeModal('newCampaignModal')">×</button>
             </div>
             <div class="modal-body">
@@ -257,8 +257,8 @@ Variáveis disponíveis:
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" onclick="closeModal('newCampaignModal')">Cancelar</button>
-                <button class="btn btn-outline" onclick="saveCampaign('draft')">💾 Salvar Rascunho</button>
-                <button class="btn btn-primary" onclick="saveCampaign('active')">🚀 Criar e Ativar</button>
+                <button class="btn btn-outline" onclick="saveCampaign('draft')"><span class="icon icon-save icon-sm"></span> Salvar Rascunho</button>
+                <button class="btn btn-primary" onclick="saveCampaign('active')"><span class="icon icon-rocket icon-sm"></span> Criar e Ativar</button>
             </div>
         </div>
     </div>
@@ -267,14 +267,14 @@ Variáveis disponíveis:
     <div class="modal-overlay" id="campaignDetailsModal">
         <div class="modal modal-lg">
             <div class="modal-header">
-                <h3 class="modal-title" id="detailsTitle">📢 Detalhes da Campanha</h3>
+                <h3 class="modal-title" id="detailsTitle"><span class="icon icon-campaigns icon-sm"></span> Detalhes da Campanha</h3>
                 <button class="modal-close" onclick="closeModal('campaignDetailsModal')">×</button>
             </div>
             <div class="modal-body">
                 <div class="tabs">
-                    <button class="tab active" onclick="switchCampaignTab('overview')">📊 Visão Geral</button>
-                    <button class="tab" onclick="switchCampaignTab('messages')">💬 Mensagens</button>
-                    <button class="tab" onclick="switchCampaignTab('recipients')">👥 Destinatários</button>
+                    <button class="tab active" onclick="switchCampaignTab('overview')"><span class="icon icon-chart-bar icon-sm"></span> Visão Geral</button>
+                    <button class="tab" onclick="switchCampaignTab('messages')"><span class="icon icon-message icon-sm"></span> Mensagens</button>
+                    <button class="tab" onclick="switchCampaignTab('recipients')"><span class="icon icon-contacts icon-sm"></span> Destinatários</button>
                 </div>
                 
                 <div class="tab-content active" id="tab-overview">
@@ -291,260 +291,12 @@ Variáveis disponíveis:
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" onclick="closeModal('campaignDetailsModal')">Fechar</button>
-                <button class="btn btn-primary" id="campaignActionBtn">▶️ Iniciar</button>
+                <button class="btn btn-primary" id="campaignActionBtn"><span class="icon icon-play icon-sm"></span> Iniciar</button>
             </div>
         </div>
     </div>
 
-    <script src="js/app.js"></script>
-    <script>
-        let campaigns = [];
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadCampaigns();
-        });
-
-        async function loadCampaigns() {
-            try {
-                showLoading('Carregando campanhas...');
-                const response = await api.get('/api/campaigns');
-                campaigns = response.campaigns || [];
-                updateStats();
-                renderCampaigns();
-                hideLoading();
-            } catch (error) {
-                hideLoading();
-                // Se não houver endpoint, mostrar campanhas de exemplo
-                campaigns = [
-                    {
-                        id: 1,
-                        name: 'Boas-vindas',
-                        description: 'Mensagem de boas-vindas para novos leads',
-                        type: 'trigger',
-                        status: 'active',
-                        sent: 156,
-                        delivered: 150,
-                        read: 120,
-                        replied: 45,
-                        created_at: new Date().toISOString()
-                    },
-                    {
-                        id: 2,
-                        name: 'Promoção Janeiro',
-                        description: 'Campanha promocional de janeiro',
-                        type: 'broadcast',
-                        status: 'completed',
-                        sent: 500,
-                        delivered: 485,
-                        read: 320,
-                        replied: 89,
-                        created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-                    }
-                ];
-                updateStats();
-                renderCampaigns();
-            }
-        }
-
-        function updateStats() {
-            document.getElementById('totalCampaigns').textContent = campaigns.length;
-            document.getElementById('activeCampaigns').textContent = campaigns.filter(c => c.status === 'active').length;
-            
-            const totalSent = campaigns.reduce((sum, c) => sum + (c.sent || 0), 0);
-            document.getElementById('totalSent').textContent = formatNumber(totalSent);
-            
-            const totalReplied = campaigns.reduce((sum, c) => sum + (c.replied || 0), 0);
-            const avgResponse = totalSent > 0 ? (totalReplied / totalSent * 100) : 0;
-            document.getElementById('avgResponse').textContent = formatPercent(avgResponse);
-        }
-
-        function renderCampaigns() {
-            const container = document.getElementById('campaignsList');
-            
-            if (campaigns.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state" style="grid-column: 1 / -1;">
-                        <div class="empty-state-icon">📢</div>
-                        <p>Nenhuma campanha criada</p>
-                        <button class="btn btn-primary mt-3" onclick="openModal('newCampaignModal')">➕ Criar Campanha</button>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = campaigns.map(c => {
-                const deliveryRate = c.sent > 0 ? (c.delivered / c.sent * 100) : 0;
-                const readRate = c.delivered > 0 ? (c.read / c.delivered * 100) : 0;
-                const replyRate = c.read > 0 ? (c.replied / c.read * 100) : 0;
-
-                return `
-                    <div class="campaign-card">
-                        <div class="campaign-header">
-                            <div>
-                                <h3 class="campaign-title">${c.name}</h3>
-                                <div class="campaign-date">Criada em ${formatDate(c.created_at, 'short')}</div>
-                            </div>
-                            <span class="badge badge-${c.status === 'active' ? 'success' : c.status === 'paused' ? 'warning' : c.status === 'completed' ? 'info' : 'secondary'}">
-                                ${c.status === 'active' ? '🟢 Ativa' : c.status === 'paused' ? '⏸️ Pausada' : c.status === 'completed' ? '✅ Concluída' : '📝 Rascunho'}
-                            </span>
-                        </div>
-                        <div class="campaign-body">
-                            <p style="color: var(--gray-600); margin-bottom: 15px;">${c.description || 'Sem descrição'}</p>
-                            <div class="campaign-stats">
-                                <div class="campaign-stat">
-                                    <div class="campaign-stat-value">${formatNumber(c.sent || 0)}</div>
-                                    <div class="campaign-stat-label">Enviadas</div>
-                                </div>
-                                <div class="campaign-stat">
-                                    <div class="campaign-stat-value">${formatPercent(deliveryRate)}</div>
-                                    <div class="campaign-stat-label">Entregues</div>
-                                </div>
-                                <div class="campaign-stat">
-                                    <div class="campaign-stat-value">${formatPercent(readRate)}</div>
-                                    <div class="campaign-stat-label">Lidas</div>
-                                </div>
-                                <div class="campaign-stat">
-                                    <div class="campaign-stat-value">${formatPercent(replyRate)}</div>
-                                    <div class="campaign-stat-label">Respostas</div>
-                                </div>
-                            </div>
-                            <div class="campaign-progress">
-                                <div class="progress" style="height: 8px;">
-                                    <div class="progress-bar" style="width: ${deliveryRate}%; background: var(--success);"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="campaign-footer">
-                            <span class="badge badge-secondary">${c.type === 'broadcast' ? '📡 Transmissão' : c.type === 'drip' ? '💧 Sequência' : '⚡ Gatilho'}</span>
-                            <div style="display: flex; gap: 10px;">
-                                <button class="btn btn-sm btn-outline" onclick="viewCampaign(${c.id})">👁️ Ver</button>
-                                ${c.status === 'active' ? 
-                                    `<button class="btn btn-sm btn-warning" onclick="pauseCampaign(${c.id})">⏸️ Pausar</button>` :
-                                    c.status === 'paused' || c.status === 'draft' ?
-                                    `<button class="btn btn-sm btn-success" onclick="startCampaign(${c.id})">▶️ Iniciar</button>` : ''
-                                }
-                                <button class="btn btn-sm btn-outline-danger" onclick="deleteCampaign(${c.id})">🗑️</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        async function saveCampaign(status) {
-            const data = {
-                name: document.getElementById('campaignName').value.trim(),
-                description: document.getElementById('campaignDescription').value.trim(),
-                type: document.getElementById('campaignType').value,
-                status: status,
-                segment: document.getElementById('campaignSegment').value,
-                message: document.getElementById('campaignMessage').value.trim(),
-                delay: parseInt(document.getElementById('campaignDelay').value),
-                start_at: document.getElementById('campaignStart').value
-            };
-
-            if (!data.name || !data.message) {
-                showToast('error', 'Erro', 'Nome e mensagem são obrigatórios');
-                return;
-            }
-
-            try {
-                showLoading('Salvando campanha...');
-                await api.post('/api/campaigns', data);
-                closeModal('newCampaignModal');
-                document.getElementById('campaignForm').reset();
-                await loadCampaigns();
-                showToast('success', 'Sucesso', 'Campanha criada com sucesso!');
-            } catch (error) {
-                hideLoading();
-                // Simular sucesso para demonstração
-                campaigns.push({
-                    id: campaigns.length + 1,
-                    ...data,
-                    sent: 0,
-                    delivered: 0,
-                    read: 0,
-                    replied: 0,
-                    created_at: new Date().toISOString()
-                });
-                closeModal('newCampaignModal');
-                document.getElementById('campaignForm').reset();
-                renderCampaigns();
-                showToast('success', 'Sucesso', 'Campanha criada com sucesso!');
-            }
-        }
-
-        function viewCampaign(id) {
-            const campaign = campaigns.find(c => c.id === id);
-            if (!campaign) return;
-
-            document.getElementById('detailsTitle').textContent = `📢 ${campaign.name}`;
-            
-            document.getElementById('campaignOverview').innerHTML = `
-                <div class="stats-grid" style="margin-bottom: 20px;">
-                    <div class="stat-card">
-                        <div class="stat-content">
-                            <div class="stat-value">${formatNumber(campaign.sent || 0)}</div>
-                            <div class="stat-label">Enviadas</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-content">
-                            <div class="stat-value">${formatNumber(campaign.delivered || 0)}</div>
-                            <div class="stat-label">Entregues</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-content">
-                            <div class="stat-value">${formatNumber(campaign.read || 0)}</div>
-                            <div class="stat-label">Lidas</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-content">
-                            <div class="stat-value">${formatNumber(campaign.replied || 0)}</div>
-                            <div class="stat-label">Respostas</div>
-                        </div>
-                    </div>
-                </div>
-                <p><strong>Descrição:</strong> ${campaign.description || 'Sem descrição'}</p>
-                <p><strong>Tipo:</strong> ${campaign.type}</p>
-                <p><strong>Status:</strong> ${campaign.status}</p>
-                <p><strong>Criada em:</strong> ${formatDate(campaign.created_at, 'datetime')}</p>
-            `;
-
-            openModal('campaignDetailsModal');
-        }
-
-        async function startCampaign(id) {
-            if (!confirm('Iniciar esta campanha?')) return;
-            showToast('success', 'Sucesso', 'Campanha iniciada!');
-            const campaign = campaigns.find(c => c.id === id);
-            if (campaign) campaign.status = 'active';
-            renderCampaigns();
-        }
-
-        async function pauseCampaign(id) {
-            if (!confirm('Pausar esta campanha?')) return;
-            showToast('success', 'Sucesso', 'Campanha pausada!');
-            const campaign = campaigns.find(c => c.id === id);
-            if (campaign) campaign.status = 'paused';
-            renderCampaigns();
-        }
-
-        async function deleteCampaign(id) {
-            if (!confirm('Excluir esta campanha?')) return;
-            campaigns = campaigns.filter(c => c.id !== id);
-            renderCampaigns();
-            showToast('success', 'Sucesso', 'Campanha excluída!');
-        }
-
-        function switchCampaignTab(tab) {
-            document.querySelectorAll('#campaignDetailsModal .tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('#campaignDetailsModal .tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`#campaignDetailsModal .tab[onclick="switchCampaignTab('${tab}')"]`).classList.add('active');
-            document.getElementById(`tab-${tab}`).classList.add('active');
-        }
-    </script>
+    <script type="module" src="/src/core/app.ts"></script>
+    <script type="module" src="/src/pages/campanhas.ts"></script>
 </body>
 </html>
