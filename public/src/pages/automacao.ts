@@ -1,7 +1,22 @@
-// @ts-nocheck
 // Automacao page logic migrated to module
 
-let automations = [];
+type TriggerType = 'new_lead' | 'status_change' | 'message_received' | 'keyword' | 'schedule' | 'inactivity';
+type ActionType = 'send_message' | 'change_status' | 'add_tag' | 'start_flow' | 'notify';
+
+type Automation = {
+    id: number;
+    name: string;
+    description?: string;
+    trigger_type: TriggerType;
+    action_type: ActionType;
+    is_active: boolean;
+    executions?: number;
+    last_execution?: string | null;
+};
+
+type AutomationsResponse = { automations?: Automation[] };
+
+let automations: Automation[] = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     loadAutomations();
@@ -12,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadAutomations() {
     try {
         showLoading('Carregando automações...');
-        const response = await api.get('/api/automations');
+        const response: AutomationsResponse = await api.get('/api/automations');
         automations = response.automations || [];
         updateStats();
         renderAutomations();
@@ -58,16 +73,30 @@ async function loadAutomations() {
 }
 
 function updateStats() {
-    document.getElementById('totalAutomations').textContent = automations.length;
-    document.getElementById('activeAutomations').textContent = automations.filter(a => a.is_active).length;
-    document.getElementById('totalExecutions').textContent = formatNumber(automations.reduce((sum, a) => sum + (a.executions || 0), 0));
+    const totalAutomations = document.getElementById('totalAutomations') as HTMLElement | null;
+    const activeAutomations = document.getElementById('activeAutomations') as HTMLElement | null;
+    const totalExecutions = document.getElementById('totalExecutions') as HTMLElement | null;
+    const lastExecution = document.getElementById('lastExecution') as HTMLElement | null;
+
+    if (totalAutomations) totalAutomations.textContent = String(automations.length);
+    if (activeAutomations) {
+        activeAutomations.textContent = String(automations.filter(a => a.is_active).length);
+    }
+    if (totalExecutions) {
+        totalExecutions.textContent = formatNumber(automations.reduce((sum, a) => sum + (a.executions || 0), 0));
+    }
     
-    const lastExec = automations.filter(a => a.last_execution).sort((a, b) => new Date(b.last_execution) - new Date(a.last_execution))[0];
-    document.getElementById('lastExecution').textContent = lastExec ? timeAgo(lastExec.last_execution) : '-';
+    const lastExec = automations
+        .filter(a => a.last_execution)
+        .sort((a, b) => new Date(b.last_execution as string).getTime() - new Date(a.last_execution as string).getTime())[0];
+    if (lastExecution) {
+        lastExecution.textContent = lastExec?.last_execution ? timeAgo(lastExec.last_execution) : '-';
+    }
 }
 
 function renderAutomations() {
-    const container = document.getElementById('automationsList');
+    const container = document.getElementById('automationsList') as HTMLElement | null;
+    if (!container) return;
     
     if (automations.length === 0) {
         container.innerHTML = `
@@ -124,7 +153,7 @@ function renderAutomations() {
     `).join('');
 }
 
-function getTriggerLabel(type) {
+function getTriggerLabel(type: TriggerType | string) {
     const labels = {
         'new_lead': 'Novo lead cadastrado',
         'status_change': 'Mudança de status',
@@ -136,7 +165,7 @@ function getTriggerLabel(type) {
     return labels[type] || type;
 }
 
-function getActionLabel(type) {
+function getActionLabel(type: ActionType | string) {
     const labels = {
         'send_message': 'Enviar mensagem',
         'change_status': 'Alterar status',
@@ -148,8 +177,9 @@ function getActionLabel(type) {
 }
 
 function updateTriggerOptions() {
-    const type = document.getElementById('triggerType').value;
-    const container = document.getElementById('triggerOptionsContainer');
+    const type = (document.getElementById('triggerType') as HTMLSelectElement | null)?.value || '';
+    const container = document.getElementById('triggerOptionsContainer') as HTMLElement | null;
+    if (!container) return;
     
     let html = '';
     
@@ -215,8 +245,9 @@ function updateTriggerOptions() {
 }
 
 function updateActionOptions() {
-    const type = document.getElementById('actionType').value;
-    const container = document.getElementById('actionOptionsContainer');
+    const type = (document.getElementById('actionType') as HTMLSelectElement | null)?.value || '';
+    const container = document.getElementById('actionOptionsContainer') as HTMLElement | null;
+    if (!container) return;
     
     let html = '';
     
@@ -265,7 +296,7 @@ Variáveis: {{nome}}, {{veiculo}}, {{placa}}"></textarea>
     container.innerHTML = html;
 }
 
-async function toggleAutomation(id, active) {
+async function toggleAutomation(id: number, active: boolean) {
     try {
         await api.put(`/api/automations/${id}`, { is_active: active });
         const automation = automations.find(a => a.id === id);
@@ -281,18 +312,18 @@ async function toggleAutomation(id, active) {
 }
 
 async function saveAutomation() {
-    const name = document.getElementById('automationName').value.trim();
-    const description = document.getElementById('automationDescription').value.trim();
-    const triggerType = document.getElementById('triggerType').value;
-    const actionType = document.getElementById('actionType').value;
-    const delay = parseInt(document.getElementById('actionDelay').value);
+    const name = (document.getElementById('automationName') as HTMLInputElement | null)?.value.trim() || '';
+    const description = (document.getElementById('automationDescription') as HTMLInputElement | null)?.value.trim() || '';
+    const triggerType = ((document.getElementById('triggerType') as HTMLSelectElement | null)?.value || '') as TriggerType;
+    const actionType = ((document.getElementById('actionType') as HTMLSelectElement | null)?.value || '') as ActionType;
+    const delay = parseInt((document.getElementById('actionDelay') as HTMLInputElement | null)?.value || '0', 10);
 
     if (!name) {
         showToast('error', 'Erro', 'Nome é obrigatório');
         return;
     }
 
-    const data = {
+    const data: Omit<Automation, 'id' | 'executions' | 'last_execution'> & { delay: number } = {
         name,
         description,
         trigger_type: triggerType,
@@ -305,7 +336,7 @@ async function saveAutomation() {
         showLoading('Salvando...');
         await api.post('/api/automations', data);
         closeModal('newAutomationModal');
-        document.getElementById('automationForm').reset();
+        (document.getElementById('automationForm') as HTMLFormElement | null)?.reset();
         await loadAutomations();
         showToast('success', 'Sucesso', 'Automação criada!');
     } catch (error) {
@@ -318,18 +349,18 @@ async function saveAutomation() {
             last_execution: null
         });
         closeModal('newAutomationModal');
-        document.getElementById('automationForm').reset();
+        (document.getElementById('automationForm') as HTMLFormElement | null)?.reset();
         renderAutomations();
         updateStats();
         showToast('success', 'Sucesso', 'Automação criada!');
     }
 }
 
-function editAutomation(id) {
+function editAutomation(id: number) {
     showToast('info', 'Info', 'Edição de automação em desenvolvimento');
 }
 
-async function deleteAutomation(id) {
+async function deleteAutomation(id: number) {
     if (!confirm('Excluir esta automação?')) return;
     
     automations = automations.filter(a => a.id !== id);
@@ -338,7 +369,14 @@ async function deleteAutomation(id) {
     showToast('success', 'Sucesso', 'Automação excluída!');
 }
 
-const windowAny = window as any;
+const windowAny = window as Window & {
+    updateTriggerOptions?: () => void;
+    updateActionOptions?: () => void;
+    toggleAutomation?: (id: number, active: boolean) => Promise<void>;
+    saveAutomation?: () => Promise<void>;
+    editAutomation?: (id: number) => void;
+    deleteAutomation?: (id: number) => Promise<void>;
+};
 windowAny.updateTriggerOptions = updateTriggerOptions;
 windowAny.updateActionOptions = updateActionOptions;
 windowAny.toggleAutomation = toggleAutomation;

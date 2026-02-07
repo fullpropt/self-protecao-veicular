@@ -1,9 +1,27 @@
-// @ts-nocheck
 // Fluxos page logic migrated to module
 
-let flows = [];
+type FlowStep = {
+    message: string;
+    delay: number;
+    condition?: string;
+};
+
+type Flow = {
+    id: number;
+    name: string;
+    description?: string;
+    trigger?: string;
+    is_active: boolean;
+    steps: FlowStep[];
+    leads_count?: number;
+    messages_sent?: number;
+};
+
+type FlowsResponse = { flows?: Flow[] };
+
+let flows: Flow[] = [];
 let stepCount = 1;
-let currentFlowId = null;
+let currentFlowId: number | null = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadFlows();
@@ -12,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadFlows() {
     try {
         showLoading('Carregando fluxos...');
-        const response = await api.get('/api/flows');
+        const response: FlowsResponse = await api.get('/api/flows');
         flows = response.flows || [];
         updateStats();
         renderFlows();
@@ -68,14 +86,19 @@ async function loadFlows() {
 }
 
 function updateStats() {
-    document.getElementById('totalFlows').textContent = flows.length;
-    document.getElementById('activeFlows').textContent = flows.filter(f => f.is_active).length;
-    document.getElementById('inFlows').textContent = formatNumber(flows.reduce((sum, f) => sum + (f.leads_count || 0), 0));
-    document.getElementById('sentMessages').textContent = formatNumber(flows.reduce((sum, f) => sum + (f.messages_sent || 0), 0));
+    const totalFlows = document.getElementById('totalFlows') as HTMLElement | null;
+    const activeFlows = document.getElementById('activeFlows') as HTMLElement | null;
+    const inFlows = document.getElementById('inFlows') as HTMLElement | null;
+    const sentMessages = document.getElementById('sentMessages') as HTMLElement | null;
+    if (totalFlows) totalFlows.textContent = String(flows.length);
+    if (activeFlows) activeFlows.textContent = String(flows.filter(f => f.is_active).length);
+    if (inFlows) inFlows.textContent = formatNumber(flows.reduce((sum, f) => sum + (f.leads_count || 0), 0));
+    if (sentMessages) sentMessages.textContent = formatNumber(flows.reduce((sum, f) => sum + (f.messages_sent || 0), 0));
 }
 
 function renderFlows() {
-    const container = document.getElementById('flowsList');
+    const container = document.getElementById('flowsList') as HTMLElement | null;
+    if (!container) return;
     
     if (flows.length === 0) {
         container.innerHTML = `
@@ -131,7 +154,7 @@ function renderFlows() {
     `).join('');
 }
 
-function formatDelay(seconds) {
+function formatDelay(seconds: number) {
     if (seconds === 0) return 'Imediato';
     if (seconds < 60) return `${seconds}s`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
@@ -141,7 +164,8 @@ function formatDelay(seconds) {
 
 function addStep() {
     stepCount++;
-    const container = document.getElementById('flowSteps');
+    const container = document.getElementById('flowSteps') as HTMLElement | null;
+    if (!container) return;
     
     const stepHtml = `
         <div class="step-item" data-step="${stepCount}">
@@ -181,8 +205,8 @@ function addStep() {
     container.insertAdjacentHTML('beforeend', stepHtml);
 }
 
-function removeStep(step) {
-    const element = document.querySelector(`.step-item[data-step="${step}"]`);
+function removeStep(step: number) {
+    const element = document.querySelector(`.step-item[data-step="${step}"]`) as HTMLElement | null;
     if (element && document.querySelectorAll('.step-item').length > 1) {
         element.remove();
         renumberSteps();
@@ -194,26 +218,27 @@ function removeStep(step) {
 function renumberSteps() {
     const steps = document.querySelectorAll('.step-item');
     steps.forEach((step, index) => {
-        step.querySelector('.step-item-number').textContent = index + 1;
+        const num = step.querySelector('.step-item-number') as HTMLElement | null;
+        if (num) num.textContent = String(index + 1);
     });
     stepCount = steps.length;
 }
 
 async function saveFlow() {
-    const name = document.getElementById('flowName').value.trim();
-    const trigger = document.getElementById('flowTrigger').value;
-    const description = document.getElementById('flowDescription').value.trim();
+    const name = (document.getElementById('flowName') as HTMLInputElement | null)?.value.trim() || '';
+    const trigger = (document.getElementById('flowTrigger') as HTMLSelectElement | null)?.value || '';
+    const description = (document.getElementById('flowDescription') as HTMLTextAreaElement | null)?.value.trim() || '';
 
     if (!name) {
         showToast('error', 'Erro', 'Nome é obrigatório');
         return;
     }
 
-    const steps = [];
+    const steps: FlowStep[] = [];
     document.querySelectorAll('.step-item').forEach(item => {
-        const message = item.querySelector('.step-message').value.trim();
-        const delay = parseInt(item.querySelector('.step-delay').value);
-        const condition = item.querySelector('.step-condition').value;
+        const message = (item.querySelector('.step-message') as HTMLTextAreaElement | null)?.value.trim() || '';
+        const delay = parseInt((item.querySelector('.step-delay') as HTMLSelectElement | null)?.value || '0', 10);
+        const condition = (item.querySelector('.step-condition') as HTMLSelectElement | null)?.value || '';
         
         if (message) {
             steps.push({ message, delay, condition });
@@ -225,7 +250,7 @@ async function saveFlow() {
         return;
     }
 
-    const data = { name, trigger, description, steps, is_active: true };
+    const data: Omit<Flow, 'id' | 'leads_count' | 'messages_sent'> = { name, trigger, description, steps, is_active: true };
 
     try {
         showLoading('Salvando...');
@@ -252,8 +277,10 @@ async function saveFlow() {
 }
 
 function resetFlowForm() {
-    document.getElementById('flowForm').reset();
-    document.getElementById('flowSteps').innerHTML = `
+    (document.getElementById('flowForm') as HTMLFormElement | null)?.reset();
+    const flowSteps = document.getElementById('flowSteps') as HTMLElement | null;
+    if (!flowSteps) return;
+    flowSteps.innerHTML = `
         <div class="step-item" data-step="1">
             <div class="step-item-number">1</div>
             <div class="step-item-content">
@@ -290,12 +317,15 @@ function resetFlowForm() {
     stepCount = 1;
 }
 
-function editFlow(id) {
+function editFlow(id: number) {
     const flow = flows.find(f => f.id === id);
     if (!flow) return;
 
     currentFlowId = id;
-    document.getElementById('editorTitle').innerHTML = `<span class="icon icon-edit icon-sm"></span> ${flow.name}`;
+    const editorTitle = document.getElementById('editorTitle') as HTMLElement | null;
+    if (editorTitle) {
+        editorTitle.innerHTML = `<span class="icon icon-edit icon-sm"></span> ${flow.name}`;
+    }
     
     let stepsHtml = flow.steps.map((s, i) => `
         <div class="step-item" data-step="${i + 1}">
@@ -329,7 +359,9 @@ function editFlow(id) {
         </div>
     `).join('');
 
-    document.getElementById('flowEditorContent').innerHTML = `
+    const flowEditorContent = document.getElementById('flowEditorContent') as HTMLElement | null;
+    if (flowEditorContent) {
+        flowEditorContent.innerHTML = `
         <div class="form-group">
             <label class="form-label">Nome</label>
             <input type="text" class="form-input" id="editFlowName" value="${flow.name}">
@@ -342,6 +374,7 @@ function editFlow(id) {
         <h4 style="margin-bottom: 15px;"><span class="icon icon-list icon-sm"></span> Etapas</h4>
         <div id="editFlowSteps">${stepsHtml}</div>
     `;
+    }
 
     openModal('flowEditorModal');
 }
@@ -350,14 +383,14 @@ function saveFlowChanges() {
     const flow = flows.find(f => f.id === currentFlowId);
     if (!flow) return;
 
-    flow.name = document.getElementById('editFlowName').value.trim();
-    flow.description = document.getElementById('editFlowDescription').value.trim();
+    flow.name = (document.getElementById('editFlowName') as HTMLInputElement | null)?.value.trim() || '';
+    flow.description = (document.getElementById('editFlowDescription') as HTMLTextAreaElement | null)?.value.trim() || '';
 
-    const steps = [];
+    const steps: FlowStep[] = [];
     document.querySelectorAll('#editFlowSteps .step-item').forEach(item => {
-        const message = item.querySelector('.step-message').value.trim();
-        const delay = parseInt(item.querySelector('.step-delay').value);
-        const condition = item.querySelector('.step-condition').value;
+        const message = (item.querySelector('.step-message') as HTMLTextAreaElement | null)?.value.trim() || '';
+        const delay = parseInt((item.querySelector('.step-delay') as HTMLSelectElement | null)?.value || '0', 10);
+        const condition = (item.querySelector('.step-condition') as HTMLSelectElement | null)?.value || '';
         if (message) steps.push({ message, delay, condition });
     });
     flow.steps = steps;
@@ -367,7 +400,7 @@ function saveFlowChanges() {
     showToast('success', 'Sucesso', 'Fluxo atualizado!');
 }
 
-function toggleFlow(id) {
+function toggleFlow(id: number) {
     const flow = flows.find(f => f.id === id);
     if (flow) {
         flow.is_active = !flow.is_active;
@@ -377,7 +410,7 @@ function toggleFlow(id) {
     }
 }
 
-function deleteFlow(id) {
+function deleteFlow(id: number) {
     if (!confirm('Excluir este fluxo?')) return;
     flows = flows.filter(f => f.id !== id);
     renderFlows();
@@ -385,7 +418,15 @@ function deleteFlow(id) {
     showToast('success', 'Sucesso', 'Fluxo excluído!');
 }
 
-const windowAny = window as any;
+const windowAny = window as Window & {
+    addStep?: () => void;
+    removeStep?: (step: number) => void;
+    saveFlow?: () => Promise<void>;
+    editFlow?: (id: number) => void;
+    saveFlowChanges?: () => void;
+    toggleFlow?: (id: number) => void;
+    deleteFlow?: (id: number) => void;
+};
 windowAny.addStep = addStep;
 windowAny.removeStep = removeStep;
 windowAny.saveFlow = saveFlow;

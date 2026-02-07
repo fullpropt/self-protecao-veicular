@@ -1,20 +1,43 @@
-// @ts-nocheck
 // Transmissao page logic migrated to module
 
-let allContacts = [];
-let filteredContacts = [];
-let selectedContacts = new Set();
-let templates = [];
-let queueInterval = null;
+type LeadStatus = 1 | 2 | 3 | 4;
+
+type Contact = {
+    id: number;
+    name?: string;
+    phone?: string;
+    status: LeadStatus;
+};
+
+type Template = { id: number; name: string; content: string };
+type LeadsResponse = { leads?: Contact[] };
+type TemplatesResponse = { templates?: Template[] };
+type QueueItem = {
+    id: number;
+    status: 'pending' | 'processing' | 'sent' | 'failed';
+    lead_name?: string;
+    lead_phone?: string;
+    processed_at?: string;
+};
+type QueueResponse = { queue?: QueueItem[] };
+
+let allContacts: Contact[] = [];
+let filteredContacts: Contact[] = [];
+let selectedContacts = new Set<number>();
+let templates: Template[] = [];
+let queueInterval: number | null = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadContacts();
     loadTemplates();
     loadQueueStatus();
     
-    document.getElementById('startTime').addEventListener('change', (e) => {
-        document.getElementById('scheduledTimeGroup').style.display = 
-            e.target.value === 'scheduled' ? 'block' : 'none';
+    const startTime = document.getElementById('startTime') as HTMLSelectElement | null;
+    const scheduledTimeGroup = document.getElementById('scheduledTimeGroup') as HTMLElement | null;
+    startTime?.addEventListener('change', (e) => {
+        if (!scheduledTimeGroup) return;
+        scheduledTimeGroup.style.display = 
+            (e.target as HTMLSelectElement).value === 'scheduled' ? 'block' : 'none';
     });
 
     // Atualizar fila a cada 5 segundos
@@ -23,11 +46,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadContacts() {
     try {
-        const response = await api.get('/api/leads');
+        const response: LeadsResponse = await api.get('/api/leads');
         allContacts = response.leads || [];
         filteredContacts = [...allContacts];
         renderRecipients();
-        document.getElementById('totalCount').textContent = allContacts.length;
+        const totalCount = document.getElementById('totalCount') as HTMLElement | null;
+        if (totalCount) totalCount.textContent = String(allContacts.length);
     } catch (error) {
         showToast('error', 'Erro', 'Não foi possível carregar os contatos');
     }
@@ -35,9 +59,10 @@ async function loadContacts() {
 
 async function loadTemplates() {
     try {
-        const response = await api.get('/api/templates');
+        const response: TemplatesResponse = await api.get('/api/templates');
         templates = response.templates || [];
-        const select = document.getElementById('templateSelect');
+        const select = document.getElementById('templateSelect') as HTMLSelectElement | null;
+        if (!select) return;
         templates.forEach(t => {
             select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
         });
@@ -45,16 +70,18 @@ async function loadTemplates() {
 }
 
 function loadTemplate() {
-    const id = document.getElementById('templateSelect').value;
-    const template = templates.find(t => t.id == id);
+    const id = (document.getElementById('templateSelect') as HTMLSelectElement | null)?.value || '';
+    const template = templates.find(t => String(t.id) === id);
     if (template) {
-        document.getElementById('messageContent').value = template.content;
+        const messageContent = document.getElementById('messageContent') as HTMLTextAreaElement | null;
+        if (messageContent) messageContent.value = template.content;
         updatePreview();
     }
 }
 
 function renderRecipients() {
-    const list = document.getElementById('recipientList');
+    const list = document.getElementById('recipientList') as HTMLElement | null;
+    if (!list) return;
     
     if (filteredContacts.length === 0) {
         list.innerHTML = `<div class="empty-state"><div class="empty-state-icon icon icon-empty icon-lg"></div><p>Nenhum contato encontrado</p></div>`;
@@ -77,7 +104,7 @@ function renderRecipients() {
     `).join('');
 }
 
-function toggleRecipient(id) {
+function toggleRecipient(id: number) {
     if (selectedContacts.has(id)) {
         selectedContacts.delete(id);
     } else {
@@ -100,18 +127,19 @@ function deselectAll() {
 }
 
 function updateSelectedCount() {
-    document.getElementById('selectedCount').textContent = selectedContacts.size;
+    const selectedCount = document.getElementById('selectedCount') as HTMLElement | null;
+    if (selectedCount) selectedCount.textContent = String(selectedContacts.size);
 }
 
 function filterRecipients() {
-    const search = document.getElementById('searchRecipients').value.toLowerCase();
-    const status = document.getElementById('filterStatus').value;
+    const search = (document.getElementById('searchRecipients') as HTMLInputElement | null)?.value.toLowerCase() || '';
+    const status = (document.getElementById('filterStatus') as HTMLSelectElement | null)?.value || '';
 
     filteredContacts = allContacts.filter(c => {
         const matchSearch = !search || 
             (c.name && c.name.toLowerCase().includes(search)) ||
             (c.phone && c.phone.includes(search));
-        const matchStatus = !status || c.status == status;
+        const matchStatus = !status || c.status == (parseInt(status, 10) as LeadStatus);
         return matchSearch && matchStatus;
     });
 
@@ -119,8 +147,9 @@ function filterRecipients() {
 }
 
 function updatePreview() {
-    const content = document.getElementById('messageContent').value;
-    const preview = document.getElementById('messagePreview');
+    const content = (document.getElementById('messageContent') as HTMLTextAreaElement | null)?.value || '';
+    const preview = document.getElementById('messagePreview') as HTMLElement | null;
+    if (!preview) return;
     
     if (!content) {
         preview.textContent = 'A mensagem aparecerá aqui...';
@@ -137,9 +166,9 @@ function updatePreview() {
 }
 
 async function startBroadcast() {
-    const message = document.getElementById('messageContent').value.trim();
-    const delay = parseInt(document.getElementById('messageDelay').value);
-    const startTime = document.getElementById('startTime').value;
+    const message = (document.getElementById('messageContent') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const delay = parseInt((document.getElementById('messageDelay') as HTMLSelectElement | null)?.value || '0', 10);
+    const startTime = (document.getElementById('startTime') as HTMLSelectElement | null)?.value || '';
 
     if (selectedContacts.size === 0) {
         showToast('error', 'Erro', 'Selecione pelo menos um contato');
@@ -155,15 +184,17 @@ async function startBroadcast() {
         showToast('warning', 'Aviso', 'WhatsApp não está conectado. As mensagens serão enviadas quando conectar.');
     }
 
-    const btn = document.getElementById('startBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="icon icon-clock icon-sm"></span> Processando...';
+    const btn = document.getElementById('startBtn') as HTMLButtonElement | null;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="icon icon-clock icon-sm"></span> Processando...';
+    }
 
     try {
         const leadIds = Array.from(selectedContacts);
         
         // Randomizar se necessário
-        if (document.getElementById('randomizeOrder').checked) {
+        if ((document.getElementById('randomizeOrder') as HTMLInputElement | null)?.checked) {
             leadIds.sort(() => Math.random() - 0.5);
         }
 
@@ -176,23 +207,26 @@ async function startBroadcast() {
         showToast('success', 'Sucesso', `${leadIds.length} mensagens adicionadas à fila!`);
         
         // Mostrar progresso
-        document.getElementById('queueProgress').style.display = 'block';
+        const queueProgress = document.getElementById('queueProgress') as HTMLElement | null;
+        if (queueProgress) queueProgress.style.display = 'block';
         loadQueueStatus();
         
         // Limpar seleção
         deselectAll();
         
     } catch (error) {
-        showToast('error', 'Erro', error.message || 'Falha ao iniciar transmissão');
+        showToast('error', 'Erro', error instanceof Error ? error.message : 'Falha ao iniciar transmissão');
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span class="icon icon-play icon-sm"></span> Iniciar Transmissão';
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="icon icon-play icon-sm"></span> Iniciar Transmissão';
+        }
     }
 }
 
 async function loadQueueStatus() {
     try {
-        const response = await api.get('/api/queue/status');
+        const response: QueueResponse = await api.get('/api/queue/status');
         const queue = response.queue || [];
         
         const pending = queue.filter(q => q.status === 'pending').length;
@@ -203,22 +237,29 @@ async function loadQueueStatus() {
 
         // Atualizar progresso
         if (total > 0) {
-            document.getElementById('queueProgress').style.display = 'block';
+            const queueProgress = document.getElementById('queueProgress') as HTMLElement | null;
+            if (queueProgress) queueProgress.style.display = 'block';
             const progress = ((sent + failed) / total) * 100;
-            document.getElementById('progressBar').style.width = `${progress}%`;
-            document.getElementById('sentCount').textContent = sent;
-            document.getElementById('pendingCount').textContent = pending + processing;
-            document.getElementById('failedCount').textContent = failed;
+            const progressBar = document.getElementById('progressBar') as HTMLElement | null;
+            const sentCount = document.getElementById('sentCount') as HTMLElement | null;
+            const pendingCount = document.getElementById('pendingCount') as HTMLElement | null;
+            const failedCount = document.getElementById('failedCount') as HTMLElement | null;
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (sentCount) sentCount.textContent = String(sent);
+            if (pendingCount) pendingCount.textContent = String(pending + processing);
+            if (failedCount) failedCount.textContent = String(failed);
             
             // Calcular ETA
-            const delay = parseInt(document.getElementById('messageDelay').value) || 5000;
+            const delay = parseInt((document.getElementById('messageDelay') as HTMLSelectElement | null)?.value || '5000', 10) || 5000;
             const remaining = pending + processing;
             const etaSeconds = Math.ceil((remaining * delay) / 1000);
             const etaMinutes = Math.floor(etaSeconds / 60);
             const etaSecs = etaSeconds % 60;
-            document.getElementById('etaTime').textContent = `${etaMinutes}:${etaSecs.toString().padStart(2, '0')}`;
+            const etaTime = document.getElementById('etaTime') as HTMLElement | null;
+            if (etaTime) etaTime.textContent = `${etaMinutes}:${etaSecs.toString().padStart(2, '0')}`;
         } else {
-            document.getElementById('queueProgress').style.display = 'none';
+            const queueProgress = document.getElementById('queueProgress') as HTMLElement | null;
+            if (queueProgress) queueProgress.style.display = 'none';
         }
 
         // Renderizar lista
@@ -229,8 +270,9 @@ async function loadQueueStatus() {
     }
 }
 
-function renderQueueList(queue) {
-    const list = document.getElementById('queueList');
+function renderQueueList(queue: QueueItem[]) {
+    const list = document.getElementById('queueList') as HTMLElement | null;
+    if (!list) return;
     
     if (queue.length === 0) {
         list.innerHTML = `<div class="empty-state"><div class="empty-state-icon icon icon-empty icon-lg"></div><p>Nenhuma mensagem na fila</p></div>`;
@@ -257,7 +299,7 @@ function renderQueueList(queue) {
     `).join('');
 }
 
-async function cancelQueueItem(id) {
+async function cancelQueueItem(id: number) {
     try {
         await api.delete(`/api/queue/${id}`);
         loadQueueStatus();
@@ -288,7 +330,19 @@ window.addEventListener('beforeunload', () => {
     if (queueInterval) clearInterval(queueInterval);
 });
 
-const windowAny = window as any;
+const windowAny = window as Window & {
+    loadTemplate?: () => void;
+    toggleRecipient?: (id: number) => void;
+    selectAll?: () => void;
+    deselectAll?: () => void;
+    filterRecipients?: () => void;
+    updatePreview?: () => void;
+    startBroadcast?: () => Promise<void>;
+    loadQueueStatus?: () => Promise<void>;
+    cancelQueueItem?: (id: number) => Promise<void>;
+    clearQueue?: () => Promise<void>;
+    pauseQueue?: () => void;
+};
 windowAny.loadTemplate = loadTemplate;
 windowAny.toggleRecipient = toggleRecipient;
 windowAny.selectAll = selectAll;

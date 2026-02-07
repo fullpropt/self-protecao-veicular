@@ -1,18 +1,49 @@
-// @ts-nocheck
 // Flow builder page logic migrated to module
 
 // Estado do construtor
-let nodes = [];
-let edges = [];
-let selectedNode = null;
-let currentFlowId = null;
+type NodeType = 'trigger' | 'message' | 'wait' | 'condition' | 'delay' | 'transfer' | 'tag' | 'status' | 'webhook' | 'end';
+type NodeData = {
+    label: string;
+    keyword?: string;
+    content?: string;
+    timeout?: number;
+    conditions?: Array<{ value: string; next?: string }>;
+    seconds?: number;
+    message?: string;
+    tag?: string;
+    status?: number;
+    url?: string;
+};
+
+type FlowNode = {
+    id: string;
+    type: NodeType;
+    subtype?: string;
+    position: { x: number; y: number };
+    data: NodeData;
+};
+
+type Edge = { source: string; target: string };
+
+type FlowSummary = {
+    id: number;
+    name: string;
+    trigger_type?: string;
+    nodes?: FlowNode[];
+    is_active?: boolean;
+};
+
+let nodes: FlowNode[] = [];
+let edges: Edge[] = [];
+let selectedNode: FlowNode | null = null;
+let currentFlowId: number | null = null;
 let zoom = 1;
 let pan = { x: 0, y: 0 };
 let isDragging = false;
-let dragNode = null;
+let dragNode: FlowNode | null = null;
 let dragOffset = { x: 0, y: 0 };
 let isConnecting = false;
-let connectionStart = null;
+let connectionStart: { nodeId: string; portType: string } | null = null;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -24,12 +55,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // Configurar drag and drop dos nós
 function setupDragAndDrop() {
     const nodeItems = document.querySelectorAll('.node-item');
-    const canvas = document.getElementById('canvasContainer');
+    const canvas = document.getElementById('canvasContainer') as HTMLElement | null;
+    if (!canvas) return;
     
     nodeItems.forEach(item => {
         item.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('nodeType', item.dataset.type);
-            e.dataTransfer.setData('nodeSubtype', item.dataset.subtype || '');
+            e.dataTransfer?.setData('nodeType', item.dataset.type || '');
+            e.dataTransfer?.setData('nodeSubtype', item.dataset.subtype || '');
         });
     });
     
@@ -39,34 +71,37 @@ function setupDragAndDrop() {
     
     canvas.addEventListener('drop', (e) => {
         e.preventDefault();
-        const type = e.dataTransfer.getData('nodeType');
-        const subtype = e.dataTransfer.getData('nodeSubtype');
+        const type = e.dataTransfer?.getData('nodeType') || '';
+        const subtype = e.dataTransfer?.getData('nodeSubtype') || '';
         
         const rect = canvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) / zoom;
         const y = (e.clientY - rect.top) / zoom;
         
-        addNode(type, subtype, x, y);
+        addNode(type as NodeType, subtype, x, y);
     });
 }
 
 // Configurar eventos do canvas
 function setupCanvasEvents() {
-    const canvas = document.getElementById('flowCanvas');
+    const canvas = document.getElementById('flowCanvas') as HTMLElement | null;
+    if (!canvas) return;
     
     canvas.addEventListener('click', (e) => {
-        if (e.target === canvas || e.target.id === 'canvasContainer') {
+        const target = e.target as HTMLElement | null;
+        if (target === canvas || target?.id === 'canvasContainer') {
             deselectNode();
         }
     });
 }
 
 // Adicionar nó
-function addNode(type, subtype, x, y) {
-    document.getElementById('emptyCanvas').style.display = 'none';
+function addNode(type: NodeType, subtype: string, x: number, y: number) {
+    const emptyCanvas = document.getElementById('emptyCanvas') as HTMLElement | null;
+    if (emptyCanvas) emptyCanvas.style.display = 'none';
     
     const id = 'node_' + Date.now();
-    const node = {
+    const node: FlowNode = {
         id,
         type,
         subtype,
@@ -80,7 +115,7 @@ function addNode(type, subtype, x, y) {
 }
 
 // Dados padrão do nó
-function getDefaultNodeData(type, subtype) {
+function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
     const defaults = {
         trigger: { label: subtype === 'keyword' ? 'Palavra-chave' : 'Novo Contato', keyword: '' },
         message: { label: 'Mensagem', content: 'Olá! Como posso ajudar?' },
@@ -97,8 +132,9 @@ function getDefaultNodeData(type, subtype) {
 }
 
 // Renderizar nó
-function renderNode(node) {
-    const container = document.getElementById('canvasContainer');
+function renderNode(node: FlowNode) {
+    const container = document.getElementById('canvasContainer') as HTMLElement | null;
+    if (!container) return;
     
     const nodeEl = document.createElement('div');
     nodeEl.className = 'flow-node';
@@ -136,11 +172,12 @@ function renderNode(node) {
     
     // Eventos de arrastar
     nodeEl.addEventListener('mousedown', (e) => {
-        if (e.target.classList.contains('port')) {
-            startConnection(node.id, e.target.dataset.port);
+        const target = e.target as HTMLElement | null;
+        if (target?.classList.contains('port')) {
+            startConnection(node.id, target.dataset.port || '');
             return;
         }
-        if (e.target.classList.contains('delete-btn')) return;
+        if (target?.classList.contains('delete-btn')) return;
         
         isDragging = true;
         dragNode = node;
@@ -154,15 +191,18 @@ function renderNode(node) {
     
     document.addEventListener('mousemove', (e) => {
         if (isDragging && dragNode) {
-            const canvas = document.getElementById('canvasContainer');
+            const canvas = document.getElementById('canvasContainer') as HTMLElement | null;
+            if (!canvas) return;
             const rect = canvas.getBoundingClientRect();
             
             dragNode.position.x = (e.clientX - rect.left - dragOffset.x) / zoom;
             dragNode.position.y = (e.clientY - rect.top - dragOffset.y) / zoom;
             
-            const nodeEl = document.getElementById(dragNode.id);
-            nodeEl.style.left = dragNode.position.x + 'px';
-            nodeEl.style.top = dragNode.position.y + 'px';
+            const nodeEl = document.getElementById(dragNode.id) as HTMLElement | null;
+            if (nodeEl) {
+                nodeEl.style.left = dragNode.position.x + 'px';
+                nodeEl.style.top = dragNode.position.y + 'px';
+            }
             
             renderConnections();
         }
@@ -175,9 +215,9 @@ function renderNode(node) {
     
     // Eventos das portas
     nodeEl.querySelectorAll('.port').forEach(port => {
-        port.addEventListener('mouseup', (e) => {
+        port.addEventListener('mouseup', () => {
             if (isConnecting && connectionStart) {
-                endConnection(node.id, port.dataset.port);
+                endConnection(node.id, port.dataset.port || '');
             }
         });
     });
@@ -186,7 +226,7 @@ function renderNode(node) {
 }
 
 // Preview do nó
-function getNodePreview(node) {
+function getNodePreview(node: FlowNode) {
     switch (node.type) {
         case 'message':
             return node.data.content?.substring(0, 50) + (node.data.content?.length > 50 ? '...' : '') || 'Clique para editar';
@@ -202,7 +242,7 @@ function getNodePreview(node) {
 }
 
 // Selecionar nó
-function selectNode(id) {
+function selectNode(id: string) {
     deselectNode();
     selectedNode = nodes.find(n => n.id === id);
     
@@ -219,11 +259,14 @@ function deselectNode() {
         if (nodeEl) nodeEl.classList.remove('selected');
     }
     selectedNode = null;
-    document.getElementById('propertiesContent').innerHTML = '<p style="color: var(--gray); font-size: 14px;">Selecione um bloco para editar suas propriedades</p>';
+    const propertiesContent = document.getElementById('propertiesContent') as HTMLElement | null;
+    if (propertiesContent) {
+        propertiesContent.innerHTML = '<p style="color: var(--gray); font-size: 14px;">Selecione um bloco para editar suas propriedades</p>';
+    }
 }
 
 // Deletar nó
-function deleteNode(id) {
+function deleteNode(id: string) {
     nodes = nodes.filter(n => n.id !== id);
     edges = edges.filter(e => e.source !== id && e.target !== id);
     
@@ -237,7 +280,8 @@ function deleteNode(id) {
     renderConnections();
     
     if (nodes.length === 0) {
-        document.getElementById('emptyCanvas').style.display = 'block';
+        const emptyCanvas = document.getElementById('emptyCanvas') as HTMLElement | null;
+        if (emptyCanvas) emptyCanvas.style.display = 'block';
     }
 }
 
@@ -245,7 +289,8 @@ function deleteNode(id) {
 function renderProperties() {
     if (!selectedNode) return;
     
-    const container = document.getElementById('propertiesContent');
+    const container = document.getElementById('propertiesContent') as HTMLElement | null;
+    if (!container) return;
     let html = '';
     
     html += `
@@ -360,7 +405,7 @@ function renderProperties() {
 }
 
 // Atualizar propriedade do nó
-function updateNodeProperty(key, value) {
+function updateNodeProperty(key: keyof NodeData, value: any) {
     if (!selectedNode) return;
     
     selectedNode.data[key] = value;
@@ -368,8 +413,10 @@ function updateNodeProperty(key, value) {
     // Atualizar visual
     const nodeEl = document.getElementById(selectedNode.id);
     if (nodeEl) {
-        nodeEl.querySelector('.title').textContent = selectedNode.data.label;
-        nodeEl.querySelector('.flow-node-body').innerHTML = getNodePreview(selectedNode);
+        const title = nodeEl.querySelector('.title') as HTMLElement | null;
+        const body = nodeEl.querySelector('.flow-node-body') as HTMLElement | null;
+        if (title) title.textContent = selectedNode.data.label;
+        if (body) body.innerHTML = getNodePreview(selectedNode);
     }
 }
 
@@ -385,20 +432,20 @@ function addCondition() {
     renderProperties();
 }
 
-function updateCondition(index, key, value) {
+function updateCondition(index: number, key: 'value' | 'next', value: string) {
     if (!selectedNode) return;
     selectedNode.data.conditions[index][key] = value;
 }
 
-function removeCondition(index) {
+function removeCondition(index: number) {
     if (!selectedNode) return;
     selectedNode.data.conditions.splice(index, 1);
     renderProperties();
 }
 
 // Inserir variável
-function insertVariable(variable) {
-    const textarea = document.getElementById('messageContent');
+function insertVariable(variable: string) {
+    const textarea = document.getElementById('messageContent') as HTMLTextAreaElement | null;
     if (textarea) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
@@ -411,13 +458,13 @@ function insertVariable(variable) {
 }
 
 // Conexões
-function startConnection(nodeId, portType) {
+function startConnection(nodeId: string, portType: string) {
     if (portType !== 'output') return;
     isConnecting = true;
     connectionStart = { nodeId, portType };
 }
 
-function endConnection(nodeId, portType) {
+function endConnection(nodeId: string, portType: string) {
     if (!isConnecting || !connectionStart) return;
     if (portType !== 'input') return;
     if (connectionStart.nodeId === nodeId) return;
@@ -438,7 +485,8 @@ function endConnection(nodeId, portType) {
 
 // Renderizar conexões
 function renderConnections() {
-    const svg = document.getElementById('connectionsSvg');
+    const svg = document.getElementById('connectionsSvg') as SVGSVGElement | null;
+    if (!svg) return;
     svg.innerHTML = '';
     
     edges.forEach(edge => {
@@ -447,8 +495,8 @@ function renderConnections() {
         
         if (!sourceNode || !targetNode) return;
         
-        const sourcePort = sourceNode.querySelector('.port.output');
-        const targetPort = targetNode.querySelector('.port.input');
+        const sourcePort = sourceNode.querySelector('.port.output') as HTMLElement | null;
+        const targetPort = targetNode.querySelector('.port.input') as HTMLElement | null;
         
         if (!sourcePort || !targetPort) return;
         
@@ -496,9 +544,10 @@ function resetZoom() {
 }
 
 function applyZoom() {
-    const container = document.getElementById('canvasContainer');
-    container.style.transform = `scale(${zoom})`;
-    document.getElementById('zoomLevel').textContent = Math.round(zoom * 100) + '%';
+    const container = document.getElementById('canvasContainer') as HTMLElement | null;
+    const zoomLevel = document.getElementById('zoomLevel') as HTMLElement | null;
+    if (container) container.style.transform = `scale(${zoom})`;
+    if (zoomLevel) zoomLevel.textContent = Math.round(zoom * 100) + '%';
     renderConnections();
 }
 
@@ -510,22 +559,27 @@ function clearCanvas() {
     edges = [];
     currentFlowId = null;
     
-    document.getElementById('canvasContainer').innerHTML = `
+    const canvasContainer = document.getElementById('canvasContainer') as HTMLElement | null;
+    if (canvasContainer) {
+        canvasContainer.innerHTML = `
         <div class="empty-canvas" id="emptyCanvas">
             <div class="icon icon-flows"></div>
             <h3>Arraste os blocos para começar</h3>
             <p>Crie seu fluxo de automação visual</p>
         </div>
     `;
+    }
     
-    document.getElementById('connectionsSvg').innerHTML = '';
-    document.getElementById('flowName').value = '';
+    const connectionsSvg = document.getElementById('connectionsSvg') as HTMLElement | null;
+    if (connectionsSvg) connectionsSvg.innerHTML = '';
+    const flowName = document.getElementById('flowName') as HTMLInputElement | null;
+    if (flowName) flowName.value = '';
     deselectNode();
 }
 
 // Salvar fluxo
 async function saveFlow() {
-    const name = document.getElementById('flowName').value.trim();
+    const name = (document.getElementById('flowName') as HTMLInputElement | null)?.value.trim() || '';
     if (!name) {
         alert('Digite um nome para o fluxo');
         return;
@@ -568,7 +622,7 @@ async function saveFlow() {
             alert('Erro ao salvar: ' + result.error);
         }
     } catch (error) {
-        alert('Erro ao salvar fluxo: ' + error.message);
+        alert('Erro ao salvar fluxo: ' + (error instanceof Error ? error.message : 'Falha inesperada'));
     }
 }
 
@@ -579,7 +633,7 @@ async function loadFlows() {
         const result = await response.json();
         
         if (result.success) {
-            renderFlowsList(result.flows);
+            renderFlowsList(result.flows as FlowSummary[]);
         }
     } catch (error) {
         console.error('Erro ao carregar fluxos:', error);
@@ -587,8 +641,9 @@ async function loadFlows() {
 }
 
 // Renderizar lista de fluxos
-function renderFlowsList(flows) {
-    const container = document.getElementById('flowsList');
+function renderFlowsList(flows: FlowSummary[]) {
+    const container = document.getElementById('flowsList') as HTMLElement | null;
+    if (!container) return;
     
     if (flows.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: var(--gray);">Nenhum fluxo criado ainda</p>';
@@ -608,7 +663,7 @@ function renderFlowsList(flows) {
 }
 
 // Carregar fluxo
-async function loadFlow(id) {
+async function loadFlow(id: number) {
     try {
         const response = await fetch(`/api/flows/${id}`);
         const result = await response.json();
@@ -617,8 +672,10 @@ async function loadFlow(id) {
             closeFlowsModal();
             
             // Limpar canvas
-            document.getElementById('canvasContainer').innerHTML = '';
-            document.getElementById('connectionsSvg').innerHTML = '';
+            const canvasContainer = document.getElementById('canvasContainer') as HTMLElement | null;
+            const connectionsSvg = document.getElementById('connectionsSvg') as HTMLElement | null;
+            if (canvasContainer) canvasContainer.innerHTML = '';
+            if (connectionsSvg) connectionsSvg.innerHTML = '';
             document.getElementById('emptyCanvas')?.remove();
             
             // Carregar dados
@@ -626,7 +683,8 @@ async function loadFlow(id) {
             nodes = result.flow.nodes || [];
             edges = result.flow.edges || [];
             
-            document.getElementById('flowName').value = result.flow.name;
+            const flowName = document.getElementById('flowName') as HTMLInputElement | null;
+            if (flowName) flowName.value = result.flow.name;
             
             // Renderizar nós
             nodes.forEach(node => renderNode(node));
@@ -647,14 +705,30 @@ function createNewFlow() {
 // Modal
 function openFlowsModal() {
     loadFlows();
-    document.getElementById('flowsModal').classList.add('active');
+    document.getElementById('flowsModal')?.classList.add('active');
 }
 
 function closeFlowsModal() {
-    document.getElementById('flowsModal').classList.remove('active');
+    document.getElementById('flowsModal')?.classList.remove('active');
 }
 
-const windowAny = window as any;
+const windowAny = window as Window & {
+    openFlowsModal?: () => void;
+    createNewFlow?: () => void;
+    clearCanvas?: () => void;
+    saveFlow?: () => Promise<void>;
+    zoomIn?: () => void;
+    zoomOut?: () => void;
+    resetZoom?: () => void;
+    insertVariable?: (variable: string) => void;
+    updateNodeProperty?: (key: keyof NodeData, value: any) => void;
+    addCondition?: () => void;
+    removeCondition?: (index: number) => void;
+    updateCondition?: (index: number, key: 'value' | 'next', value: string) => void;
+    deleteNode?: (id: string) => void;
+    loadFlow?: (id: number) => Promise<void>;
+    closeFlowsModal?: () => void;
+};
 windowAny.openFlowsModal = openFlowsModal;
 windowAny.createNewFlow = createNewFlow;
 windowAny.clearCanvas = clearCanvas;

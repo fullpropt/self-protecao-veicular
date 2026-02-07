@@ -1,19 +1,41 @@
-// @ts-nocheck
 // Dashboard page logic migrated to module
 
 // Dados dos leads
-let allLeads = [];
-let selectedLeads = [];
+declare const Chart:
+    | undefined
+    | (new (ctx: HTMLCanvasElement | CanvasRenderingContext2D, config: Record<string, unknown>) => {
+          destroy?: () => void;
+      });
 
-let statsChartInstance = null;
+type LeadStatus = 1 | 2 | 3 | 4;
+
+type Lead = {
+    id: number;
+    name?: string;
+    phone?: string;
+    vehicle?: string;
+    plate?: string;
+    email?: string;
+    status: LeadStatus;
+    created_at: string;
+};
+
+type LeadsResponse = { leads?: Lead[] };
+
+let allLeads: Lead[] = [];
+let selectedLeads: number[] = [];
+
+let statsChartInstance: { destroy?: () => void } | null = null;
 
 // Carregar dados ao iniciar
 document.addEventListener('DOMContentLoaded', () => {
     const today = new Date();
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
-    document.getElementById('statsStartDate').value = weekAgo.toISOString().slice(0, 10);
-    document.getElementById('statsEndDate').value = today.toISOString().slice(0, 10);
+    const statsStart = document.getElementById('statsStartDate') as HTMLInputElement | null;
+    const statsEnd = document.getElementById('statsEndDate') as HTMLInputElement | null;
+    if (statsStart) statsStart.value = weekAgo.toISOString().slice(0, 10);
+    if (statsEnd) statsEnd.value = today.toISOString().slice(0, 10);
     initStatsChart();
     loadDashboardData();
 });
@@ -23,7 +45,7 @@ async function loadDashboardData() {
     try {
         showLoading('Carregando dados...');
         
-        const response = await api.get('/api/leads');
+        const response: LeadsResponse = await api.get('/api/leads');
         allLeads = response.leads || [];
         
         updateStats();
@@ -39,7 +61,7 @@ async function loadDashboardData() {
 }
 
 function initStatsChart() {
-    const ctx = document.getElementById('statsChart');
+    const ctx = document.getElementById('statsChart') as HTMLCanvasElement | null;
     if (!ctx || typeof Chart === 'undefined') return;
     const labels = [];
     const today = new Date();
@@ -62,14 +84,22 @@ function updateStats() {
     const pending = allLeads.filter(l => l.status === 1 || l.status === 2).length;
     const conversion = total > 0 ? (completed / total * 100) : 0;
 
-    document.getElementById('totalLeads').textContent = formatNumber(total);
-    document.getElementById('completedLeads').textContent = formatNumber(completed);
-    document.getElementById('pendingLeads').textContent = formatNumber(pending);
-    document.getElementById('conversionRate').textContent = formatPercent(conversion);
+    const totalLeads = document.getElementById('totalLeads') as HTMLElement | null;
+    const completedLeads = document.getElementById('completedLeads') as HTMLElement | null;
+    const pendingLeads = document.getElementById('pendingLeads') as HTMLElement | null;
+    const conversionRate = document.getElementById('conversionRate') as HTMLElement | null;
 
-    document.getElementById('statsContacts').textContent = formatNumber(total);
-    document.getElementById('statsMessages').textContent = formatNumber(total * 2);
-    document.getElementById('statsInteractionsPer').textContent = total > 0 ? (total * 2 / total).toFixed(1) : '0';
+    if (totalLeads) totalLeads.textContent = formatNumber(total);
+    if (completedLeads) completedLeads.textContent = formatNumber(completed);
+    if (pendingLeads) pendingLeads.textContent = formatNumber(pending);
+    if (conversionRate) conversionRate.textContent = formatPercent(conversion);
+
+    const statsContacts = document.getElementById('statsContacts') as HTMLElement | null;
+    const statsMessages = document.getElementById('statsMessages') as HTMLElement | null;
+    const statsInteractions = document.getElementById('statsInteractionsPer') as HTMLElement | null;
+    if (statsContacts) statsContacts.textContent = formatNumber(total);
+    if (statsMessages) statsMessages.textContent = formatNumber(total * 2);
+    if (statsInteractions) statsInteractions.textContent = total > 0 ? (total * 2 / total).toFixed(1) : '0';
 }
 
 // Atualizar funil
@@ -80,21 +110,30 @@ function updateFunnel() {
     const stage3 = allLeads.filter(l => l.status === 3).length;
     const stage4 = allLeads.filter(l => l.status === 4).length;
 
-    document.getElementById('funnel1').textContent = formatNumber(stage1 + stage2 + stage3);
-    document.getElementById('funnel2').textContent = formatNumber(stage2 + stage3);
-    document.getElementById('funnel3').textContent = formatNumber(stage3);
-    document.getElementById('funnel4').textContent = formatNumber(stage3);
+    const funnel1 = document.getElementById('funnel1') as HTMLElement | null;
+    const funnel2 = document.getElementById('funnel2') as HTMLElement | null;
+    const funnel3 = document.getElementById('funnel3') as HTMLElement | null;
+    const funnel4 = document.getElementById('funnel4') as HTMLElement | null;
+    const funnel2Percent = document.getElementById('funnel2Percent') as HTMLElement | null;
+    const funnel3Percent = document.getElementById('funnel3Percent') as HTMLElement | null;
+    const funnel4Percent = document.getElementById('funnel4Percent') as HTMLElement | null;
+
+    if (funnel1) funnel1.textContent = formatNumber(stage1 + stage2 + stage3);
+    if (funnel2) funnel2.textContent = formatNumber(stage2 + stage3);
+    if (funnel3) funnel3.textContent = formatNumber(stage3);
+    if (funnel4) funnel4.textContent = formatNumber(stage3);
 
     if (total > 0) {
-        document.getElementById('funnel2Percent').textContent = formatPercent((stage2 + stage3) / total * 100);
-        document.getElementById('funnel3Percent').textContent = formatPercent(stage3 / total * 100);
-        document.getElementById('funnel4Percent').textContent = formatPercent(stage3 / total * 100);
+        if (funnel2Percent) funnel2Percent.textContent = formatPercent((stage2 + stage3) / total * 100);
+        if (funnel3Percent) funnel3Percent.textContent = formatPercent(stage3 / total * 100);
+        if (funnel4Percent) funnel4Percent.textContent = formatPercent(stage3 / total * 100);
     }
 }
 
 // Renderizar tabela de leads
-function renderLeadsTable(leads = null) {
-    const tbody = document.getElementById('leadsTableBody');
+function renderLeadsTable(leads: Lead[] | null = null) {
+    const tbody = document.getElementById('leadsTableBody') as HTMLElement | null;
+    if (!tbody) return;
     const data = leads || allLeads;
 
     if (data.length === 0) {
@@ -156,8 +195,8 @@ function renderLeadsTable(leads = null) {
 
 // Filtrar leads
 function filterLeads() {
-    const search = document.getElementById('searchLeads').value.toLowerCase();
-    const status = document.getElementById('filterStatus').value;
+    const search = (document.getElementById('searchLeads') as HTMLInputElement | null)?.value.toLowerCase() || '';
+    const status = (document.getElementById('filterStatus') as HTMLSelectElement | null)?.value || '';
 
     let filtered = allLeads;
 
@@ -171,7 +210,7 @@ function filterLeads() {
     }
 
     if (status) {
-        filtered = filtered.filter(l => l.status == status);
+        filtered = filtered.filter(l => l.status == (parseInt(status, 10) as LeadStatus));
     }
 
     renderLeadsTable(filtered);
@@ -179,26 +218,28 @@ function filterLeads() {
 
 // Selecionar todos
 function toggleSelectAll() {
-    const selectAll = document.getElementById('selectAll').checked;
+    const selectAll = (document.getElementById('selectAll') as HTMLInputElement | null)?.checked || false;
     const checkboxes = document.querySelectorAll('.lead-checkbox');
-    checkboxes.forEach(cb => cb.checked = selectAll);
+    checkboxes.forEach(cb => {
+        (cb as HTMLInputElement).checked = selectAll;
+    });
     updateSelection();
 }
 
 // Atualizar seleção
 function updateSelection() {
     const checkboxes = document.querySelectorAll('.lead-checkbox:checked');
-    selectedLeads = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    selectedLeads = Array.from(checkboxes).map(cb => parseInt((cb as HTMLInputElement).value, 10));
 }
 
 // Salvar novo lead
 async function saveLead() {
-    const name = document.getElementById('leadName').value.trim();
-    const phone = document.getElementById('leadPhone').value.replace(/\D/g, '');
-    const vehicle = document.getElementById('leadVehicle').value.trim();
-    const plate = document.getElementById('leadPlate').value.trim().toUpperCase();
-    const email = document.getElementById('leadEmail').value.trim();
-    const status = parseInt(document.getElementById('leadStatus').value);
+    const name = (document.getElementById('leadName') as HTMLInputElement | null)?.value.trim() || '';
+    const phone = (document.getElementById('leadPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
+    const vehicle = (document.getElementById('leadVehicle') as HTMLInputElement | null)?.value.trim() || '';
+    const plate = (document.getElementById('leadPlate') as HTMLInputElement | null)?.value.trim().toUpperCase() || '';
+    const email = (document.getElementById('leadEmail') as HTMLInputElement | null)?.value.trim() || '';
+    const status = parseInt((document.getElementById('leadStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus;
 
     if (!name || !phone) {
         showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
@@ -218,41 +259,49 @@ async function saveLead() {
         });
 
         closeModal('addLeadModal');
-        document.getElementById('addLeadForm').reset();
+        (document.getElementById('addLeadForm') as HTMLFormElement | null)?.reset();
         
         await loadDashboardData();
         showToast('success', 'Sucesso', 'Lead adicionado com sucesso!');
     } catch (error) {
         hideLoading();
-        showToast('error', 'Erro', error.message || 'Não foi possível salvar o lead');
+        showToast('error', 'Erro', error instanceof Error ? error.message : 'Não foi possível salvar o lead');
     }
 }
 
 // Editar lead
-function editLead(id) {
+function editLead(id: number) {
     const lead = allLeads.find(l => l.id === id);
     if (!lead) return;
 
-    document.getElementById('editLeadId').value = lead.id;
-    document.getElementById('editLeadName').value = lead.name || '';
-    document.getElementById('editLeadPhone').value = lead.phone || '';
-    document.getElementById('editLeadVehicle').value = lead.vehicle || '';
-    document.getElementById('editLeadPlate').value = lead.plate || '';
-    document.getElementById('editLeadEmail').value = lead.email || '';
-    document.getElementById('editLeadStatus').value = lead.status || 1;
+    const editLeadId = document.getElementById('editLeadId') as HTMLInputElement | null;
+    const editLeadName = document.getElementById('editLeadName') as HTMLInputElement | null;
+    const editLeadPhone = document.getElementById('editLeadPhone') as HTMLInputElement | null;
+    const editLeadVehicle = document.getElementById('editLeadVehicle') as HTMLInputElement | null;
+    const editLeadPlate = document.getElementById('editLeadPlate') as HTMLInputElement | null;
+    const editLeadEmail = document.getElementById('editLeadEmail') as HTMLInputElement | null;
+    const editLeadStatus = document.getElementById('editLeadStatus') as HTMLSelectElement | null;
+
+    if (editLeadId) editLeadId.value = String(lead.id);
+    if (editLeadName) editLeadName.value = lead.name || '';
+    if (editLeadPhone) editLeadPhone.value = lead.phone || '';
+    if (editLeadVehicle) editLeadVehicle.value = lead.vehicle || '';
+    if (editLeadPlate) editLeadPlate.value = lead.plate || '';
+    if (editLeadEmail) editLeadEmail.value = lead.email || '';
+    if (editLeadStatus) editLeadStatus.value = String(lead.status || 1);
 
     openModal('editLeadModal');
 }
 
 // Atualizar lead
 async function updateLead() {
-    const id = document.getElementById('editLeadId').value;
-    const name = document.getElementById('editLeadName').value.trim();
-    const phone = document.getElementById('editLeadPhone').value.replace(/\D/g, '');
-    const vehicle = document.getElementById('editLeadVehicle').value.trim();
-    const plate = document.getElementById('editLeadPlate').value.trim().toUpperCase();
-    const email = document.getElementById('editLeadEmail').value.trim();
-    const status = parseInt(document.getElementById('editLeadStatus').value);
+    const id = (document.getElementById('editLeadId') as HTMLInputElement | null)?.value || '';
+    const name = (document.getElementById('editLeadName') as HTMLInputElement | null)?.value.trim() || '';
+    const phone = (document.getElementById('editLeadPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
+    const vehicle = (document.getElementById('editLeadVehicle') as HTMLInputElement | null)?.value.trim() || '';
+    const plate = (document.getElementById('editLeadPlate') as HTMLInputElement | null)?.value.trim().toUpperCase() || '';
+    const email = (document.getElementById('editLeadEmail') as HTMLInputElement | null)?.value.trim() || '';
+    const status = parseInt((document.getElementById('editLeadStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus;
 
     if (!name || !phone) {
         showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
@@ -271,12 +320,12 @@ async function updateLead() {
         showToast('success', 'Sucesso', 'Lead atualizado com sucesso!');
     } catch (error) {
         hideLoading();
-        showToast('error', 'Erro', error.message || 'Não foi possível atualizar o lead');
+        showToast('error', 'Erro', error instanceof Error ? error.message : 'Não foi possível atualizar o lead');
     }
 }
 
 // Excluir lead
-async function deleteLead(id) {
+async function deleteLead(id: number) {
     if (!confirm('Tem certeza que deseja excluir este lead?')) return;
 
     try {
@@ -286,24 +335,24 @@ async function deleteLead(id) {
         showToast('success', 'Sucesso', 'Lead excluído com sucesso!');
     } catch (error) {
         hideLoading();
-        showToast('error', 'Erro', error.message || 'Não foi possível excluir o lead');
+        showToast('error', 'Erro', error instanceof Error ? error.message : 'Não foi possível excluir o lead');
     }
 }
 
 // Enviar WhatsApp
-function sendWhatsApp(phone) {
+function sendWhatsApp(phone: string) {
     const cleanPhone = phone.replace(/\D/g, '');
     window.open(`https://wa.me/55${cleanPhone}`, '_blank');
 }
 
 // Importar leads
 async function importLeads() {
-    const fileInput = document.getElementById('importFile');
-    const textInput = document.getElementById('importText').value.trim();
+    const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
+    const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value.trim() || '';
 
-    let data = [];
+    let data: Array<Record<string, string>> = [];
 
-    if (fileInput.files.length > 0) {
+    if (fileInput?.files && fileInput.files.length > 0) {
         const file = fileInput.files[0];
         const text = await file.text();
         data = parseCSV(text);
@@ -342,8 +391,9 @@ async function importLeads() {
         }
 
         closeModal('importModal');
-        document.getElementById('importFile').value = '';
-        document.getElementById('importText').value = '';
+        if (fileInput) fileInput.value = '';
+        const importText = document.getElementById('importText') as HTMLTextAreaElement | null;
+        if (importText) importText.value = '';
         
         await loadDashboardData();
         showToast('success', 'Sucesso', `${imported} leads importados com sucesso!`);
@@ -382,7 +432,23 @@ function confirmReset() {
     showToast('info', 'Info', 'Função de reset desabilitada por segurança');
 }
 
-const windowAny = window as any;
+const windowAny = window as Window & {
+    loadDashboardData?: () => Promise<void>;
+    updateStats?: () => void;
+    updateFunnel?: () => void;
+    renderLeadsTable?: (leads?: Lead[] | null) => void;
+    filterLeads?: () => void;
+    toggleSelectAll?: () => void;
+    updateSelection?: () => void;
+    saveLead?: () => Promise<void>;
+    editLead?: (id: number) => void;
+    updateLead?: () => Promise<void>;
+    deleteLead?: (id: number) => Promise<void>;
+    sendWhatsApp?: (phone: string) => void;
+    importLeads?: () => Promise<void>;
+    exportLeads?: () => void;
+    confirmReset?: () => void;
+};
 windowAny.loadDashboardData = loadDashboardData;
 windowAny.updateStats = updateStats;
 windowAny.updateFunnel = updateFunnel;
