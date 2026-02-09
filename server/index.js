@@ -327,14 +327,15 @@ async function createSession(sessionId, socket, attempt = 0) {
     }
     
     const baileys = await baileysLoader.getBaileys();
-    const {
-        default: makeWASocket,
-        DisconnectReason,
-        useMultiFileAuthState,
-        fetchLatestBaileysVersion,
-        makeCacheableSignalKeyStore,
-        delay
-    } = baileys;
+        const {
+            default: makeWASocket,
+            DisconnectReason,
+            useMultiFileAuthState,
+            fetchLatestBaileysVersion,
+            makeCacheableSignalKeyStore,
+            makeInMemoryStore,
+            delay
+        } = baileys;
     
     try {
         console.log(`[${sessionId}] Criando sessão... (Tentativa ${attempt + 1}/${MAX_RECONNECT_ATTEMPTS})`);
@@ -352,6 +353,9 @@ async function createSession(sessionId, socket, attempt = 0) {
         
         console.log(`[${sessionId}] Usando Baileys versão: ${version.join('.')}`);
         
+        const syncFullHistory = process.env.WHATSAPP_SYNC_FULL_HISTORY !== 'false';
+        const store = typeof makeInMemoryStore === 'function' ? makeInMemoryStore({ logger }) : null;
+
         const sock = makeWASocket({
             version,
             logger,
@@ -362,7 +366,7 @@ async function createSession(sessionId, socket, attempt = 0) {
             },
             browser: ['SELF Proteção Veicular', 'Chrome', '120.0.0'],
             generateHighQualityLinkPreview: true,
-            syncFullHistory: false,
+            syncFullHistory,
             markOnlineOnConnect: true,
             getMessage: async (key) => {
                 const msg = Message.findByMessageId(key.id);
@@ -375,6 +379,10 @@ async function createSession(sessionId, socket, attempt = 0) {
                 return { conversation: '' };
             }
         });
+
+        if (store) {
+            store.bind(sock.ev);
+        }
         
         sessions.set(sessionId, {
             socket: sock,
@@ -514,6 +522,11 @@ async function createSession(sessionId, socket, attempt = 0) {
                     webhookService.trigger('whatsapp.connected', { sessionId, user: session.user });
                     
                     console.log(`[${sessionId}] ✅ WhatsApp conectado: ${session.user.name}`);
+
+                    // Forçar sincronização inicial de chats
+                    setTimeout(() => {
+                        triggerChatSync(sessionId, sock, store);
+                    }, 1500);
                     
                     // Criar monitor de saúde da conexão
                     const healthMonitor = connectionFixer.createHealthMonitor(sock, sessionId);
@@ -852,6 +865,57 @@ function syncChatsToDatabase(sessionId, payload) {
         if (Object.keys(updates).length > 0) {
             Conversation.update(conversation.id, updates);
         }
+    }
+}
+
+function extractStoreChats(store) {
+    if (!store) return [];
+    if (typeof store.chats?.all === 'function') {
+        return store.chats.all();
+    }
+    if (typeof store.chats?.toJSON === 'function') {
+        return store.chats.toJSON();
+    }
+    if (store.chats && typeof store.chats.values === 'function') {
+        return Array.from(store.chats.values());
+    }
+    return [];
+}
+
+async function triggerChatSync(sessionId, sock, store, attempt = 1) {
+    let synced = false;
+
+    try {
+        if (typeof sock?.fetchChats === 'function') {
+            const chats = await sock.fetchChats();
+            if (chats?.length) {
+                syncChatsToDatabase(sessionId, chats);
+                synced = true;
+            }
+        } else if (typeof sock?.getChats === 'function') {
+            const chats = await sock.getChats();
+            if (chats?.length) {
+                syncChatsToDatabase(sessionId, chats);
+                synced = true;
+            }
+        }
+    } catch (error) {
+        console.warn(`[${sessionId}] ⚠️ Não foi possível buscar chats por API:`, error.message);
+    }
+
+    if (!synced) {
+        const chats = extractStoreChats(store);
+        if (chats.length > 0) {
+            syncChatsToDatabase(sessionId, chats);
+            synced = true;
+        }
+    }
+
+    if (!synced && attempt < 3) {
+        const delayMs = attempt === 1 ? 4000 : 8000;
+        setTimeout(() => {
+            triggerChatSync(sessionId, sock, store, attempt + 1);
+        }, delayMs);
     }
 }
 
