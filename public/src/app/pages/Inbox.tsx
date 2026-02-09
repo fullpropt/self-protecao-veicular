@@ -324,12 +324,16 @@ export default function Inbox() {
           </Link>
         </div>
         <nav className="sidebar-nav">
-          <div className="nav-section">
-            <ul className="nav-menu">
-            </ul>
-          </div>
-          <div className="nav-section">
-            <div className="nav-section-title">Conversas</div>
+                            <div className="nav-section">
+                      <ul className="nav-menu">
+                          <li className="nav-item"><Link to="/dashboard" className="nav-link"><span className="icon icon-dashboard"></span>Painel de Controle</Link></li>
+                          <li className="nav-item"><Link to="/contatos" className="nav-link"><span className="icon icon-contacts"></span>Contatos</Link></li>
+                          <li className="nav-item"><Link to="/campanhas" className="nav-link"><span className="icon icon-campaigns"></span>Campanhas</Link></li>
+                      </ul>
+                  </div>
+
+                  <div className="nav-section">
+                      <div className="nav-section-title">Conversas</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/inbox" className="nav-link active">
