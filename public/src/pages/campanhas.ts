@@ -83,21 +83,6 @@ function setSelectValue(select: HTMLSelectElement | null, value: string) {
     }
 }
 
-function getHashQueryParams() {
-    const hash = window.location.hash || '';
-    const queryIndex = hash.indexOf('?');
-    if (queryIndex === -1) return new URLSearchParams();
-    return new URLSearchParams(hash.slice(queryIndex + 1));
-}
-
-function clearHashQuery() {
-    const hash = window.location.hash || '';
-    const queryIndex = hash.indexOf('?');
-    if (queryIndex === -1) return;
-    const base = hash.slice(0, queryIndex);
-    window.history.replaceState(null, '', base);
-}
-
 function openBroadcastModal() {
     openCampaignModal();
 
@@ -111,13 +96,7 @@ function openBroadcastModal() {
 }
 
 function initCampanhas() {
-    loadCampaigns().finally(() => {
-        const params = getHashQueryParams();
-        if (params.get('quick') === 'broadcast') {
-            openBroadcastModal();
-            clearHashQuery();
-        }
-    });
+    loadCampaigns();
 }
 
 onReady(initCampanhas);
@@ -467,6 +446,7 @@ const windowAny = window as Window & {
     initCampanhas?: () => void;
     loadCampaigns?: () => void;
     openCampaignModal?: () => void;
+    openBroadcastModal?: () => void;
     saveCampaign?: (status?: CampaignStatus) => Promise<void>;
     viewCampaign?: (id: number) => void;
     editCampaign?: (id: number) => void;
@@ -478,6 +458,7 @@ const windowAny = window as Window & {
 windowAny.initCampanhas = initCampanhas;
 windowAny.loadCampaigns = loadCampaigns;
 windowAny.openCampaignModal = openCampaignModal;
+windowAny.openBroadcastModal = openBroadcastModal;
 windowAny.saveCampaign = saveCampaign;
 windowAny.viewCampaign = viewCampaign;
 windowAny.editCampaign = editCampaign;
