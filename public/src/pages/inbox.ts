@@ -34,11 +34,25 @@ let conversations: Conversation[] = [];
 let currentConversation: Conversation | null = null;
 let messages: ChatMessage[] = [];
 let socket: null | { on: (event: string, handler: (data?: any) => void) => void; emit: (event: string, payload?: any) => void } = null;
+let refreshInterval: number | null = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+function initInbox() {
     loadConversations();
     initSocket();
-});
+    if (refreshInterval === null) {
+        refreshInterval = window.setInterval(loadConversations, 10000);
+    }
+}
+
+onReady(initInbox);
 
 function initSocket() {
     try {
@@ -392,10 +406,10 @@ function updateUnreadBadge() {
     }
 }
 
-// Atualizar conversas a cada 10 segundos
-setInterval(loadConversations, 10000);
+// Atualizar conversas a cada 10 segundos (iniciado em initInbox)
 
 const windowAny = window as Window & {
+    initInbox?: () => void;
     filterConversations?: (filter: 'all' | 'unread') => void;
     searchConversations?: () => void;
     selectConversation?: (id: number) => Promise<void>;
@@ -409,6 +423,7 @@ const windowAny = window as Window & {
     backToList?: () => void;
     logout?: () => void;
 };
+windowAny.initInbox = initInbox;
 windowAny.filterConversations = filterConversations;
 windowAny.searchConversations = searchConversations;
 windowAny.selectConversation = selectConversation;
@@ -422,4 +437,4 @@ windowAny.registerCurrentUser = registerCurrentUser;
 windowAny.backToList = backToList;
 windowAny.logout = logout;
 
-export {};
+export { initInbox };
