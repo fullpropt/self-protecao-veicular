@@ -16,7 +16,7 @@ function onReady(callback: () => void) {
 }
 
 function getDashboardUrl() {
-    return 'app.html#/dashboard';
+    return '#/dashboard';
 }
 
 function getInputValue(id: string): string {

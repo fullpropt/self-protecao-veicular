@@ -628,15 +628,15 @@ export default function FlowBuilder() {
                   <img src="img/logo-self.png" alt="SELF" onError={(event) => { (event.currentTarget as HTMLElement).style.display = 'none'; }} />
               </div>
               <ul className="sidebar-menu">
-                  <li><a href="app.html#/dashboard"><span className="icon icon-dashboard"></span> Dashboard</a></li>
-                  <li><a href="app.html#/funil"><span className="icon icon-funnel"></span> Funil de Vendas</a></li>
-                  <li><a href="app.html#/whatsapp"><span className="icon icon-whatsapp"></span> WhatsApp</a></li>
-                  <li><a href="app.html#/conversas"><span className="icon icon-message"></span> Conversas</a></li>
-                  <li><a href="app.html#/flow-builder" className="active"><span className="icon icon-flows"></span> Fluxos</a></li>
-                  <li><a href="app.html#/configuracoes"><span className="icon icon-settings"></span> Configurações</a></li>
+                  <li><a href="#/dashboard"><span className="icon icon-dashboard"></span> Dashboard</a></li>
+                  <li><a href="#/funil"><span className="icon icon-funnel"></span> Funil de Vendas</a></li>
+                  <li><a href="#/whatsapp"><span className="icon icon-whatsapp"></span> WhatsApp</a></li>
+                  <li><a href="#/conversas"><span className="icon icon-message"></span> Conversas</a></li>
+                  <li><a href="#/flow-builder" className="active"><span className="icon icon-flows"></span> Fluxos</a></li>
+                  <li><a href="#/configuracoes"><span className="icon icon-settings"></span> Configurações</a></li>
               </ul>
               <div className="sidebar-footer">
-                  <a href="app.html#/login" className="btn-logout">Sair</a>
+                  <a href="#/login" className="btn-logout">Sair</a>
               </div>
           </nav>
           

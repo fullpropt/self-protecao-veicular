@@ -68,7 +68,7 @@ function onReady(callback: () => void) {
 
 
 function getLoginUrl() {
-    return 'app.html#/login';
+    return '#/login';
 }
 
 function getQueryParams() {

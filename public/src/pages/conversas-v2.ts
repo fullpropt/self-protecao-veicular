@@ -66,7 +66,7 @@ function onReady(callback: () => void) {
 
 
 function getFunilUrl(leadId: string | number) {
-    return `app.html#/funil?lead=${leadId}`;
+    return `#/funil?lead=${leadId}`;
 }
 
 // ============================================

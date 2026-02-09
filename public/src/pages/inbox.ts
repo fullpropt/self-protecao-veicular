@@ -46,7 +46,7 @@ function onReady(callback: () => void) {
 
 
 function getContatosUrl(id: string | number) {
-    return `app.html#/contatos?id=${id}`;
+    return `#/contatos?id=${id}`;
 }
 
 function initInbox() {

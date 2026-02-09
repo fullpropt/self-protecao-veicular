@@ -317,7 +317,7 @@ export default function Inbox() {
 
       <aside className="sidebar">
         <div className="sidebar-header">
-          <a href="app.html#/dashboard" className="sidebar-logo">
+          <a href="#/dashboard" className="sidebar-logo">
             <img src="img/logo-self.png" alt="SELF" />
             <span>SELF</span>
           </a>
@@ -326,22 +326,22 @@ export default function Inbox() {
           <div className="nav-section">
             <ul className="nav-menu">
               <li className="nav-item">
-                <a href="app.html#/dashboard" className="nav-link">
+                <a href="#/dashboard" className="nav-link">
                   <span className="icon icon-dashboard"></span>Painel de Controle
                 </a>
               </li>
               <li className="nav-item">
-                <a href="app.html#/contatos" className="nav-link">
+                <a href="#/contatos" className="nav-link">
                   <span className="icon icon-contacts"></span>Contatos
                 </a>
               </li>
               <li className="nav-item">
-                <a href="app.html#/campanhas" className="nav-link">
+                <a href="#/campanhas" className="nav-link">
                   <span className="icon icon-campaigns"></span>Campanhas
                 </a>
               </li>
               <li className="nav-item">
-                <a href="app.html#/transmissao" className="nav-link">
+                <a href="#/transmissao" className="nav-link">
                   <span className="icon icon-broadcast"></span>Transmiss??o
                 </a>
               </li>
@@ -351,7 +351,7 @@ export default function Inbox() {
             <div className="nav-section-title">Conversas</div>
             <ul className="nav-menu">
               <li className="nav-item">
-                <a href="app.html#/inbox" className="nav-link active">
+                <a href="#/inbox" className="nav-link active">
                   <span className="icon icon-inbox"></span>Inbox
                   <span className="badge" id="unreadBadge" style={{ display: 'none' }}>0</span>
                 </a>
@@ -362,17 +362,17 @@ export default function Inbox() {
             <div className="nav-section-title">Automa????o</div>
             <ul className="nav-menu">
               <li className="nav-item">
-                <a href="app.html#/automacao" className="nav-link">
+                <a href="#/automacao" className="nav-link">
                   <span className="icon icon-automation"></span>Automa????o
                 </a>
               </li>
               <li className="nav-item">
-                <a href="app.html#/fluxos" className="nav-link">
+                <a href="#/fluxos" className="nav-link">
                   <span className="icon icon-flows"></span>Fluxos de Conversa
                 </a>
               </li>
               <li className="nav-item">
-                <a href="app.html#/funil" className="nav-link">
+                <a href="#/funil" className="nav-link">
                   <span className="icon icon-funnel"></span>Funil de Vendas
                 </a>
               </li>
@@ -382,17 +382,17 @@ export default function Inbox() {
             <div className="nav-section-title">Sistema</div>
             <ul className="nav-menu">
               <li className="nav-item">
-                <a href="app.html#/whatsapp" className="nav-link">
+                <a href="#/whatsapp" className="nav-link">
                   <span className="icon icon-whatsapp"></span>WhatsApp
                 </a>
               </li>
               <li className="nav-item">
-                <a href="app.html#/configuracoes" className="nav-link">
+                <a href="#/configuracoes" className="nav-link">
                   <span className="icon icon-settings"></span>Configura????es
                 </a>
               </li>
               <li className="nav-item">
-                <a href="app.html#/configuracoes?panel=copys" className="nav-link" title="Copys e Mensagens">
+                <a href="#/configuracoes?panel=copys" className="nav-link" title="Copys e Mensagens">
                   <span className="icon icon-templates"></span>Modelos
                 </a>
               </li>

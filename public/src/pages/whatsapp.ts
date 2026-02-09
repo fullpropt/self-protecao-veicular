@@ -34,11 +34,11 @@ function onReady(callback: () => void) {
 
 
 function getLoginUrl() {
-    return 'app.html#/login';
+    return '#/login';
 }
 
 function getConversasUrl(params: URLSearchParams) {
-    return `app.html#/conversas?${params.toString()}`;
+    return `#/conversas?${params.toString()}`;
 }
 
 // InicializaÃ§Ã£o

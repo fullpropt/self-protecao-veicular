@@ -30,7 +30,7 @@ function onReady(callback: () => void) {
 
 
 function getContatosUrl(stage: number | string) {
-    return `app.html#/contatos?status=${stage}`;
+    return `#/contatos?status=${stage}`;
 }
 
 function initFunil() {

@@ -796,31 +796,31 @@ export default function Whatsapp() {
               
               <ul className="sidebar-menu">
                   <li>
-                      <a href="app.html#/dashboard">
+                      <a href="#/dashboard">
                           <span className="icon icon-dashboard"></span>
                           Dashboard
                       </a>
                   </li>
                   <li>
-                      <a href="app.html#/funil">
+                      <a href="#/funil">
                           <span className="icon icon-funnel"></span>
                           Funil de Vendas
                       </a>
                   </li>
                   <li>
-                      <a href="app.html#/whatsapp" className="active">
+                      <a href="#/whatsapp" className="active">
                           <span className="icon icon-whatsapp"></span>
                           WhatsApp
                       </a>
                   </li>
                   <li>
-                      <a href="app.html#/conversas">
+                      <a href="#/conversas">
                           <span className="icon icon-message"></span>
                           Conversas
                       </a>
                   </li>
                   <li>
-                      <a href="app.html#/configuracoes">
+                      <a href="#/configuracoes">
                           <span className="icon icon-settings"></span>
                           Configurações
                       </a>
@@ -921,7 +921,7 @@ export default function Whatsapp() {
                                   </div>
                                   
                                   <div style={{ display: 'flex', gap: '15px', flexDirection: 'column' }}>
-                                      <a href="app.html#/conversas" className="btn btn-primary">Ir para Conversas</a>
+                                      <a href="#/conversas" className="btn btn-primary">Ir para Conversas</a>
                                       <button className="btn btn-danger" onClick={() => globals.disconnect?.()}>Desconectar</button>
                                   </div>
                               </div>

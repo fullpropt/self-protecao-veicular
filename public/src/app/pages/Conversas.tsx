@@ -659,31 +659,31 @@ export default function Conversas() {
               
               <ul className="sidebar-menu">
                   <li>
-                      <a href="app.html#/dashboard">
+                      <a href="#/dashboard">
                           <span className="icon icon-dashboard"></span>
                           Dashboard
                       </a>
                   </li>
                   <li>
-                      <a href="app.html#/funil">
+                      <a href="#/funil">
                           <span className="icon icon-funnel"></span>
                           Funil de Vendas
                       </a>
                   </li>
                   <li>
-                      <a href="app.html#/whatsapp">
+                      <a href="#/whatsapp">
                           <span className="icon icon-whatsapp"></span>
                           WhatsApp
                       </a>
                   </li>
                   <li>
-                      <a href="app.html#/conversas" className="active">
+                      <a href="#/conversas" className="active">
                           <span className="icon icon-message"></span>
                           Conversas
                       </a>
                   </li>
                   <li>
-                      <a href="app.html#/configuracoes">
+                      <a href="#/configuracoes">
                           <span className="icon icon-settings"></span>
                           Configurações
                       </a>
@@ -709,7 +709,7 @@ export default function Conversas() {
               <div className="connection-warning" id="connection-warning" style={{ display: 'none', marginBottom: '20px', borderRadius: '12px' }}>
                   <span className="icon icon-warning icon-sm"></span>
                   <span>WhatsApp não está conectado.</span>
-                  <a href="app.html#/whatsapp">Conectar agora →</a>
+                  <a href="#/whatsapp">Conectar agora →</a>
               </div>
               
               <div className="inbox-container">

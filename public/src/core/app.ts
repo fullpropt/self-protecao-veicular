@@ -57,7 +57,7 @@ function isAppShell() {
 
 function buildAppUrl(path: string, query?: string) {
     const suffix = query ? `?${query}` : '';
-    return `app.html#/${path}${suffix}`;
+    return `#/${path}${suffix}`;
 }
 
 function buildLegacyUrl(page: string, query?: string) {
@@ -272,7 +272,7 @@ function initSidebar() {
     }
     
     // Marcar item ativo no menu
-    const currentPage = `app.html${window.location.hash || '#/dashboard'}`;
+    const currentPage = window.location.hash || '#/dashboard';
     const navLinks = document.querySelectorAll('.nav-link');
     navLinks.forEach(link => {
         const href = link.getAttribute('href');
@@ -693,7 +693,7 @@ async function updateUnreadCount() {
         const unread = response.conversations?.filter((c: { unread_count?: number }) => (c.unread_count || 0) > 0).length || 0;
         
         const badges = document.querySelectorAll(
-            '.nav-link[href="app.html#/conversas"] .badge, .nav-link[href="app.html#/inbox"] .badge'
+            '.nav-link[href="#/conversas"] .badge, .nav-link[href="#/inbox"] .badge'
         );
         badges.forEach(badge => {
             const badgeEl = badge as HTMLElement;
