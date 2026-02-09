@@ -42,6 +42,7 @@ export default function Inbox() {
         .inbox-container {
             display: grid;
             grid-template-columns: 350px 1fr 320px;
+            grid-template-rows: 1fr;
             height: calc(100vh - 120px);
             gap: 0;
             background: white;
@@ -64,6 +65,7 @@ export default function Inbox() {
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
+            min-height: 0;
         }
         .conversations-header {
             padding: 20px;
@@ -157,6 +159,7 @@ export default function Inbox() {
             display: flex;
             flex-direction: column;
             background: #e5ddd5;
+            min-height: 0;
         }
         .chat-header {
             background: white;
@@ -176,6 +179,7 @@ export default function Inbox() {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            min-height: 0;
         }
         .message {
             max-width: 70%;
@@ -297,6 +301,7 @@ export default function Inbox() {
             display: flex;
             flex-direction: column;
             padding: 24px;
+            min-height: 0;
         }
         .inbox-right-panel-content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
         .inbox-right-panel-robot { font-size: 64px; margin-bottom: 20px; opacity: 0.6; }

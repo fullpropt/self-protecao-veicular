@@ -230,6 +230,34 @@ export default function Whatsapp() {
             color: var(--gray);
             font-size: 15px;
         }
+
+        .whatsapp-tabs {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .whatsapp-tab {
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: var(--lighter);
+            color: var(--gray);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .whatsapp-tab:hover {
+            background: rgba(109, 40, 217, 0.12);
+            color: var(--primary);
+        }
+
+        .whatsapp-tab.active {
+            background: var(--primary);
+            color: white;
+        }
         
         .status-badge {
             display: flex;
@@ -815,9 +843,9 @@ export default function Whatsapp() {
                       </Link>
                   </li>
                   <li>
-                      <Link to="/conversas">
-                          <span className="icon icon-message"></span>
-                          Conversas
+                      <Link to="/inbox">
+                          <span className="icon icon-inbox"></span>
+                          Inbox
                       </Link>
                   </li>
                   <li>
@@ -841,6 +869,10 @@ export default function Whatsapp() {
                   <div className="header-title">
                       <h1>WhatsApp</h1>
                       <p>Conecte e gerencie suas mensagens</p>
+                      <div className="whatsapp-tabs">
+                          <Link to="/whatsapp" className="whatsapp-tab active">Conexão</Link>
+                          <Link to="/inbox" className="whatsapp-tab">Conversas</Link>
+                      </div>
                   </div>
                   
                   <div className="status-badge disconnected" id="status-badge">

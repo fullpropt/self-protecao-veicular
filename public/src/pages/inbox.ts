@@ -37,6 +37,15 @@ let messages: ChatMessage[] = [];
 let socket: null | { on: (event: string, handler: (data?: any) => void) => void; emit: (event: string, payload?: any) => void } = null;
 let refreshInterval: number | null = null;
 
+function escapeHtml(value: string) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', callback);
@@ -139,8 +148,8 @@ function renderConversations() {
                 ${getInitials(c.name)}
             </div>
             <div class="conversation-info">
-                <div class="conversation-name">${c.name || 'Sem nome'}</div>
-                <div class="conversation-preview">${c.lastMessage || 'Sem mensagens'}</div>
+                <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
+                <div class="conversation-preview">${escapeHtml(c.lastMessage || 'Sem mensagens')}</div>
             </div>
             <div class="conversation-meta">
                 <div class="conversation-time">${c.lastMessageAt ? timeAgo(c.lastMessageAt) : ''}</div>
@@ -175,8 +184,8 @@ function renderFilteredConversations(filtered: Conversation[]) {
         <div class="conversation-item ${c.unread > 0 ? 'unread' : ''}" onclick="selectConversation(${c.id})">
             <div class="conversation-avatar" style="background: ${getAvatarColor(c.name)}">${getInitials(c.name)}</div>
             <div class="conversation-info">
-                <div class="conversation-name">${c.name || 'Sem nome'}</div>
-                <div class="conversation-preview">${c.lastMessage || ''}</div>
+                <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
+                <div class="conversation-preview">${escapeHtml(c.lastMessage || '')}</div>
             </div>
             <div class="conversation-meta">
                 <div class="conversation-time">${c.lastMessageAt ? timeAgo(c.lastMessageAt) : ''}</div>
@@ -234,7 +243,7 @@ function renderChat() {
                 ${getInitials(currentConversation.name)}
             </div>
             <div class="chat-header-info">
-                <div class="chat-header-name">${currentConversation.name || 'Sem nome'}</div>
+                <div class="chat-header-name">${escapeHtml(currentConversation.name || 'Sem nome')}</div>
                 <div class="chat-header-status">${formatPhone(currentConversation.phone)}</div>
             </div>
             <div style="display: flex; gap: 10px;">
@@ -284,7 +293,7 @@ function renderMessages() {
 
     return messages.map(m => `
         <div class="message ${m.direction === 'outgoing' ? 'sent' : 'received'}">
-            <div class="message-content">${m.content}</div>
+            <div class="message-content">${escapeHtml(m.content)}</div>
             <div class="message-time">
                 ${formatDate(m.created_at, 'time')}
                 ${m.direction === 'outgoing' ? `<span class="message-status">${m.status === 'read' ? '✓✓' : m.status === 'delivered' ? '✓✓' : '✓'}</span>` : ''}

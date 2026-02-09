@@ -559,6 +559,31 @@ async function createSession(sessionId, socket, attempt = 0) {
                 }
             }
         });
+
+        // Sincronizar lista de chats/contatos
+        sock.ev.on('chats.set', (payload) => {
+            try {
+                syncChatsToDatabase(sessionId, payload);
+            } catch (error) {
+                console.error(`[${sessionId}] ❌ Erro ao sincronizar chats:`, error.message);
+            }
+        });
+
+        sock.ev.on('chats.upsert', (payload) => {
+            try {
+                syncChatsToDatabase(sessionId, payload);
+            } catch (error) {
+                console.error(`[${sessionId}] ❌ Erro ao sincronizar chats:`, error.message);
+            }
+        });
+
+        sock.ev.on('chats.update', (payload) => {
+            try {
+                syncChatsToDatabase(sessionId, payload);
+            } catch (error) {
+                console.error(`[${sessionId}] ❌ Erro ao sincronizar chats:`, error.message);
+            }
+        });
         
         // Presença (digitando)
         sock.ev.on('presence.update', (presence) => {
@@ -744,6 +769,88 @@ function scheduleAutomations(context) {
             executeAutomationAction(automation, context).catch((error) => {
                 console.error(`❌ Erro ao executar automação ${automation.id}:`, error.message);
             });
+        }
+    }
+}
+
+function normalizeChatPayload(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload.chats)) return payload.chats;
+    return [];
+}
+
+function getChatDisplayName(chat, fallback) {
+    return chat?.name || chat?.notify || chat?.subject || chat?.pushName || fallback;
+}
+
+function extractLastMessageFromChat(chat) {
+    const msg = chat?.lastMessage?.message || chat?.lastMessage?.messageStubParameters || null;
+    if (!msg) return null;
+    if (typeof msg === 'string') return msg;
+    return (
+        msg.conversation ||
+        msg.extendedTextMessage?.text ||
+        msg.imageMessage?.caption ||
+        msg.videoMessage?.caption ||
+        msg.documentMessage?.caption ||
+        null
+    );
+}
+
+function syncChatsToDatabase(sessionId, payload) {
+    const chats = normalizeChatPayload(payload);
+    if (chats.length === 0) return;
+
+    for (const chat of chats) {
+        const jid = chat?.id || chat?.jid;
+        if (!jid || String(jid).endsWith('@g.us')) continue;
+
+        const phone = extractNumber(jid);
+        if (!phone) continue;
+
+        const displayName = getChatDisplayName(chat, phone);
+        let lead = Lead.findByJid(jid) || Lead.findByPhone(phone);
+        if (!lead) {
+            lead = Lead.findOrCreate({
+                phone,
+                jid,
+                name: displayName,
+                source: 'whatsapp'
+            }).lead;
+        } else if (displayName && !lead.name) {
+            Lead.update(lead.id, { name: displayName });
+            lead = Lead.findById(lead.id);
+        }
+
+        const convResult = Conversation.findOrCreate({
+            lead_id: lead.id,
+            session_id: sessionId
+        });
+        const conversation = convResult.conversation;
+
+        const updates = {};
+        if (typeof chat.unreadCount === 'number') {
+            updates.unread_count = chat.unreadCount;
+        }
+
+        const lastMessage = extractLastMessageFromChat(chat);
+        if (lastMessage) {
+            let metadata = {};
+            try {
+                metadata = conversation?.metadata ? JSON.parse(conversation.metadata) : {};
+            } catch (e) {
+                metadata = {};
+            }
+            metadata.last_message = lastMessage;
+            if (chat?.conversationTimestamp) {
+                metadata.last_message_at = new Date(Number(chat.conversationTimestamp) * 1000).toISOString();
+            }
+            updates.metadata = metadata;
+        }
+
+        if (Object.keys(updates).length > 0) {
+            Conversation.update(conversation.id, updates);
         }
     }
 }
@@ -1432,8 +1539,27 @@ app.get('/api/conversations', optionalAuth, (req, res) => {
         const decrypted = lastMessage?.content_encrypted
             ? decryptMessage(lastMessage.content_encrypted)
             : lastMessage?.content;
-        const lastMessageText = (decrypted || '').trim() || (lastMessage ? previewForMedia(lastMessage.media_type) : 'Clique para iniciar conversa');
-        const lastMessageAt = lastMessage?.sent_at || lastMessage?.created_at || c.updated_at;
+
+        let metadata = {};
+        try {
+            metadata = c.metadata ? JSON.parse(c.metadata) : {};
+        } catch (e) {
+            metadata = {};
+        }
+
+        const metadataLast = metadata.last_message || '';
+        const metadataLastAt = metadata.last_message_at || null;
+
+        const lastMessageText =
+            (decrypted || '').trim() ||
+            (metadataLast ? String(metadataLast).trim() : '') ||
+            (lastMessage ? previewForMedia(lastMessage.media_type) : 'Clique para iniciar conversa');
+
+        const lastMessageAt =
+            lastMessage?.sent_at ||
+            lastMessage?.created_at ||
+            metadataLastAt ||
+            c.updated_at;
 
         return {
             ...c,
@@ -1929,4 +2055,3 @@ process.on('uncaughtException', (error) => {
         process.exit(0);
     });
 };
-
