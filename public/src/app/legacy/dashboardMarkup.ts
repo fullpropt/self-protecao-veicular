@@ -227,37 +227,7 @@ export const dashboardContentTopMarkup = `
 `;
 
 export const dashboardContentBottomMarkup = `
-<!-- Funil de Conversão -->
-        <div class="funnel-container">
-            <div class="funnel-title"><span class="icon icon-funnel icon-sm"></span> Funil de Conversão</div>
-            <div class="funnel-stages" id="funnelStages">
-                <div class="funnel-stage" data-stage="1">
-                    <div class="funnel-value" id="funnel1">0</div>
-                    <div class="funnel-label">Etapa 1</div>
-                    <div class="funnel-percent">100%</div>
-                </div>
-                <div class="funnel-arrow">→</div>
-                <div class="funnel-stage" data-stage="2">
-                    <div class="funnel-value" id="funnel2">0</div>
-                    <div class="funnel-label">Etapa 2</div>
-                    <div class="funnel-percent" id="funnel2Percent">0%</div>
-                </div>
-                <div class="funnel-arrow">→</div>
-                <div class="funnel-stage" data-stage="3">
-                    <div class="funnel-value" id="funnel3">0</div>
-                    <div class="funnel-label">Etapa 3</div>
-                    <div class="funnel-percent" id="funnel3Percent">0%</div>
-                </div>
-                <div class="funnel-arrow">→</div>
-                <div class="funnel-stage" data-stage="4">
-                    <div class="funnel-value" id="funnel4">0</div>
-                    <div class="funnel-label">Concluído</div>
-                    <div class="funnel-percent" id="funnel4Percent">0%</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Leads Recentes -->
+<!-- Leads Recentes -->
         <div class="table-container">
             <div class="table-header">
                 <div class="table-title"><span class="icon icon-contacts icon-sm"></span> Leads Recentes</div>

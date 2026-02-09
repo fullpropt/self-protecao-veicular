@@ -91,6 +91,39 @@ function StatsCards() {
   );
 }
 
+function Funnel() {
+  return (
+    <div className="funnel-container">
+      <div className="funnel-title"><span className="icon icon-funnel icon-sm"></span> Funil de Conversão</div>
+      <div className="funnel-stages" id="funnelStages">
+        <div className="funnel-stage" data-stage="1">
+          <div className="funnel-value" id="funnel1">0</div>
+          <div className="funnel-label">Etapa 1</div>
+          <div className="funnel-percent">100%</div>
+        </div>
+        <div className="funnel-arrow">&rarr;</div>
+        <div className="funnel-stage" data-stage="2">
+          <div className="funnel-value" id="funnel2">0</div>
+          <div className="funnel-label">Etapa 2</div>
+          <div className="funnel-percent" id="funnel2Percent">0%</div>
+        </div>
+        <div className="funnel-arrow">&rarr;</div>
+        <div className="funnel-stage" data-stage="3">
+          <div className="funnel-value" id="funnel3">0</div>
+          <div className="funnel-label">Etapa 3</div>
+          <div className="funnel-percent" id="funnel3Percent">0%</div>
+        </div>
+        <div className="funnel-arrow">&rarr;</div>
+        <div className="funnel-stage" data-stage="4">
+          <div className="funnel-value" id="funnel4">0</div>
+          <div className="funnel-label">Concluído</div>
+          <div className="funnel-percent" id="funnel4Percent">0%</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +156,7 @@ export default function Dashboard() {
         <DashboardHeader />
         <div dangerouslySetInnerHTML={{ __html: dashboardContentTopMarkup }} />
         <StatsCards />
+        <Funnel />
         <div dangerouslySetInnerHTML={{ __html: dashboardContentBottomMarkup }} />
       </main>
       <div dangerouslySetInnerHTML={{ __html: dashboardAfterMarkup }} />
