@@ -506,6 +506,7 @@ function getStatusLabel(status: number) {
 
 const windowAny = window as Window & {
     initContacts?: () => void;
+    loadContacts?: () => void;
     changePage?: (delta: number) => void;
     filterContacts?: () => void;
     toggleSelectAll?: () => void;
@@ -528,6 +529,7 @@ const windowAny = window as Window & {
     loadTemplate?: () => void;
 };
 windowAny.initContacts = initContacts;
+windowAny.loadContacts = loadContacts;
 windowAny.changePage = changePage;
 windowAny.filterContacts = filterContacts;
 windowAny.toggleSelectAll = toggleSelectAll;
