@@ -166,64 +166,6 @@ export const dashboardContentTopMarkup = `
                 </button>
             </div>
         </div>
-
-        <!-- Estatísticas por período (estilo BotConversa) -->
-        <div class="dashboard-botconversa">
-            <div class="stats-period-card">
-                <h3>Estatísticas por período</h3>
-                <div class="stats-period-controls">
-                    <input type="date" class="form-input" id="statsStartDate">
-                    <input type="date" class="form-input" id="statsEndDate">
-                    <select class="form-select" id="statsMetric" style="width: auto;">
-                        <option value="novos_contatos">Novos Contatos</option>
-                        <option value="mensagens">Mensagens</option>
-                        <option value="interacoes">Interações</option>
-                    </select>
-                    <div class="chart-type-toggle">
-                        <button type="button" class="chart-btn active" title="Gráfico de linhas">
-                            <span class="icon icon-chart-line icon-sm"></span>
-                        </button>
-                        <button type="button" class="chart-btn" title="Gráfico de barras">
-                            <span class="icon icon-chart-bar icon-sm"></span>
-                        </button>
-                    </div>
-                </div>
-                <div class="stats-period-chart" id="statsPeriodChart">
-                    <canvas id="statsChart" style="max-height: 200px;"></canvas>
-                </div>
-            </div>
-            <div class="stats-general-card">
-                <h3>Estatísticas gerais</h3>
-                <div class="stats-general-item">
-                    <span class="stats-general-label">Contatos que interagiram</span>
-                    <span class="stats-general-value" id="statsContacts">0</span>
-                </div>
-                <div class="stats-general-item">
-                    <span class="stats-general-label">Mensagem enviada pelo contato</span>
-                    <span class="stats-general-value" id="statsMessages">0</span>
-                </div>
-                <div class="stats-general-item">
-                    <span class="stats-general-label">Interações/Inscrito</span>
-                    <span class="stats-general-value" id="statsInteractionsPer">0</span>
-                </div>
-            </div>
-        </div>
-        <div class="events-personalized-card" style="margin-bottom: 24px;">
-            <div class="events-header">
-                <h3>Eventos personalizados <span class="info-icon" title="Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas."><span class="icon icon-info icon-sm"></span></span></h3>
-                <select class="form-select" style="width: auto;">
-                    <option>Este mês</option>
-                    <option>Semana</option>
-                    <option>Ano</option>
-                </select>
-                <button class="btn btn-primary btn-sm">Criar</button>
-            </div>
-            <div class="events-empty">
-                <span class="events-empty-emoji icon icon-empty"></span>
-                <p><strong>Nenhum evento personalizado ainda</strong></p>
-                <p class="text-muted">Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas.</p>
-            </div>
-        </div>
 `;
 
 export const dashboardContentBottomMarkup = `

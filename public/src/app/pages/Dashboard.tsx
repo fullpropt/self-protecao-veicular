@@ -58,6 +58,82 @@ function DashboardHeader() {
   );
 }
 
+function StatsPeriod() {
+  return (
+    <div className="dashboard-botconversa">
+      <div className="stats-period-card">
+        <h3>Estatísticas por período</h3>
+        <div className="stats-period-controls">
+          <input type="date" className="form-input" id="statsStartDate" />
+          <input type="date" className="form-input" id="statsEndDate" />
+          <select className="form-select" id="statsMetric" style={{ width: 'auto' }}>
+            <option value="novos_contatos">Novos Contatos</option>
+            <option value="mensagens">Mensagens</option>
+            <option value="interacoes">Interações</option>
+          </select>
+          <div className="chart-type-toggle">
+            <button type="button" className="chart-btn active" title="Gráfico de linhas">
+              <span className="icon icon-chart-line icon-sm"></span>
+            </button>
+            <button type="button" className="chart-btn" title="Gráfico de barras">
+              <span className="icon icon-chart-bar icon-sm"></span>
+            </button>
+          </div>
+        </div>
+        <div className="stats-period-chart" id="statsPeriodChart">
+          <canvas id="statsChart" style={{ maxHeight: '200px' }}></canvas>
+        </div>
+      </div>
+      <div className="stats-general-card">
+        <h3>Estatísticas gerais</h3>
+        <div className="stats-general-item">
+          <span className="stats-general-label">Contatos que interagiram</span>
+          <span className="stats-general-value" id="statsContacts">0</span>
+        </div>
+        <div className="stats-general-item">
+          <span className="stats-general-label">Mensagem enviada pelo contato</span>
+          <span className="stats-general-value" id="statsMessages">0</span>
+        </div>
+        <div className="stats-general-item">
+          <span className="stats-general-label">Interações/Inscrito</span>
+          <span className="stats-general-value" id="statsInteractionsPer">0</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EventsCard() {
+  return (
+    <div className="events-personalized-card" style={{ marginBottom: '24px' }}>
+      <div className="events-header">
+        <h3>
+          Eventos personalizados{' '}
+          <span
+            className="info-icon"
+            title="Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas."
+          >
+            <span className="icon icon-info icon-sm"></span>
+          </span>
+        </h3>
+        <select className="form-select" style={{ width: 'auto' }}>
+          <option>Este mês</option>
+          <option>Semana</option>
+          <option>Ano</option>
+        </select>
+        <button className="btn btn-primary btn-sm">Criar</button>
+      </div>
+      <div className="events-empty">
+        <span className="events-empty-emoji icon icon-empty"></span>
+        <p><strong>Nenhum evento personalizado ainda</strong></p>
+        <p className="text-muted">
+          Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function StatsCards() {
   return (
     <div className="stats-grid">
@@ -413,6 +489,8 @@ export default function Dashboard() {
       <main className="main-content">
         <DashboardHeader />
         <div dangerouslySetInnerHTML={{ __html: dashboardContentTopMarkup }} />
+        <StatsPeriod />
+        <EventsCard />
         <StatsCards />
         <Funnel />
         <LeadsTable />
