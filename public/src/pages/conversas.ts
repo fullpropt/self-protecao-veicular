@@ -58,8 +58,36 @@ let messages: Record<string, ChatMessage[]> = {};
 let currentFilter = 'all';
 
 // Inicialização
-document.addEventListener('DOMContentLoaded', function() {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+// InicializaÃ§Ã£o
+function initConversas() {
     initSocket();
+    loadConversations();
+    
+    // Verificar parÃ¢metros da URL
+    const params = new URLSearchParams(window.location.search);
+    const phone = params.get('phone');
+    const name = params.get('name');
+    
+    if (phone) {
+        setTimeout(() => {
+            selectConversation({
+                number: phone,
+                name: name || phone,
+                jid: formatJid(phone)
+            });
+        }, 500);
+    }
+}
+
+onReady(initConversas);
     loadConversations();
     
     // Verificar parâmetros da URL
@@ -638,6 +666,7 @@ function logout() {
 }
 
 const windowAny = window as Window & {
+    initConversas?: () => void;
     selectConversation?: (contact: Conversation) => void;
     sendMessage?: () => void;
     handleKeyDown?: (event: KeyboardEvent) => void;
@@ -651,6 +680,7 @@ const windowAny = window as Window & {
     toggleSidebar?: () => void;
     logout?: () => void;
 };
+windowAny.initConversas = initConversas;
 windowAny.selectConversation = selectConversation;
 windowAny.sendMessage = sendMessage;
 windowAny.handleKeyDown = handleKeyDown;
@@ -664,4 +694,4 @@ windowAny.viewLeadDetails = viewLeadDetails;
 windowAny.toggleSidebar = toggleSidebar;
 windowAny.logout = logout;
 
-export {};
+export { initConversas };

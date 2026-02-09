@@ -7,6 +7,18 @@ type LoginResponse = {
     error?: string;
 };
 
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+function getDashboardUrl() {
+    return window.location.pathname.includes('app.html') ? 'app.html#/dashboard' : 'dashboard.html';
+}
+
 function getInputValue(id: string): string {
     const input = document.getElementById(id) as HTMLInputElement | null;
     return input?.value ?? '';
@@ -48,7 +60,7 @@ async function handleLogin(e: Event) {
         sessionStorage.setItem('selfDashboardUser', data.user?.name || identifier);
         sessionStorage.setItem('selfDashboardExpiry', Date.now() + (8 * 60 * 60 * 1000));
 
-        window.location.href = 'dashboard.html';
+        window.location.href = getDashboardUrl();
     } catch (error) {
         if (errorMsg) {
             errorMsg.style.display = 'block';
@@ -62,15 +74,24 @@ async function handleLogin(e: Event) {
     return false;
 }
 
-// Verificar se ja esta logado
-if (sessionStorage.getItem('selfDashboardToken')) {
-    const expiry = sessionStorage.getItem('selfDashboardExpiry');
-    if (expiry && Date.now() < parseInt(expiry)) {
-        window.location.href = 'dashboard.html';
+function initLogin() {
+    // Verificar se ja esta logado
+    if (sessionStorage.getItem('selfDashboardToken')) {
+        const expiry = sessionStorage.getItem('selfDashboardExpiry');
+        if (expiry && Date.now() < parseInt(expiry)) {
+            window.location.href = getDashboardUrl();
+            return;
+        }
     }
+
+    const windowAny = window as Window & {
+        handleLogin?: (e: Event) => boolean | Promise<boolean>;
+        initLogin?: () => void;
+    };
+    windowAny.handleLogin = handleLogin;
+    windowAny.initLogin = initLogin;
 }
 
-const windowAny = window as Window & { handleLogin?: (e: Event) => boolean | Promise<boolean> };
-windowAny.handleLogin = handleLogin;
+onReady(initLogin);
 
-export {};
+export { initLogin };

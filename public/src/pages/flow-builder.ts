@@ -46,11 +46,22 @@ let isConnecting = false;
 let connectionStart: { nodeId: string; portType: string } | null = null;
 
 // Inicialização
-document.addEventListener('DOMContentLoaded', () => {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+function initFlowBuilder() {
+
     setupDragAndDrop();
     setupCanvasEvents();
     loadFlows();
-});
+}
+
+onReady(initFlowBuilder);
 
 // Configurar drag and drop dos nós
 function setupDragAndDrop() {
@@ -713,6 +724,7 @@ function closeFlowsModal() {
 }
 
 const windowAny = window as Window & {
+    initFlowBuilder?: () => void;
     openFlowsModal?: () => void;
     createNewFlow?: () => void;
     clearCanvas?: () => void;
@@ -729,6 +741,7 @@ const windowAny = window as Window & {
     loadFlow?: (id: number) => Promise<void>;
     closeFlowsModal?: () => void;
 };
+windowAny.initFlowBuilder = initFlowBuilder;
 windowAny.openFlowsModal = openFlowsModal;
 windowAny.createNewFlow = createNewFlow;
 windowAny.clearCanvas = clearCanvas;
@@ -745,4 +758,4 @@ windowAny.deleteNode = deleteNode;
 windowAny.loadFlow = loadFlow;
 windowAny.closeFlowsModal = closeFlowsModal;
 
-export {};
+export { initFlowBuilder };

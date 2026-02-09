@@ -20,10 +20,21 @@ let leads: Lead[] = [];
 let currentView: 'kanban' | 'funnel' = 'kanban';
 let currentLead: Lead | null = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+function initFunil() {
+
     loadFunnel();
     initDragAndDrop();
-});
+}
+
+onReady(initFunil);
 
 async function loadFunnel() {
     try {
@@ -258,6 +269,7 @@ function saveStagesConfig() {
 }
 
 const windowAny = window as Window & {
+    initFunil?: () => void;
     viewLead?: (id: number) => void;
     changeLeadStatus?: (id: number, status: string) => Promise<void>;
     openLeadWhatsApp?: () => void;
@@ -266,6 +278,7 @@ const windowAny = window as Window & {
     filterByStage?: (stage: number | string) => void;
     saveStagesConfig?: () => void;
 };
+windowAny.initFunil = initFunil;
 windowAny.viewLead = viewLead;
 windowAny.changeLeadStatus = changeLeadStatus;
 windowAny.openLeadWhatsApp = openLeadWhatsApp;
@@ -274,4 +287,4 @@ windowAny.toggleView = toggleView;
 windowAny.filterByStage = filterByStage;
 windowAny.saveStagesConfig = saveStagesConfig;
 
-export {};
+export { initFunil };

@@ -23,9 +23,20 @@ let flows: Flow[] = [];
 let stepCount = 1;
 let currentFlowId: number | null = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+function initFluxos() {
+
     loadFlows();
-});
+}
+
+onReady(initFluxos);
 
 async function loadFlows() {
     try {
@@ -419,6 +430,7 @@ function deleteFlow(id: number) {
 }
 
 const windowAny = window as Window & {
+    initFluxos?: () => void;
     addStep?: () => void;
     removeStep?: (step: number) => void;
     saveFlow?: () => Promise<void>;
@@ -427,6 +439,7 @@ const windowAny = window as Window & {
     toggleFlow?: (id: number) => void;
     deleteFlow?: (id: number) => void;
 };
+windowAny.initFluxos = initFluxos;
 windowAny.addStep = addStep;
 windowAny.removeStep = removeStep;
 windowAny.saveFlow = saveFlow;
@@ -435,4 +448,4 @@ windowAny.saveFlowChanges = saveFlowChanges;
 windowAny.toggleFlow = toggleFlow;
 windowAny.deleteFlow = deleteFlow;
 
-export {};
+export { initFluxos };

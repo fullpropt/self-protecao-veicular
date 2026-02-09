@@ -7,7 +7,15 @@ type Settings = {
     whatsapp?: { interval?: string; messagesPerHour?: string; workStart?: string; workEnd?: string };
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+function initConfiguracoes() {
     loadSettings();
     checkWhatsAppStatus();
     const hash = window.location.hash?.slice(1);
@@ -20,7 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
             panel.classList.add('active');
         }
     }
-});
+}
+
+onReady(initConfiguracoes);
 
 function showPanel(panelId: string) {
     document.querySelectorAll('.settings-nav-item').forEach(item => item.classList.remove('active'));
@@ -242,6 +252,7 @@ function testWebhook() { showToast('info', 'Testando', 'Enviando requisição de
 function saveApiSettings() { showToast('success', 'Sucesso', 'Configurações de API salvas!'); }
 
 const windowAny = window as Window & {
+    initConfiguracoes?: () => void;
     showPanel?: (panelId: string) => void;
     saveGeneralSettings?: () => void;
     saveFunnelSettings?: () => void;
@@ -260,6 +271,7 @@ const windowAny = window as Window & {
     testWebhook?: () => void;
     saveApiSettings?: () => void;
 };
+windowAny.initConfiguracoes = initConfiguracoes;
 windowAny.showPanel = showPanel;
 windowAny.saveGeneralSettings = saveGeneralSettings;
 windowAny.saveFunnelSettings = saveFunnelSettings;
@@ -278,4 +290,4 @@ windowAny.regenerateApiKey = regenerateApiKey;
 windowAny.testWebhook = testWebhook;
 windowAny.saveApiSettings = saveApiSettings;
 
-export {};
+export { initConfiguracoes };

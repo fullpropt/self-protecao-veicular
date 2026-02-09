@@ -18,11 +18,21 @@ type AutomationsResponse = { automations?: Automation[] };
 
 let automations: Automation[] = [];
 
-document.addEventListener('DOMContentLoaded', () => {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+function initAutomacao() {
     loadAutomations();
     updateTriggerOptions();
     updateActionOptions();
-});
+}
+
+onReady(initAutomacao);
 
 async function loadAutomations() {
     try {
@@ -370,6 +380,7 @@ async function deleteAutomation(id: number) {
 }
 
 const windowAny = window as Window & {
+    initAutomacao?: () => void;
     updateTriggerOptions?: () => void;
     updateActionOptions?: () => void;
     toggleAutomation?: (id: number, active: boolean) => Promise<void>;
@@ -377,6 +388,7 @@ const windowAny = window as Window & {
     editAutomation?: (id: number) => void;
     deleteAutomation?: (id: number) => Promise<void>;
 };
+windowAny.initAutomacao = initAutomacao;
 windowAny.updateTriggerOptions = updateTriggerOptions;
 windowAny.updateActionOptions = updateActionOptions;
 windowAny.toggleAutomation = toggleAutomation;
@@ -384,4 +396,4 @@ windowAny.saveAutomation = saveAutomation;
 windowAny.editAutomation = editAutomation;
 windowAny.deleteAutomation = deleteAutomation;
 
-export {};
+export { initAutomacao };

@@ -27,7 +27,16 @@ let selectedContacts = new Set<number>();
 let templates: Template[] = [];
 let queueInterval: number | null = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+function initTransmissao() {
+
     loadContacts();
     loadTemplates();
     loadQueueStatus();
@@ -38,7 +47,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!scheduledTimeGroup) return;
         scheduledTimeGroup.style.display = 
             (e.target as HTMLSelectElement).value === 'scheduled' ? 'block' : 'none';
-    });
+}
+
+onReady(initTransmissao);
 
     // Atualizar fila a cada 5 segundos
     queueInterval = setInterval(loadQueueStatus, 5000);
@@ -331,6 +342,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 const windowAny = window as Window & {
+    initTransmissao?: () => void;
     loadTemplate?: () => void;
     toggleRecipient?: (id: number) => void;
     selectAll?: () => void;
@@ -343,6 +355,7 @@ const windowAny = window as Window & {
     clearQueue?: () => Promise<void>;
     pauseQueue?: () => void;
 };
+windowAny.initTransmissao = initTransmissao;
 windowAny.loadTemplate = loadTemplate;
 windowAny.toggleRecipient = toggleRecipient;
 windowAny.selectAll = selectAll;
@@ -355,4 +368,4 @@ windowAny.cancelQueueItem = cancelQueueItem;
 windowAny.clearQueue = clearQueue;
 windowAny.pauseQueue = pauseQueue;
 
-export {};
+export { initTransmissao };

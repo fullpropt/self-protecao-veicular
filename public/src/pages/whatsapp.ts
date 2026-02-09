@@ -24,9 +24,22 @@ type WhatsAppContact = { number: string; name?: string };
 let contacts: WhatsAppContact[] = [];
 
 // Inicialização
-document.addEventListener('DOMContentLoaded', function() {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+// InicializaÃ§Ã£o
+function initWhatsapp() {
     if (checkAuth()) {
         initSocket();
+    }
+}
+
+onReady(initWhatsapp);
     }
 });
 
@@ -402,16 +415,18 @@ function logout() {
 }
 
 const windowAny = window as Window & {
+    initWhatsapp?: () => void;
     startConnection?: () => void;
     disconnect?: () => void;
     openChat?: (phone: string, name: string) => void;
     toggleSidebar?: () => void;
     logout?: () => void;
 };
+windowAny.initWhatsapp = initWhatsapp;
 windowAny.startConnection = startConnection;
 windowAny.disconnect = disconnect;
 windowAny.openChat = openChat;
 windowAny.toggleSidebar = toggleSidebar;
 windowAny.logout = logout;
 
-export {};
+export { initWhatsapp };

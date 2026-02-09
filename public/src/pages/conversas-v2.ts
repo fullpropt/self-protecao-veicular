@@ -56,8 +56,24 @@ let isConnected = false;
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
-document.addEventListener('DOMContentLoaded', () => {
+function onReady(callback: () => void) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', callback);
+    } else {
+        callback();
+    }
+}
+
+// ============================================
+// INICIALIZAÃ‡ÃƒO
+// ============================================
+function initConversasV2() {
     initSocket();
+    setupEventListeners();
+    loadContacts();
+}
+
+onReady(initConversasV2);
     setupEventListeners();
     loadContacts();
 });
@@ -734,16 +750,18 @@ function showToast(type: 'success' | 'error' | 'warning' | 'info', title: string
 }
 
 const windowAny = window as Window & {
+    initConversasV2?: () => void;
     selectContact?: (jid: string) => void;
     sendMessage?: () => void;
     closeAttachModal?: () => void;
     sendFile?: () => Promise<void>;
     toggleBot?: () => void;
 };
+windowAny.initConversasV2 = initConversasV2;
 windowAny.selectContact = selectContact;
 windowAny.sendMessage = sendMessage;
 windowAny.closeAttachModal = closeAttachModal;
 windowAny.sendFile = sendFile;
 windowAny.toggleBot = toggleBot;
 
-export {};
+export { initConversasV2 };
