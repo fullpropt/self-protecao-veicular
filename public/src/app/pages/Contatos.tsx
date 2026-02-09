@@ -47,7 +47,7 @@ export default function Contatos() {
           (mod as { initContacts?: () => void }).initContacts?.();
           return;
         }
-        throw new Error('initContacts nÃ£o estÃ¡ disponÃ­vel');
+        throw new Error('initContacts não está disponível');
       } catch (error) {
         if (cancelled) return;
         console.error('Falha ao iniciar Contatos:', error);
@@ -169,7 +169,7 @@ export default function Contatos() {
         {bootError && (
           <div className="card mb-4" style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}>
             <div className="card-body">
-              NÃ£o foi possÃ­vel inicializar os contatos. Abra o console para ver o erro.
+              Não foi possível inicializar os contatos. Abra o console para ver o erro.
             </div>
           </div>
         )}
@@ -526,7 +526,7 @@ João Silva,27999999999,Honda Civic,ABC1234`}
                 placeholder={`Digite a mensagem...
 Use {{nome}} para personalizar`}
               ></textarea>
-              <p className="form-help">Variáveis: {{nome}}, {{veiculo}}, {{placa}}</p>
+              <p className="form-help">{'Variáveis: {{nome}}, {{veiculo}}, {{placa}}'}</p>
             </div>
             <div className="form-row">
               <div className="form-group">

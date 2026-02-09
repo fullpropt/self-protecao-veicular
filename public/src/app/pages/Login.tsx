@@ -153,7 +153,7 @@ export default function Login() {
               type="text"
               className="form-input"
               id="username"
-              placeholder="Digite seu e-mail ou usuÃ¡rio"
+              placeholder="Digite seu e-mail ou usuário"
               required
               autoComplete="off"
             />

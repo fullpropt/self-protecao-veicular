@@ -41,7 +41,7 @@ function getConversasUrl(params: URLSearchParams) {
     return `#/conversas?${params.toString()}`;
 }
 
-// InicializaÃ§Ã£o
+// Inicializa??o
 function initWhatsapp() {
     if (checkAuth()) {
         initSocket();

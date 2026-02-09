@@ -81,7 +81,7 @@ function getQueryParams() {
     return new URLSearchParams(query);
 }
 
-// InicializaÃ§Ã£o
+// Inicializa??o
 function initConversas() {
     initSocket();
     loadConversations();

@@ -169,7 +169,7 @@ export default function Transmissao() {
               </li>
               <li className="nav-item">
                 <Link to="/transmissao" className="nav-link active">
-                  <span className="icon icon-broadcast"></span>TransmissÃ£o
+                  <span className="icon icon-broadcast"></span>Transmissão
                 </Link>
               </li>
             </ul>
@@ -186,11 +186,11 @@ export default function Transmissao() {
             </ul>
           </div>
           <div className="nav-section">
-            <div className="nav-section-title">AutomaÃ§Ã£o</div>
+            <div className="nav-section-title">Automação</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/automacao" className="nav-link">
-                  <span className="icon icon-automation"></span>AutomaÃ§Ã£o
+                  <span className="icon icon-automation"></span>Automação
                 </Link>
               </li>
               <li className="nav-item">
@@ -215,7 +215,7 @@ export default function Transmissao() {
               </li>
               <li className="nav-item">
                 <Link to="/configuracoes" className="nav-link">
-                  <span className="icon icon-settings"></span>ConfiguraÃ§Ãµes
+                  <span className="icon icon-settings"></span>Configurações
                 </Link>
               </li>
             </ul>
@@ -233,8 +233,8 @@ export default function Transmissao() {
       <main className="main-content">
         <div className="page-header">
           <div className="page-title">
-            <h1><span className="icon icon-broadcast icon-sm"></span> TransmissÃ£o em Lote</h1>
-            <p>Envie mensagens para mÃºltiplos contatos com automaÃ§Ã£o de tempo</p>
+            <h1><span className="icon icon-broadcast icon-sm"></span> Transmissão em Lote</h1>
+            <p>Envie mensagens para múltiplos contatos com automação de tempo</p>
           </div>
           <div className="page-actions">
             <button className="btn btn-outline" onClick={() => globals.loadQueueStatus?.()}>
@@ -253,7 +253,7 @@ export default function Transmissao() {
                 <span className="icon icon-export icon-sm"></span> Envio em Andamento
               </h3>
               <p style={{ color: 'var(--gray-500)', margin: '5px 0 0' }}>
-                Aguarde enquanto as mensagens sÃ£o enviadas
+                Aguarde enquanto as mensagens são enviadas
               </p>
             </div>
             <button className="btn btn-sm btn-danger" onClick={() => globals.pauseQueue?.()}>
@@ -286,7 +286,7 @@ export default function Transmissao() {
         <div className="broadcast-container">
           <div className="card">
             <div className="card-header">
-              <div className="card-title"><span className="icon icon-contacts icon-sm"></span> DestinatÃ¡rios</div>
+              <div className="card-title"><span className="icon icon-contacts icon-sm"></span> Destinatários</div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="btn btn-sm btn-outline" onClick={() => globals.selectAll?.()}>Selecionar Todos</button>
                 <button className="btn btn-sm btn-outline" onClick={() => globals.deselectAll?.()}>Limpar</button>
@@ -310,7 +310,7 @@ export default function Transmissao() {
                     <option value="">Todos os Status</option>
                     <option value="1">Novo</option>
                     <option value="2">Em Andamento</option>
-                    <option value="3">ConcluÃ­do</option>
+                    <option value="3">Concluído</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -349,14 +349,14 @@ export default function Transmissao() {
                   className="form-textarea"
                   id="messageContent"
                   rows={6}
-                  placeholder={`Digite sua mensagem aqui...\n\nUse variÃ¡veis para personalizar:\n{{nome}} - Nome do contato\n{{veiculo}} - VeÃ­culo\n{{placa}} - Placa`}
+                  placeholder={`Digite sua mensagem aqui...\n\nUse variáveis para personalizar:\n{{nome}} - Nome do contato\n{{veiculo}} - Veículo\n{{placa}} - Placa`}
                   onKeyUp={() => globals.updatePreview?.()}
                 ></textarea>
               </div>
               <div className="form-group">
-                <label className="form-label">PrÃ©-visualizaÃ§Ã£o</label>
+                <label className="form-label">Pré-visualização</label>
                 <div className="message-preview" id="messagePreview">
-                  A mensagem aparecerÃ¡ aqui...
+                  A mensagem aparecer? aqui...
                 </div>
               </div>
               <div className="form-row">
@@ -376,10 +376,10 @@ export default function Transmissao() {
                   <p className="form-help">Tempo de espera entre cada envio</p>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">InÃ­cio do envio</label>
+                  <label className="form-label">Início do envio</label>
                   <select className="form-select" id="startTime">
                     <option value="now">Imediatamente</option>
-                    <option value="scheduled">Agendar horÃ¡rio</option>
+                    <option value="scheduled">Agendar horário</option>
                   </select>
                 </div>
               </div>
@@ -398,13 +398,13 @@ export default function Transmissao() {
                 <label className="checkbox-wrapper">
                   <input type="checkbox" id="skipSent" />
                   <span className="checkbox-custom"></span>
-                  <span>Pular contatos jÃ¡ contatados hoje</span>
+                  <span>Pular contatos j? contatados hoje</span>
                 </label>
               </div>
             </div>
             <div className="card-footer">
               <button className="btn btn-whatsapp w-100" onClick={() => globals.startBroadcast?.()} id="startBtn">
-                <span className="icon icon-play icon-sm"></span> Iniciar TransmissÃ£o
+                <span className="icon icon-play icon-sm"></span> Iniciar Transmissão
               </button>
             </div>
           </div>

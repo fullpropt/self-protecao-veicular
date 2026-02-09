@@ -312,7 +312,7 @@ export default function Inbox() {
           document.querySelector('.sidebar-overlay')?.classList.toggle('active');
         }}
       >
-        ???
+        {'\u2630'}
       </button>
       <div className="sidebar-overlay"></div>
 
@@ -343,7 +343,7 @@ export default function Inbox() {
               </li>
               <li className="nav-item">
                 <Link to="/transmissao" className="nav-link">
-                  <span className="icon icon-broadcast"></span>Transmiss??o
+                  <span className="icon icon-broadcast"></span>Transmissão
                 </Link>
               </li>
             </ul>
@@ -360,11 +360,11 @@ export default function Inbox() {
             </ul>
           </div>
           <div className="nav-section">
-            <div className="nav-section-title">Automa????o</div>
+            <div className="nav-section-title">Automação</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/automacao" className="nav-link">
-                  <span className="icon icon-automation"></span>Automa????o
+                  <span className="icon icon-automation"></span>Automação
                 </Link>
               </li>
               <li className="nav-item">
@@ -389,7 +389,7 @@ export default function Inbox() {
               </li>
               <li className="nav-item">
                 <Link to="/configuracoes" className="nav-link">
-                  <span className="icon icon-settings"></span>Configura????es
+                  <span className="icon icon-settings"></span>Configurações
                 </Link>
               </li>
               <li className="nav-item">
@@ -416,7 +416,7 @@ export default function Inbox() {
               <h2><span className="icon icon-inbox icon-sm"></span> Inbox</h2>
               <div className="conversations-tabs">
                 <button className="active" onClick={() => globals.filterConversations?.('all')}>Todos</button>
-                <button onClick={() => globals.filterConversations?.('unread')}>N??o lidos</button>
+                <button onClick={() => globals.filterConversations?.('unread')}>Não lidos</button>
               </div>
               <div className="search-box" style={{ maxWidth: '100%' }}>
                 <span className="search-icon icon icon-search icon-sm"></span>
@@ -440,17 +440,17 @@ export default function Inbox() {
             <div className="chat-empty">
               <div className="chat-empty-icon icon icon-empty icon-lg"></div>
               <h3>Nenhum chat selecionado</h3>
-              <p>Selecione uma conversa da lista ao lado para come??ar a conversar</p>
+              <p>Selecione uma conversa da lista ao lado para começar a conversar</p>
             </div>
           </div>
 
           <div className="inbox-right-panel" id="inboxRightPanel">
             <div className="inbox-right-panel-content" id="inboxRightContent">
               <span className="inbox-right-panel-robot icon icon-automation icon-lg"></span>
-              <p><strong>Este cliente ainda n??o est?? cadastrado na sua audi??ncia.</strong></p>
-              <p>Vamos cadastr??-lo para que o cart??o do usu??rio dele apare??a aqui?</p>
+              <p><strong>Este cliente ainda não está cadastrado na sua audiência.</strong></p>
+              <p>Vamos cadastrá-lo para que o cartão do usuário dele apareça aqui?</p>
               <button className="btn-register-user" onClick={() => globals.registerCurrentUser?.()}>
-                SIM! Cadastrar este usu??rio
+                SIM! Cadastrar este usuário
               </button>
             </div>
           </div>

@@ -550,7 +550,7 @@ export default function Dashboard() {
               <li className="nav-item">
                 <Link to="/transmissao" className="nav-link">
                   <span className="icon icon-broadcast"></span>
-                  TransmissÃ£o
+                  Transmissão
                 </Link>
               </li>
             </ul>
@@ -570,12 +570,12 @@ export default function Dashboard() {
           </div>
 
           <div className="nav-section">
-            <div className="nav-section-title">AutomaÃ§Ã£o</div>
+            <div className="nav-section-title">Automação</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/automacao" className="nav-link">
                   <span className="icon icon-automation"></span>
-                  AutomaÃ§Ã£o
+                  Automação
                 </Link>
               </li>
               <li className="nav-item">
@@ -605,7 +605,7 @@ export default function Dashboard() {
               <li className="nav-item">
                 <Link to="/configuracoes" className="nav-link">
                   <span className="icon icon-settings"></span>
-                  ConfiguraÃ§Ãµes
+                  Configurações
                 </Link>
               </li>
               <li className="nav-item">
