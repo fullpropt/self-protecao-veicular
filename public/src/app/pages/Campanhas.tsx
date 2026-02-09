@@ -5,6 +5,7 @@ type CampanhasGlobals = {
   initCampanhas?: () => void;
   loadCampaigns?: () => void;
   openModal?: (id: string) => void;
+  openCampaignModal?: () => void;
   closeModal?: (id: string) => void;
   saveCampaign?: (status: 'active' | 'draft') => void;
   switchCampaignTab?: (tab: string) => void;
@@ -165,7 +166,7 @@ export default function Campanhas() {
                   </div>
                   <div className="page-actions">
                       <button className="btn btn-outline" onClick={() => globals.loadCampaigns?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
-                      <button className="btn btn-primary" onClick={() => globals.openModal?.('newCampaignModal')}><span className="icon icon-add icon-sm"></span> Nova Campanha</button>
+                      <button className="btn btn-primary" onClick={() => (globals.openCampaignModal ? globals.openCampaignModal() : globals.openModal?.('newCampaignModal'))}><span className="icon icon-add icon-sm"></span> Nova Campanha</button>
                   </div>
               </div>
       
@@ -216,6 +217,7 @@ export default function Campanhas() {
                   </div>
                   <div className="modal-body">
                       <form id="campaignForm">
+                          <input type="hidden" id="campaignId" />
                           <div className="form-group">
                               <label className="form-label required">Nome da Campanha</label>
                               <input type="text" className="form-input" id="campaignName" required placeholder="Ex: Promoção Janeiro" />

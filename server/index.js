@@ -20,7 +20,7 @@ const qrcode = require('qrcode');
 // Database
 const { getDatabase, close: closeDatabase, query, run } = require('./database/connection');
 const { migrate } = require('./database/migrate');
-const { Lead, Conversation, Message, Template, Flow, Settings, User } = require('./database/models');
+const { Lead, Conversation, Message, Template, Campaign, Automation, Flow, Settings, User } = require('./database/models');
 
 // Services
 const webhookService = require('./services/webhookService');
@@ -1327,6 +1327,116 @@ app.put('/api/templates/:id', authenticate, (req, res) => {
 
 app.delete('/api/templates/:id', authenticate, (req, res) => {
     Template.delete(req.params.id);
+    res.json({ success: true });
+});
+
+// ============================================
+// API DE CAMPANHAS
+// ============================================
+
+app.get('/api/campaigns', optionalAuth, (req, res) => {
+    const { status, type, limit, offset, search } = req.query;
+    const campaigns = Campaign.list({
+        status,
+        type,
+        search,
+        limit: limit ? parseInt(limit) : 50,
+        offset: offset ? parseInt(offset) : 0
+    });
+
+    res.json({ success: true, campaigns });
+});
+
+app.get('/api/campaigns/:id', optionalAuth, (req, res) => {
+    const campaign = Campaign.findById(req.params.id);
+    if (!campaign) {
+        return res.status(404).json({ error: 'Campanha nÃ£o encontrada' });
+    }
+    res.json({ success: true, campaign });
+});
+
+app.post('/api/campaigns', authenticate, (req, res) => {
+    try {
+        const payload = {
+            ...req.body,
+            created_by: req.user?.id
+        };
+        const result = Campaign.create(payload);
+        const campaign = Campaign.findById(result.id);
+        res.json({ success: true, campaign });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.put('/api/campaigns/:id', authenticate, (req, res) => {
+    const campaign = Campaign.findById(req.params.id);
+    if (!campaign) {
+        return res.status(404).json({ error: 'Campanha nÃ£o encontrada' });
+    }
+
+    Campaign.update(req.params.id, req.body);
+    const updatedCampaign = Campaign.findById(req.params.id);
+    res.json({ success: true, campaign: updatedCampaign });
+});
+
+app.delete('/api/campaigns/:id', authenticate, (req, res) => {
+    Campaign.delete(req.params.id);
+    res.json({ success: true });
+});
+
+// ============================================
+// API DE AUTOMACOES
+// ============================================
+
+app.get('/api/automations', optionalAuth, (req, res) => {
+    const { is_active, trigger_type, limit, offset, search } = req.query;
+    const automations = Automation.list({
+        is_active: is_active !== undefined ? parseInt(is_active) : undefined,
+        trigger_type,
+        search,
+        limit: limit ? parseInt(limit) : 50,
+        offset: offset ? parseInt(offset) : 0
+    });
+
+    res.json({ success: true, automations });
+});
+
+app.get('/api/automations/:id', optionalAuth, (req, res) => {
+    const automation = Automation.findById(req.params.id);
+    if (!automation) {
+        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
+    }
+    res.json({ success: true, automation });
+});
+
+app.post('/api/automations', authenticate, (req, res) => {
+    try {
+        const payload = {
+            ...req.body,
+            created_by: req.user?.id
+        };
+        const result = Automation.create(payload);
+        const automation = Automation.findById(result.id);
+        res.json({ success: true, automation });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+app.put('/api/automations/:id', authenticate, (req, res) => {
+    const automation = Automation.findById(req.params.id);
+    if (!automation) {
+        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
+    }
+
+    Automation.update(req.params.id, req.body);
+    const updatedAutomation = Automation.findById(req.params.id);
+    res.json({ success: true, automation: updatedAutomation });
+});
+
+app.delete('/api/automations/:id', authenticate, (req, res) => {
+    Automation.delete(req.params.id);
     res.json({ success: true });
 });
 

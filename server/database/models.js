@@ -422,6 +422,209 @@ const Template = {
 };
 
 // ============================================
+// CAMPAIGNS
+// ============================================
+
+const Campaign = {
+    create(data) {
+        const uuid = generateUUID();
+
+        const result = run(`
+            INSERT INTO campaigns (uuid, name, description, type, status, segment, message, delay, start_at, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            uuid,
+            data.name,
+            data.description,
+            data.type || 'broadcast',
+            data.status || 'draft',
+            data.segment,
+            data.message,
+            data.delay || 0,
+            data.start_at,
+            data.created_by
+        ]);
+
+        return { id: result.lastInsertRowid, uuid };
+    },
+
+    findById(id) {
+        return queryOne('SELECT * FROM campaigns WHERE id = ?', [id]);
+    },
+
+    list(options = {}) {
+        let sql = 'SELECT * FROM campaigns WHERE 1=1';
+        const params = [];
+
+        if (options.status) {
+            sql += ' AND status = ?';
+            params.push(options.status);
+        }
+
+        if (options.type) {
+            sql += ' AND type = ?';
+            params.push(options.type);
+        }
+
+        if (options.created_by) {
+            sql += ' AND created_by = ?';
+            params.push(options.created_by);
+        }
+
+        if (options.search) {
+            sql += ' AND (name LIKE ? OR description LIKE ?)';
+            params.push(`%${options.search}%`, `%${options.search}%`);
+        }
+
+        sql += ' ORDER BY created_at DESC';
+
+        if (options.limit) {
+            sql += ' LIMIT ?';
+            params.push(options.limit);
+        }
+
+        if (options.offset) {
+            sql += ' OFFSET ?';
+            params.push(options.offset);
+        }
+
+        return query(sql, params);
+    },
+
+    update(id, data) {
+        const fields = [];
+        const values = [];
+
+        const allowedFields = [
+            'name', 'description', 'type', 'status', 'segment',
+            'message', 'delay', 'start_at', 'sent', 'delivered', 'read', 'replied'
+        ];
+
+        for (const [key, value] of Object.entries(data)) {
+            if (allowedFields.includes(key)) {
+                fields.push(`${key} = ?`);
+                values.push(value);
+            }
+        }
+
+        if (fields.length === 0) return null;
+
+        fields.push("updated_at = datetime('now')");
+        values.push(id);
+
+        return run(`UPDATE campaigns SET ${fields.join(', ')} WHERE id = ?`, values);
+    },
+
+    delete(id) {
+        return run('DELETE FROM campaigns WHERE id = ?', [id]);
+    }
+};
+
+// ============================================
+// AUTOMATIONS
+// ============================================
+
+const Automation = {
+    create(data) {
+        const uuid = generateUUID();
+        const isActive = typeof data.is_active === 'boolean' ? (data.is_active ? 1 : 0) : (data.is_active ?? 1);
+
+        const result = run(`
+            INSERT INTO automations (uuid, name, description, trigger_type, trigger_value, action_type, action_value, delay, is_active, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            uuid,
+            data.name,
+            data.description,
+            data.trigger_type,
+            data.trigger_value,
+            data.action_type,
+            data.action_value,
+            data.delay || 0,
+            isActive,
+            data.created_by
+        ]);
+
+        return { id: result.lastInsertRowid, uuid };
+    },
+
+    findById(id) {
+        return queryOne('SELECT * FROM automations WHERE id = ?', [id]);
+    },
+
+    list(options = {}) {
+        let sql = 'SELECT * FROM automations WHERE 1=1';
+        const params = [];
+
+        if (options.is_active !== undefined) {
+            sql += ' AND is_active = ?';
+            params.push(options.is_active ? 1 : 0);
+        }
+
+        if (options.trigger_type) {
+            sql += ' AND trigger_type = ?';
+            params.push(options.trigger_type);
+        }
+
+        if (options.created_by) {
+            sql += ' AND created_by = ?';
+            params.push(options.created_by);
+        }
+
+        if (options.search) {
+            sql += ' AND (name LIKE ? OR description LIKE ?)';
+            params.push(`%${options.search}%`, `%${options.search}%`);
+        }
+
+        sql += ' ORDER BY created_at DESC';
+
+        if (options.limit) {
+            sql += ' LIMIT ?';
+            params.push(options.limit);
+        }
+
+        if (options.offset) {
+            sql += ' OFFSET ?';
+            params.push(options.offset);
+        }
+
+        return query(sql, params);
+    },
+
+    update(id, data) {
+        const fields = [];
+        const values = [];
+
+        const allowedFields = [
+            'name', 'description', 'trigger_type', 'trigger_value',
+            'action_type', 'action_value', 'delay', 'is_active', 'executions', 'last_execution'
+        ];
+
+        for (const [key, value] of Object.entries(data)) {
+            if (allowedFields.includes(key)) {
+                fields.push(`${key} = ?`);
+                if (key === 'is_active' && typeof value === 'boolean') {
+                    values.push(value ? 1 : 0);
+                } else {
+                    values.push(value);
+                }
+            }
+        }
+
+        if (fields.length === 0) return null;
+
+        fields.push("updated_at = datetime('now')");
+        values.push(id);
+
+        return run(`UPDATE automations SET ${fields.join(', ')} WHERE id = ?`, values);
+    },
+
+    delete(id) {
+        return run('DELETE FROM automations WHERE id = ?', [id]);
+    }
+};
+
+// ============================================
 // FLOWS
 // ============================================
 
@@ -787,6 +990,8 @@ module.exports = {
     Conversation,
     Message,
     Template,
+    Campaign,
+    Automation,
     Flow,
     MessageQueue,
     Webhook,

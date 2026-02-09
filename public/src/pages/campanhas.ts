@@ -34,6 +34,55 @@ function onReady(callback: () => void) {
     }
 }
 
+function setCampaignModalTitle(mode: 'new' | 'edit') {
+    const modalTitle = document.querySelector('#newCampaignModal .modal-title') as HTMLElement | null;
+    if (!modalTitle) return;
+
+    if (mode === 'edit') {
+        modalTitle.innerHTML = '<span class="icon icon-edit icon-sm"></span> Editar Campanha';
+    } else {
+        modalTitle.innerHTML = '<span class="icon icon-add icon-sm"></span> Nova Campanha';
+    }
+}
+
+function resetCampaignForm() {
+    const form = document.getElementById('campaignForm') as HTMLFormElement | null;
+    form?.reset();
+    const idInput = document.getElementById('campaignId') as HTMLInputElement | null;
+    if (idInput) idInput.value = '';
+    setCampaignModalTitle('new');
+}
+
+function openCampaignModal() {
+    resetCampaignForm();
+    const win = window as Window & { openModal?: (id: string) => void };
+    win.openModal?.('newCampaignModal');
+}
+
+function getCampaignId() {
+    const idValue = (document.getElementById('campaignId') as HTMLInputElement | null)?.value || '';
+    const parsed = parseInt(idValue, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatInputDateTime(value?: string) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function setSelectValue(select: HTMLSelectElement | null, value: string) {
+    if (!select) return;
+    const hasOption = Array.from(select.options).some(option => option.value === value);
+    if (hasOption) {
+        select.value = value;
+    } else if (select.options.length > 0) {
+        select.value = select.options[0].value;
+    }
+}
+
 function initCampanhas() {
     loadCampaigns();
 }
@@ -58,6 +107,10 @@ async function loadCampaigns() {
                 description: 'Mensagem de boas-vindas para novos leads',
                 type: 'trigger',
                 status: 'active',
+                segment: 'new',
+                message: 'Olá {{nome}}! Seja bem-vindo à SELF.',
+                delay: 5000,
+                start_at: new Date().toISOString(),
                 sent: 156,
                 delivered: 150,
                 read: 120,
@@ -70,6 +123,10 @@ async function loadCampaigns() {
                 description: 'Campanha promocional de janeiro',
                 type: 'broadcast',
                 status: 'completed',
+                segment: 'all',
+                message: 'Promoção especial para você!',
+                delay: 5000,
+                start_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
                 sent: 500,
                 delivered: 485,
                 read: 320,
@@ -110,7 +167,7 @@ function renderCampaigns() {
             <div class="empty-state" style="grid-column: 1 / -1;">
                 <div class="empty-state-icon icon icon-empty icon-lg"></div>
                 <p>Nenhuma campanha criada</p>
-                <button class="btn btn-primary mt-3" onclick="openModal('newCampaignModal')"><span class="icon icon-add icon-sm"></span> Criar Campanha</button>
+                <button class="btn btn-primary mt-3" onclick="openCampaignModal()"><span class="icon icon-add icon-sm"></span> Criar Campanha</button>
             </div>
         `;
         return;
@@ -162,6 +219,7 @@ function renderCampaigns() {
                     <span class="badge badge-secondary">${c.type === 'broadcast' ? 'Transmissão' : c.type === 'drip' ? 'Sequência' : 'Gatilho'}</span>
                     <div style="display: flex; gap: 10px;">
                         <button class="btn btn-sm btn-outline" onclick="viewCampaign(${c.id})"><span class="icon icon-eye icon-sm"></span> Ver</button>
+                        <button class="btn btn-sm btn-outline" onclick="editCampaign(${c.id})"><span class="icon icon-edit icon-sm"></span> Editar</button>
                         ${c.status === 'active' ? 
                             `<button class="btn btn-sm btn-warning" onclick="pauseCampaign(${c.id})"><span class="icon icon-pause icon-sm"></span> Pausar</button>` :
                             c.status === 'paused' || c.status === 'draft' ?
@@ -175,12 +233,16 @@ function renderCampaigns() {
     }).join('');
 }
 
-async function saveCampaign(status: CampaignStatus) {
+async function saveCampaign(statusOverride?: CampaignStatus) {
+    const campaignId = getCampaignId();
+    const statusFromSelect = ((document.getElementById('campaignStatus') as HTMLSelectElement | null)?.value || '') as CampaignStatus;
+    const status = campaignId ? (statusFromSelect || statusOverride || 'draft') : (statusOverride || statusFromSelect || 'draft');
+
     const data = {
         name: (document.getElementById('campaignName') as HTMLInputElement | null)?.value.trim() || '',
         description: (document.getElementById('campaignDescription') as HTMLInputElement | null)?.value.trim() || '',
         type: ((document.getElementById('campaignType') as HTMLSelectElement | null)?.value || 'trigger') as CampaignType,
-        status: status,
+        status,
         segment: (document.getElementById('campaignSegment') as HTMLSelectElement | null)?.value || '',
         message: (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)?.value.trim() || '',
         delay: parseInt((document.getElementById('campaignDelay') as HTMLInputElement | null)?.value || '0', 10),
@@ -188,35 +250,50 @@ async function saveCampaign(status: CampaignStatus) {
     };
 
     if (!data.name || !data.message) {
-        showToast('error', 'Erro', 'Nome e mensagem são obrigatórios');
+        showToast('error', 'Erro', 'Nome e mensagem s?o obrigat?rios');
         return;
     }
 
     try {
         showLoading('Salvando campanha...');
-        await api.post('/api/campaigns', data);
+        if (campaignId) {
+            await api.put(`/api/campaigns/${campaignId}`, data);
+        } else {
+            await api.post('/api/campaigns', data);
+        }
         closeModal('newCampaignModal');
-        const form = document.getElementById('campaignForm') as HTMLFormElement | null;
-        form?.reset();
+        resetCampaignForm();
         await loadCampaigns();
-        showToast('success', 'Sucesso', 'Campanha criada com sucesso!');
+        showToast('success', 'Sucesso', campaignId ? 'Campanha atualizada com sucesso!' : 'Campanha criada com sucesso!');
     } catch (error) {
         hideLoading();
-        // Simular sucesso para demonstração
-        campaigns.push({
-            id: campaigns.length + 1,
-            ...data,
-            sent: 0,
-            delivered: 0,
-            read: 0,
-            replied: 0,
-            created_at: new Date().toISOString()
-        });
+        if (campaignId) {
+            const index = campaigns.findIndex(c => c.id === campaignId);
+            if (index >= 0) {
+                campaigns[index] = {
+                    ...campaigns[index],
+                    ...data,
+                    status
+                };
+            }
+            showToast('success', 'Sucesso', 'Campanha atualizada com sucesso!');
+        } else {
+            // Simular sucesso para demonstra??o
+            campaigns.push({
+                id: campaigns.length + 1,
+                ...data,
+                sent: 0,
+                delivered: 0,
+                read: 0,
+                replied: 0,
+                created_at: new Date().toISOString()
+            });
+            showToast('success', 'Sucesso', 'Campanha criada com sucesso!');
+        }
         closeModal('newCampaignModal');
-        const form = document.getElementById('campaignForm') as HTMLFormElement | null;
-        form?.reset();
+        resetCampaignForm();
         renderCampaigns();
-        showToast('success', 'Sucesso', 'Campanha criada com sucesso!');
+        updateStats();
     }
 }
 
@@ -258,7 +335,7 @@ function viewCampaign(id: number) {
                 </div>
             </div>
         </div>
-        <p><strong>Descrição:</strong> ${campaign.description || 'Sem descrição'}</p>
+        <p><strong>Descri??o:</strong> ${campaign.description || 'Sem descri??o'}</p>
         <p><strong>Tipo:</strong> ${campaign.type}</p>
         <p><strong>Status:</strong> ${campaign.status}</p>
         <p><strong>Criada em:</strong> ${formatDate(campaign.created_at, 'datetime')}</p>
@@ -268,27 +345,80 @@ function viewCampaign(id: number) {
     openModal('campaignDetailsModal');
 }
 
+function editCampaign(id: number) {
+    const campaign = campaigns.find(c => c.id === id);
+    if (!campaign) return;
+
+    const idInput = document.getElementById('campaignId') as HTMLInputElement | null;
+    if (idInput) idInput.value = String(campaign.id);
+
+    const nameInput = document.getElementById('campaignName') as HTMLInputElement | null;
+    if (nameInput) nameInput.value = campaign.name || '';
+
+    const descriptionInput = document.getElementById('campaignDescription') as HTMLInputElement | null;
+    if (descriptionInput) descriptionInput.value = campaign.description || '';
+
+    setSelectValue(document.getElementById('campaignType') as HTMLSelectElement | null, campaign.type || 'broadcast');
+    setSelectValue(document.getElementById('campaignStatus') as HTMLSelectElement | null, campaign.status || 'draft');
+    setSelectValue(document.getElementById('campaignSegment') as HTMLSelectElement | null, campaign.segment || 'all');
+
+    const messageInput = document.getElementById('campaignMessage') as HTMLTextAreaElement | null;
+    if (messageInput) messageInput.value = campaign.message || '';
+
+    const delaySelect = document.getElementById('campaignDelay') as HTMLSelectElement | null;
+    if (delaySelect) {
+        const delayValue = campaign.delay ? String(campaign.delay) : delaySelect.value;
+        setSelectValue(delaySelect, delayValue);
+    }
+
+    const startInput = document.getElementById('campaignStart') as HTMLInputElement | null;
+    if (startInput) startInput.value = formatInputDateTime(campaign.start_at);
+
+    setCampaignModalTitle('edit');
+
+    const win = window as Window & { openModal?: (id: string) => void };
+    win.openModal?.('newCampaignModal');
+}
+
 async function startCampaign(id: number) {
     if (!confirm('Iniciar esta campanha?')) return;
-    showToast('success', 'Sucesso', 'Campanha iniciada!');
+    try {
+        await api.put(`/api/campaigns/${id}`, { status: 'active' });
+    } catch (error) {
+        // fallback local
+    }
     const campaign = campaigns.find(c => c.id === id);
     if (campaign) campaign.status = 'active';
     renderCampaigns();
+    updateStats();
+    showToast('success', 'Sucesso', 'Campanha iniciada!');
 }
 
 async function pauseCampaign(id: number) {
     if (!confirm('Pausar esta campanha?')) return;
-    showToast('success', 'Sucesso', 'Campanha pausada!');
+    try {
+        await api.put(`/api/campaigns/${id}`, { status: 'paused' });
+    } catch (error) {
+        // fallback local
+    }
     const campaign = campaigns.find(c => c.id === id);
     if (campaign) campaign.status = 'paused';
     renderCampaigns();
+    updateStats();
+    showToast('success', 'Sucesso', 'Campanha pausada!');
 }
 
 async function deleteCampaign(id: number) {
     if (!confirm('Excluir esta campanha?')) return;
+    try {
+        await api.delete(`/api/campaigns/${id}`);
+    } catch (error) {
+        // fallback local
+    }
     campaigns = campaigns.filter(c => c.id !== id);
     renderCampaigns();
-    showToast('success', 'Sucesso', 'Campanha excluída!');
+    updateStats();
+    showToast('success', 'Sucesso', 'Campanha exclu?da!');
 }
 
 function switchCampaignTab(tab: string) {
@@ -303,8 +433,10 @@ function switchCampaignTab(tab: string) {
 const windowAny = window as Window & {
     initCampanhas?: () => void;
     loadCampaigns?: () => void;
-    saveCampaign?: (status: CampaignStatus) => Promise<void>;
+    openCampaignModal?: () => void;
+    saveCampaign?: (status?: CampaignStatus) => Promise<void>;
     viewCampaign?: (id: number) => void;
+    editCampaign?: (id: number) => void;
     startCampaign?: (id: number) => Promise<void>;
     pauseCampaign?: (id: number) => Promise<void>;
     deleteCampaign?: (id: number) => Promise<void>;
@@ -312,8 +444,10 @@ const windowAny = window as Window & {
 };
 windowAny.initCampanhas = initCampanhas;
 windowAny.loadCampaigns = loadCampaigns;
+windowAny.openCampaignModal = openCampaignModal;
 windowAny.saveCampaign = saveCampaign;
 windowAny.viewCampaign = viewCampaign;
+windowAny.editCampaign = editCampaign;
 windowAny.startCampaign = startCampaign;
 windowAny.pauseCampaign = pauseCampaign;
 windowAny.deleteCampaign = deleteCampaign;

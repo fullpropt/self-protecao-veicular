@@ -5,6 +5,7 @@ type AutomacaoGlobals = {
   initAutomacao?: () => void;
   loadAutomations?: () => void;
   openModal?: (id: string) => void;
+  openAutomationModal?: () => void;
   closeModal?: (id: string) => void;
   saveAutomation?: () => void;
   updateActionOptions?: () => void;
@@ -199,7 +200,7 @@ export default function Automacao() {
                   </div>
                   <div className="page-actions">
                       <button className="btn btn-outline" onClick={() => globals.loadAutomations?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
-                      <button className="btn btn-primary" onClick={() => globals.openModal?.('newAutomationModal')}><span className="icon icon-add icon-sm"></span> Nova Automação</button>
+                      <button className="btn btn-primary" onClick={() => (globals.openAutomationModal ? globals.openAutomationModal() : globals.openModal?.('newAutomationModal'))}><span className="icon icon-add icon-sm"></span> Nova Automação</button>
                   </div>
               </div>
       
@@ -250,6 +251,7 @@ export default function Automacao() {
                   </div>
                   <div className="modal-body">
                       <form id="automationForm">
+                          <input type="hidden" id="automationId" />
                           <div className="form-group">
                               <label className="form-label required">Nome da Automação</label>
                               <input type="text" className="form-input" id="automationName" required placeholder="Ex: Boas-vindas automática" />

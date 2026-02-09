@@ -118,6 +118,46 @@ CREATE TABLE IF NOT EXISTS templates (
     updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Tabela de Campanhas
+CREATE TABLE IF NOT EXISTS campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    type TEXT DEFAULT 'broadcast' CHECK(type IN ('trigger', 'broadcast', 'drip')),
+    status TEXT DEFAULT 'draft' CHECK(status IN ('active', 'paused', 'completed', 'draft')),
+    segment TEXT,
+    message TEXT,
+    delay INTEGER DEFAULT 0,
+    start_at TEXT,
+    sent INTEGER DEFAULT 0,
+    delivered INTEGER DEFAULT 0,
+    read INTEGER DEFAULT 0,
+    replied INTEGER DEFAULT 0,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Tabela de Automações
+CREATE TABLE IF NOT EXISTS automations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    trigger_type TEXT NOT NULL CHECK(trigger_type IN ('new_lead', 'status_change', 'message_received', 'keyword', 'schedule', 'inactivity')),
+    trigger_value TEXT,
+    action_type TEXT NOT NULL CHECK(action_type IN ('send_message', 'change_status', 'add_tag', 'start_flow', 'notify')),
+    action_value TEXT,
+    delay INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    executions INTEGER DEFAULT 0,
+    last_execution TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
 -- Tabela de Execuções de Fluxo
 CREATE TABLE IF NOT EXISTS flow_executions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -8,7 +8,10 @@ type Automation = {
     name: string;
     description?: string;
     trigger_type: TriggerType;
+    trigger_value?: string;
     action_type: ActionType;
+    action_value?: string;
+    delay?: number;
     is_active: boolean;
     executions?: number;
     last_execution?: string | null;
@@ -23,6 +26,145 @@ function onReady(callback: () => void) {
         document.addEventListener('DOMContentLoaded', callback);
     } else {
         callback();
+    }
+}
+
+function setAutomationModalTitle(mode: 'new' | 'edit') {
+    const modalTitle = document.querySelector('#newAutomationModal .modal-title') as HTMLElement | null;
+    if (!modalTitle) return;
+
+    if (mode === 'edit') {
+        modalTitle.innerHTML = '<span class="icon icon-edit icon-sm"></span> Editar Automação';
+    } else {
+        modalTitle.innerHTML = '<span class="icon icon-add icon-sm"></span> Nova Automação';
+    }
+}
+
+function resetAutomationForm() {
+    const form = document.getElementById('automationForm') as HTMLFormElement | null;
+    form?.reset();
+    const idInput = document.getElementById('automationId') as HTMLInputElement | null;
+    if (idInput) idInput.value = '';
+    updateTriggerOptions();
+    updateActionOptions();
+    setAutomationModalTitle('new');
+}
+
+function openAutomationModal() {
+    resetAutomationForm();
+    const win = window as Window & { openModal?: (id: string) => void };
+    win.openModal?.('newAutomationModal');
+}
+
+function getAutomationId() {
+    const idValue = (document.getElementById('automationId') as HTMLInputElement | null)?.value || '';
+    const parsed = parseInt(idValue, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getTriggerValue(type: TriggerType): string {
+    switch (type) {
+        case 'status_change': {
+            const fromStatus = (document.getElementById('triggerFromStatus') as HTMLSelectElement | null)?.value || '';
+            const toStatus = (document.getElementById('triggerToStatus') as HTMLSelectElement | null)?.value || '';
+            if (!fromStatus && !toStatus) return '';
+            return JSON.stringify({ from: fromStatus, to: toStatus });
+        }
+        case 'keyword':
+            return (document.getElementById('triggerKeywords') as HTMLInputElement | null)?.value.trim() || '';
+        case 'schedule': {
+            const time = (document.getElementById('triggerTime') as HTMLInputElement | null)?.value || '';
+            const days = Array.from(document.querySelectorAll('#triggerOptionsContainer input[type=\"checkbox\"]:checked'))
+                .map(input => (input as HTMLInputElement).value);
+            if (!time && days.length === 0) return '';
+            return JSON.stringify({ time, days });
+        }
+        case 'inactivity':
+            return (document.getElementById('triggerInactivity') as HTMLSelectElement | null)?.value || '';
+        default:
+            return '';
+    }
+}
+
+function applyTriggerValue(type: TriggerType, value?: string | null) {
+    if (!value) return;
+    try {
+        if (type === 'status_change') {
+            const parsed = JSON.parse(value);
+            const fromStatus = (document.getElementById('triggerFromStatus') as HTMLSelectElement | null);
+            const toStatus = (document.getElementById('triggerToStatus') as HTMLSelectElement | null);
+            if (fromStatus && parsed?.from !== undefined) fromStatus.value = String(parsed.from);
+            if (toStatus && parsed?.to !== undefined) toStatus.value = String(parsed.to);
+            return;
+        }
+        if (type === 'schedule') {
+            const parsed = JSON.parse(value);
+            const timeInput = document.getElementById('triggerTime') as HTMLInputElement | null;
+            if (timeInput && parsed?.time) timeInput.value = parsed.time;
+            if (Array.isArray(parsed?.days)) {
+                document.querySelectorAll('#triggerOptionsContainer input[type=\"checkbox\"]').forEach(input => {
+                    const checkbox = input as HTMLInputElement;
+                    checkbox.checked = parsed.days.includes(checkbox.value);
+                });
+            }
+            return;
+        }
+    } catch (error) {
+        // ignore parse errors
+    }
+
+    if (type === 'keyword') {
+        const keywordInput = document.getElementById('triggerKeywords') as HTMLInputElement | null;
+        if (keywordInput) keywordInput.value = value;
+    }
+    if (type === 'inactivity') {
+        const inactivitySelect = document.getElementById('triggerInactivity') as HTMLSelectElement | null;
+        if (inactivitySelect) inactivitySelect.value = value;
+    }
+}
+
+function getActionValue(type: ActionType): string {
+    switch (type) {
+        case 'send_message':
+            return (document.getElementById('actionMessage') as HTMLTextAreaElement | null)?.value.trim() || '';
+        case 'change_status':
+            return (document.getElementById('actionStatus') as HTMLSelectElement | null)?.value || '';
+        case 'add_tag':
+            return (document.getElementById('actionTag') as HTMLInputElement | null)?.value.trim() || '';
+        case 'start_flow':
+            return (document.getElementById('actionFlow') as HTMLSelectElement | null)?.value || '';
+        case 'notify':
+            return (document.getElementById('actionNotification') as HTMLTextAreaElement | null)?.value.trim() || '';
+        default:
+            return '';
+    }
+}
+
+function applyActionValue(type: ActionType, value?: string | null) {
+    if (value === undefined || value === null) return;
+    if (type === 'send_message') {
+        const messageInput = document.getElementById('actionMessage') as HTMLTextAreaElement | null;
+        if (messageInput) messageInput.value = value;
+        return;
+    }
+    if (type === 'change_status') {
+        const statusSelect = document.getElementById('actionStatus') as HTMLSelectElement | null;
+        if (statusSelect) statusSelect.value = value;
+        return;
+    }
+    if (type === 'add_tag') {
+        const tagInput = document.getElementById('actionTag') as HTMLInputElement | null;
+        if (tagInput) tagInput.value = value;
+        return;
+    }
+    if (type === 'start_flow') {
+        const flowSelect = document.getElementById('actionFlow') as HTMLSelectElement | null;
+        if (flowSelect) flowSelect.value = value;
+        return;
+    }
+    if (type === 'notify') {
+        const notifyInput = document.getElementById('actionNotification') as HTMLTextAreaElement | null;
+        if (notifyInput) notifyInput.value = value;
     }
 }
 
@@ -51,7 +193,10 @@ async function loadAutomations() {
                 name: 'Boas-vindas',
                 description: 'Envia mensagem de boas-vindas para novos leads',
                 trigger_type: 'new_lead',
+                trigger_value: '',
                 action_type: 'send_message',
+                action_value: 'Olá {{nome}}! Seja bem-vindo à SELF.',
+                delay: 0,
                 is_active: true,
                 executions: 156,
                 last_execution: new Date(Date.now() - 3600000).toISOString()
@@ -61,7 +206,10 @@ async function loadAutomations() {
                 name: 'Follow-up Automático',
                 description: 'Envia follow-up após 24h sem resposta',
                 trigger_type: 'inactivity',
+                trigger_value: '86400',
                 action_type: 'send_message',
+                action_value: 'Oi {{nome}}, ainda posso te ajudar?',
+                delay: 0,
                 is_active: true,
                 executions: 89,
                 last_execution: new Date(Date.now() - 7200000).toISOString()
@@ -71,7 +219,10 @@ async function loadAutomations() {
                 name: 'Notificação de Interesse',
                 description: 'Notifica equipe quando lead demonstra interesse',
                 trigger_type: 'keyword',
+                trigger_value: 'interesse, preço',
                 action_type: 'notify',
+                action_value: 'Lead interessado: {{nome}}',
+                delay: 0,
                 is_active: false,
                 executions: 45,
                 last_execution: new Date(Date.now() - 86400000).toISOString()
@@ -113,7 +264,7 @@ function renderAutomations() {
             <div class="empty-state" style="grid-column: 1 / -1;">
                 <div class="empty-state-icon icon icon-empty icon-lg"></div>
                 <p>Nenhuma automação criada</p>
-                <button class="btn btn-primary mt-3" onclick="openModal('newAutomationModal')"><span class="icon icon-add icon-sm"></span> Criar Automação</button>
+                <button class="btn btn-primary mt-3" onclick="openAutomationModal()"><span class="icon icon-add icon-sm"></span> Criar Automação</button>
             </div>
         `;
         return;
@@ -322,6 +473,7 @@ async function toggleAutomation(id: number, active: boolean) {
 }
 
 async function saveAutomation() {
+    const automationId = getAutomationId();
     const name = (document.getElementById('automationName') as HTMLInputElement | null)?.value.trim() || '';
     const description = (document.getElementById('automationDescription') as HTMLInputElement | null)?.value.trim() || '';
     const triggerType = ((document.getElementById('triggerType') as HTMLSelectElement | null)?.value || '') as TriggerType;
@@ -329,59 +481,115 @@ async function saveAutomation() {
     const delay = parseInt((document.getElementById('actionDelay') as HTMLInputElement | null)?.value || '0', 10);
 
     if (!name) {
-        showToast('error', 'Erro', 'Nome é obrigatório');
+        showToast('error', 'Erro', 'Nome ? obrigat?rio');
         return;
     }
 
-    const data: Omit<Automation, 'id' | 'executions' | 'last_execution'> & { delay: number } = {
+    const triggerValue = getTriggerValue(triggerType);
+    const actionValue = getActionValue(actionType);
+    const existing = automationId ? automations.find(a => a.id === automationId) : null;
+
+    const data: Omit<Automation, 'id' | 'executions' | 'last_execution'> = {
         name,
         description,
         trigger_type: triggerType,
+        trigger_value: triggerValue,
         action_type: actionType,
+        action_value: actionValue,
         delay,
-        is_active: true
+        is_active: existing ? existing.is_active : true
     };
 
     try {
         showLoading('Salvando...');
-        await api.post('/api/automations', data);
+        if (automationId) {
+            await api.put(`/api/automations/${automationId}`, data);
+        } else {
+            await api.post('/api/automations', data);
+        }
         closeModal('newAutomationModal');
-        (document.getElementById('automationForm') as HTMLFormElement | null)?.reset();
+        resetAutomationForm();
         await loadAutomations();
-        showToast('success', 'Sucesso', 'Automação criada!');
+        showToast('success', 'Sucesso', automationId ? 'Automa??o atualizada!' : 'Automa??o criada!');
     } catch (error) {
         hideLoading();
-        // Simular sucesso
-        automations.push({
-            id: automations.length + 1,
-            ...data,
-            executions: 0,
-            last_execution: null
-        });
+        if (automationId) {
+            const index = automations.findIndex(a => a.id === automationId);
+            if (index >= 0) {
+                automations[index] = {
+                    ...automations[index],
+                    ...data
+                };
+            }
+            showToast('success', 'Sucesso', 'Automa??o atualizada!');
+        } else {
+            // Simular sucesso
+            automations.push({
+                id: automations.length + 1,
+                ...data,
+                executions: 0,
+                last_execution: null
+            });
+            showToast('success', 'Sucesso', 'Automa??o criada!');
+        }
         closeModal('newAutomationModal');
-        (document.getElementById('automationForm') as HTMLFormElement | null)?.reset();
+        resetAutomationForm();
         renderAutomations();
         updateStats();
-        showToast('success', 'Sucesso', 'Automação criada!');
     }
 }
 
 function editAutomation(id: number) {
-    showToast('info', 'Info', 'Edição de automação em desenvolvimento');
+    const automation = automations.find(a => a.id === id);
+    if (!automation) return;
+
+    const idInput = document.getElementById('automationId') as HTMLInputElement | null;
+    if (idInput) idInput.value = String(automation.id);
+
+    const nameInput = document.getElementById('automationName') as HTMLInputElement | null;
+    if (nameInput) nameInput.value = automation.name || '';
+
+    const descriptionInput = document.getElementById('automationDescription') as HTMLInputElement | null;
+    if (descriptionInput) descriptionInput.value = automation.description || '';
+
+    const triggerSelect = document.getElementById('triggerType') as HTMLSelectElement | null;
+    if (triggerSelect) triggerSelect.value = automation.trigger_type;
+    updateTriggerOptions();
+    applyTriggerValue(automation.trigger_type, automation.trigger_value);
+
+    const actionSelect = document.getElementById('actionType') as HTMLSelectElement | null;
+    if (actionSelect) actionSelect.value = automation.action_type;
+    updateActionOptions();
+    applyActionValue(automation.action_type, automation.action_value);
+
+    const delaySelect = document.getElementById('actionDelay') as HTMLSelectElement | null;
+    if (delaySelect) delaySelect.value = String(automation.delay || 0);
+
+    setAutomationModalTitle('edit');
+
+    const win = window as Window & { openModal?: (id: string) => void };
+    win.openModal?.('newAutomationModal');
 }
 
 async function deleteAutomation(id: number) {
-    if (!confirm('Excluir esta automação?')) return;
-    
+    if (!confirm('Excluir esta automa??o?')) return;
+
+    try {
+        await api.delete(`/api/automations/${id}`);
+    } catch (error) {
+        // fallback local
+    }
+
     automations = automations.filter(a => a.id !== id);
     renderAutomations();
     updateStats();
-    showToast('success', 'Sucesso', 'Automação excluída!');
+    showToast('success', 'Sucesso', 'Automa??o exclu?da!');
 }
 
 const windowAny = window as Window & {
     initAutomacao?: () => void;
     loadAutomations?: () => void;
+    openAutomationModal?: () => void;
     updateTriggerOptions?: () => void;
     updateActionOptions?: () => void;
     toggleAutomation?: (id: number, active: boolean) => Promise<void>;
@@ -391,6 +599,7 @@ const windowAny = window as Window & {
 };
 windowAny.initAutomacao = initAutomacao;
 windowAny.loadAutomations = loadAutomations;
+windowAny.openAutomationModal = openAutomationModal;
 windowAny.updateTriggerOptions = updateTriggerOptions;
 windowAny.updateActionOptions = updateActionOptions;
 windowAny.toggleAutomation = toggleAutomation;
