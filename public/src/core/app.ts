@@ -38,7 +38,7 @@ type ApiRequestOptions = RequestInit & {
 // CONFIGURAÇÃO GLOBAL
 // ============================================
 
-const BUILD_ID = '2026-02-09T16:20:00Z';
+const BUILD_ID = '2026-02-09T16:35:00Z';
 const APP: AppState = {
     version: '4.1.1',
     socketUrl: window.location.hostname === 'localhost' 
@@ -796,4 +796,5 @@ windowAny.LEAD_STATUS = LEAD_STATUS;
 windowAny.FUNNEL_STAGES = FUNNEL_STAGES;
 
 export {};
+
 

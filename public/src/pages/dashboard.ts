@@ -73,6 +73,17 @@ async function loadDashboardData() {
 function initStatsChart() {
     const ctx = document.getElementById('statsChart') as HTMLCanvasElement | null;
     if (!ctx || typeof Chart === 'undefined') return;
+
+    const chartLib = Chart as unknown as {
+        getChart?: (canvas: HTMLCanvasElement) => { destroy: () => void } | undefined;
+    };
+    const existing = chartLib.getChart?.(ctx);
+    if (existing) {
+        existing.destroy();
+    } else if (statsChartInstance?.destroy) {
+        statsChartInstance.destroy();
+    }
+
     const labels = [];
     const today = new Date();
     for (let i = 6; i >= 0; i--) {
