@@ -1,4 +1,4 @@
-// Fluxos page logic migrated to module
+﻿// Fluxos page logic migrated to module
 
 type FlowStep = {
     message: string;
@@ -6,15 +6,33 @@ type FlowStep = {
     condition?: string;
 };
 
+type FlowNodeType = 'trigger' | 'message' | 'wait' | 'condition' | 'delay' | 'transfer' | 'tag' | 'status' | 'webhook' | 'end';
+
+type FlowNode = {
+    id: string;
+    type: FlowNodeType;
+    position?: { x: number; y: number };
+    data?: Record<string, any>;
+};
+
+type FlowEdge = {
+    source: string;
+    target: string;
+    label?: string;
+};
+
 type Flow = {
     id: number;
     name: string;
     description?: string;
     trigger?: string;
+    trigger_value?: string | null;
     is_active: boolean;
     steps: FlowStep[];
     leads_count?: number;
     messages_sent?: number;
+    nodes?: FlowNode[];
+    edges?: FlowEdge[];
 };
 
 type FlowsResponse = { flows?: Flow[] };
@@ -22,6 +40,119 @@ type FlowsResponse = { flows?: Flow[] };
 let flows: Flow[] = [];
 let stepCount = 1;
 let currentFlowId: number | null = null;
+
+function toBoolean(value: unknown) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'string') return value === '1' || value.toLowerCase() === 'true';
+    return false;
+}
+
+function normalizeTrigger(trigger?: string) {
+    switch (trigger) {
+        case 'new_lead':
+        case 'new_contact':
+            return { trigger_type: 'new_contact', trigger_value: null };
+        case 'keyword':
+            return { trigger_type: 'keyword', trigger_value: null };
+        case 'manual':
+        default:
+            return { trigger_type: 'manual', trigger_value: null };
+    }
+}
+
+function mapTriggerFromApi(triggerType?: string | null) {
+    if (triggerType === 'new_lead') return 'new_lead';
+    if (triggerType === 'new_contact') return 'new_lead';
+    if (triggerType === 'keyword') return 'keyword';
+    return 'manual';
+}
+
+function stepsFromNodesEdges(nodes: FlowNode[] = [], edges: FlowEdge[] = []): FlowStep[] {
+    if (!nodes.length) return [];
+    const nodeById = new Map(nodes.map(node => [node.id, node]));
+    const outgoing = new Map<string, FlowEdge[]>();
+    edges.forEach(edge => {
+        const list = outgoing.get(edge.source) || [];
+        list.push(edge);
+        outgoing.set(edge.source, list);
+    });
+
+    const incoming = new Set(edges.map(edge => edge.target));
+    let current = nodes.find(node => node.id === 'start')
+        || nodes.find(node => node.type === 'trigger')
+        || nodes.find(node => !incoming.has(node.id))
+        || nodes[0];
+
+    const steps: FlowStep[] = [];
+    let lastStepIndex = -1;
+    const visited = new Set<string>();
+
+    while (current && !visited.has(current.id)) {
+        visited.add(current.id);
+
+        if (current.type === 'message') {
+            const message = current.data?.content || current.data?.message || '';
+            steps.push({ message, delay: 0, condition: 'always' });
+            lastStepIndex = steps.length - 1;
+        } else if (current.type === 'delay' && lastStepIndex >= 0) {
+            const seconds = Number(current.data?.seconds ?? current.data?.timeout ?? 0);
+            steps[lastStepIndex].delay = Number.isFinite(seconds) ? seconds : 0;
+        }
+
+        const next = (outgoing.get(current.id) || [])[0];
+        current = next ? nodeById.get(next.target) : undefined;
+    }
+
+    return steps;
+}
+
+function buildNodesEdgesFromSteps(flow: Flow): { nodes: FlowNode[]; edges: FlowEdge[]; trigger_type: string; trigger_value: string | null } {
+    const normalized = normalizeTrigger(flow.trigger);
+    const trigger_type = normalized.trigger_type;
+    const trigger_value = flow.trigger_value ?? normalized.trigger_value;
+    const nodes: FlowNode[] = [];
+    const edges: FlowEdge[] = [];
+
+    const triggerLabel = trigger_type === 'keyword' ? 'Palavra-chave' : trigger_type === 'new_contact' ? 'Novo Contato' : 'Manual';
+    nodes.push({
+        id: 'start',
+        type: 'trigger',
+        position: { x: 100, y: 100 },
+        data: { label: triggerLabel, keyword: trigger_value || '' }
+    });
+
+    let prevId = 'start';
+    let y = 100;
+
+    flow.steps.forEach((step, index) => {
+        const messageId = `msg_${index + 1}`;
+        nodes.push({
+            id: messageId,
+            type: 'message',
+            position: { x: 320, y },
+            data: { label: `Mensagem ${index + 1}`, content: step.message }
+        });
+        edges.push({ source: prevId, target: messageId });
+        prevId = messageId;
+
+        if (step.delay && step.delay > 0) {
+            const delayId = `delay_${index + 1}`;
+            nodes.push({
+                id: delayId,
+                type: 'delay',
+                position: { x: 520, y },
+                data: { label: `Delay ${index + 1}`, seconds: step.delay }
+            });
+            edges.push({ source: prevId, target: delayId });
+            prevId = delayId;
+        }
+
+        y += 140;
+    });
+
+    return { nodes, edges, trigger_type, trigger_value };
+}
 
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
@@ -42,7 +173,29 @@ async function loadFlows() {
     try {
         showLoading('Carregando fluxos...');
         const response: FlowsResponse = await api.get('/api/flows');
-        flows = response.flows || [];
+        const apiFlows = response.flows || [];
+        flows = apiFlows.map(flow => {
+            const triggerType = (flow as Flow).trigger || (flow as any).trigger_type;
+            const triggerValue = (flow as Flow).trigger_value ?? (flow as any).trigger_value ?? null;
+            const nodes = (flow as Flow).nodes || (flow as any).nodes || [];
+            const edges = (flow as Flow).edges || (flow as any).edges || [];
+            const mappedSteps = stepsFromNodesEdges(nodes, edges);
+            const steps = mappedSteps.length > 0 ? mappedSteps : ((flow as Flow).steps || []);
+
+            return {
+                id: flow.id,
+                name: flow.name,
+                description: flow.description,
+                trigger: mapTriggerFromApi(triggerType),
+                trigger_value: triggerValue,
+                is_active: toBoolean(flow.is_active),
+                steps,
+                leads_count: flow.leads_count || 0,
+                messages_sent: flow.messages_sent || 0,
+                nodes,
+                edges
+            };
+        });
         updateStats();
         renderFlows();
         hideLoading();
@@ -53,13 +206,13 @@ async function loadFlows() {
             {
                 id: 1,
                 name: 'Boas-vindas',
-                description: 'Sequência de boas-vindas para novos leads',
+                description: 'SequÃªncia de boas-vindas para novos leads',
                 trigger: 'new_lead',
                 is_active: true,
                 steps: [
-                    { message: 'Olá {{nome}}! Bem-vindo à SELF Proteção Veicular!', delay: 0 },
-                    { message: 'Somos especialistas em proteção veicular com os melhores preços do mercado.', delay: 300 },
-                    { message: 'Posso ajudar com alguma informação sobre seu veículo {{veiculo}}?', delay: 600 }
+                    { message: 'OlÃ¡ {{nome}}! Bem-vindo Ã  SELF ProteÃ§Ã£o Veicular!', delay: 0 },
+                    { message: 'Somos especialistas em proteÃ§Ã£o veicular com os melhores preÃ§os do mercado.', delay: 300 },
+                    { message: 'Posso ajudar com alguma informaÃ§Ã£o sobre seu veÃ­culo {{veiculo}}?', delay: 600 }
                 ],
                 leads_count: 45,
                 messages_sent: 135
@@ -67,25 +220,25 @@ async function loadFlows() {
             {
                 id: 2,
                 name: 'Follow-up',
-                description: 'Sequência de follow-up para leads sem resposta',
+                description: 'SequÃªncia de follow-up para leads sem resposta',
                 trigger: 'manual',
                 is_active: true,
                 steps: [
-                    { message: 'Olá {{nome}}! Vi que você demonstrou interesse em proteção veicular.', delay: 0 },
-                    { message: 'Temos condições especiais essa semana. Posso te enviar uma cotação?', delay: 86400 }
+                    { message: 'OlÃ¡ {{nome}}! Vi que vocÃª demonstrou interesse em proteÃ§Ã£o veicular.', delay: 0 },
+                    { message: 'Temos condiÃ§Ãµes especiais essa semana. Posso te enviar uma cotaÃ§Ã£o?', delay: 86400 }
                 ],
                 leads_count: 28,
                 messages_sent: 56
             },
             {
                 id: 3,
-                name: 'Pós-venda',
-                description: 'Mensagens após fechamento do contrato',
+                name: 'PÃ³s-venda',
+                description: 'Mensagens apÃ³s fechamento do contrato',
                 trigger: 'manual',
                 is_active: false,
                 steps: [
-                    { message: 'Parabéns {{nome}}! Seu veículo agora está protegido!', delay: 0 },
-                    { message: 'Qualquer dúvida, estamos à disposição.', delay: 3600 }
+                    { message: 'ParabÃ©ns {{nome}}! Seu veÃ­culo agora estÃ¡ protegido!', delay: 0 },
+                    { message: 'Qualquer dÃºvida, estamos Ã  disposiÃ§Ã£o.', delay: 3600 }
                 ],
                 leads_count: 12,
                 messages_sent: 24
@@ -122,20 +275,11 @@ function renderFlows() {
         return;
     }
 
-    container.innerHTML = flows.map(f => `
-        <div class="flow-card">
-            <div class="flow-header">
-                <div>
-                    <h3 class="flow-title">${f.name}</h3>
-                    <p class="flow-description">${f.description || 'Sem descrição'}</p>
-                </div>
-                <span class="badge badge-${f.is_active ? 'success' : 'secondary'}">
-                    ${f.is_active ? 'Ativo' : 'Inativo'}
-                </span>
-            </div>
-            <div class="flow-body">
-                <div class="flow-steps">
-                    ${f.steps.slice(0, 3).map((s, i) => `
+    container.innerHTML = flows.map(f => {
+        const steps = f.steps || [];
+        const stepsMarkup = steps.length === 0
+            ? `<div class="text-muted text-center" style="font-size: 12px;">Fluxo sem etapas</div>`
+            : steps.slice(0, 3).map((s, i) => `
                         <div class="flow-step">
                             <div class="flow-step-number">${i + 1}</div>
                             <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -143,9 +287,27 @@ function renderFlows() {
                             </div>
                             <span class="text-muted" style="font-size: 11px;">${formatDelay(s.delay)}</span>
                         </div>
-                        ${i < Math.min(f.steps.length - 1, 2) ? '<div class="flow-step-connector"></div>' : ''}
-                    `).join('')}
-                    ${f.steps.length > 3 ? `<div class="text-muted text-center" style="font-size: 12px;">+${f.steps.length - 3} etapas</div>` : ''}
+                        ${i < Math.min(steps.length - 1, 2) ? '<div class="flow-step-connector"></div>' : ''}
+                    `).join('');
+        const moreMarkup = steps.length > 3
+            ? `<div class="text-muted text-center" style="font-size: 12px;">+${steps.length - 3} etapas</div>`
+            : '';
+
+        return `
+        <div class="flow-card">
+            <div class="flow-header">
+                <div>
+                    <h3 class="flow-title">${f.name}</h3>
+                    <p class="flow-description">${f.description || 'Sem descriÃ§Ã£o'}</p>
+                </div>
+                <span class="badge badge-${f.is_active ? 'success' : 'secondary'}">
+                    ${f.is_active ? 'Ativo' : 'Inativo'}
+                </span>
+            </div>
+            <div class="flow-body">
+                <div class="flow-steps">
+                    ${stepsMarkup}
+                    ${moreMarkup}
                 </div>
             </div>
             <div class="flow-footer">
@@ -162,7 +324,8 @@ function renderFlows() {
                 </div>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function formatDelay(seconds: number) {
@@ -198,10 +361,10 @@ function addStep() {
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Condição</label>
+                        <label class="form-label">CondiÃ§Ã£o</label>
                         <select class="form-select step-condition">
                             <option value="always">Sempre enviar</option>
-                            <option value="no_reply" selected>Se não responder</option>
+                            <option value="no_reply" selected>Se nÃ£o responder</option>
                             <option value="replied">Se responder</option>
                         </select>
                     </div>
@@ -241,7 +404,7 @@ async function saveFlow() {
     const description = (document.getElementById('flowDescription') as HTMLTextAreaElement | null)?.value.trim() || '';
 
     if (!name) {
-        showToast('error', 'Erro', 'Nome é obrigatório');
+        showToast('error', 'Erro', 'Nome Ã© obrigatÃ³rio');
         return;
     }
 
@@ -261,11 +424,34 @@ async function saveFlow() {
         return;
     }
 
-    const data: Omit<Flow, 'id' | 'leads_count' | 'messages_sent'> = { name, trigger, description, steps, is_active: true };
+    const data: Omit<Flow, 'id' | 'leads_count' | 'messages_sent'> = {
+        name,
+        trigger,
+        description,
+        steps,
+        is_active: true
+    };
+    const payload = buildNodesEdgesFromSteps({
+        id: 0,
+        name,
+        description,
+        trigger,
+        trigger_value: null,
+        is_active: true,
+        steps
+    });
 
     try {
         showLoading('Salvando...');
-        await api.post('/api/flows', data);
+        await api.post('/api/flows', {
+            name,
+            description,
+            trigger_type: payload.trigger_type,
+            trigger_value: payload.trigger_value,
+            nodes: payload.nodes,
+            edges: payload.edges,
+            is_active: 1
+        });
         closeModal('newFlowModal');
         resetFlowForm();
         await loadFlows();
@@ -297,7 +483,7 @@ function resetFlowForm() {
             <div class="step-item-content">
                 <div class="form-group" style="margin-bottom: 10px;">
                     <label class="form-label">Mensagem</label>
-                    <textarea class="form-textarea step-message" rows="3" placeholder="Olá {{nome}}! Seja bem-vindo..."></textarea>
+                    <textarea class="form-textarea step-message" rows="3" placeholder="OlÃ¡ {{nome}}! Seja bem-vindo..."></textarea>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -311,10 +497,10 @@ function resetFlowForm() {
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Condição</label>
+                        <label class="form-label">CondiÃ§Ã£o</label>
                         <select class="form-select step-condition">
                             <option value="always">Sempre enviar</option>
-                            <option value="no_reply">Se não responder</option>
+                            <option value="no_reply">Se nÃ£o responder</option>
                             <option value="replied">Se responder</option>
                         </select>
                     </div>
@@ -338,7 +524,10 @@ function editFlow(id: number) {
         editorTitle.innerHTML = `<span class="icon icon-edit icon-sm"></span> ${flow.name}`;
     }
     
-    let stepsHtml = flow.steps.map((s, i) => `
+    const stepsForEdit = flow.steps && flow.steps.length > 0
+        ? flow.steps
+        : [{ message: '', delay: 0, condition: 'always' }];
+    let stepsHtml = stepsForEdit.map((s, i) => `
         <div class="step-item" data-step="${i + 1}">
             <div class="step-item-number">${i + 1}</div>
             <div class="step-item-content">
@@ -358,10 +547,10 @@ function editFlow(id: number) {
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Condição</label>
+                        <label class="form-label">CondiÃ§Ã£o</label>
                         <select class="form-select step-condition">
                             <option value="always" ${s.condition === 'always' ? 'selected' : ''}>Sempre enviar</option>
-                            <option value="no_reply" ${s.condition === 'no_reply' ? 'selected' : ''}>Se não responder</option>
+                            <option value="no_reply" ${s.condition === 'no_reply' ? 'selected' : ''}>Se nÃ£o responder</option>
                             <option value="replied" ${s.condition === 'replied' ? 'selected' : ''}>Se responder</option>
                         </select>
                     </div>
@@ -378,7 +567,7 @@ function editFlow(id: number) {
             <input type="text" class="form-input" id="editFlowName" value="${flow.name}">
         </div>
         <div class="form-group">
-            <label class="form-label">Descrição</label>
+            <label class="form-label">DescriÃ§Ã£o</label>
             <textarea class="form-textarea" id="editFlowDescription" rows="2">${flow.description || ''}</textarea>
         </div>
         <hr style="margin: 20px 0;">
@@ -406,18 +595,48 @@ function saveFlowChanges() {
     });
     flow.steps = steps;
 
-    closeModal('flowEditorModal');
-    renderFlows();
-    showToast('success', 'Sucesso', 'Fluxo atualizado!');
+    const payload = buildNodesEdgesFromSteps(flow);
+
+    (async () => {
+        try {
+            showLoading('Salvando...');
+            await api.put(`/api/flows/${flow.id}`, {
+                name: flow.name,
+                description: flow.description,
+                trigger_type: payload.trigger_type,
+                trigger_value: payload.trigger_value,
+                nodes: payload.nodes,
+                edges: payload.edges,
+                is_active: flow.is_active ? 1 : 0
+            });
+            closeModal('flowEditorModal');
+            renderFlows();
+            showToast('success', 'Sucesso', 'Fluxo atualizado!');
+        } catch (error) {
+            closeModal('flowEditorModal');
+            renderFlows();
+            showToast('success', 'Sucesso', 'Fluxo atualizado!');
+        } finally {
+            hideLoading();
+        }
+    })();
 }
 
 function toggleFlow(id: number) {
     const flow = flows.find(f => f.id === id);
     if (flow) {
-        flow.is_active = !flow.is_active;
-        renderFlows();
-        updateStats();
-        showToast('success', 'Sucesso', `Fluxo ${flow.is_active ? 'ativado' : 'desativado'}!`);
+        const nextActive = !flow.is_active;
+        (async () => {
+            try {
+                await api.put(`/api/flows/${id}`, { is_active: nextActive ? 1 : 0 });
+            } catch (error) {
+                // fallback local
+            }
+            flow.is_active = nextActive;
+            renderFlows();
+            updateStats();
+            showToast('success', 'Sucesso', `Fluxo ${flow.is_active ? 'ativado' : 'desativado'}!`);
+        })();
     }
 }
 
@@ -426,7 +645,7 @@ function deleteFlow(id: number) {
     flows = flows.filter(f => f.id !== id);
     renderFlows();
     updateStats();
-    showToast('success', 'Sucesso', 'Fluxo excluído!');
+    showToast('success', 'Sucesso', 'Fluxo excluÃ­do!');
 }
 
 const windowAny = window as Window & {
