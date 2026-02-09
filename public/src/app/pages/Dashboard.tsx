@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import {
   dashboardAfterMarkup,
-  dashboardContentMarkup,
+  dashboardContentBottomMarkup,
+  dashboardContentTopMarkup,
   dashboardShellMarkup
 } from '../legacy/dashboardMarkup';
 
@@ -51,6 +52,45 @@ function DashboardHeader() {
   );
 }
 
+function StatsCards() {
+  return (
+    <div className="stats-grid">
+      <div className="stat-card">
+        <div className="stat-icon primary"><span className="icon icon-contacts"></span></div>
+        <div className="stat-content">
+          <div className="stat-value" id="totalLeads">0</div>
+          <div className="stat-label">Total de Leads</div>
+          <div className="stat-change positive" id="leadsChange">+0%</div>
+        </div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-icon success"><span className="icon icon-check"></span></div>
+        <div className="stat-content">
+          <div className="stat-value" id="completedLeads">0</div>
+          <div className="stat-label">Concluídos</div>
+          <div className="stat-change positive" id="completedChange">+0%</div>
+        </div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-icon warning"><span className="icon icon-clock"></span></div>
+        <div className="stat-content">
+          <div className="stat-value" id="pendingLeads">0</div>
+          <div className="stat-label">Em Andamento</div>
+          <div className="stat-change negative" id="pendingChange">-0%</div>
+        </div>
+      </div>
+      <div className="stat-card">
+        <div className="stat-icon info"><span className="icon icon-chart-bar"></span></div>
+        <div className="stat-content">
+          <div className="stat-value" id="conversionRate">0.0%</div>
+          <div className="stat-label">Conversão</div>
+          <div className="stat-change positive" id="conversionChange">+0%</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +121,9 @@ export default function Dashboard() {
       <div dangerouslySetInnerHTML={{ __html: dashboardShellMarkup }} />
       <main className="main-content">
         <DashboardHeader />
-        <div dangerouslySetInnerHTML={{ __html: dashboardContentMarkup }} />
+        <div dangerouslySetInnerHTML={{ __html: dashboardContentTopMarkup }} />
+        <StatsCards />
+        <div dangerouslySetInnerHTML={{ __html: dashboardContentBottomMarkup }} />
       </main>
       <div dangerouslySetInnerHTML={{ __html: dashboardAfterMarkup }} />
     </div>

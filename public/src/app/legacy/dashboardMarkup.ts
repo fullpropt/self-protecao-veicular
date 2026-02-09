@@ -140,7 +140,7 @@ export const dashboardShellMarkup = `
     <!-- Main Content -->
 `;
 
-export const dashboardContentMarkup = `
+export const dashboardContentTopMarkup = `
 <!-- Header -->
         
             <div class="page-actions">
@@ -224,44 +224,10 @@ export const dashboardContentMarkup = `
                 <p class="text-muted">Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas.</p>
             </div>
         </div>
+`;
 
-        <!-- Stats Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon primary"><span class="icon icon-contacts"></span></div>
-                <div class="stat-content">
-                    <div class="stat-value" id="totalLeads">0</div>
-                    <div class="stat-label">Total de Leads</div>
-                    <div class="stat-change positive" id="leadsChange">+0%</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon success"><span class="icon icon-check"></span></div>
-                <div class="stat-content">
-                    <div class="stat-value" id="completedLeads">0</div>
-                    <div class="stat-label">Concluídos</div>
-                    <div class="stat-change positive" id="completedChange">+0%</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon warning"><span class="icon icon-clock"></span></div>
-                <div class="stat-content">
-                    <div class="stat-value" id="pendingLeads">0</div>
-                    <div class="stat-label">Em Andamento</div>
-                    <div class="stat-change negative" id="pendingChange">-0%</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon info"><span class="icon icon-chart-bar"></span></div>
-                <div class="stat-content">
-                    <div class="stat-value" id="conversionRate">0.0%</div>
-                    <div class="stat-label">Conversão</div>
-                    <div class="stat-change positive" id="conversionChange">+0%</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Funil de Conversão -->
+export const dashboardContentBottomMarkup = `
+<!-- Funil de Conversão -->
         <div class="funnel-container">
             <div class="funnel-title"><span class="icon icon-funnel icon-sm"></span> Funil de Conversão</div>
             <div class="funnel-stages" id="funnelStages">
