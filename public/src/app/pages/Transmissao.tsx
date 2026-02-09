@@ -137,7 +137,7 @@ export default function Transmissao() {
           document.querySelector('.sidebar-overlay')?.classList.toggle('active');
         }}
       >
-        â˜°
+        {'\u2630'}
       </button>
       <div className="sidebar-overlay"></div>
 
