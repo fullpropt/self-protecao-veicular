@@ -3,6 +3,9 @@ import { useEffect } from 'react';
 type LoginGlobals = {
   initLogin?: () => void;
   handleLogin?: (event: Event) => boolean | Promise<boolean>;
+  handleRegister?: (event: Event) => boolean | Promise<boolean>;
+  showLogin?: () => void;
+  showRegister?: () => void;
 };
 
 export default function Login() {
@@ -75,6 +78,29 @@ export default function Login() {
             font-size: 24px;
         }
 
+        .auth-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .auth-tab {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            background: #f9f5fb;
+            color: #5a2a6b;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .auth-tab.active {
+            background: #5a2a6b;
+            color: #fff;
+            border-color: #5a2a6b;
+        }
+
         .form-group {
             margin-bottom: 20px;
         }
@@ -129,6 +155,10 @@ export default function Login() {
             display: none;
         }
 
+        .hidden {
+            display: none;
+        }
+
         .security-badge {
             text-align: center;
             margin-top: 20px;
@@ -142,18 +172,23 @@ export default function Login() {
         </div>
         <h1 className="login-title">Acesso ao Dashboard</h1>
 
+        <div className="auth-tabs">
+          <button id="loginTab" type="button" className="auth-tab active" onClick={() => globals.showLogin?.()}>Entrar</button>
+          <button id="registerTab" type="button" className="auth-tab" onClick={() => globals.showRegister?.()}>Criar conta</button>
+        </div>
+
         <div className="error-message" id="errorMsg">
-          Usuario ou senha incorretos
+          Usu?rio ou senha incorretos
         </div>
 
         <form id="loginForm" onSubmit={(event) => globals.handleLogin?.(event as unknown as Event)}>
           <div className="form-group">
-            <label className="form-label">Usuario</label>
+            <label className="form-label">Usu?rio</label>
             <input
               type="text"
               className="form-input"
               id="username"
-              placeholder="Digite seu e-mail ou usuário"
+              placeholder="Digite seu e-mail ou usu?rio"
               required
               autoComplete="off"
             />
@@ -167,8 +202,50 @@ export default function Login() {
           <button type="submit" className="btn-login">Entrar</button>
         </form>
 
+        <div className="error-message" id="registerErrorMsg">
+          Falha ao criar conta
+        </div>
+
+        <form id="registerForm" className="hidden" onSubmit={(event) => globals.handleRegister?.(event as unknown as Event)}>
+          <div className="form-group">
+            <label className="form-label">Nome</label>
+            <input
+              type="text"
+              className="form-input"
+              id="registerName"
+              placeholder="Digite seu nome"
+              required
+              autoComplete="name"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">E-mail</label>
+            <input
+              type="email"
+              className="form-input"
+              id="registerEmail"
+              placeholder="Digite seu e-mail"
+              required
+              autoComplete="email"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Senha</label>
+            <input type="password" className="form-input" id="registerPassword" placeholder="Crie uma senha" required />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Confirmar senha</label>
+            <input type="password" className="form-input" id="registerConfirm" placeholder="Repita a senha" required />
+          </div>
+
+          <button type="submit" className="btn-login">Criar conta</button>
+        </form>
+
         <div className="security-badge">
-          Conexao segura e criptografada
+          Conex?o segura e criptografada
         </div>
       </div>
     </div>

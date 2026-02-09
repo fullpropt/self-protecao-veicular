@@ -7,6 +7,10 @@ type LoginResponse = {
     error?: string;
 };
 
+type RegisterResponse = LoginResponse;
+
+type AuthMode = 'login' | 'register';
+
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', callback);
@@ -26,6 +30,53 @@ function getInputValue(id: string): string {
 
 function getErrorMessageElement(): HTMLElement | null {
     return document.getElementById('errorMsg');
+}
+
+function getRegisterErrorElement(): HTMLElement | null {
+    return document.getElementById('registerErrorMsg');
+}
+
+function setErrorMessage(target: HTMLElement | null, message: string) {
+    if (!target) return;
+    target.style.display = 'block';
+    target.textContent = message;
+    setTimeout(() => {
+        target.style.display = 'none';
+    }, 4000);
+}
+
+function setAuthMode(mode: AuthMode) {
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const loginTab = document.getElementById('loginTab');
+    const registerTab = document.getElementById('registerTab');
+    const loginError = getErrorMessageElement();
+    const registerError = getRegisterErrorElement();
+
+    if (mode === 'login') {
+        loginForm?.classList.remove('hidden');
+        registerForm?.classList.add('hidden');
+        loginTab?.classList.add('active');
+        registerTab?.classList.remove('active');
+    } else {
+        loginForm?.classList.add('hidden');
+        registerForm?.classList.remove('hidden');
+        loginTab?.classList.remove('active');
+        registerTab?.classList.add('active');
+    }
+
+    if (loginError) loginError.style.display = 'none';
+    if (registerError) registerError.style.display = 'none';
+}
+
+function saveSession(data: LoginResponse, fallbackName: string) {
+    if (!data?.token) return;
+    sessionStorage.setItem('selfDashboardToken', data.token);
+    if (data.refreshToken) {
+        sessionStorage.setItem('selfDashboardRefreshToken', data.refreshToken);
+    }
+    sessionStorage.setItem('selfDashboardUser', data.user?.name || fallbackName);
+    sessionStorage.setItem('selfDashboardExpiry', Date.now() + (8 * 60 * 60 * 1000));
 }
 
 async function handleLogin(e: Event) {
@@ -53,22 +104,63 @@ async function handleLogin(e: Event) {
             throw new Error(data?.error || 'Credenciais inválidas');
         }
 
-        sessionStorage.setItem('selfDashboardToken', data.token);
-        if (data.refreshToken) {
-            sessionStorage.setItem('selfDashboardRefreshToken', data.refreshToken);
-        }
-        sessionStorage.setItem('selfDashboardUser', data.user?.name || identifier);
-        sessionStorage.setItem('selfDashboardExpiry', Date.now() + (8 * 60 * 60 * 1000));
+        saveSession(data, identifier);
 
         window.location.href = getDashboardUrl();
     } catch (error) {
-        if (errorMsg) {
-            errorMsg.style.display = 'block';
-            errorMsg.textContent = error instanceof Error ? error.message : 'Falha ao realizar login';
-            setTimeout(() => {
-                errorMsg.style.display = 'none';
-            }, 4000);
+        setErrorMessage(errorMsg, error instanceof Error ? error.message : 'Falha ao realizar login');
+    }
+
+    return false;
+}
+
+async function handleRegister(e: Event) {
+    e.preventDefault();
+
+    const name = getInputValue('registerName').trim();
+    const email = getInputValue('registerEmail').trim();
+    const password = getInputValue('registerPassword');
+    const confirm = getInputValue('registerConfirm');
+    const errorMsg = getRegisterErrorElement();
+
+    if (!name || !email || !password || !confirm) {
+        setErrorMessage(errorMsg, 'Preencha todos os campos');
+        return false;
+    }
+
+    if (password.length < 6) {
+        setErrorMessage(errorMsg, 'Senha deve ter pelo menos 6 caracteres');
+        return false;
+    }
+
+    if (password !== confirm) {
+        setErrorMessage(errorMsg, 'As senhas não coincidem');
+        return false;
+    }
+
+    try {
+        const response = await fetch(`${window.location.origin}/api/auth/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name,
+                email,
+                password
+            })
+        });
+
+        const data: RegisterResponse = await response.json();
+
+        if (!response.ok || !data?.token) {
+            throw new Error(data?.error || 'Falha ao criar conta');
         }
+
+        saveSession(data, name);
+        window.location.href = getDashboardUrl();
+    } catch (error) {
+        setErrorMessage(errorMsg, error instanceof Error ? error.message : 'Falha ao criar conta');
     }
 
     return false;
@@ -86,10 +178,18 @@ function initLogin() {
 
     const windowAny = window as Window & {
         handleLogin?: (e: Event) => boolean | Promise<boolean>;
+        handleRegister?: (e: Event) => boolean | Promise<boolean>;
         initLogin?: () => void;
+        showLogin?: () => void;
+        showRegister?: () => void;
     };
     windowAny.handleLogin = handleLogin;
+    windowAny.handleRegister = handleRegister;
     windowAny.initLogin = initLogin;
+    windowAny.showLogin = () => setAuthMode('login');
+    windowAny.showRegister = () => setAuthMode('register');
+
+    setAuthMode('login');
 }
 
 onReady(initLogin);

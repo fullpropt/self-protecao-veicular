@@ -135,7 +135,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Autenticação obrigatória para /api (exceto login/refresh)
 app.use('/api', (req, res, next) => {
     const path = req.path || '';
-    if (path.startsWith('/auth/login') || path.startsWith('/auth/refresh')) {
+    if (path.startsWith('/auth/login') || path.startsWith('/auth/refresh') || path.startsWith('/auth/register')) {
         return next();
     }
     return authenticate(req, res, next);
@@ -1070,6 +1070,59 @@ app.post('/api/auth/login', async (req, res) => {
         const token = generateToken(user);
         const refreshToken = generateRefreshToken(user);
         
+        res.json({
+            success: true,
+            token,
+            refreshToken,
+            user: {
+                id: user.id,
+                uuid: user.uuid,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+
+        if (!name || !email || !password) {
+            return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+        }
+
+        if (String(password).length < 6) {
+            return res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' });
+        }
+
+        const { User } = require('./database/models');
+        const { generateToken, generateRefreshToken, hashPassword } = require('./middleware/auth');
+
+        const normalizedEmail = String(email || '').trim().toLowerCase();
+        const existing = User.findByEmail(normalizedEmail);
+        if (existing) {
+            return res.status(409).json({ error: 'Email já cadastrado' });
+        }
+
+        User.create({
+            name: String(name || '').trim(),
+            email: normalizedEmail,
+            password_hash: hashPassword(String(password)),
+            role: 'agent'
+        });
+
+        const user = User.findByEmail(normalizedEmail);
+        if (!user) {
+            return res.status(500).json({ error: 'Falha ao criar usuário' });
+        }
+
+        const token = generateToken(user);
+        const refreshToken = generateRefreshToken(user);
+
         res.json({
             success: true,
             token,
