@@ -30,14 +30,6 @@ let currentPage = 1;
 const perPage = 20;
 let tags: Tag[] = [];
 
-function onReady(callback: () => void) {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', callback);
-    } else {
-        callback();
-    }
-}
-
 
 function getQueryParams() {
     if (window.location.search) {
@@ -71,12 +63,14 @@ function applyUrlFilters() {
 }
 
 function initContacts() {
+    if (!document.getElementById('contactsTableBody')) {
+        setTimeout(initContacts, 50);
+        return;
+    }
     loadContacts();
     loadTags();
     loadTemplates();
 }
-
-onReady(initContacts);
 
 async function loadContacts() {
     try {
@@ -496,8 +490,8 @@ function exportContacts() {
 function switchTab(tab: string) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    document.querySelector(`.tab[onclick="switchTab('${tab}')"]`)?.classList.add('active');
-    document.getElementById(`tab-${tab}`)?.classList.add('active');
+    document.querySelector(`.tab[data-tab="${tab}"]`)?.classList.add('active');
+    document.querySelector(`.tab-content[data-tab-content="${tab}"]`)?.classList.add('active');
 }
 
 function getStatusLabel(status: number) {

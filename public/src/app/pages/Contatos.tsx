@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Link } from 'react-router-dom';
 type ContatosGlobals = {
@@ -26,20 +26,32 @@ type ContatosGlobals = {
 };
 
 export default function Contatos() {
+  const [bootError, setBootError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
 
     const boot = async () => {
-      await import('../../core/app');
-      const mod = await import('../../pages/contatos');
+      try {
+        await import('../../core/app');
+        const mod = await import('../../pages/contatos');
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      const win = window as Window & ContatosGlobals;
-      if (typeof win.initContacts === 'function') {
-        win.initContacts();
-      } else if (typeof (mod as { initContacts?: () => void }).initContacts === 'function') {
-        (mod as { initContacts?: () => void }).initContacts?.();
+        const win = window as Window & ContatosGlobals;
+        if (typeof win.initContacts === 'function') {
+          win.initContacts();
+          return;
+        }
+        if (typeof (mod as { initContacts?: () => void }).initContacts === 'function') {
+          (mod as { initContacts?: () => void }).initContacts?.();
+          return;
+        }
+        throw new Error('initContacts nÃ£o estÃ¡ disponÃ­vel');
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Falha ao iniciar Contatos:', error);
+        setBootError(error instanceof Error ? error.message : 'Falha ao iniciar Contatos');
       }
     };
 
@@ -154,6 +166,13 @@ export default function Contatos() {
       </aside>
 
       <main className="main-content">
+        {bootError && (
+          <div className="card mb-4" style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}>
+            <div className="card-body">
+              NÃ£o foi possÃ­vel inicializar os contatos. Abra o console para ver o erro.
+            </div>
+          </div>
+        )}
         <div className="page-header">
           <div className="page-title">
             <h1><span className="icon icon-contacts icon-sm"></span> Contatos</h1>
@@ -364,18 +383,18 @@ export default function Contatos() {
           </div>
           <div className="modal-body">
             <div className="tabs">
-              <button className="tab active" onClick={() => globals.switchTab?.('info')}>
+              <button className="tab active" data-tab="info" onClick={() => globals.switchTab?.('info')}>
                 <span className="icon icon-info icon-sm"></span> Informações
               </button>
-              <button className="tab" onClick={() => globals.switchTab?.('history')}>
+              <button className="tab" data-tab="history" onClick={() => globals.switchTab?.('history')}>
                 <span className="icon icon-clock icon-sm"></span> Histórico
               </button>
-              <button className="tab" onClick={() => globals.switchTab?.('messages')}>
+              <button className="tab" data-tab="messages" onClick={() => globals.switchTab?.('messages')}>
                 <span className="icon icon-message icon-sm"></span> Mensagens
               </button>
             </div>
 
-            <div className="tab-content active" id="tab-info">
+            <div className="tab-content active" id="tab-info" data-tab-content="info">
               <form id="editContactForm">
                 <input type="hidden" id="editContactId" />
                 <div className="form-row">
@@ -420,14 +439,14 @@ export default function Contatos() {
               </form>
             </div>
 
-            <div className="tab-content" id="tab-history">
+            <div className="tab-content" id="tab-history" data-tab-content="history">
               <div id="contactHistory" className="empty-state">
                 <div className="empty-state-icon icon icon-clock icon-lg"></div>
                 <p>Nenhum histórico disponível</p>
               </div>
             </div>
 
-            <div className="tab-content" id="tab-messages">
+            <div className="tab-content" id="tab-messages" data-tab-content="messages">
               <div id="contactMessages" className="empty-state">
                 <div className="empty-state-icon icon icon-message icon-lg"></div>
                 <p>Nenhuma mensagem trocada</p>
@@ -540,3 +559,4 @@ Use {{nome}} para personalizar`}
     </div>
   );
 }
+
