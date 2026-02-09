@@ -206,6 +206,7 @@ const sessions = whatsappService.sessions;
 const reconnectAttempts = whatsappService.reconnectAttempts;
 const qrTimeouts = whatsappService.qrTimeouts;
 const logger = pino({ level: 'silent' });
+const typingStatus = new Map();
 
 function persistWhatsappSession(sessionId, status, options = {}) {
     try {
@@ -1740,7 +1741,6 @@ process.on('uncaughtException', (error) => {
         process.exit(0);
     });
 };
-
 
 
 
