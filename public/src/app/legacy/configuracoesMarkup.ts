@@ -91,39 +91,39 @@ export const configuracoesMarkup = `
 
     <aside class="sidebar">
         <div class="sidebar-header">
-            <a href="dashboard.html" class="sidebar-logo">
+            <a href="app.html#/dashboard" class="sidebar-logo">
                 <img src="img/logo-self.png" alt="SELF"><span>SELF</span>
             </a>
         </div>
         <nav class="sidebar-nav">
             <div class="nav-section">
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="dashboard.html" class="nav-link"><span class="icon icon-dashboard"></span>Painel de Controle</a></li>
-                    <li class="nav-item"><a href="contatos.html" class="nav-link"><span class="icon icon-contacts"></span>Contatos</a></li>
-                    <li class="nav-item"><a href="campanhas.html" class="nav-link"><span class="icon icon-campaigns"></span>Campanhas</a></li>
-                    <li class="nav-item"><a href="transmissao.html" class="nav-link"><span class="icon icon-broadcast"></span>Transmissão</a></li>
+                    <li class="nav-item"><a href="app.html#/dashboard" class="nav-link"><span class="icon icon-dashboard"></span>Painel de Controle</a></li>
+                    <li class="nav-item"><a href="app.html#/contatos" class="nav-link"><span class="icon icon-contacts"></span>Contatos</a></li>
+                    <li class="nav-item"><a href="app.html#/campanhas" class="nav-link"><span class="icon icon-campaigns"></span>Campanhas</a></li>
+                    <li class="nav-item"><a href="app.html#/transmissao" class="nav-link"><span class="icon icon-broadcast"></span>Transmissão</a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Conversas</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="inbox.html" class="nav-link"><span class="icon icon-inbox"></span>Inbox</a></li>
+                    <li class="nav-item"><a href="app.html#/inbox" class="nav-link"><span class="icon icon-inbox"></span>Inbox</a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Automação</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="automacao.html" class="nav-link"><span class="icon icon-automation"></span>Automação</a></li>
-                    <li class="nav-item"><a href="fluxos.html" class="nav-link"><span class="icon icon-flows"></span>Fluxos de Conversa</a></li>
-                    <li class="nav-item"><a href="funil.html" class="nav-link"><span class="icon icon-funnel"></span>Funil de Vendas</a></li>
+                    <li class="nav-item"><a href="app.html#/automacao" class="nav-link"><span class="icon icon-automation"></span>Automação</a></li>
+                    <li class="nav-item"><a href="app.html#/fluxos" class="nav-link"><span class="icon icon-flows"></span>Fluxos de Conversa</a></li>
+                    <li class="nav-item"><a href="app.html#/funil" class="nav-link"><span class="icon icon-funnel"></span>Funil de Vendas</a></li>
                 </ul>
             </div>
             <div class="nav-section">
                 <div class="nav-section-title">Sistema</div>
                 <ul class="nav-menu">
-                    <li class="nav-item"><a href="whatsapp.html" class="nav-link"><span class="icon icon-whatsapp"></span>WhatsApp</a></li>
-                    <li class="nav-item"><a href="configuracoes.html" class="nav-link active"><span class="icon icon-settings"></span>Configurações</a></li>
-                    <li class="nav-item"><a href="configuracoes.html#copys" class="nav-link"><span class="icon icon-templates"></span>Modelos</a></li>
+                    <li class="nav-item"><a href="app.html#/whatsapp" class="nav-link"><span class="icon icon-whatsapp"></span>WhatsApp</a></li>
+                    <li class="nav-item"><a href="app.html#/configuracoes" class="nav-link active"><span class="icon icon-settings"></span>Configurações</a></li>
+                    <li class="nav-item"><a href="app.html#/configuracoes?panel=copys" class="nav-link"><span class="icon icon-templates"></span>Modelos</a></li>
                 </ul>
             </div>
         </nav>
@@ -176,7 +176,7 @@ export const configuracoesMarkup = `
                         <div class="connection-disconnected" id="connectionDisconnected">
                             <div class="connection-icon disconnected">!</div>
                             <h4>WhatsApp desconectado</h4>
-                            <p>Conecte seu WhatsApp em <a href="whatsapp.html">WhatsApp → Conectar</a> para ativar a automação.</p>
+                            <p>Conecte seu WhatsApp em <a href="app.html#/whatsapp">WhatsApp → Conectar</a> para ativar a automação.</p>
                         </div>
                     </div>
                 </div>

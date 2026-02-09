@@ -761,31 +761,31 @@ export const whatsappMarkup = `
         
         <ul class="sidebar-menu">
             <li>
-                <a href="dashboard.html">
+                <a href="app.html#/dashboard">
                     <span class="icon icon-dashboard"></span>
                     Dashboard
                 </a>
             </li>
             <li>
-                <a href="funil.html">
+                <a href="app.html#/funil">
                     <span class="icon icon-funnel"></span>
                     Funil de Vendas
                 </a>
             </li>
             <li>
-                <a href="whatsapp.html" class="active">
+                <a href="app.html#/whatsapp" class="active">
                     <span class="icon icon-whatsapp"></span>
                     WhatsApp
                 </a>
             </li>
             <li>
-                <a href="conversas.html">
+                <a href="app.html#/conversas">
                     <span class="icon icon-message"></span>
                     Conversas
                 </a>
             </li>
             <li>
-                <a href="configuracoes.html">
+                <a href="app.html#/configuracoes">
                     <span class="icon icon-settings"></span>
                     Configurações
                 </a>
@@ -893,7 +893,7 @@ export const whatsappMarkup = `
                             </div>
                             
                             <div style="display: flex; gap: 15px; flex-direction: column;">
-                                <a href="conversas.html" class="btn btn-primary">Ir para Conversas</a>
+                                <a href="app.html#/conversas" class="btn btn-primary">Ir para Conversas</a>
                                 <button class="btn btn-danger" onclick="disconnect()">Desconectar</button>
                             </div>
                         </div>

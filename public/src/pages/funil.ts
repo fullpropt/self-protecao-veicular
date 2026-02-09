@@ -28,6 +28,16 @@ function onReady(callback: () => void) {
     }
 }
 
+
+function isAppShell() {
+    return window.location.pathname.includes('app.html');
+}
+
+function getContatosUrl(stage: number | string) {
+    const base = isAppShell() ? 'app.html#/contatos' : 'contatos.html';
+    return `${base}?status=${stage}`;
+}
+
 function initFunil() {
 
     loadFunnel();
@@ -260,7 +270,7 @@ function toggleView() {
 }
 
 function filterByStage(stage: number | string) {
-    window.location.href = `contatos.html?status=${stage}`;
+    window.location.href = getContatosUrl(stage);
 }
 
 function saveStagesConfig() {

@@ -38,6 +38,38 @@ function onReady(callback: () => void) {
     }
 }
 
+
+function getQueryParams() {
+    if (window.location.search) {
+        return new URLSearchParams(window.location.search);
+    }
+    const hash = window.location.hash;
+    const queryIndex = hash.indexOf('?');
+    const query = queryIndex >= 0 ? hash.slice(queryIndex + 1) : '';
+    return new URLSearchParams(query);
+}
+
+function applyUrlFilters() {
+    const params = getQueryParams();
+    const statusParam = params.get('status');
+    const idParam = params.get('id');
+
+    if (statusParam) {
+        const filterStatus = document.getElementById('filterStatus') as HTMLSelectElement | null;
+        if (filterStatus) {
+            filterStatus.value = statusParam;
+            filterContacts();
+        }
+    }
+
+    if (idParam) {
+        const id = parseInt(idParam, 10);
+        if (!Number.isNaN(id)) {
+            setTimeout(() => editContact(id), 0);
+        }
+    }
+}
+
 function initContacts() {
     loadContacts();
     loadTags();
@@ -54,6 +86,7 @@ async function loadContacts() {
         filteredContacts = [...allContacts];
         updateStats();
         renderContacts();
+        applyUrlFilters();
         hideLoading();
     } catch (error) {
         hideLoading();

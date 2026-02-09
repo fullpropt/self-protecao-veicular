@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   dashboardAfterMarkup,
   dashboardContentBottomMarkup,
@@ -21,6 +22,7 @@ type DashboardGlobals = {
 };
 
 function DashboardHeader() {
+  const navigate = useNavigate();
   const globals = window as Window & DashboardGlobals;
 
   return (
@@ -45,7 +47,7 @@ function DashboardHeader() {
           <span className="icon icon-export icon-sm"></span>
           Exportar
         </button>
-        <button type="button" className="btn btn-whatsapp" onClick={() => { window.location.href = 'transmissao.html'; }}>
+        <button type="button" className="btn btn-whatsapp" onClick={() => navigate('/transmissao')}>
           <span className="icon icon-batch icon-sm"></span>
           Lote
         </button>

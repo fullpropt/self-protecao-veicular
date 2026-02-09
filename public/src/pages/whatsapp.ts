@@ -32,6 +32,20 @@ function onReady(callback: () => void) {
     }
 }
 
+
+function isAppShell() {
+    return window.location.pathname.includes('app.html');
+}
+
+function getLoginUrl() {
+    return isAppShell() ? 'app.html#/login' : 'login.html';
+}
+
+function getConversasUrl(params: URLSearchParams) {
+    const base = isAppShell() ? 'app.html#/conversas' : 'conversas.html';
+    return `${base}?${params.toString()}`;
+}
+
 // InicializaÃ§Ã£o
 function initWhatsapp() {
     if (checkAuth()) {
@@ -45,7 +59,7 @@ function checkAuth() {
     const token = sessionStorage.getItem('selfDashboardToken');
     const expiry = sessionStorage.getItem('selfDashboardExpiry');
     if (!token || !expiry || Date.now() > parseInt(expiry)) {
-        window.location.href = 'login.html';
+        window.location.href = getLoginUrl();
         return false;
     }
     return true;
@@ -359,7 +373,7 @@ function renderContacts() {
 // Abrir chat
 function openChat(phone: string, name: string) {
     const params = new URLSearchParams({ phone, name });
-    window.location.href = `conversas.html?${params.toString()}`;
+    window.location.href = getConversasUrl(params);
 }
 
 // Formatar telefone
@@ -409,7 +423,7 @@ function logout() {
     sessionStorage.removeItem('selfDashboardToken');
     sessionStorage.removeItem('selfDashboardExpiry');
     sessionStorage.removeItem('selfDashboardUser');
-    window.location.href = 'login.html';
+    window.location.href = getLoginUrl();
 }
 
 const windowAny = window as Window & {

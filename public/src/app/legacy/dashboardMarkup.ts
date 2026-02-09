@@ -30,7 +30,7 @@ export const dashboardShellMarkup = `
     <!-- Sidebar -->
     <aside class="sidebar">
         <div class="sidebar-header">
-            <a href="dashboard.html" class="sidebar-logo">
+            <a href="app.html#/dashboard" class="sidebar-logo">
                 <img src="img/logo-self.png" alt="SELF">
                 <span>SELF</span>
             </a>
@@ -40,25 +40,25 @@ export const dashboardShellMarkup = `
             <div class="nav-section">
                 <ul class="nav-menu">
                     <li class="nav-item">
-                        <a href="dashboard.html" class="nav-link active">
+                        <a href="app.html#/dashboard" class="nav-link active">
                             <span class="icon icon-dashboard"></span>
                             Painel de Controle
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="contatos.html" class="nav-link">
+                        <a href="app.html#/contatos" class="nav-link">
                             <span class="icon icon-contacts"></span>
                             Contatos
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="campanhas.html" class="nav-link">
+                        <a href="app.html#/campanhas" class="nav-link">
                             <span class="icon icon-campaigns"></span>
                             Campanhas
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="transmissao.html" class="nav-link">
+                        <a href="app.html#/transmissao" class="nav-link">
                             <span class="icon icon-broadcast"></span>
                             Transmissão
                         </a>
@@ -70,7 +70,7 @@ export const dashboardShellMarkup = `
                 <div class="nav-section-title">Conversas</div>
                 <ul class="nav-menu">
                     <li class="nav-item">
-                        <a href="inbox.html" class="nav-link">
+                        <a href="app.html#/inbox" class="nav-link">
                             <span class="icon icon-inbox"></span>
                             Inbox
                             <span class="badge" style="display: none;">0</span>
@@ -83,19 +83,19 @@ export const dashboardShellMarkup = `
                 <div class="nav-section-title">Automação</div>
                 <ul class="nav-menu">
                     <li class="nav-item">
-                        <a href="automacao.html" class="nav-link">
+                        <a href="app.html#/automacao" class="nav-link">
                             <span class="icon icon-automation"></span>
                             Automação
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="fluxos.html" class="nav-link">
+                        <a href="app.html#/fluxos" class="nav-link">
                             <span class="icon icon-flows"></span>
                             Fluxos de Conversa
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="funil.html" class="nav-link">
+                        <a href="app.html#/funil" class="nav-link">
                             <span class="icon icon-funnel"></span>
                             Funil de Vendas
                         </a>
@@ -107,19 +107,19 @@ export const dashboardShellMarkup = `
                 <div class="nav-section-title">Sistema</div>
                 <ul class="nav-menu">
                     <li class="nav-item">
-                        <a href="whatsapp.html" class="nav-link">
+                        <a href="app.html#/whatsapp" class="nav-link">
                             <span class="icon icon-whatsapp"></span>
                             WhatsApp
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="configuracoes.html" class="nav-link">
+                        <a href="app.html#/configuracoes" class="nav-link">
                             <span class="icon icon-settings"></span>
                             Configurações
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="configuracoes.html#copys" class="nav-link">
+                        <a href="app.html#/configuracoes?panel=copys" class="nav-link">
                             <span class="icon icon-templates"></span>
                             Modelos
                         </a>
@@ -156,7 +156,7 @@ export const dashboardContentTopMarkup = `
                     <span class="icon icon-export icon-sm"></span>
                     Exportar
                 </button>
-                <button class="btn btn-whatsapp" onclick="window.location.href='transmissao.html'">
+                <button class="btn btn-whatsapp" onclick="window.location.href='app.html#/transmissao'">
                     <span class="icon icon-batch icon-sm"></span>
                     Lote
                 </button>

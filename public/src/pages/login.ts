@@ -16,7 +16,7 @@ function onReady(callback: () => void) {
 }
 
 function getDashboardUrl() {
-    return window.location.pathname.includes('app.html') ? 'app.html#/dashboard' : 'dashboard.html';
+    return 'app.html#/dashboard';
 }
 
 function getInputValue(id: string): string {

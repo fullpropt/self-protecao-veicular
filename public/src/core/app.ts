@@ -50,6 +50,32 @@ const APP: AppState = {
     user: null
 };
 
+
+function isAppShell() {
+    return window.location.pathname.includes('app.html');
+}
+
+function buildAppUrl(path: string, query?: string) {
+    const suffix = query ? `?${query}` : '';
+    return `app.html#/${path}${suffix}`;
+}
+
+function buildLegacyUrl(page: string, query?: string) {
+    const suffix = query ? `?${query}` : '';
+    return `${page}.html${suffix}`;
+}
+
+function isLoginRoute() {
+    if (isAppShell()) {
+        return window.location.hash.startsWith('#/login');
+    }
+    return window.location.pathname.includes('login.html');
+}
+
+function getLoginUrl() {
+    return isAppShell() ? buildAppUrl('login') : buildLegacyUrl('login');
+}
+
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
@@ -92,8 +118,8 @@ function checkAuth() {
     
     if (!token || !expiry || Date.now() > parseInt(expiry)) {
         // Não redirecionar se já estiver na página de login
-        if (!window.location.pathname.includes('login.html')) {
-            window.location.href = 'login.html';
+        if (!isLoginRoute()) {
+            window.location.href = getLoginUrl();
         }
         return false;
     }
@@ -120,7 +146,7 @@ function logout() {
     sessionStorage.removeItem('selfDashboardUser');
     sessionStorage.removeItem('selfDashboardExpiry');
     sessionStorage.removeItem('selfDashboardRefreshToken');
-    window.location.href = 'login.html';
+    window.location.href = getLoginUrl();
 }
 
 // ============================================
@@ -249,7 +275,9 @@ function initSidebar() {
     }
     
     // Marcar item ativo no menu
-    const currentPage = window.location.pathname.split('/').pop() || 'dashboard.html';
+    const currentPage = isAppShell()
+        ? `app.html${window.location.hash}`
+        : (window.location.pathname.split('/').pop() || 'dashboard.html');
     const navLinks = document.querySelectorAll('.nav-link');
     navLinks.forEach(link => {
         const href = link.getAttribute('href');
@@ -388,7 +416,7 @@ async function apiRequest(endpoint: string, options: ApiRequestOptions = {}) {
         const response = await fetch(url, config);
         const data = await response.json();
         
-        if (response.status === 401 && !window.location.pathname.includes('login.html')) {
+        if (response.status === 401 && !isLoginRoute()) {
             logout();
             throw new Error(data.error || 'Sessão expirada');
         }
@@ -669,7 +697,10 @@ async function updateUnreadCount() {
         const response = await api.get('/api/conversations?status=active');
         const unread = response.conversations?.filter((c: { unread_count?: number }) => (c.unread_count || 0) > 0).length || 0;
         
-        const badges = document.querySelectorAll('.nav-link[href="conversas.html"] .badge, .nav-link[href="inbox.html"] .badge');
+        const badges = document.querySelectorAll(
+            '.nav-link[href="app.html#/conversas"] .badge, .nav-link[href="app.html#/inbox"] .badge, ' +
+            '.nav-link[href="conversas.html"] .badge, .nav-link[href="inbox.html"] .badge'
+        );
         badges.forEach(badge => {
             const badgeEl = badge as HTMLElement;
             if (unread > 0) {

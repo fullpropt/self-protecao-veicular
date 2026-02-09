@@ -44,6 +44,16 @@ function onReady(callback: () => void) {
     }
 }
 
+
+function isAppShell() {
+    return window.location.pathname.includes('app.html');
+}
+
+function getContatosUrl(id: string | number) {
+    const base = isAppShell() ? 'app.html#/contatos' : 'contatos.html';
+    return `${base}?id=${id}`;
+}
+
 function initInbox() {
     loadConversations();
     initSocket();
@@ -355,7 +365,7 @@ function openWhatsApp() {
 
 function viewContact() {
     if (currentConversation) {
-        window.location.href = `contatos.html?id=${currentConversation.id}`;
+        window.location.href = getContatosUrl(currentConversation.id);
     }
 }
 

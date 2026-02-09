@@ -15,15 +15,32 @@ function onReady(callback: () => void) {
     }
 }
 
+
+function getPanelFromLocation() {
+    const hash = window.location.hash || '';
+    if (!hash) return null;
+
+    if (hash.startsWith('#/')) {
+        const queryIndex = hash.indexOf('?');
+        if (queryIndex >= 0) {
+            const params = new URLSearchParams(hash.slice(queryIndex + 1));
+            return params.get('panel');
+        }
+        return null;
+    }
+
+    return hash.startsWith('#') ? hash.slice(1) : hash;
+}
+
 function initConfiguracoes() {
     loadSettings();
     checkWhatsAppStatus();
-    const hash = window.location.hash?.slice(1);
-    if (hash) {
-        const panel = document.getElementById(`panel-${hash}`);
+    const panelFromUrl = getPanelFromLocation();
+    if (panelFromUrl) {
+        const panel = document.getElementById(`panel-${panelFromUrl}`);
         if (panel) {
             document.querySelectorAll('.settings-nav-item').forEach(i => i.classList.remove('active'));
-            document.querySelector(`[onclick="showPanel('${hash}')"]`)?.classList.add('active');
+            document.querySelector(`[onclick="showPanel('${panelFromUrl}')"]`)?.classList.add('active');
             document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
             panel.classList.add('active');
         }

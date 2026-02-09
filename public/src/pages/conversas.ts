@@ -66,13 +66,32 @@ function onReady(callback: () => void) {
     }
 }
 
+
+function isAppShell() {
+    return window.location.pathname.includes('app.html');
+}
+
+function getLoginUrl() {
+    return isAppShell() ? 'app.html#/login' : 'login.html';
+}
+
+function getQueryParams() {
+    if (window.location.search) {
+        return new URLSearchParams(window.location.search);
+    }
+    const hash = window.location.hash;
+    const queryIndex = hash.indexOf('?');
+    const query = queryIndex >= 0 ? hash.slice(queryIndex + 1) : '';
+    return new URLSearchParams(query);
+}
+
 // InicializaÃ§Ã£o
 function initConversas() {
     initSocket();
     loadConversations();
     
     // Verificar parÃ¢metros da URL
-    const params = new URLSearchParams(window.location.search);
+    const params = getQueryParams();
     const phone = params.get('phone');
     const name = params.get('name');
     
@@ -645,7 +664,7 @@ function toggleSidebar() {
 
 function logout() {
     localStorage.removeItem('isLoggedIn');
-    window.location.href = 'login.html';
+    window.location.href = getLoginUrl();
 }
 
 const windowAny = window as Window & {

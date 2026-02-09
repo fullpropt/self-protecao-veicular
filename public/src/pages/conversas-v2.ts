@@ -64,6 +64,16 @@ function onReady(callback: () => void) {
     }
 }
 
+
+function isAppShell() {
+    return window.location.pathname.includes('app.html');
+}
+
+function getFunilUrl(leadId: string | number) {
+    const base = isAppShell() ? 'app.html#/funil' : 'funil.html';
+    return `${base}?lead=${leadId}`;
+}
+
 // ============================================
 // INICIALIZAÃ‡ÃƒO
 // ============================================
@@ -230,7 +240,7 @@ function setupEventListeners() {
     // Botão de ver lead
     document.getElementById('btnViewLead')?.addEventListener('click', () => {
         if (currentContact?.leadId) {
-            window.location.href = `funil.html?lead=${currentContact.leadId}`;
+            window.location.href = getFunilUrl(currentContact.leadId);
         }
     });
 }
