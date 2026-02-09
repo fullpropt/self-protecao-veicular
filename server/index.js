@@ -208,6 +208,20 @@ const qrTimeouts = whatsappService.qrTimeouts;
 const logger = pino({ level: 'silent' });
 const typingStatus = new Map();
 
+function getSessionUser(sessionId) {
+    return sessions.get(sessionId)?.user || null;
+}
+
+function getSessionDisplayName(sessionId) {
+    const user = getSessionUser(sessionId);
+    return user?.pushName || user?.name || null;
+}
+
+function getSessionPhone(sessionId) {
+    const user = getSessionUser(sessionId);
+    return user?.phone || (user?.id ? extractNumber(user.id) : null);
+}
+
 function persistWhatsappSession(sessionId, status, options = {}) {
     try {
         const qr_code = options.qr_code || null;
@@ -815,6 +829,9 @@ function syncChatsToDatabase(sessionId, payload) {
     const chats = normalizeChatPayload(payload);
     if (chats.length === 0) return;
 
+    const sessionDisplayName = getSessionDisplayName(sessionId);
+    const sessionPhone = getSessionPhone(sessionId);
+
     for (const chat of chats) {
         const jid = chat?.id || chat?.jid;
         if (!jid || String(jid).endsWith('@g.us')) continue;
@@ -822,7 +839,12 @@ function syncChatsToDatabase(sessionId, payload) {
         const phone = extractNumber(jid);
         if (!phone) continue;
 
-        const displayName = getChatDisplayName(chat, phone);
+        let displayName = getChatDisplayName(chat, phone);
+        const isSelfChat = sessionPhone && phone === sessionPhone;
+        if (isSelfChat) {
+            displayName = sessionDisplayName ? `${sessionDisplayName} (Você)` : 'Você';
+        }
+
         let lead = Lead.findByJid(jid) || Lead.findByPhone(phone);
         if (!lead) {
             lead = Lead.findOrCreate({
@@ -831,9 +853,17 @@ function syncChatsToDatabase(sessionId, payload) {
                 name: displayName,
                 source: 'whatsapp'
             }).lead;
-        } else if (displayName && !lead.name) {
-            Lead.update(lead.id, { name: displayName });
-            lead = Lead.findById(lead.id);
+        } else if (displayName) {
+            const shouldUpdateName =
+                !lead.name ||
+                lead.name === phone ||
+                (sessionDisplayName && lead.name === sessionDisplayName) ||
+                (sessionDisplayName && lead.name === `${sessionDisplayName} (Você)`) ||
+                lead.name === 'Você';
+            if (shouldUpdateName) {
+                Lead.update(lead.id, { name: displayName });
+                lead = Lead.findById(lead.id);
+            }
         }
 
         const convResult = Conversation.findOrCreate({
@@ -925,6 +955,8 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
 async function processIncomingMessage(sessionId, msg) {
     const from = msg.key.remoteJid;
     const isFromMe = msg.key.fromMe;
+    const sessionDisplayName = getSessionDisplayName(sessionId);
+    const sessionPhone = getSessionPhone(sessionId);
     
     // Ignorar grupos por enquanto
     if (from?.endsWith('@g.us')) return;
@@ -949,14 +981,32 @@ async function processIncomingMessage(sessionId, msg) {
     else if (msg.message?.stickerMessage) mediaType = 'sticker';
     
     const phone = extractNumber(from);
+    const isSelfChat = sessionPhone && phone === sessionPhone;
+    const selfName = sessionDisplayName ? `${sessionDisplayName} (Você)` : 'Você';
     
     // Buscar ou criar lead
     const { lead, created: leadCreated } = Lead.findOrCreate({
         phone,
         jid: from,
-        name: msg.pushName || phone,
+        name: isSelfChat ? selfName : (!isFromMe ? (msg.pushName || phone) : undefined),
         source: 'whatsapp'
     });
+
+    if (isSelfChat) {
+        if (!lead.name || lead.name !== selfName) {
+            Lead.update(lead.id, { name: selfName });
+        }
+    } else if (!isFromMe && msg.pushName) {
+        const shouldUpdateName =
+            !lead.name ||
+            lead.name === phone ||
+            (sessionDisplayName && lead.name === sessionDisplayName) ||
+            (sessionDisplayName && lead.name === `${sessionDisplayName} (Você)`) ||
+            lead.name === 'Você';
+        if (shouldUpdateName) {
+            Lead.update(lead.id, { name: msg.pushName });
+        }
+    }
     
     // Buscar ou criar conversa
     const { conversation, created: convCreated } = Conversation.findOrCreate({
