@@ -12,6 +12,8 @@ type DashboardGlobals = {
   openModal?: (id: string) => void;
   exportLeads?: () => void;
   confirmReset?: () => void;
+  filterLeads?: () => void;
+  toggleSelectAll?: () => void;
 };
 
 function DashboardHeader() {
@@ -124,6 +126,70 @@ function Funnel() {
   );
 }
 
+function LeadsTable() {
+  const globals = window as Window & DashboardGlobals;
+
+  return (
+    <div className="table-container">
+      <div className="table-header">
+        <div className="table-title"><span className="icon icon-contacts icon-sm"></span> Leads Recentes</div>
+        <div className="table-filters">
+          <div className="search-box">
+            <span className="search-icon icon icon-search icon-sm"></span>
+            <input
+              type="text"
+              id="searchLeads"
+              placeholder="Buscar por nome, telefone..."
+              onKeyUp={() => globals.filterLeads?.()}
+            />
+          </div>
+          <select
+            className="form-select"
+            id="filterStatus"
+            onChange={() => globals.filterLeads?.()}
+            style={{ width: 'auto' }}
+          >
+            <option value="">Todos os Status</option>
+            <option value="1">Novo</option>
+            <option value="2">Em Andamento</option>
+            <option value="3">Concluído</option>
+            <option value="4">Perdido</option>
+          </select>
+        </div>
+      </div>
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>
+                <label className="checkbox-wrapper">
+                  <input type="checkbox" id="selectAll" onChange={() => globals.toggleSelectAll?.()} />
+                  <span className="checkbox-custom"></span>
+                </label>
+              </th>
+              <th>Data/Hora</th>
+              <th>Nome</th>
+              <th>WhatsApp</th>
+              <th>Placa</th>
+              <th>Veículo</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="leadsTableBody">
+            <tr>
+              <td colSpan={8} className="table-empty">
+                <div className="table-empty-icon icon icon-empty icon-lg"></div>
+                <p>Carregando leads...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +223,7 @@ export default function Dashboard() {
         <div dangerouslySetInnerHTML={{ __html: dashboardContentTopMarkup }} />
         <StatsCards />
         <Funnel />
+        <LeadsTable />
         <div dangerouslySetInnerHTML={{ __html: dashboardContentBottomMarkup }} />
       </main>
       <div dangerouslySetInnerHTML={{ __html: dashboardAfterMarkup }} />

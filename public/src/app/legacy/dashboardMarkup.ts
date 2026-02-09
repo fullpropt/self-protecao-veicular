@@ -227,54 +227,7 @@ export const dashboardContentTopMarkup = `
 `;
 
 export const dashboardContentBottomMarkup = `
-<!-- Leads Recentes -->
-        <div class="table-container">
-            <div class="table-header">
-                <div class="table-title"><span class="icon icon-contacts icon-sm"></span> Leads Recentes</div>
-                <div class="table-filters">
-                    <div class="search-box">
-                        <span class="search-icon icon icon-search icon-sm"></span>
-                        <input type="text" id="searchLeads" placeholder="Buscar por nome, telefone..." onkeyup="filterLeads()">
-                    </div>
-                    <select class="form-select" id="filterStatus" onchange="filterLeads()" style="width: auto;">
-                        <option value="">Todos os Status</option>
-                        <option value="1">Novo</option>
-                        <option value="2">Em Andamento</option>
-                        <option value="3">Concluído</option>
-                        <option value="4">Perdido</option>
-                    </select>
-                </div>
-            </div>
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>
-                                <label class="checkbox-wrapper">
-                                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
-                                    <span class="checkbox-custom"></span>
-                                </label>
-                            </th>
-                            <th>Data/Hora</th>
-                            <th>Nome</th>
-                            <th>WhatsApp</th>
-                            <th>Placa</th>
-                            <th>Veículo</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="leadsTableBody">
-                        <tr>
-                            <td colspan="8" class="table-empty">
-                                <div class="table-empty-icon icon icon-empty icon-lg"></div>
-                                <p>Carregando leads...</p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+
 `;
 
 export const dashboardAfterMarkup = `
