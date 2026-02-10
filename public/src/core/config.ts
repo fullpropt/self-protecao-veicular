@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CONFIGURAÇÕES DO SISTEMA - ZapVender v2.0.0
  * Altere estas configurações conforme seu ambiente
  */
@@ -53,6 +53,7 @@ type UtilsType = {
     formatPhoneToWhatsApp: (phone: string) => string;
     formatDate: (dateStr: string) => string;
     formatDateTime: (dateStr: string) => string;
+    fixMojibakeText: (value: string) => string;
 };
 
 const CONFIG: Config = {
@@ -178,6 +179,32 @@ const SAMPLE_DATA: SampleData = {
 // UTILITÁRIOS GERAIS
 // ============================================
 
+function fixMojibakeText(value: string): string {
+    if (!value || typeof value !== 'string') return value;
+    
+    // Padrões comuns de texto corrompido (UTF-8 lido como latin1/windows-1252)
+    const suspiciousPattern = /(Ã.|Â.|â.|�)/;
+    if (!suspiciousPattern.test(value)) return value;
+
+    try {
+        const bytes = new Uint8Array(value.length);
+        for (let i = 0; i < value.length; i++) {
+            bytes[i] = value.charCodeAt(i) & 0xFF;
+        }
+
+        const decoded = new TextDecoder('utf-8').decode(bytes);
+
+        // Evita substituir por resultado pior
+        if (!decoded || decoded.includes('�')) {
+            return value;
+        }
+
+        return decoded;
+    } catch {
+        return value;
+    }
+}
+
 const Utils: UtilsType = {
     formatPhoneDisplay: (phone) => {
         if (!phone) return '';
@@ -221,8 +248,76 @@ const Utils: UtilsType = {
     formatDateTime: (dateStr) => {
         const date = new Date(dateStr);
         return date.toLocaleString('pt-BR');
-    }
+    },
+
+    fixMojibakeText
 };
+
+function applyMojibakeFixToDocument() {
+    if (typeof document === 'undefined') return;
+
+    const fixTextNode = (node: Text) => {
+        const original = node.nodeValue || '';
+        const fixed = fixMojibakeText(original);
+        if (fixed !== original) {
+            node.nodeValue = fixed;
+        }
+    };
+
+    const scan = (root: Node) => {
+        const walker = document.createTreeWalker(
+            root,
+            NodeFilter.SHOW_TEXT
+        );
+
+        let current = walker.nextNode();
+        while (current) {
+            fixTextNode(current as Text);
+            current = walker.nextNode();
+        }
+
+        if (root instanceof Element || root instanceof Document) {
+            const elements = (root as ParentNode).querySelectorAll
+                ? (root as ParentNode).querySelectorAll('*')
+                : [];
+
+            elements.forEach((el) => {
+                ['placeholder', 'title', 'aria-label'].forEach((attr) => {
+                    const value = el.getAttribute(attr);
+                    if (!value) return;
+                    const fixed = fixMojibakeText(value);
+                    if (fixed !== value) {
+                        el.setAttribute(attr, fixed);
+                    }
+                });
+            });
+        }
+    };
+
+    scan(document.body);
+
+    const windowAny = window as Window & { __mojibakeFixObserver?: MutationObserver };
+    if (windowAny.__mojibakeFixObserver) return;
+
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    fixTextNode(node as Text);
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    scan(node);
+                }
+            });
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    windowAny.__mojibakeFixObserver = observer;
+}
 
 console.log(`ZapVender v${CONFIG.VERSION}`);
 console.log(`Socket URL: ${CONFIG.SOCKET_URL}`);
@@ -236,5 +331,10 @@ windowAny.CONFIG = CONFIG;
 windowAny.SAMPLE_DATA = SAMPLE_DATA;
 windowAny.Utils = Utils;
 
-export {};
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyMojibakeFixToDocument);
+} else {
+    applyMojibakeFixToDocument();
+}
 
+export {};
