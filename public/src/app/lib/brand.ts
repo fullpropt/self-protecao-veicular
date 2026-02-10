@@ -1,4 +1,4 @@
-const BRAND_LOGO_VERSION = '20260210-4';
+const BRAND_LOGO_VERSION = '20260210-5';
 
 function withVersion(url: string) {
   const separator = url.includes('?') ? '&' : '?';
