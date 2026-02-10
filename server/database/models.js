@@ -342,6 +342,10 @@ const Message = {
         
         return query(sql, params);
     },
+
+    getLastByLead(leadId) {
+        return queryOne('SELECT * FROM messages WHERE lead_id = ? ORDER BY created_at DESC LIMIT 1', [leadId]);
+    },
     
     getLastMessage(conversationId) {
         return queryOne('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1', [conversationId]);

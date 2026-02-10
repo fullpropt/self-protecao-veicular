@@ -31,7 +31,8 @@ function extractNumber(jid) {
     if (!jid) return '';
     const jidStr = String(jid);
     if (jidStr.includes('@lid')) return '';
-    return jidStr.replace(/[^0-9]/g, '');
+    const base = jidStr.split('@')[0].split(':')[0];
+    return base.replace(/[^0-9]/g, '');
 }
 
 /**

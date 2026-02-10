@@ -79,6 +79,8 @@ try {
     console.log('✅ Banco de dados inicializado');
     cleanupDuplicateMessages();
     cleanupLidLeads();
+    cleanupInvalidPhones();
+    cleanupEmptyWhatsappLeads();
 } catch (error) {
     console.error('❌ Erro ao inicializar banco de dados:', error.message);
 }
@@ -231,6 +233,14 @@ function isLidJid(jid) {
 
 function isUserJid(jid) {
     return typeof jid === 'string' && jid.includes('@s.whatsapp.net');
+}
+
+function normalizePhoneFromJid(jid) {
+    if (!jid) return '';
+    const jidStr = String(jid);
+    if (jidStr.includes('@lid')) return '';
+    const base = jidStr.split('@')[0].split(':')[0];
+    return base.replace(/\D/g, '');
 }
 
 function normalizeJid(jid) {
@@ -411,6 +421,49 @@ function cleanupLidLeads() {
         console.log(`Removidos ${lidLeads.length} leads com @lid`);
     } catch (error) {
         console.warn('Falha ao limpar leads @lid:', error.message);
+    }
+}
+
+function cleanupInvalidPhones() {
+    try {
+        const candidates = query(
+            "SELECT id, jid, phone FROM leads WHERE (jid LIKE '%@s.whatsapp.net%' AND jid LIKE '%:%') OR length(phone) > 13"
+        );
+        if (!candidates || candidates.length === 0) return;
+
+        for (const lead of candidates) {
+            const normalized = normalizePhoneFromJid(lead.jid);
+            if (!normalized) continue;
+            if (normalized === String(lead.phone || '')) continue;
+
+            const existing = Lead.findByPhone(normalized);
+            if (existing && existing.id !== lead.id) {
+                mergeLeads(existing, lead);
+            } else {
+                updateLeadIdentity(lead, lead.jid, normalized);
+            }
+        }
+    } catch (error) {
+        console.warn('Falha ao corrigir telefones invalidos:', error.message);
+    }
+}
+
+function cleanupEmptyWhatsappLeads() {
+    try {
+        const emptyLeads = query(`
+            SELECT l.id
+            FROM leads l
+            LEFT JOIN messages m ON m.lead_id = l.id
+            WHERE l.source = 'whatsapp' AND m.id IS NULL
+        `);
+        if (!emptyLeads || emptyLeads.length === 0) return;
+
+        for (const lead of emptyLeads) {
+            run('DELETE FROM leads WHERE id = ?', [lead.id]);
+        }
+        console.log(`Removidos ${emptyLeads.length} leads WhatsApp sem mensagens`);
+    } catch (error) {
+        console.warn('Falha ao limpar leads WhatsApp sem mensagens:', error.message);
     }
 }
 
@@ -1043,6 +1096,8 @@ function syncChatsToDatabase(sessionId, payload) {
         const jid = normalizeJid(rawJid);
         if (!jid || String(jid).endsWith('@g.us')) continue;
 
+        if (!chat?.lastMessage) continue;
+
         const phone = extractNumber(jid);
         if (!phone) continue;
 
@@ -1531,22 +1586,30 @@ io.on('connection', (socket) => {
     });
     
     socket.on('get-contacts', ({ sessionId }) => {
-        const leads = Lead.list({ limit: 100 });
+        const leads = Lead.list({ limit: 200 });
         
-        const contacts = leads.map(lead => {
-            const lastMsg = Message.listByLead(lead.id, { limit: 1 })[0];
-            return {
-                jid: lead.jid,
-                number: lead.phone,
-                name: lead.name,
-                vehicle: lead.vehicle,
-                plate: lead.plate,
-                status: lead.status,
-                lastMessage: lastMsg?.content?.substring(0, 50) || 'Clique para iniciar conversa',
-                lastMessageTime: lastMsg?.created_at ? new Date(lastMsg.created_at).getTime() : new Date(lead.created_at).getTime(),
-                unreadCount: 0
-            };
-        });
+        const contacts = leads
+            .map(lead => {
+                const lastMsg = Message.getLastByLead(lead.id);
+                if (!lastMsg) return null;
+
+                const preview = lastMsg.content
+                    ? lastMsg.content.substring(0, 50)
+                    : (lastMsg.media_type ? `[${lastMsg.media_type}]` : 'Sem mensagens');
+
+                return {
+                    jid: lead.jid,
+                    number: lead.phone,
+                    name: lead.name,
+                    vehicle: lead.vehicle,
+                    plate: lead.plate,
+                    status: lead.status,
+                    lastMessage: preview,
+                    lastMessageTime: lastMsg?.created_at ? new Date(lastMsg.created_at).getTime() : new Date(lead.created_at).getTime(),
+                    unreadCount: 0
+                };
+            })
+            .filter(Boolean);
         
         socket.emit('contacts-list', { sessionId, contacts });
     });
