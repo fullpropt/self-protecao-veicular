@@ -77,6 +77,7 @@ if (process.env.NODE_ENV === 'production') {
 try {
     migrate();
     console.log('✅ Banco de dados inicializado');
+    cleanupDuplicateMessages();
 } catch (error) {
     console.error('❌ Erro ao inicializar banco de dados:', error.message);
 }
@@ -207,6 +208,7 @@ const reconnectAttempts = whatsappService.reconnectAttempts;
 const qrTimeouts = whatsappService.qrTimeouts;
 const logger = pino({ level: 'silent' });
 const typingStatus = new Map();
+const jidAliasMap = new Map();
 
 function getSessionUser(sessionId) {
     return sessions.get(sessionId)?.user || null;
@@ -220,6 +222,178 @@ function getSessionDisplayName(sessionId) {
 function getSessionPhone(sessionId) {
     const user = getSessionUser(sessionId);
     return user?.phone || (user?.id ? extractNumber(user.id) : null);
+}
+
+function isLidJid(jid) {
+    return typeof jid === 'string' && jid.includes('@lid');
+}
+
+function isUserJid(jid) {
+    return typeof jid === 'string' && jid.includes('@s.whatsapp.net');
+}
+
+function normalizeJid(jid) {
+    if (!jid) return null;
+    if (isLidJid(jid) && jidAliasMap.has(jid)) {
+        return jidAliasMap.get(jid);
+    }
+    return jid;
+}
+
+function registerContactAlias(contact) {
+    if (!contact) return;
+    const candidates = [
+        contact.id,
+        contact.jid,
+        contact.lid,
+        contact.lidJid,
+        contact?.lid?.id,
+        contact?.lid?.jid
+    ].filter(Boolean);
+
+    if (candidates.length < 2) return;
+
+    let lidJid = null;
+    let userJid = null;
+
+    for (const cand of candidates) {
+        if (!lidJid && isLidJid(cand)) lidJid = cand;
+        if (!userJid && isUserJid(cand)) userJid = cand;
+    }
+
+    if (lidJid && userJid) {
+        jidAliasMap.set(lidJid, userJid);
+
+        const primary = Lead.findByJid(userJid) || Lead.findByPhone(extractNumber(userJid));
+        const duplicate = Lead.findByJid(lidJid) || Lead.findByPhone(extractNumber(lidJid));
+
+        if (primary && duplicate && primary.id !== duplicate.id) {
+            mergeLeads(primary, duplicate);
+        } else if (!primary && duplicate) {
+            updateLeadIdentity(duplicate, userJid, extractNumber(userJid));
+        } else if (primary && primary.jid !== userJid) {
+            updateLeadIdentity(primary, userJid, extractNumber(userJid));
+        }
+    }
+}
+
+function resolveMessageJid(msg) {
+    const candidates = [
+        msg?.key?.remoteJid,
+        msg?.key?.participant,
+        msg?.participant,
+        msg?.message?.extendedTextMessage?.contextInfo?.participant,
+        msg?.message?.senderKeyDistributionMessage?.groupId
+    ].filter(Boolean);
+
+    let lidJid = null;
+    let userJid = null;
+
+    for (const jid of candidates) {
+        if (!lidJid && isLidJid(jid)) lidJid = jid;
+        if (!userJid && isUserJid(jid)) userJid = jid;
+    }
+
+    if (lidJid && userJid) {
+        jidAliasMap.set(lidJid, userJid);
+    }
+
+    for (const jid of candidates) {
+        const normalized = normalizeJid(jid);
+        if (normalized && isUserJid(normalized)) {
+            return normalized;
+        }
+    }
+
+    return normalizeJid(msg?.key?.remoteJid);
+}
+
+function mergeConversationsForLeads(primaryLeadId, duplicateLeadId) {
+    const conversations = query(
+        'SELECT id, lead_id, unread_count, updated_at FROM conversations WHERE lead_id IN (?, ?) ORDER BY updated_at DESC',
+        [primaryLeadId, duplicateLeadId]
+    );
+
+    if (!conversations || conversations.length === 0) return;
+
+    const primaryConversation = conversations[0];
+    const primaryConversationId = primaryConversation.id;
+    const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+
+    // Reatribuir mensagens e remover conversas duplicadas
+    for (const conversation of conversations) {
+        if (conversation.id === primaryConversationId) continue;
+        run('UPDATE messages SET conversation_id = ? WHERE conversation_id = ?', [primaryConversationId, conversation.id]);
+        run('DELETE FROM conversations WHERE id = ?', [conversation.id]);
+    }
+
+    // Garantir lead correto na conversa principal
+    run('UPDATE conversations SET lead_id = ?, unread_count = ? WHERE id = ?', [
+        primaryLeadId,
+        totalUnread,
+        primaryConversationId
+    ]);
+}
+
+function mergeLeads(primaryLead, duplicateLead) {
+    if (!primaryLead || !duplicateLead || primaryLead.id === duplicateLead.id) return;
+
+    // Mesclar conversas e mensagens
+    mergeConversationsForLeads(primaryLead.id, duplicateLead.id);
+    run('UPDATE messages SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
+    run('UPDATE conversations SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
+
+    // Remover lead duplicado
+    Lead.delete(duplicateLead.id);
+}
+
+function updateLeadIdentity(lead, jid, phone) {
+    if (!lead || !jid) return lead;
+
+    const cleanedPhone = phone ? String(phone).replace(/\D/g, '') : '';
+    if (!cleanedPhone) return lead;
+
+    const hasChanges = lead.jid !== jid || String(lead.phone || '') !== cleanedPhone;
+    if (!hasChanges) return lead;
+
+    try {
+        run(
+            "UPDATE leads SET jid = ?, phone = ?, phone_formatted = ?, updated_at = datetime('now') WHERE id = ?",
+            [jid, cleanedPhone, cleanedPhone, lead.id]
+        );
+        return Lead.findById(lead.id) || lead;
+    } catch (error) {
+        console.warn('⚠️ Falha ao atualizar identidade do lead:', error.message);
+        return lead;
+    }
+}
+
+function cleanupDuplicateMessages() {
+    try {
+        // Remover duplicados com message_id igual (segurança extra)
+        run(`
+            DELETE FROM messages
+            WHERE message_id IS NOT NULL
+            AND id NOT IN (
+                SELECT MIN(id) FROM messages
+                WHERE message_id IS NOT NULL
+                GROUP BY message_id
+            )
+        `);
+
+        // Remover duplicados sem message_id (mesmo conteúdo no mesmo segundo)
+        run(`
+            DELETE FROM messages
+            WHERE message_id IS NULL
+            AND id NOT IN (
+                SELECT MIN(id) FROM messages
+                WHERE message_id IS NULL
+                GROUP BY conversation_id, lead_id, sender_type, content, media_type, is_from_me, strftime('%Y-%m-%d %H:%M:%S', created_at)
+            )
+        `);
+    } catch (error) {
+        console.warn('⚠️ Falha ao limpar mensagens duplicadas:', error.message);
+    }
 }
 
 function persistWhatsappSession(sessionId, status, options = {}) {
@@ -587,6 +761,20 @@ async function createSession(sessionId, socket, attempt = 0) {
             }
         });
 
+        sock.ev.on('contacts.set', (payload) => {
+            const contacts = payload?.contacts || [];
+            for (const contact of contacts) {
+                registerContactAlias(contact);
+            }
+        });
+
+        sock.ev.on('contacts.upsert', (contacts) => {
+            const list = Array.isArray(contacts) ? contacts : [contacts];
+            for (const contact of list) {
+                registerContactAlias(contact);
+            }
+        });
+
         // Sincronizar lista de chats/contatos
         sock.ev.on('chats.set', (payload) => {
             try {
@@ -833,7 +1021,8 @@ function syncChatsToDatabase(sessionId, payload) {
     const sessionPhone = getSessionPhone(sessionId);
 
     for (const chat of chats) {
-        const jid = chat?.id || chat?.jid;
+        const rawJid = chat?.id || chat?.jid;
+        const jid = normalizeJid(rawJid);
         if (!jid || String(jid).endsWith('@g.us')) continue;
 
         const phone = extractNumber(jid);
@@ -846,6 +1035,19 @@ function syncChatsToDatabase(sessionId, payload) {
         }
 
         let lead = Lead.findByJid(jid) || Lead.findByPhone(phone);
+        if (rawJid && rawJid !== jid) {
+            const aliasLead = Lead.findByJid(rawJid) || Lead.findByPhone(extractNumber(rawJid));
+            if (aliasLead && lead && aliasLead.id !== lead.id) {
+                mergeLeads(lead, aliasLead);
+            } else if (aliasLead && !lead) {
+                lead = updateLeadIdentity(aliasLead, jid, phone);
+            } else if (aliasLead && lead && aliasLead.id === lead.id) {
+                lead = updateLeadIdentity(lead, jid, phone);
+            }
+        }
+        if (lead && lead.jid !== jid) {
+            lead = updateLeadIdentity(lead, jid, phone);
+        }
         if (!lead) {
             lead = Lead.findOrCreate({
                 phone,
@@ -953,7 +1155,8 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
  * Processar mensagem recebida
  */
 async function processIncomingMessage(sessionId, msg) {
-    const from = msg.key.remoteJid;
+    const fromRaw = msg.key.remoteJid;
+    const from = resolveMessageJid(msg);
     const isFromMe = msg.key.fromMe;
     const sessionDisplayName = getSessionDisplayName(sessionId);
     const sessionPhone = getSessionPhone(sessionId);
@@ -980,6 +1183,19 @@ async function processIncomingMessage(sessionId, msg) {
     else if (msg.message?.documentMessage) mediaType = 'document';
     else if (msg.message?.stickerMessage) mediaType = 'sticker';
     
+    if (fromRaw && from && fromRaw !== from) {
+        const resolvedPhone = isUserJid(from) ? extractNumber(from) : null;
+        const primary = Lead.findByJid(from) || (resolvedPhone ? Lead.findByPhone(resolvedPhone) : null);
+        const duplicate = Lead.findByJid(fromRaw) || Lead.findByPhone(extractNumber(fromRaw));
+        if (primary && duplicate && primary.id !== duplicate.id) {
+            mergeLeads(primary, duplicate);
+        } else if (!primary && duplicate && resolvedPhone) {
+            updateLeadIdentity(duplicate, from, resolvedPhone);
+        } else if (primary && !duplicate && resolvedPhone) {
+            updateLeadIdentity(primary, from, resolvedPhone);
+        }
+    }
+
     const phone = extractNumber(from);
     const isSelfChat = sessionPhone && phone === sessionPhone;
     const selfName = sessionDisplayName ? `${sessionDisplayName} (Você)` : 'Você';
@@ -1146,24 +1362,44 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
         });
     }
     
+    const messageId = result?.key?.id;
+    if (!messageId) {
+        console.warn(`[${sessionId}] ⚠️ Mensagem enviada sem id retornado.`);
+        return { ...result, lead, conversation };
+    }
+
+    const existingMessage = Message.findByMessageId(messageId);
+    if (existingMessage) {
+        return { ...result, savedMessage: existingMessage, lead, conversation, deduped: true };
+    }
+
     // Salvar mensagem
-    const savedMessage = Message.create({
-        message_id: result.key.id,
-        conversation_id: conversation.id,
-        lead_id: lead.id,
-        sender_type: 'agent',
-        content: type === 'text' ? message : (options.caption || ''),
-        content_encrypted: encryptMessage(type === 'text' ? message : (options.caption || '')),
-        media_type: type,
-        media_url: type !== 'text' ? (options.url || message) : null,
-        status: 'sent',
-        is_from_me: true,
-        sent_at: new Date().toISOString()
-    });
+    let savedMessage;
+    try {
+        savedMessage = Message.create({
+            message_id: messageId,
+            conversation_id: conversation.id,
+            lead_id: lead.id,
+            sender_type: 'agent',
+            content: type === 'text' ? message : (options.caption || ''),
+            content_encrypted: encryptMessage(type === 'text' ? message : (options.caption || '')),
+            media_type: type,
+            media_url: type !== 'text' ? (options.url || message) : null,
+            status: 'sent',
+            is_from_me: true,
+            sent_at: new Date().toISOString()
+        });
+    } catch (error) {
+        if (String(error.message || '').includes('UNIQUE')) {
+            savedMessage = Message.findByMessageId(messageId);
+        } else {
+            throw error;
+        }
+    }
     
     // Webhook
     webhookService.trigger('message.sent', {
-        messageId: result.key.id,
+        messageId,
         to,
         content: message,
         type
