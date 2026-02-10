@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
+import { brandLogoUrl, brandName } from '../lib/brand';
 
 type LoginGlobals = {
   initLogin?: () => void;
@@ -167,7 +168,7 @@ export default function Login() {
         }
       `}</style>
       <div className="login-container">
-        <div className="login-logo"><img src="/img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></div>
+        <div className="login-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></div>
         <h1 className="login-title">Acesso ao Dashboard</h1>
 
         <div className="auth-tabs">

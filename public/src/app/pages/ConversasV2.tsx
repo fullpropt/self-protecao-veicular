@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
+import { brandLogoUrl, brandName } from '../lib/brand';
 type ConversasV2Globals = {
   initConversasV2?: () => void;
   closeAttachModal?: () => void;
@@ -40,14 +41,14 @@ export default function ConversasV2() {
 
       `}</style>
           <nav className="sidebar">
-              <div className="sidebar-logo"><img src="/img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></div>
+              <div className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></div>
               <ul className="sidebar-menu">
                   <li><Link to="/dashboard"><span className="icon icon-dashboard"></span> Painel de Controle</Link></li>
                   <li><Link to="/funil"><span className="icon icon-funnel"></span> Funil de Vendas</Link></li>
                   <li><Link to="/whatsapp"><span className="icon icon-whatsapp"></span> WhatsApp</Link></li>
                   <li><Link to="/conversas-v2" className="active"><span className="icon icon-message"></span> Conversas</Link></li>
                   <li><Link to="/flow-builder"><span className="icon icon-flows"></span> Fluxos</Link></li>
-                  <li><Link to="/configuracoes"><span className="icon icon-settings"></span> Configurações</Link></li>
+                  <li><Link to="/configuracoes"><span className="icon icon-settings"></span> ConfiguraÃ§Ãµes</Link></li>
               </ul>
               <div className="sidebar-footer">
                   <Link to="/login" className="btn-logout">Sair</Link>
@@ -74,7 +75,7 @@ export default function ConversasV2() {
                           <h2><span className="icon icon-inbox icon-sm"></span> Inbox</h2>
                           <div className="conversations-tabs">
                               <button className="tab-btn active" data-filter="all">Todos</button>
-                              <button className="tab-btn" data-filter="unread">Não lidos</button>
+                              <button className="tab-btn" data-filter="unread">NÃ£o lidos</button>
                               <button className="tab-btn" data-filter="bot">Bot Ativo</button>
                           </div>
                           <div className="search-box">
@@ -90,7 +91,7 @@ export default function ConversasV2() {
                       <div className="empty-state" id="emptyState">
                           <div className="icon icon-empty icon-lg"></div>
                           <h3>Inicie uma conversa</h3>
-                          <p>Selecione um contato na lista ao lado para começar a conversar</p>
+                          <p>Selecione um contato na lista ao lado para comeÃ§ar a conversar</p>
                       </div>
                       
                       <div className="chat-header" id="chatHeader" style={{ display: 'none' }}>
@@ -117,8 +118,8 @@ export default function ConversasV2() {
                       
                       <div className="chat-input-area" id="chatInputArea" style={{ display: 'none' }}>
                           <div className="quick-replies" id="quickReplies">
-                              <button className="quick-reply-btn" data-message="Olá! Tudo bem?"><span className="icon icon-smile icon-sm"></span> Olá!</button>
-                              <button className="quick-reply-btn" data-message="Vou verificar e te retorno em breve!"><span className="icon icon-info icon-sm"></span> Mais informações</button>
+                              <button className="quick-reply-btn" data-message="OlÃ¡! Tudo bem?"><span className="icon icon-smile icon-sm"></span> OlÃ¡!</button>
+                              <button className="quick-reply-btn" data-message="Vou verificar e te retorno em breve!"><span className="icon icon-info icon-sm"></span> Mais informaÃ§Ãµes</button>
                               <button className="quick-reply-btn" data-message="Obrigado pelo contato!"><span className="icon icon-check icon-sm"></span> Agradecer</button>
                               <button className="quick-reply-btn" data-message="Vou retornar em breve!"><span className="icon icon-clock icon-sm"></span> Retorno</button>
                           </div>
@@ -126,7 +127,7 @@ export default function ConversasV2() {
                               <div className="chat-input-actions">
                                   <button id="btnEmoji" title="Emoji"><span className="icon icon-smile icon-sm"></span></button>
                                   <button id="btnAttach" title="Anexar arquivo"><span className="icon icon-attachment icon-sm"></span></button>
-                                  <button id="btnAudio" title="Gravar áudio"><span className="icon icon-message icon-sm"></span></button>
+                                  <button id="btnAudio" title="Gravar Ã¡udio"><span className="icon icon-message icon-sm"></span></button>
                               </div>
                               <div className="chat-input-field">
                                   <textarea id="messageInput" placeholder="Digite sua mensagem..." rows="1"></textarea>

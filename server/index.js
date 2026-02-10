@@ -82,6 +82,7 @@ try {
     cleanupInvalidPhones();
     cleanupEmptyWhatsappLeads();
     cleanupDuplicatePhoneSuffixLeads();
+    cleanupBrokenLeadNames();
 } catch (error) {
     console.error('? Erro ao inicializar banco de dados:', error.message);
 }
@@ -368,18 +369,23 @@ function updateLeadIdentity(lead, jid, phone) {
     const hasChanges = lead.jid !== jid || String(lead.phone || '') !== cleanedPhone;
     if (!hasChanges) return lead;
 
+    const oldPhone = String(lead.phone || '').replace(/\D/g, '');
+    const nameDigits = String(lead.name || '').replace(/\D/g, '');
+    const nextName = nameDigits && nameDigits === oldPhone && nameDigits !== cleanedPhone
+        ? cleanedPhone
+        : lead.name;
+
     try {
         run(
-            "UPDATE leads SET jid = ?, phone = ?, phone_formatted = ?, updated_at = datetime('now') WHERE id = ?",
-            [jid, cleanedPhone, cleanedPhone, lead.id]
+            "UPDATE leads SET jid = ?, phone = ?, phone_formatted = ?, name = ?, updated_at = datetime('now') WHERE id = ?",
+            [jid, cleanedPhone, cleanedPhone, nextName, lead.id]
         );
         return Lead.findById(lead.id) || lead;
     } catch (error) {
-        console.warn('?? Falha ao atualizar identidade do lead:', error.message);
+        console.warn('Falha ao atualizar identidade do lead:', error.message);
         return lead;
     }
 }
-
 function cleanupDuplicateMessages() {
     try {
         // Remover duplicados com message_id igual (segurança extra)
@@ -516,6 +522,33 @@ function cleanupDuplicatePhoneSuffixLeads() {
     }
 }
 
+function cleanupBrokenLeadNames() {
+    try {
+        const leads = query("SELECT id, name, phone FROM leads WHERE name IS NOT NULL");
+        if (!leads || leads.length === 0) return;
+
+        for (const lead of leads) {
+            const fixed = normalizeText(lead.name || '');
+            const nameDigits = String(lead.name || '').replace(/\D/g, '');
+            const phoneDigits = String(lead.phone || '').replace(/\D/g, '');
+            let nextName = lead.name;
+
+            if (fixed && fixed !== lead.name) {
+                nextName = fixed;
+            }
+
+            if (phoneDigits && String(lead.name || '').match(/^\d+$/) && nameDigits !== phoneDigits) {
+                nextName = phoneDigits;
+            }
+
+            if (nextName && nextName !== lead.name) {
+                run("UPDATE leads SET name = ?, updated_at = datetime('now') WHERE id = ?", [nextName, lead.id]);
+            }
+        }
+    } catch (error) {
+        console.warn('Falha ao corrigir nomes de leads:', error.message);
+    }
+}
 function persistWhatsappSession(sessionId, status, options = {}) {
     try {
         const qr_code = options.qr_code || null;
@@ -1307,6 +1340,12 @@ async function processIncomingMessage(sessionId, msg) {
     else if (msg.message?.audioMessage) mediaType = 'audio';
     else if (msg.message?.documentMessage) mediaType = 'document';
     else if (msg.message?.stickerMessage) mediaType = 'sticker';
+
+    if (!text && mediaType !== 'text') {
+        text = previewForMedia(mediaType);
+    }
+    text = normalizeText(text);
+    const pushName = normalizeText(msg.pushName || '');
     
     if (fromRaw && from && fromRaw !== from) {
         const resolvedPhone = isUserJid(from) ? extractNumber(from) : null;
@@ -1335,7 +1374,7 @@ async function processIncomingMessage(sessionId, msg) {
     const { lead, created: leadCreated } = Lead.findOrCreate({
         phone,
         jid: from,
-        name: isSelfChat ? selfName : (!isFromMe ? (msg.pushName || phone) : undefined),
+        name: isSelfChat ? selfName : (!isFromMe ? (pushName || phone) : undefined),
         source: 'whatsapp'
     });
 
@@ -1343,7 +1382,7 @@ async function processIncomingMessage(sessionId, msg) {
         if (!lead.name || lead.name !== selfName) {
             Lead.update(lead.id, { name: selfName });
         }
-    } else if (!isFromMe && msg.pushName) {
+    } else if (!isFromMe && pushName) {
         const shouldUpdateName =
             !lead.name ||
             lead.name === phone ||
@@ -1351,7 +1390,7 @@ async function processIncomingMessage(sessionId, msg) {
             (sessionDisplayName && lead.name === `${sessionDisplayName} (Você)`) ||
             lead.name === 'Você';
         if (shouldUpdateName) {
-            Lead.update(lead.id, { name: msg.pushName });
+            Lead.update(lead.id, { name: pushName });
         }
     }
     
@@ -1620,7 +1659,7 @@ io.on('connection', (socket) => {
     
     socket.on('get-messages', ({ sessionId, contactJid, leadId }) => {
         let messages = [];
-        
+
         if (leadId) {
             messages = Message.listByLead(leadId, { limit: 100 });
         } else if (contactJid) {
@@ -1629,33 +1668,43 @@ io.on('connection', (socket) => {
                 messages = Message.listByLead(lead.id, { limit: 100 });
             }
         }
-        
+
         // Descriptografar mensagens
-        messages = messages.map(m => ({
-            ...m,
-            text: m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content,
-            content: m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content
-        }));
-        
+        messages = messages.map(m => {
+            const raw = m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content;
+            let text = raw;
+            if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
+                text = previewForMedia(m.media_type);
+            }
+            text = normalizeText(text);
+            return {
+                ...m,
+                text,
+                content: text
+            };
+        });
+
         socket.emit('messages-list', { sessionId, contactJid, leadId, messages });
     });
     
     socket.on('get-contacts', ({ sessionId }) => {
         const leads = Lead.list({ limit: 200 });
         const sessionPhone = getSessionPhone(sessionId);
-        const sessionDisplayName = getSessionDisplayName(sessionId) || 'Usuario';
-        
+        const sessionDisplayName = normalizeText(getSessionDisplayName(sessionId) || 'Usuario');
+
         const contacts = leads
             .map(lead => {
                 const lastMsg = Message.getLastByLead(lead.id);
                 if (!lastMsg) return null;
 
-                const preview = lastMsg.content
+                const preview = normalizeText(lastMsg.content
                     ? lastMsg.content.substring(0, 50)
-                    : (lastMsg.media_type ? `[${lastMsg.media_type}]` : 'Sem mensagens');
+                    : (lastMsg.media_type ? previewForMedia(lastMsg.media_type) : 'Sem mensagens'));
 
-                let displayName = lead.name;
-                if (sessionPhone && String(lead.phone || '') === String(sessionPhone)) {
+                let displayName = normalizeText(lead.name);
+                const phoneSuffix = normalizePhoneSuffix(lead.phone);
+                const sessionSuffix = normalizePhoneSuffix(sessionPhone);
+                if (phoneSuffix && sessionSuffix && phoneSuffix === sessionSuffix) {
                     displayName = `${sessionDisplayName} (Você)`;
                 }
 
@@ -1673,7 +1722,7 @@ io.on('connection', (socket) => {
             })
             .filter(Boolean)
             .sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
-        
+
         socket.emit('contacts-list', { sessionId, contacts });
     });
     
@@ -2059,19 +2108,19 @@ app.get('/api/conversations', optionalAuth, (req, res) => {
             lastMessage?.created_at ||
             null;
 
-        let name = c.lead_name;
+        let name = normalizeText(c.lead_name);
         const sessionPhone = getSessionPhone(c.session_id);
         const phoneSuffix = normalizePhoneSuffix(c.phone);
         const sessionSuffix = normalizePhoneSuffix(sessionPhone);
         if (phoneSuffix && sessionSuffix && phoneSuffix === sessionSuffix) {
-            const sessionName = getSessionDisplayName(c.session_id) || 'Usuario';
+            const sessionName = normalizeText(getSessionDisplayName(c.session_id) || 'Usuario');
             name = `${sessionName} (Você)`;
         }
 
         return {
             ...c,
             unread: c.unread_count || 0,
-            lastMessage: lastMessageText,
+            lastMessage: normalizeText(lastMessageText),
             lastMessageAt,
             name,
             phone: c.phone
@@ -2156,12 +2205,20 @@ app.get('/api/messages/:leadId', authenticate, (req, res) => {
     const messages = Message.listByLead(req.params.leadId, { 
         limit: parseInt(req.query.limit) || 100 
     });
-    
-    const decrypted = messages.map(m => ({
-        ...m,
-        content: m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content
-    }));
-    
+
+    const decrypted = messages.map(m => {
+        const raw = m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content;
+        let text = raw;
+        if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
+            text = previewForMedia(m.media_type);
+        }
+        text = normalizeText(text);
+        return {
+            ...m,
+            content: text
+        };
+    });
+
     res.json({ success: true, messages: decrypted });
 });
 
@@ -2589,6 +2646,28 @@ process.on('uncaughtException', (error) => {
         process.exit(0);
     });
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

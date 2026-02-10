@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 
 import { Link } from 'react-router-dom';
+import { brandLogoUrl, brandName } from '../lib/brand';
 type ContatosGlobals = {
   initContacts?: () => void;
   loadContacts?: () => void;
@@ -47,7 +48,7 @@ export default function Contatos() {
           (mod as { initContacts?: () => void }).initContacts?.();
           return;
         }
-        throw new Error('initContacts não está disponível');
+        throw new Error('initContacts nÃ£o estÃ¡ disponÃ­vel');
       } catch (error) {
         if (cancelled) return;
         console.error('Falha ao iniciar Contatos:', error);
@@ -79,7 +80,7 @@ export default function Contatos() {
 
       <aside className="sidebar">
         <div className="sidebar-header">
-          <Link to="/dashboard" className="sidebar-logo"><img src="/img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></Link>
+          <Link to="/dashboard" className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></Link>
         </div>
         <nav className="sidebar-nav">
                             <div className="nav-section">
@@ -102,11 +103,11 @@ export default function Contatos() {
             </ul>
           </div>
           <div className="nav-section">
-            <div className="nav-section-title">Automação</div>
+            <div className="nav-section-title">AutomaÃ§Ã£o</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/automacao" className="nav-link">
-                  <span className="icon icon-automation"></span>Automação
+                  <span className="icon icon-automation"></span>AutomaÃ§Ã£o
                 </Link>
               </li>
               <li className="nav-item">
@@ -131,7 +132,7 @@ export default function Contatos() {
               </li>
               <li className="nav-item">
                 <Link to="/configuracoes" className="nav-link">
-                  <span className="icon icon-settings"></span>Configurações
+                  <span className="icon icon-settings"></span>ConfiguraÃ§Ãµes
                 </Link>
               </li>
             </ul>
@@ -150,7 +151,7 @@ export default function Contatos() {
         {bootError && (
           <div className="card mb-4" style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}>
             <div className="card-body">
-              Não foi possível inicializar os contatos. Abra o console para ver o erro.
+              NÃ£o foi possÃ­vel inicializar os contatos. Abra o console para ver o erro.
             </div>
           </div>
         )}
@@ -222,7 +223,7 @@ export default function Contatos() {
               <span className="icon icon-delete icon-sm"></span> Excluir
             </button>
             <button className="btn btn-sm btn-outline" onClick={() => globals.clearSelection?.()}>
-              <span className="icon icon-close icon-sm"></span> Limpar Seleção
+              <span className="icon icon-close icon-sm"></span> Limpar SeleÃ§Ã£o
             </button>
           </div>
         </div>
@@ -239,7 +240,7 @@ export default function Contatos() {
                 <option value="">Todos os Status</option>
                 <option value="1">Novo</option>
                 <option value="2">Em Andamento</option>
-                <option value="3">Concluído</option>
+                <option value="3">ConcluÃ­do</option>
                 <option value="4">Perdido</option>
               </select>
               <select className="form-select" id="filterTag" onChange={() => globals.filterContacts?.()} style={{ width: 'auto' }}>
@@ -259,12 +260,12 @@ export default function Contatos() {
                   </th>
                   <th>Contato</th>
                   <th>WhatsApp</th>
-                  <th>Veículo</th>
+                  <th>VeÃ­culo</th>
                   <th>Placa</th>
                   <th>Status</th>
                   <th>Tags</th>
-                  <th>Última Interação</th>
-                  <th>Ações</th>
+                  <th>Ãšltima InteraÃ§Ã£o</th>
+                  <th>AÃ§Ãµes</th>
                 </tr>
               </thead>
               <tbody id="contactsTableBody">
@@ -281,10 +282,10 @@ export default function Contatos() {
             <span id="paginationInfo">Mostrando 0 de 0 contatos</span>
             <div style={{ display: 'flex', gap: '5px' }}>
               <button className="btn btn-sm btn-outline" id="prevPage" onClick={() => globals.changePage?.(-1)} disabled>
-                ← Anterior
+                â† Anterior
               </button>
               <button className="btn btn-sm btn-outline" id="nextPage" onClick={() => globals.changePage?.(1)} disabled>
-                Próximo →
+                PrÃ³ximo â†’
               </button>
             </div>
           </div>
@@ -295,7 +296,7 @@ export default function Contatos() {
         <div className="modal">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Novo Contato</h3>
-            <button className="modal-close" onClick={() => globals.closeModal?.('addContactModal')}>×</button>
+            <button className="modal-close" onClick={() => globals.closeModal?.('addContactModal')}>Ã—</button>
           </div>
           <div className="modal-body">
             <form id="addContactForm">
@@ -306,11 +307,11 @@ export default function Contatos() {
               <div className="form-group">
                 <label className="form-label required">WhatsApp</label>
                 <input type="tel" className="form-input" id="contactPhone" required placeholder="27999999999" />
-                <p className="form-help">Apenas números com DDD</p>
+                <p className="form-help">Apenas nÃºmeros com DDD</p>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Veículo</label>
+                  <label className="form-label">VeÃ­culo</label>
                   <input type="text" className="form-input" id="contactVehicle" placeholder="Ex: Honda Civic 2020" />
                 </div>
                 <div className="form-group">
@@ -328,7 +329,7 @@ export default function Contatos() {
                   <select className="form-select" id="contactStatus">
                     <option value="1">Novo</option>
                     <option value="2">Em Andamento</option>
-                    <option value="3">Concluído</option>
+                    <option value="3">ConcluÃ­do</option>
                     <option value="4">Perdido</option>
                   </select>
                 </div>
@@ -338,14 +339,14 @@ export default function Contatos() {
                     <option value="manual">Manual</option>
                     <option value="whatsapp">WhatsApp</option>
                     <option value="site">Site</option>
-                    <option value="indicacao">Indicação</option>
+                    <option value="indicacao">IndicaÃ§Ã£o</option>
                     <option value="outro">Outro</option>
                   </select>
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Observações</label>
-                <textarea className="form-textarea" id="contactNotes" rows={3} placeholder="Anotações sobre o contato..."></textarea>
+                <label className="form-label">ObservaÃ§Ãµes</label>
+                <textarea className="form-textarea" id="contactNotes" rows={3} placeholder="AnotaÃ§Ãµes sobre o contato..."></textarea>
               </div>
             </form>
           </div>
@@ -360,15 +361,15 @@ export default function Contatos() {
         <div className="modal modal-lg">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-edit icon-sm"></span> Editar Contato</h3>
-            <button className="modal-close" onClick={() => globals.closeModal?.('editContactModal')}>×</button>
+            <button className="modal-close" onClick={() => globals.closeModal?.('editContactModal')}>Ã—</button>
           </div>
           <div className="modal-body">
             <div className="tabs">
               <button className="tab active" data-tab="info" onClick={() => globals.switchTab?.('info')}>
-                <span className="icon icon-info icon-sm"></span> Informações
+                <span className="icon icon-info icon-sm"></span> InformaÃ§Ãµes
               </button>
               <button className="tab" data-tab="history" onClick={() => globals.switchTab?.('history')}>
-                <span className="icon icon-clock icon-sm"></span> Histórico
+                <span className="icon icon-clock icon-sm"></span> HistÃ³rico
               </button>
               <button className="tab" data-tab="messages" onClick={() => globals.switchTab?.('messages')}>
                 <span className="icon icon-message icon-sm"></span> Mensagens
@@ -390,7 +391,7 @@ export default function Contatos() {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Veículo</label>
+                    <label className="form-label">VeÃ­culo</label>
                     <input type="text" className="form-input" id="editContactVehicle" />
                   </div>
                   <div className="form-group">
@@ -408,13 +409,13 @@ export default function Contatos() {
                     <select className="form-select" id="editContactStatus">
                       <option value="1">Novo</option>
                       <option value="2">Em Andamento</option>
-                      <option value="3">Concluído</option>
+                      <option value="3">ConcluÃ­do</option>
                       <option value="4">Perdido</option>
                     </select>
                   </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Observações</label>
+                  <label className="form-label">ObservaÃ§Ãµes</label>
                   <textarea className="form-textarea" id="editContactNotes" rows={3}></textarea>
                 </div>
               </form>
@@ -423,7 +424,7 @@ export default function Contatos() {
             <div className="tab-content" id="tab-history" data-tab-content="history">
               <div id="contactHistory" className="empty-state">
                 <div className="empty-state-icon icon icon-clock icon-lg"></div>
-                <p>Nenhum histórico disponível</p>
+                <p>Nenhum histÃ³rico disponÃ­vel</p>
               </div>
             </div>
 
@@ -439,7 +440,7 @@ export default function Contatos() {
             <button className="btn btn-whatsapp" onClick={() => globals.openWhatsApp?.()}>
               <span className="icon icon-whatsapp icon-sm"></span> WhatsApp
             </button>
-            <button className="btn btn-primary" onClick={() => globals.updateContact?.()}>Salvar Alterações</button>
+            <button className="btn btn-primary" onClick={() => globals.updateContact?.()}>Salvar AlteraÃ§Ãµes</button>
           </div>
         </div>
       </div>
@@ -448,7 +449,7 @@ export default function Contatos() {
         <div className="modal modal-lg">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-import icon-sm"></span> Importar Contatos</h3>
-            <button className="modal-close" onClick={() => globals.closeModal?.('importModal')}>×</button>
+            <button className="modal-close" onClick={() => globals.closeModal?.('importModal')}>Ã—</button>
           </div>
           <div className="modal-body">
             <div className="form-group">
@@ -463,7 +464,7 @@ export default function Contatos() {
                 id="importText"
                 rows={8}
                 placeholder={`nome,telefone,veiculo,placa
-João Silva,27999999999,Honda Civic,ABC1234`}
+JoÃ£o Silva,27999999999,Honda Civic,ABC1234`}
               ></textarea>
             </div>
             <div className="form-group">
@@ -485,11 +486,11 @@ João Silva,27999999999,Honda Civic,ABC1234`}
         <div className="modal modal-lg">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-whatsapp icon-sm"></span> Enviar Mensagem em Lote</h3>
-            <button className="modal-close" onClick={() => globals.closeModal?.('bulkMessageModal')}>×</button>
+            <button className="modal-close" onClick={() => globals.closeModal?.('bulkMessageModal')}>Ã—</button>
           </div>
           <div className="modal-body">
             <div className="form-group">
-              <label className="form-label">Destinatários</label>
+              <label className="form-label">DestinatÃ¡rios</label>
               <p className="text-muted"><span id="bulkRecipients">0</span> contatos selecionados</p>
             </div>
             <div className="form-group">
@@ -507,7 +508,7 @@ João Silva,27999999999,Honda Civic,ABC1234`}
                 placeholder={`Digite a mensagem...
 Use {{nome}} para personalizar`}
               ></textarea>
-              <p className="form-help">{'Variáveis: {{nome}}, {{veiculo}}, {{placa}}'}</p>
+              <p className="form-help">{'VariÃ¡veis: {{nome}}, {{veiculo}}, {{placa}}'}</p>
             </div>
             <div className="form-row">
               <div className="form-group">
@@ -521,7 +522,7 @@ Use {{nome}} para personalizar`}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Início</label>
+                <label className="form-label">InÃ­cio</label>
                 <select className="form-select" id="bulkStart">
                   <option value="now">Imediatamente</option>
                   <option value="scheduled">Agendar</option>

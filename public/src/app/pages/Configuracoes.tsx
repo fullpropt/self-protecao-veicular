@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+Ôªøimport { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
+import { brandLogoUrl, brandName } from '../lib/brand';
 type ConfiguracoesGlobals = {
   initConfiguracoes?: () => void;
   showPanel?: (panel: string) => void;
@@ -147,7 +148,7 @@ export default function Configuracoes() {
       
           <aside className="sidebar">
               <div className="sidebar-header">
-                  <Link to="/dashboard" className="sidebar-logo"><img src="/img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></Link>
+                  <Link to="/dashboard" className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></Link>
               </div>
               <nav className="sidebar-nav">
                                     <div className="nav-section">
@@ -165,9 +166,9 @@ export default function Configuracoes() {
                       </ul>
                   </div>
                   <div className="nav-section">
-                      <div className="nav-section-title">AutomaÁ„o</div>
+                      <div className="nav-section-title">Automa√ß√£o</div>
                       <ul className="nav-menu">
-                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>AutomaÁ„o</Link></li>
+                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>Automa√ß√£o</Link></li>
                           <li className="nav-item"><Link to="/fluxos" className="nav-link"><span className="icon icon-flows"></span>Fluxos de Conversa</Link></li>
                           <li className="nav-item"><Link to="/funil" className="nav-link"><span className="icon icon-funnel"></span>Funil de Vendas</Link></li>
                       </ul>
@@ -176,7 +177,7 @@ export default function Configuracoes() {
                       <div className="nav-section-title">Sistema</div>
                       <ul className="nav-menu">
                           <li className="nav-item"><Link to="/whatsapp" className="nav-link"><span className="icon icon-whatsapp"></span>WhatsApp</Link></li>
-                          <li className="nav-item"><Link to="/configuracoes" className="nav-link active"><span className="icon icon-settings"></span>ConfiguraÁıes</Link></li>
+                          <li className="nav-item"><Link to="/configuracoes" className="nav-link active"><span className="icon icon-settings"></span>Configura√ß√µes</Link></li>
                       </ul>
                   </div>
               </nav>
@@ -192,50 +193,50 @@ export default function Configuracoes() {
           <main className="main-content">
               <div className="page-header">
                   <div className="page-title">
-                      <h1><span className="icon icon-settings icon-sm"></span> ConfiguraÁıes</h1>
-                      <p>Gerencie as configuraÁıes do sistema</p>
+                      <h1><span className="icon icon-settings icon-sm"></span> Configura√ß√µes</h1>
+                      <p>Gerencie as configura√ß√µes do sistema</p>
                   </div>
               </div>
       
               <div className="settings-container">
                   <nav className="settings-nav">
-                      <div className="settings-nav-item active" onClick={() => globals.showPanel?.('conexao')}><span className="icon icon-whatsapp icon-sm"></span> Conex„o</div>
+                      <div className="settings-nav-item active" onClick={() => globals.showPanel?.('conexao')}><span className="icon icon-whatsapp icon-sm"></span> Conex√£o</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('general')}><span className="icon icon-building icon-sm"></span> Campos</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Etiquetas</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas r·pidas</div>
+                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas r√°pidas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('team')}><span className="icon icon-contacts icon-sm"></span> Equipe</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Hor·rios</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('flows')}><span className="icon icon-flows icon-sm"></span> Fluxos Padrıes</div>
+                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Hor√°rios</div>
+                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('flows')}><span className="icon icon-flows icon-sm"></span> Fluxos Padr√µes</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('funnel')}><span className="icon icon-funnel icon-sm"></span> Funil de Vendas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('copys')}><span className="icon icon-templates icon-sm"></span> Copys e Mensagens</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('whatsapp')}><span className="icon icon-whatsapp icon-sm"></span> WhatsApp</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('notifications')}><span className="icon icon-bell icon-sm"></span> NotificaÁıes</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('users')}><span className="icon icon-user icon-sm"></span> Usu·rios</div>
+                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('notifications')}><span className="icon icon-bell icon-sm"></span> Notifica√ß√µes</div>
+                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('users')}><span className="icon icon-user icon-sm"></span> Usu√°rios</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('api')}><span className="icon icon-plug icon-sm"></span> API e Webhooks</div>
                   </nav>
       
                   <div className="settings-panels">
                       <div className="settings-panel active" id="panel-conexao">
-                          <h3 className="settings-section-title">Conex„o</h3>
+                          <h3 className="settings-section-title">Conex√£o</h3>
                           <div className="connection-status-card" id="connectionStatusCard">
                               <div className="connection-success" id="connectionSuccess" style={{ display: 'none' }}>
                                   <div className="connection-icon success">?</div>
-                                  <h4>AutomaÁ„o est· ligada</h4>
-                                  <p>O n˙mero de WhatsApp <strong id="connectedPhone">+55...</strong> est· conectado ‡ Companhia.</p>
-                                  <p className="connection-info">Seu WhatsApp foi conectado com sucesso. AutomaÁ„o continuar· funcionando mesmo com o celular desligado. PorÈm, se vocÍ n„o acessar o aplicativo do WhatsApp nos prÛximos 14 dias, seu telefone ser· desconectado automaticamente pelo WhatsApp por motivos de seguranÁa.</p>
+                                  <h4>Automa√ß√£o est√° ligada</h4>
+                                  <p>O n√∫mero de WhatsApp <strong id="connectedPhone">+55...</strong> est√° conectado √† Companhia.</p>
+                                  <p className="connection-info">Seu WhatsApp foi conectado com sucesso. Automa√ß√£o continuar√° funcionando mesmo com o celular desligado. Por√©m, se voc√™ n√£o acessar o aplicativo do WhatsApp nos pr√≥ximos 14 dias, seu telefone ser√° desconectado automaticamente pelo WhatsApp por motivos de seguran√ßa.</p>
                                   <button className="btn btn-danger" onClick={() => globals.disconnectWhatsApp?.()}>Desconectar</button>
                               </div>
                               <div className="connection-disconnected" id="connectionDisconnected">
                                   <div className="connection-icon disconnected">!</div>
                                   <h4>WhatsApp desconectado</h4>
-                                  <p>Conecte seu WhatsApp em <Link to="/whatsapp">WhatsApp ? Conectar</Link> para ativar a automaÁ„o.</p>
+                                  <p>Conecte seu WhatsApp em <Link to="/whatsapp">WhatsApp ? Conectar</Link> para ativar a automa√ß√£o.</p>
                               </div>
                           </div>
                       </div>
       
                       <div className="settings-panel" id="panel-general">
                           <div className="settings-section">
-                              <h3 className="settings-section-title"><span className="icon icon-building icon-sm"></span> InformaÁıes da Empresa</h3>
+                              <h3 className="settings-section-title"><span className="icon icon-building icon-sm"></span> Informa√ß√µes da Empresa</h3>
                               <div className="form-group">
                                   <label className="form-label">Nome da Empresa</label>
                                   <input type="text" className="form-input" id="companyName" defaultValue="ZapVender" />
@@ -255,14 +256,14 @@ export default function Configuracoes() {
                                   <input type="email" className="form-input" id="companyEmail" placeholder="contato@empresa.com" />
                               </div>
                           </div>
-                          <button className="btn btn-primary" onClick={() => globals.saveGeneralSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar ConfiguraÁıes</button>
+                          <button className="btn btn-primary" onClick={() => globals.saveGeneralSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar Configura√ß√µes</button>
                       </div>
       
                       <div className="settings-panel" id="panel-labels"><h3 className="settings-section-title">Etiquetas</h3><p className="text-muted">Em breve.</p></div>
-                      <div className="settings-panel" id="panel-quick"><h3 className="settings-section-title">Respostas r·pidas</h3><p className="text-muted">Em breve.</p></div>
+                      <div className="settings-panel" id="panel-quick"><h3 className="settings-section-title">Respostas r√°pidas</h3><p className="text-muted">Em breve.</p></div>
                       <div className="settings-panel" id="panel-team"><h3 className="settings-section-title">Equipe</h3><p className="text-muted">Em breve.</p></div>
-                      <div className="settings-panel" id="panel-hours"><h3 className="settings-section-title">Hor·rios</h3><p className="text-muted">Em breve.</p></div>
-                      <div className="settings-panel" id="panel-flows"><h3 className="settings-section-title">Fluxos Padrıes</h3><p className="text-muted">Em breve.</p></div>
+                      <div className="settings-panel" id="panel-hours"><h3 className="settings-section-title">Hor√°rios</h3><p className="text-muted">Em breve.</p></div>
+                      <div className="settings-panel" id="panel-flows"><h3 className="settings-section-title">Fluxos Padr√µes</h3><p className="text-muted">Em breve.</p></div>
       
                       <div className="settings-panel" id="panel-funnel">
                           <div className="settings-section">
@@ -283,8 +284,8 @@ export default function Configuracoes() {
                                           </div>
                                       </div>
                                       <div className="form-group">
-                                          <label className="form-label">DescriÁ„o</label>
-                                          <input type="text" className="form-input" defaultValue="Lead recÈm cadastrado" id="funnel1Desc" />
+                                          <label className="form-label">Descri√ß√£o</label>
+                                          <input type="text" className="form-input" defaultValue="Lead rec√©m cadastrado" id="funnel1Desc" />
                                       </div>
                                   </div>
       
@@ -301,8 +302,8 @@ export default function Configuracoes() {
                                           </div>
                                       </div>
                                       <div className="form-group">
-                                          <label className="form-label">DescriÁ„o</label>
-                                          <input type="text" className="form-input" defaultValue="Em negociaÁ„o" id="funnel2Desc" />
+                                          <label className="form-label">Descri√ß√£o</label>
+                                          <input type="text" className="form-input" defaultValue="Em negocia√ß√£o" id="funnel2Desc" />
                                       </div>
                                   </div>
       
@@ -311,7 +312,7 @@ export default function Configuracoes() {
                                       <div className="form-row">
                                           <div className="form-group">
                                               <label className="form-label">Nome</label>
-                                              <input type="text" className="form-input" defaultValue="ConcluÌdo" id="funnel3Name" />
+                                              <input type="text" className="form-input" defaultValue="Conclu√≠do" id="funnel3Name" />
                                           </div>
                                           <div className="form-group">
                                               <label className="form-label">Cor</label>
@@ -319,7 +320,7 @@ export default function Configuracoes() {
                                           </div>
                                       </div>
                                       <div className="form-group">
-                                          <label className="form-label">DescriÁ„o</label>
+                                          <label className="form-label">Descri√ß√£o</label>
                                           <input type="text" className="form-input" defaultValue="Venda realizada" id="funnel3Desc" />
                                       </div>
                                   </div>
@@ -337,8 +338,8 @@ export default function Configuracoes() {
                                           </div>
                                       </div>
                                       <div className="form-group">
-                                          <label className="form-label">DescriÁ„o</label>
-                                          <input type="text" className="form-input" defaultValue="N„o converteu" id="funnel4Desc" />
+                                          <label className="form-label">Descri√ß√£o</label>
+                                          <input type="text" className="form-input" defaultValue="N√£o converteu" id="funnel4Desc" />
                                       </div>
                                   </div>
                               </div>
@@ -374,7 +375,7 @@ export default function Configuracoes() {
 
                       <div className="settings-panel" id="panel-whatsapp">
                           <div className="settings-section">
-                              <h3 className="settings-section-title"><span className="icon icon-whatsapp icon-sm"></span> Conex„o WhatsApp</h3>
+                              <h3 className="settings-section-title"><span className="icon icon-whatsapp icon-sm"></span> Conex√£o WhatsApp</h3>
                               <div className="alert alert-info mb-4">
                                   <strong>Status:</strong> <span id="whatsappStatusText">Verificando...</span>
                               </div>
@@ -389,30 +390,30 @@ export default function Configuracoes() {
                           </div>
       
                           <div className="settings-section">
-                              <h3 className="settings-section-title"><span className="icon icon-settings icon-sm"></span> ConfiguraÁıes de Envio</h3>
+                              <h3 className="settings-section-title"><span className="icon icon-settings icon-sm"></span> Configura√ß√µes de Envio</h3>
                               <div className="form-group">
                                   <label className="form-label">Intervalo entre mensagens (segundos)</label>
                                   <input type="number" className="form-input" id="messageInterval" defaultValue="30" min="10" max="300" />
-                                  <small className="text-muted">MÌnimo: 10s | M·ximo: 300s</small>
+                                  <small className="text-muted">M√≠nimo: 10s | M√°ximo: 300s</small>
                               </div>
                               <div className="form-group">
                                   <label className="form-label">Limite de mensagens por hora</label>
                                   <input type="number" className="form-input" id="messagesPerHour" defaultValue="60" min="10" max="200" />
                               </div>
                               <div className="form-group">
-                                  <label className="form-label">Hor·rio de funcionamento</label>
+                                  <label className="form-label">Hor√°rio de funcionamento</label>
                                   <div className="form-row">
                                       <input type="time" className="form-input" id="workStart" defaultValue="08:00" />
                                       <input type="time" className="form-input" id="workEnd" defaultValue="18:00" />
                                   </div>
                               </div>
                           </div>
-                          <button className="btn btn-primary" onClick={() => globals.saveWhatsAppSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar ConfiguraÁıes</button>
+                          <button className="btn btn-primary" onClick={() => globals.saveWhatsAppSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar Configura√ß√µes</button>
                       </div>
       
                       <div className="settings-panel" id="panel-notifications">
                           <div className="settings-section">
-                              <h3 className="settings-section-title"><span className="icon icon-bell icon-sm"></span> PreferÍncias de NotificaÁ„o</h3>
+                              <h3 className="settings-section-title"><span className="icon icon-bell icon-sm"></span> Prefer√™ncias de Notifica√ß√£o</h3>
                               <div className="form-group">
                                   <label className="checkbox-wrapper">
                                       <input type="checkbox" id="notifyNewLead" checked />
@@ -431,25 +432,25 @@ export default function Configuracoes() {
                                   <label className="checkbox-wrapper">
                                       <input type="checkbox" id="notifySound" checked />
                                       <span className="checkbox-custom"></span>
-                                      Som de notificaÁ„o
+                                      Som de notifica√ß√£o
                                   </label>
                               </div>
                           </div>
-                          <button className="btn btn-primary" onClick={() => globals.saveNotificationSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar NotificaÁıes</button>
+                          <button className="btn btn-primary" onClick={() => globals.saveNotificationSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar Notifica√ß√µes</button>
                       </div>
       
                       <div className="settings-panel" id="panel-users">
                           <div className="settings-section">
-                              <h3 className="settings-section-title"><span className="icon icon-user icon-sm"></span> Gerenciar Usu·rios</h3>
+                              <h3 className="settings-section-title"><span className="icon icon-user icon-sm"></span> Gerenciar Usu√°rios</h3>
                               <div className="table-container">
                                   <table className="data-table">
                                       <thead>
                                           <tr>
                                               <th>Nome</th>
                                               <th>E-mail</th>
-                                              <th>FunÁ„o</th>
+                                              <th>Fun√ß√£o</th>
                                               <th>Status</th>
-                                              <th>AÁıes</th>
+                                              <th>A√ß√µes</th>
                                           </tr>
                                       </thead>
                                       <tbody id="usersTableBody">
@@ -463,7 +464,7 @@ export default function Configuracoes() {
                                       </tbody>
                                   </table>
                               </div>
-                              <button className="btn btn-primary mt-4" onClick={() => globals.openModal?.('addUserModal')}><span className="icon icon-add icon-sm"></span> Adicionar Usu·rio</button>
+                              <button className="btn btn-primary mt-4" onClick={() => globals.openModal?.('addUserModal')}><span className="icon icon-add icon-sm"></span> Adicionar Usu√°rio</button>
                           </div>
       
                           <div className="settings-section">
@@ -499,7 +500,7 @@ export default function Configuracoes() {
       
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-link icon-sm"></span> Webhooks</h3>
-                              <p className="text-muted mb-4">Configure URLs para receber notificaÁıes de eventos.</p>
+                              <p className="text-muted mb-4">Configure URLs para receber notifica√ß√µes de eventos.</p>
                               <div className="form-group">
                                   <label className="form-label">URL do Webhook (Novo Lead)</label>
                                   <input type="url" className="form-input" id="webhookNewLead" placeholder="https://seu-site.com/webhook/new-lead" />
@@ -510,7 +511,7 @@ export default function Configuracoes() {
                               </div>
                               <button className="btn btn-outline" onClick={() => globals.testWebhook?.()}>Testar Webhook</button>
                           </div>
-                          <button className="btn btn-primary" onClick={() => globals.saveApiSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar ConfiguraÁıes</button>
+                          <button className="btn btn-primary" onClick={() => globals.saveApiSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar Configura√ß√µes</button>
                       </div>
                   </div>
               </div>
@@ -519,8 +520,8 @@ export default function Configuracoes() {
           <div className="modal-overlay" id="addUserModal">
               <div className="modal">
                   <div className="modal-header">
-                      <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Adicionar Usu·rio</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('addUserModal')}>◊</button>
+                      <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Adicionar Usu√°rio</h3>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('addUserModal')}>√ó</button>
                   </div>
                   <div className="modal-body">
                       <div className="form-group">
@@ -536,9 +537,9 @@ export default function Configuracoes() {
                           <input type="password" className="form-input" id="newUserPassword" required />
                       </div>
                       <div className="form-group">
-                          <label className="form-label">FunÁ„o</label>
+                          <label className="form-label">Fun√ß√£o</label>
                           <select className="form-select" id="newUserRole">
-                              <option value="user">Usu·rio</option>
+                              <option value="user">Usu√°rio</option>
                               <option value="admin">Administrador</option>
                           </select>
                       </div>
@@ -554,18 +555,18 @@ export default function Configuracoes() {
               <div className="modal">
                   <div className="modal-header">
                       <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Novo Template</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('addTemplateModal')}>◊</button>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('addTemplateModal')}>√ó</button>
                   </div>
                   <div className="modal-body">
                       <div className="form-group">
                           <label className="form-label required">Nome do Template</label>
-                          <input type="text" className="form-input" id="newTemplateName" required placeholder="Ex: PromoÁ„o" />
+                          <input type="text" className="form-input" id="newTemplateName" required placeholder="Ex: Promo√ß√£o" />
                       </div>
                       <div className="form-group">
                           <label className="form-label required">Tipo</label>
                           <select className="form-select" id="newTemplateType" onChange={() => globals.updateNewTemplateForm?.()}>
                               <option value="text">Texto</option>
-                              <option value="audio">¡udio</option>
+                              <option value="audio">√Åudio</option>
                           </select>
                       </div>
                       <div className="form-group">
@@ -574,9 +575,9 @@ export default function Configuracoes() {
                               <textarea className="form-textarea" id="newTemplateMessage" rows="6" required placeholder="Digite a mensagem..."></textarea>
                           </div>
                           <div id="newTemplateAudioGroup" style={{ display: 'none' }}>
-                              <label className="form-label required">Arquivo de ·udio</label>
+                              <label className="form-label required">Arquivo de √°udio</label>
                               <input type="file" className="form-input" id="newTemplateAudio" accept="audio/*" />
-                              <small className="text-muted">Envie um ·udio (ogg/mp3/wav). Ele ficar· salvo para uso no Inbox.</small>
+                              <small className="text-muted">Envie um √°udio (ogg/mp3/wav). Ele ficar√° salvo para uso no Inbox.</small>
                           </div>
                       </div>
                   </div>

@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
+import { brandLogoUrl, brandName } from '../lib/brand';
 type FluxosGlobals = {
   initFluxos?: () => void;
   loadFlows?: () => void;
@@ -158,12 +159,12 @@ export default function Fluxos() {
             gap: 5px;
         }
       `}</style>
-      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
+      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>â˜°</button>
           <div className="sidebar-overlay"></div>
       
           <aside className="sidebar">
               <div className="sidebar-header">
-                  <Link to="/dashboard" className="sidebar-logo"><img src="/img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></Link>
+                  <Link to="/dashboard" className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></Link>
               </div>
               <nav className="sidebar-nav">
                                     <div className="nav-section">
@@ -181,9 +182,9 @@ export default function Fluxos() {
                       </ul>
                   </div>
                   <div className="nav-section">
-                      <div className="nav-section-title">Automação</div>
+                      <div className="nav-section-title">AutomaÃ§Ã£o</div>
                       <ul className="nav-menu">
-                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>Automação</Link></li>
+                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>AutomaÃ§Ã£o</Link></li>
                           <li className="nav-item"><Link to="/fluxos" className="nav-link active"><span className="icon icon-flows"></span>Fluxos de Conversa</Link></li>
                           <li className="nav-item"><Link to="/funil" className="nav-link"><span className="icon icon-funnel"></span>Funil de Vendas</Link></li>
                       </ul>
@@ -192,7 +193,7 @@ export default function Fluxos() {
                       <div className="nav-section-title">Sistema</div>
                       <ul className="nav-menu">
                           <li className="nav-item"><Link to="/whatsapp" className="nav-link"><span className="icon icon-whatsapp"></span>WhatsApp</Link></li>
-                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>Configurações</Link></li>
+                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>ConfiguraÃ§Ãµes</Link></li>
                       </ul>
                   </div>
               </nav>
@@ -209,7 +210,7 @@ export default function Fluxos() {
               <div className="page-header">
                   <div className="page-title">
                       <h1><span className="icon icon-flows icon-sm"></span> Fluxos de Conversa</h1>
-                      <p>Crie sequências de mensagens automáticas</p>
+                      <p>Crie sequÃªncias de mensagens automÃ¡ticas</p>
                   </div>
                   <div className="page-actions">
                       <button className="btn btn-outline" onClick={() => globals.loadFlows?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
@@ -260,14 +261,14 @@ export default function Fluxos() {
               <div className="modal modal-lg">
                   <div className="modal-header">
                       <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Novo Fluxo de Conversa</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('newFlowModal')}>×</button>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('newFlowModal')}>Ã—</button>
                   </div>
                   <div className="modal-body">
                       <form id="flowForm">
                           <div className="form-row">
                               <div className="form-group">
                                   <label className="form-label required">Nome do Fluxo</label>
-                                  <input type="text" className="form-input" id="flowName" required placeholder="Ex: Sequência de Boas-vindas" />
+                                  <input type="text" className="form-input" id="flowName" required placeholder="Ex: SequÃªncia de Boas-vindas" />
                               </div>
                               <div className="form-group">
                                   <label className="form-label">Gatilho</label>
@@ -280,7 +281,7 @@ export default function Fluxos() {
                           </div>
                           
                           <div className="form-group">
-                              <label className="form-label">Descrição</label>
+                              <label className="form-label">DescriÃ§Ã£o</label>
                               <textarea className="form-textarea" id="flowDescription" rows="2" placeholder="Descreva o objetivo deste fluxo"></textarea>
                           </div>
       
@@ -294,7 +295,7 @@ export default function Fluxos() {
                                   <div className="step-item-content">
                                       <div className="form-group" style={{ marginBottom: '10px' }}>
                                           <label className="form-label">Mensagem</label>
-                                          <textarea className="form-textarea step-message" rows="3" placeholder="Olá {{nome}}! Seja bem-vindo..."></textarea>
+                                          <textarea className="form-textarea step-message" rows="3" placeholder="OlÃ¡ {{nome}}! Seja bem-vindo..."></textarea>
                                       </div>
                                       <div className="form-row">
                                           <div className="form-group">
@@ -308,10 +309,10 @@ export default function Fluxos() {
                                               </select>
                                           </div>
                                           <div className="form-group">
-                                              <label className="form-label">Condição</label>
+                                              <label className="form-label">CondiÃ§Ã£o</label>
                                               <select className="form-select step-condition">
                                                   <option value="always">Sempre enviar</option>
-                                                  <option value="no_reply">Se não responder</option>
+                                                  <option value="no_reply">Se nÃ£o responder</option>
                                                   <option value="replied">Se responder</option>
                                               </select>
                                           </div>
@@ -339,14 +340,14 @@ export default function Fluxos() {
               <div className="modal modal-xl">
                   <div className="modal-header">
                       <h3 className="modal-title" id="editorTitle"><span className="icon icon-edit icon-sm"></span> Editor de Fluxo</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('flowEditorModal')}>×</button>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('flowEditorModal')}>Ã—</button>
                   </div>
                   <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                       <div id="flowEditorContent"></div>
                   </div>
                   <div className="modal-footer">
                       <button className="btn btn-outline" onClick={() => globals.closeModal?.('flowEditorModal')}>Cancelar</button>
-                      <button className="btn btn-primary" onClick={() => globals.saveFlowChanges?.()}><span className="icon icon-save icon-sm"></span> Salvar Alterações</button>
+                      <button className="btn btn-primary" onClick={() => globals.saveFlowChanges?.()}><span className="icon icon-save icon-sm"></span> Salvar AlteraÃ§Ãµes</button>
                   </div>
               </div>
           </div>

@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
+import { brandLogoUrl, brandName } from '../lib/brand';
 type WhatsappGlobals = {
   initWhatsapp?: () => void;
   startConnection?: () => void;
@@ -616,7 +617,7 @@ export default function Whatsapp() {
 
       <aside className="sidebar" id="sidebar">
         <div className="sidebar-header">
-          <Link to="/dashboard" className="sidebar-logo"><img src="/img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></Link>
+          <Link to="/dashboard" className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></Link>
         </div>
         <nav className="sidebar-nav">
           <div className="nav-section">
@@ -652,11 +653,11 @@ export default function Whatsapp() {
           </div>
 
           <div className="nav-section">
-            <div className="nav-section-title">Automação</div>
+            <div className="nav-section-title">AutomaÃ§Ã£o</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/automacao" className="nav-link">
-                  <span className="icon icon-automation"></span>Automação
+                  <span className="icon icon-automation"></span>AutomaÃ§Ã£o
                 </Link>
               </li>
               <li className="nav-item">
@@ -682,7 +683,7 @@ export default function Whatsapp() {
               </li>
               <li className="nav-item">
                 <Link to="/configuracoes" className="nav-link">
-                  <span className="icon icon-settings"></span>Configurações
+                  <span className="icon icon-settings"></span>ConfiguraÃ§Ãµes
                 </Link>
               </li>
             </ul>
@@ -703,7 +704,7 @@ export default function Whatsapp() {
                       <h1>WhatsApp</h1>
                       <p>Conecte e gerencie suas mensagens</p>
                       <div className="whatsapp-tabs">
-                          <Link to="/whatsapp" className="whatsapp-tab active">Conexão</Link>
+                          <Link to="/whatsapp" className="whatsapp-tab active">ConexÃ£o</Link>
                           <Link to="/inbox" className="whatsapp-tab">Conversas</Link>
                       </div>
                   </div>
@@ -718,7 +719,7 @@ export default function Whatsapp() {
                   <div className="card">
                       <div className="card-header">
                           <div className="card-header-icon green"><span className="icon icon-whatsapp"></span></div>
-                          <h2>Conexão WhatsApp</h2>
+                          <h2>ConexÃ£o WhatsApp</h2>
                       </div>
                       
                       <div className="card-body">
@@ -728,13 +729,13 @@ export default function Whatsapp() {
                                       <div id="qr-code">
                                           <div className="qr-loading">
                                               <div className="spinner"></div>
-                                              <p>Aguardando conexão...</p>
+                                              <p>Aguardando conexÃ£o...</p>
                                           </div>
                                       </div>
                                   </div>
                                   
                                   <p className="qr-timer" id="qr-timer" style={{ display: 'none' }}>
-                                      Por segurança, o QR Code será atualizado em <strong id="timer-countdown">30</strong> segundos
+                                      Por seguranÃ§a, o QR Code serÃ¡ atualizado em <strong id="timer-countdown">30</strong> segundos
                                   </p>
                                   
                                   <button className="btn btn-whatsapp" id="connect-btn" onClick={() => globals.startConnection?.()}>Conectar WhatsApp</button>
@@ -752,7 +753,7 @@ export default function Whatsapp() {
                                   </div>
                                   <div className="instruction-step">
                                       <span className="step-number">3</span>
-                                      <span className="step-text">Vá em Configurações &gt; Dispositivos conectados</span>
+                                      <span className="step-text">VÃ¡ em ConfiguraÃ§Ãµes &gt; Dispositivos conectados</span>
                                   </div>
                                   <div className="instruction-step">
                                       <span className="step-number">4</span>
@@ -769,7 +770,7 @@ export default function Whatsapp() {
                                   <div className="connected-state">
                                       <div className="connected-avatar">OK</div>
                                   <h3>WhatsApp Conectado!</h3>
-                                  <p>Seu WhatsApp está conectado e pronto para uso</p>
+                                  <p>Seu WhatsApp estÃ¡ conectado e pronto para uso</p>
                                   
                                   <div className="connected-info">
                                       <div className="connected-info-row">
@@ -777,7 +778,7 @@ export default function Whatsapp() {
                                           <span className="connected-info-value" id="user-name">-</span>
                                       </div>
                                       <div className="connected-info-row">
-                                          <span className="connected-info-label">Número</span>
+                                          <span className="connected-info-label">NÃºmero</span>
                                           <span className="connected-info-value" id="user-phone">-</span>
                                       </div>
                                       <div className="connected-info-row">

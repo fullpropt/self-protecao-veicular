@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
+import { brandLogoUrl, brandName } from '../lib/brand';
 type ConversasGlobals = {
   initConversas?: () => void;
   filterConversations?: (filter: string) => void;
@@ -253,7 +254,7 @@ export default function Conversas() {
             display: inline-block;
         }
         
-        /* ÁREA DE CHAT */
+        /* ÃREA DE CHAT */
         .chat-area {
             display: flex;
             flex-direction: column;
@@ -508,7 +509,7 @@ export default function Conversas() {
             transform: scale(1);
         }
         
-        /* Templates rápidos */
+        /* Templates rÃ¡pidos */
         .quick-templates {
             padding: 10px 20px;
             background: white;
@@ -536,7 +537,7 @@ export default function Conversas() {
             border-color: var(--primary);
         }
         
-        /* Aviso de conexão */
+        /* Aviso de conexÃ£o */
         .connection-warning {
             background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
             border: 1px solid #ffc107;
@@ -654,7 +655,7 @@ export default function Conversas() {
         }
       `}</style>
           <aside className="sidebar" id="sidebar">
-              <div className="sidebar-logo"><img src="/img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></div>
+              <div className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></div>
               
               <ul className="sidebar-menu">
                   <li>
@@ -684,7 +685,7 @@ export default function Conversas() {
                   <li>
                       <Link to="/configuracoes">
                           <span className="icon icon-settings"></span>
-                          Configurações
+                          ConfiguraÃ§Ãµes
                       </Link>
                   </li>
               </ul>
@@ -694,7 +695,7 @@ export default function Conversas() {
               </div>
           </aside>
           
-          <button className="mobile-menu-toggle" onClick={() => globals.toggleSidebar?.()}>☰</button>
+          <button className="mobile-menu-toggle" onClick={() => globals.toggleSidebar?.()}>â˜°</button>
           <div className="sidebar-overlay" onClick={() => globals.toggleSidebar?.()}></div>
           
           <main className="main-content">
@@ -707,8 +708,8 @@ export default function Conversas() {
               
               <div className="connection-warning" id="connection-warning" style={{ display: 'none', marginBottom: '20px', borderRadius: '12px' }}>
                   <span className="icon icon-warning icon-sm"></span>
-                  <span>WhatsApp não está conectado.</span>
-                  <Link to="/whatsapp">Conectar agora →</Link>
+                  <span>WhatsApp nÃ£o estÃ¡ conectado.</span>
+                  <Link to="/whatsapp">Conectar agora â†’</Link>
               </div>
               
               <div className="inbox-container">
@@ -720,7 +721,7 @@ export default function Conversas() {
                           </h2>
                           <div className="inbox-filters">
                               <button className="filter-btn active" onClick={() => globals.filterConversations?.('all')}>Todos</button>
-                              <button className="filter-btn" onClick={() => globals.filterConversations?.('unread')}>Não lidos</button>
+                              <button className="filter-btn" onClick={() => globals.filterConversations?.('unread')}>NÃ£o lidos</button>
                           </div>
                           <input type="text" className="search-box" placeholder="Buscar conversa..." id="search-input" onInput={() => globals.searchConversations?.()} />
                       </div>
@@ -732,7 +733,7 @@ export default function Conversas() {
                   <div className="chat-area" id="chat-area">
                       <div className="chat-header" id="chat-header" style={{ display: 'none' }}>
                           <div className="chat-header-left">
-                              <button className="back-btn" onClick={() => globals.showConversationsList?.()}>←</button>
+                              <button className="back-btn" onClick={() => globals.showConversationsList?.()}>â†</button>
                               <div className="chat-header-avatar" id="chat-avatar"><span className="icon icon-user icon-sm"></span></div>
                               <div className="chat-header-info">
                                   <h3 id="chat-name">Selecione uma conversa</h3>
@@ -755,14 +756,14 @@ export default function Conversas() {
                           <div className="chat-empty" id="chat-empty">
                               <span className="icon icon-empty icon-lg"></span>
                               <h3>Nenhum chat selecionado</h3>
-                              <p>Selecione uma conversa da lista ao lado para começar a conversar</p>
+                              <p>Selecione uma conversa da lista ao lado para comeÃ§ar a conversar</p>
                           </div>
                       </div>
                       
                       <div className="quick-templates" id="quick-templates" style={{ display: 'none' }}>
-                          <button className="quick-template" onClick={() => globals.useTemplate?.('Olá! Tudo bem?')}><span className="icon icon-smile icon-sm"></span> Olá!</button>
-                          <button className="quick-template" onClick={() => globals.useTemplate?.('Posso te ajudar com mais informações sobre proteção veicular?')}><span className="icon icon-info icon-sm"></span> Mais informações</button>
-                          <button className="quick-template" onClick={() => globals.useTemplate?.('Obrigado pelo contato! Qualquer dúvida, estou à disposição.')}><span className="icon icon-check icon-sm"></span> Agradecer</button>
+                          <button className="quick-template" onClick={() => globals.useTemplate?.('OlÃ¡! Tudo bem?')}><span className="icon icon-smile icon-sm"></span> OlÃ¡!</button>
+                          <button className="quick-template" onClick={() => globals.useTemplate?.('Posso te ajudar com mais informaÃ§Ãµes sobre proteÃ§Ã£o veicular?')}><span className="icon icon-info icon-sm"></span> Mais informaÃ§Ãµes</button>
+                          <button className="quick-template" onClick={() => globals.useTemplate?.('Obrigado pelo contato! Qualquer dÃºvida, estou Ã  disposiÃ§Ã£o.')}><span className="icon icon-check icon-sm"></span> Agradecer</button>
                           <button className="quick-template" onClick={() => globals.useTemplate?.('Vou verificar e te retorno em breve!')}><span className="icon icon-clock icon-sm"></span> Retorno</button>
                       </div>
                       
