@@ -1,6 +1,6 @@
 /**
- * SELF PROTEÇÃO VEICULAR - SERVIDOR PRINCIPAL v4.1
- * Carregado por server/start.js (bootstrap) após listen - app e server já criados.
+ * SELF PROTE��O VEICULAR - SERVIDOR PRINCIPAL v4.1
+ * Carregado por server/start.js (bootstrap) ap�s listen - app e server j� criados.
  */
 
 module.exports = function init(app, server) {
@@ -12,7 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 
-// Baileys (loader dinâmico - ESM)
+// Baileys (loader din�mico - ESM)
 const baileysLoader = require('./services/whatsapp/baileysLoader');
 const pino = require('pino');
 const qrcode = require('qrcode');
@@ -27,7 +27,7 @@ const webhookService = require('./services/webhookService');
 const queueService = require('./services/queueService');
 const flowService = require('./services/flowService');
 
-// Utils - Fixers (correções automáticas baseadas em análise de projetos GitHub)
+// Utils - Fixers (corre��es autom�ticas baseadas em an�lise de projetos GitHub)
 const audioFixer = require('./utils/audioFixer');
 const connectionFixer = require('./utils/connectionFixer');
 
@@ -41,7 +41,7 @@ const { authenticate, optionalAuth, requestLogger, verifyToken } = require('./mi
 const { encrypt, decrypt } = require('./utils/encryption');
 
 // ============================================
-// CONFIGURAÇÕES
+// CONFIGURA��ES
 // ============================================
 
 const PORT = process.env.PORT || 3001;
@@ -56,41 +56,41 @@ const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'self-protecao-veicular-key-2024';
 
-// Avisar se chaves de segurança não foram configuradas (não bloqueia startup para deploy funcionar)
+// Avisar se chaves de seguran�a n�o foram configuradas (n�o bloqueia startup para deploy funcionar)
 if (process.env.NODE_ENV === 'production') {
     if (!process.env.ENCRYPTION_KEY || ENCRYPTION_KEY === 'self-protecao-veicular-key-2024') {
-        console.warn('⚠️  AVISO: Configure ENCRYPTION_KEY nas variáveis de ambiente para produção.');
+        console.warn('??  AVISO: Configure ENCRYPTION_KEY nas vari�veis de ambiente para produ��o.');
     }
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'self-protecao-jwt-secret-2024') {
-        console.warn('⚠️  AVISO: Configure JWT_SECRET nas variáveis de ambiente para produção.');
+        console.warn('??  AVISO: Configure JWT_SECRET nas vari�veis de ambiente para produ��o.');
     }
 }
 
-// Criar diretórios necessários
+// Criar diret�rios necess�rios
 [SESSIONS_DIR, UPLOADS_DIR, path.join(__dirname, '..', 'data')].forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
 });
 
-// Migração roda aqui (servidor já está ouvindo via start.js)
+// Migra��o roda aqui (servidor j� est� ouvindo via start.js)
 try {
     migrate();
-    console.log('✅ Banco de dados inicializado');
+    console.log('? Banco de dados inicializado');
     cleanupDuplicateMessages();
     cleanupLidLeads();
     cleanupInvalidPhones();
     cleanupEmptyWhatsappLeads();
     cleanupDuplicatePhoneSuffixLeads();
 } catch (error) {
-    console.error('❌ Erro ao inicializar banco de dados:', error.message);
+    console.error('? Erro ao inicializar banco de dados:', error.message);
 }
 
 // ============================================
-// MIDDLEWARES E ROTAS (app já tem /health do start.js)
+// MIDDLEWARES E ROTAS (app j� tem /health do start.js)
 // ============================================
 
-// Segurança
+// Seguran�a
 app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
@@ -103,24 +103,24 @@ app.set('trust proxy', 1);
 const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000,
     max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-    message: { error: 'Muitas requisições, tente novamente mais tarde' }
+    message: { error: 'Muitas requisi��es, tente novamente mais tarde' }
 });
 app.use('/api/', limiter);
 
-// CORS - Configurável via variável de ambiente
+// CORS - Configur�vel via vari�vel de ambiente
 const allowedOrigins = process.env.CORS_ORIGINS 
     ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
     : (process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3000', 'http://localhost:3001']);
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Permitir requisições sem origin (mobile apps, Postman, etc)
+        // Permitir requisi��es sem origin (mobile apps, Postman, etc)
         if (!origin) return callback(null, true);
         
         if (allowedOrigins.length === 0 || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            callback(new Error('Não permitido por CORS'));
+            callback(new Error('N�o permitido por CORS'));
         }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -137,7 +137,7 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Autenticação obrigatória para /api (exceto login/refresh)
+// Autentica��o obrigat�ria para /api (exceto login/refresh)
 app.use('/api', (req, res, next) => {
     const path = req.path || '';
     if (path.startsWith('/auth/login') || path.startsWith('/auth/refresh') || path.startsWith('/auth/register')) {
@@ -146,7 +146,7 @@ app.use('/api', (req, res, next) => {
     return authenticate(req, res, next);
 });
 
-// Arquivos estáticos
+// Arquivos est�ticos
 app.use(express.static(STATIC_DIR, {
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('app.html')) {
@@ -184,7 +184,7 @@ const io = new Server(server, {
     transports: ['websocket', 'polling']
 });
 
-// Autenticação via JWT no handshake do Socket.IO
+// Autentica��o via JWT no handshake do Socket.IO
 io.use((socket, next) => {
     try {
         const headerToken = socket.handshake.headers?.authorization;
@@ -204,7 +204,7 @@ io.use((socket, next) => {
 });
 
 // ============================================
-// WHATSAPP - GERENCIAMENTO DE SESSÕES (via whatsapp service)
+// WHATSAPP - GERENCIAMENTO DE SESS�ES (via whatsapp service)
 // ============================================
 
 const sessions = whatsappService.sessions;
@@ -375,14 +375,14 @@ function updateLeadIdentity(lead, jid, phone) {
         );
         return Lead.findById(lead.id) || lead;
     } catch (error) {
-        console.warn('⚠️ Falha ao atualizar identidade do lead:', error.message);
+        console.warn('?? Falha ao atualizar identidade do lead:', error.message);
         return lead;
     }
 }
 
 function cleanupDuplicateMessages() {
     try {
-        // Remover duplicados com message_id igual (segurança extra)
+        // Remover duplicados com message_id igual (seguran�a extra)
         run(`
             DELETE FROM messages
             WHERE message_id IS NOT NULL
@@ -393,7 +393,7 @@ function cleanupDuplicateMessages() {
             )
         `);
 
-        // Remover duplicados sem message_id (mesmo conteúdo no mesmo segundo)
+        // Remover duplicados sem message_id (mesmo conte�do no mesmo segundo)
         run(`
             DELETE FROM messages
             WHERE message_id IS NULL
@@ -404,7 +404,7 @@ function cleanupDuplicateMessages() {
             )
         `);
     } catch (error) {
-        console.warn('⚠️ Falha ao limpar mensagens duplicadas:', error.message);
+        console.warn('?? Falha ao limpar mensagens duplicadas:', error.message);
     }
 }
 
@@ -530,7 +530,7 @@ function persistWhatsappSession(sessionId, status, options = {}) {
                 updated_at = datetime('now')
         `, [sessionId, status, qr_code, last_connected_at]);
     } catch (error) {
-        console.error(`[${sessionId}] Erro ao persistir sessão:`, error.message);
+        console.error(`[${sessionId}] Erro ao persistir sess�o:`, error.message);
     }
 }
 
@@ -540,14 +540,14 @@ async function rehydrateSessions(ioInstance) {
         for (const row of stored) {
             const sessionId = row.session_id;
             if (sessionExists(sessionId)) {
-                console.log(`[${sessionId}] Reidratando sessão armazenada...`);
+                console.log(`[${sessionId}] Reidratando sess�o armazenada...`);
                 await createSession(sessionId, null);
             } else {
-                console.log(`[${sessionId}] Sessão no banco sem arquivos locais, ignorando.`);
+                console.log(`[${sessionId}] Sess�o no banco sem arquivos locais, ignorando.`);
             }
         }
     } catch (error) {
-        console.error('❌ Erro ao reidratar sessões:', error.message);
+        console.error('? Erro ao reidratar sess�es:', error.message);
     }
 }
 
@@ -571,7 +571,7 @@ const formatJid = whatsappService.formatJid;
 const extractNumber = whatsappService.extractNumber;
 
 /**
- * Função de envio de mensagem (usada pelos serviços)
+ * Fun��o de envio de mensagem (usada pelos servi�os)
  */
 async function sendMessageToWhatsApp(options) {
     const { to, jid, content, mediaType, mediaUrl, sessionId } = options;
@@ -579,7 +579,7 @@ async function sendMessageToWhatsApp(options) {
     const session = whatsappService.getSession(sid);
     
     if (!session || !session.isConnected) {
-        throw new Error('WhatsApp não está conectado');
+        throw new Error('WhatsApp n�o est� conectado');
     }
     
     const targetJid = jid || formatJid(to);
@@ -608,7 +608,7 @@ async function sendMessageToWhatsApp(options) {
                 ...audioOptions.options
             });
         } catch (error) {
-            console.error('[SendMessage] Erro ao preparar áudio, usando método padrão:', error.message);
+            console.error('[SendMessage] Erro ao preparar �udio, usando m�todo padr�o:', error.message);
             result = await session.socket.sendMessage(targetJid, {
                 audio: { url: mediaUrl },
                 mimetype: options.mimetype || 'audio/ogg; codecs=opus',
@@ -623,7 +623,7 @@ async function sendMessageToWhatsApp(options) {
 }
 
 /**
- * Criar sessão WhatsApp
+ * Criar sess�o WhatsApp
  */
 async function createSession(sessionId, socket, attempt = 0) {
     const clientSocket = socket || { emit: () => {} };
@@ -646,20 +646,20 @@ async function createSession(sessionId, socket, attempt = 0) {
         } = baileys;
     
     try {
-        console.log(`[${sessionId}] Criando sessão... (Tentativa ${attempt + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+        console.log(`[${sessionId}] Criando sess�o... (Tentativa ${attempt + 1}/${MAX_RECONNECT_ATTEMPTS})`);
         persistWhatsappSession(sessionId, 'connecting');
         
-        // Validar e corrigir sessão se necessário
+        // Validar e corrigir sess�o se necess�rio
         const sessionValidation = await connectionFixer.validateSession(sessionPath);
         if (!sessionValidation.valid && attempt === 0) {
-            console.log(`[${sessionId}] Problemas na sessão detectados, corrigindo...`);
+            console.log(`[${sessionId}] Problemas na sess�o detectados, corrigindo...`);
             await connectionFixer.fixSession(sessionPath);
         }
         
         const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
         const { version } = await fetchLatestBaileysVersion();
         
-        console.log(`[${sessionId}] Usando Baileys versão: ${version.join('.')}`);
+        console.log(`[${sessionId}] Usando Baileys vers�o: ${version.join('.')}`);
         
         const syncFullHistory = process.env.WHATSAPP_SYNC_FULL_HISTORY !== 'false';
         const store = typeof makeInMemoryStore === 'function' ? makeInMemoryStore({ logger }) : null;
@@ -672,7 +672,7 @@ async function createSession(sessionId, socket, attempt = 0) {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger)
             },
-            browser: ['SELF Proteção Veicular', 'Chrome', '120.0.0'],
+            browser: ['SELF Prote��o Veicular', 'Chrome', '120.0.0'],
             generateHighQualityLinkPreview: true,
             syncFullHistory,
             markOnlineOnConnect: true,
@@ -703,7 +703,7 @@ async function createSession(sessionId, socket, attempt = 0) {
         
         reconnectAttempts.set(sessionId, 0);
         
-        // Eventos de conexão
+        // Eventos de conex�o
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
             const session = sessions.get(sessionId);
@@ -725,7 +725,7 @@ async function createSession(sessionId, socket, attempt = 0) {
                     webhookService.trigger('whatsapp.qr_generated', { sessionId });
                     persistWhatsappSession(sessionId, 'qr_pending', { qr_code: qrDataUrl });
                     
-                    console.log(`[${sessionId}] ✅ QR Code gerado`);
+                    console.log(`[${sessionId}] ? QR Code gerado`);
                     
                     const timeout = setTimeout(() => {
                         const currentSession = sessions.get(sessionId);
@@ -737,7 +737,7 @@ async function createSession(sessionId, socket, attempt = 0) {
                     qrTimeouts.set(sessionId, timeout);
                     
                 } catch (qrError) {
-                    console.error(`[${sessionId}] ❌ Erro ao gerar QR:`, qrError.message);
+                    console.error(`[${sessionId}] ? Erro ao gerar QR:`, qrError.message);
                     clientSocket.emit('error', { message: 'Erro ao gerar QR Code' });
                 }
             }
@@ -751,14 +751,14 @@ async function createSession(sessionId, socket, attempt = 0) {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 
-                console.log(`[${sessionId}] Conexão fechada. Status: ${statusCode}`);
+                console.log(`[${sessionId}] Conex�o fechada. Status: ${statusCode}`);
                 persistWhatsappSession(sessionId, 'disconnected');
                 
-                // Detectar tipo de erro e aplicar correção
+                // Detectar tipo de erro e aplicar corre��o
                 const errorInfo = connectionFixer.detectDisconnectReason(lastDisconnect?.error);
-                console.log(`[${sessionId}] Tipo de erro: ${errorInfo.type}, Ação: ${errorInfo.action}`);
+                console.log(`[${sessionId}] Tipo de erro: ${errorInfo.type}, A��o: ${errorInfo.action}`);
                 
-                // Aplicar correção se necessário
+                // Aplicar corre��o se necess�rio
                 if (errorInfo.action === 'clean_session' || errorInfo.action === 'regenerate_keys') {
                     await connectionFixer.applyFixAction(sessionPath, errorInfo.action);
                 }
@@ -815,7 +815,7 @@ async function createSession(sessionId, socket, attempt = 0) {
                     session.reconnecting = false;
                     session.user = {
                         id: sock.user?.id,
-                        name: sock.user?.name || 'Usuário',
+                        name: sock.user?.name || 'Usu�rio',
                         pushName: sock.user?.verifiedName || sock.user?.name,
                         phone: extractNumber(sock.user?.id)
                     };
@@ -829,14 +829,14 @@ async function createSession(sessionId, socket, attempt = 0) {
                     // Webhook
                     webhookService.trigger('whatsapp.connected', { sessionId, user: session.user });
                     
-                    console.log(`[${sessionId}] ✅ WhatsApp conectado: ${session.user.name}`);
+                    console.log(`[${sessionId}] ? WhatsApp conectado: ${session.user.name}`);
 
-                    // Forçar sincronização inicial de chats
+                    // For�ar sincroniza��o inicial de chats
                     setTimeout(() => {
                         triggerChatSync(sessionId, sock, store);
                     }, 1500);
                     
-                    // Criar monitor de saúde da conexão
+                    // Criar monitor de sa�de da conex�o
                     const healthMonitor = connectionFixer.createHealthMonitor(sock, sessionId);
                     session.healthMonitor = healthMonitor;
                 }
@@ -900,7 +900,7 @@ async function createSession(sessionId, socket, attempt = 0) {
             try {
                 syncChatsToDatabase(sessionId, payload);
             } catch (error) {
-                console.error(`[${sessionId}] ❌ Erro ao sincronizar chats:`, error.message);
+                console.error(`[${sessionId}] ? Erro ao sincronizar chats:`, error.message);
             }
         });
 
@@ -908,7 +908,7 @@ async function createSession(sessionId, socket, attempt = 0) {
             try {
                 syncChatsToDatabase(sessionId, payload);
             } catch (error) {
-                console.error(`[${sessionId}] ❌ Erro ao sincronizar chats:`, error.message);
+                console.error(`[${sessionId}] ? Erro ao sincronizar chats:`, error.message);
             }
         });
 
@@ -916,11 +916,11 @@ async function createSession(sessionId, socket, attempt = 0) {
             try {
                 syncChatsToDatabase(sessionId, payload);
             } catch (error) {
-                console.error(`[${sessionId}] ❌ Erro ao sincronizar chats:`, error.message);
+                console.error(`[${sessionId}] ? Erro ao sincronizar chats:`, error.message);
             }
         });
         
-        // Presença (digitando)
+        // Presen�a (digitando)
         sock.ev.on('presence.update', (presence) => {
             const jid = presence.id;
             const isTyping = presence.presences?.[jid]?.lastKnownPresence === 'composing';
@@ -936,14 +936,14 @@ async function createSession(sessionId, socket, attempt = 0) {
         });
         
         sock.ev.on('error', (error) => {
-            console.error(`[${sessionId}] ❌ Erro:`, error.message);
+            console.error(`[${sessionId}] ? Erro:`, error.message);
             clientSocket.emit('error', { message: error.message });
         });
         
         return sock;
         
     } catch (error) {
-        console.error(`[${sessionId}] ❌ Erro ao criar sessão:`, error.message);
+        console.error(`[${sessionId}] ? Erro ao criar sess�o:`, error.message);
         
         const currentAttempt = reconnectAttempts.get(sessionId) || 0;
         if (currentAttempt < MAX_RECONNECT_ATTEMPTS) {
@@ -951,7 +951,7 @@ async function createSession(sessionId, socket, attempt = 0) {
             await baileys.delay(RECONNECT_DELAY);
             return await createSession(sessionId, clientSocket, currentAttempt + 1);
         } else {
-            clientSocket.emit('error', { message: 'Erro ao criar sessão WhatsApp' });
+            clientSocket.emit('error', { message: 'Erro ao criar sess�o WhatsApp' });
             return null;
         }
     }
@@ -1097,12 +1097,12 @@ function scheduleAutomations(context) {
         if (delayMs > 0) {
             setTimeout(() => {
                 executeAutomationAction(automation, context).catch((error) => {
-                    console.error(`❌ Erro ao executar automação ${automation.id}:`, error.message);
+                    console.error(`? Erro ao executar automa��o ${automation.id}:`, error.message);
                 });
             }, delayMs);
         } else {
             executeAutomationAction(automation, context).catch((error) => {
-                console.error(`❌ Erro ao executar automação ${automation.id}:`, error.message);
+                console.error(`? Erro ao executar automa��o ${automation.id}:`, error.message);
             });
         }
     }
@@ -1151,9 +1151,11 @@ function syncChatsToDatabase(sessionId, payload) {
         if (!phone) continue;
 
         let displayName = getChatDisplayName(chat, phone);
-        const isSelfChat = sessionPhone && phone === sessionPhone;
+        const phoneDigits = String(phone || '').replace(/\\D/g, '');
+    const sessionDigits = String(sessionPhone || '').replace(/\\D/g, '');
+    const isSelfChat = sessionDigits && phoneDigits && phoneDigits.slice(-11) === sessionDigits.slice(-11);
         if (isSelfChat) {
-            displayName = sessionDisplayName ? `${sessionDisplayName} (Você)` : 'Você';
+            displayName = sessionDisplayName ? `${sessionDisplayName} (Voc�)` : 'Voc�';
         }
 
         let lead = Lead.findByJid(jid) || Lead.findByPhone(phone);
@@ -1182,8 +1184,8 @@ function syncChatsToDatabase(sessionId, payload) {
                 !lead.name ||
                 lead.name === phone ||
                 (sessionDisplayName && lead.name === sessionDisplayName) ||
-                (sessionDisplayName && lead.name === `${sessionDisplayName} (Você)`) ||
-                lead.name === 'Você';
+                (sessionDisplayName && lead.name === `${sessionDisplayName} (Voc�)`) ||
+                lead.name === 'Voc�';
             if (shouldUpdateName) {
                 Lead.update(lead.id, { name: displayName });
                 lead = Lead.findById(lead.id);
@@ -1254,7 +1256,7 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
             }
         }
     } catch (error) {
-        console.warn(`[${sessionId}] ⚠️ Não foi possível buscar chats por API:`, error.message);
+        console.warn(`[${sessionId}] ?? N�o foi poss�vel buscar chats por API:`, error.message);
     }
 
     if (!synced) {
@@ -1278,6 +1280,7 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
  */
 async function processIncomingMessage(sessionId, msg) {
     const fromRaw = msg.key.remoteJid;
+    if (fromRaw?.endsWith('@g.us')) return;
     const from = resolveMessageJid(msg);
     const isFromMe = msg.key.fromMe;
     const sessionDisplayName = getSessionDisplayName(sessionId);
@@ -1297,7 +1300,7 @@ async function processIncomingMessage(sessionId, msg) {
                '';
     }
     
-    // Tipo de mídia
+    // Tipo de m�dia
     let mediaType = 'text';
     if (msg.message?.imageMessage) mediaType = 'image';
     else if (msg.message?.videoMessage) mediaType = 'video';
@@ -1323,8 +1326,10 @@ async function processIncomingMessage(sessionId, msg) {
         console.warn(`[${sessionId}] Ignorando mensagem com JID invalido: ${from}`);
         return;
     }
-    const isSelfChat = sessionPhone && phone === sessionPhone;
-    const selfName = sessionDisplayName ? `${sessionDisplayName} (Você)` : 'Você';
+    const phoneDigits = String(phone || '').replace(/\\D/g, '');
+    const sessionDigits = String(sessionPhone || '').replace(/\\D/g, '');
+    const isSelfChat = sessionDigits && phoneDigits && phoneDigits.slice(-11) === sessionDigits.slice(-11);
+    const selfName = sessionDisplayName ? `${sessionDisplayName} (Voc�)` : 'Voc�';
     
     // Buscar ou criar lead
     const { lead, created: leadCreated } = Lead.findOrCreate({
@@ -1343,8 +1348,8 @@ async function processIncomingMessage(sessionId, msg) {
             !lead.name ||
             lead.name === phone ||
             (sessionDisplayName && lead.name === sessionDisplayName) ||
-            (sessionDisplayName && lead.name === `${sessionDisplayName} (Você)`) ||
-            lead.name === 'Você';
+            (sessionDisplayName && lead.name === `${sessionDisplayName} (Voc�)`) ||
+            lead.name === 'Voc�';
         if (shouldUpdateName) {
             Lead.update(lead.id, { name: msg.pushName });
         }
@@ -1416,9 +1421,9 @@ async function processIncomingMessage(sessionId, msg) {
             lead: { id: lead.id, name: lead.name, phone: lead.phone }
         });
         
-        console.log(`[${sessionId}] 📨 Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
+        console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
         
-        // Processar fluxo de automação
+        // Processar fluxo de automa��o
         if (conversation.is_bot_active) {
             conversation.created = convCreated;
             await flowService.processIncomingMessage(
@@ -1447,7 +1452,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     const session = sessions.get(sessionId);
     
     if (!session || !session.isConnected) {
-        throw new Error('Sessão não está conectada');
+        throw new Error('Sess�o n�o est� conectada');
     }
     
     const jid = formatJid(to);
@@ -1491,7 +1496,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     
     const messageId = result?.key?.id;
     if (!messageId) {
-        console.warn(`[${sessionId}] ⚠️ Mensagem enviada sem id retornado.`);
+        console.warn(`[${sessionId}] ?? Mensagem enviada sem id retornado.`);
         return { ...result, lead, conversation };
     }
 
@@ -1532,23 +1537,23 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
         type
     });
     
-    console.log(`[${sessionId}] ✅ Mensagem enviada para ${to}`);
+    console.log(`[${sessionId}] ? Mensagem enviada para ${to}`);
     
     return { ...result, savedMessage, lead, conversation };
 }
 
 /**
- * Verificar se sessão existe
+ * Verificar se sess�o existe
  */
 function sessionExists(sessionId) {
     return whatsappService.hasSession(sessionId, SESSIONS_DIR);
 }
 
 // ============================================
-// INICIALIZAR SERVIÇOS
+// INICIALIZAR SERVI�OS
 // ============================================
 
-// Inicializar serviço de fila
+// Inicializar servi�o de fila
 queueService.init(async (options) => {
     return await sendMessageToWhatsApp({
         ...options,
@@ -1556,7 +1561,7 @@ queueService.init(async (options) => {
     });
 });
 
-// Inicializar serviço de fluxos
+// Inicializar servi�o de fluxos
 flowService.init(async (options) => {
     return await sendMessageToWhatsApp({
         ...options,
@@ -1564,7 +1569,7 @@ flowService.init(async (options) => {
     });
 });
 
-// Reidratar sessões armazenadas (após restart)
+// Reidratar sess�es armazenadas (ap�s restart)
 rehydrateSessions(io);
 
 // ============================================
@@ -1572,7 +1577,7 @@ rehydrateSessions(io);
 // ============================================
 
 io.on('connection', (socket) => {
-    console.log('🔌 Cliente conectado:', socket.id);
+    console.log('?? Cliente conectado:', socket.id);
     
     socket.on('check-session', async ({ sessionId }) => {
         const session = sessions.get(sessionId);
@@ -1651,7 +1656,7 @@ io.on('connection', (socket) => {
 
                 let displayName = lead.name;
                 if (sessionPhone && String(lead.phone || '') === String(sessionPhone)) {
-                    displayName = `${sessionDisplayName} (Você)`;
+                    displayName = `${sessionDisplayName} (Voc�)`;
                 }
 
                 return {
@@ -1739,7 +1744,7 @@ io.on('connection', (socket) => {
     });
     
     socket.on('disconnect', () => {
-        console.log('🔌 Cliente desconectado:', socket.id);
+        console.log('?? Cliente desconectado:', socket.id);
     });
 });
 
@@ -1747,7 +1752,7 @@ io.on('connection', (socket) => {
 // ROTAS API REST
 // ============================================
 
-// Status do WhatsApp (para Configurações > Conexão)
+// Status do WhatsApp (para Configura��es > Conex�o)
 app.get('/api/whatsapp/status', optionalAuth, (req, res) => {
     const sessionId = 'self_whatsapp_session';
     const session = sessions.get(sessionId);
@@ -1791,7 +1796,7 @@ app.get('/api/status', (req, res) => {
 });
 
 // ============================================
-// API DE AUTENTICAÇÃO
+// API DE AUTENTICA��O
 // ============================================
 
 app.post('/api/auth/login', async (req, res) => {
@@ -1799,7 +1804,7 @@ app.post('/api/auth/login', async (req, res) => {
         const { email, password } = req.body;
         
         if (!email || !password) {
-            return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+            return res.status(400).json({ error: 'Email e senha s�o obrigat�rios' });
         }
         
         const { User } = require('./database/models');
@@ -1808,7 +1813,7 @@ app.post('/api/auth/login', async (req, res) => {
         const normalizedEmail = String(email || '').trim().toLowerCase();
         let user = User.findByEmail(normalizedEmail);
 
-        // Compatibilidade com login legado (usuário: thyago / senha: thyago123)
+        // Compatibilidade com login legado (usu�rio: thyago / senha: thyago123)
         if (!user && normalizedEmail === 'thyago' && password === 'thyago123') {
             const legacyEmail = 'thyago@self.com.br';
             user = User.findByEmail(legacyEmail);
@@ -1825,11 +1830,11 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         if (!user || !verifyPassword(password, user.password_hash)) {
-            return res.status(401).json({ error: 'Credenciais inválidas' });
+            return res.status(401).json({ error: 'Credenciais inv�lidas' });
         }
         
         if (!user.is_active) {
-            return res.status(401).json({ error: 'Usuário desativado' });
+            return res.status(401).json({ error: 'Usu�rio desativado' });
         }
         
         User.updateLastLogin(user.id);
@@ -1859,7 +1864,7 @@ app.post('/api/auth/register', async (req, res) => {
         const { name, email, password } = req.body;
 
         if (!name || !email || !password) {
-            return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+            return res.status(400).json({ error: 'Nome, email e senha s�o obrigat�rios' });
         }
 
         if (String(password).length < 6) {
@@ -1872,7 +1877,7 @@ app.post('/api/auth/register', async (req, res) => {
         const normalizedEmail = String(email || '').trim().toLowerCase();
         const existing = User.findByEmail(normalizedEmail);
         if (existing) {
-            return res.status(409).json({ error: 'Email já cadastrado' });
+            return res.status(409).json({ error: 'Email j� cadastrado' });
         }
 
         User.create({
@@ -1884,7 +1889,7 @@ app.post('/api/auth/register', async (req, res) => {
 
         const user = User.findByEmail(normalizedEmail);
         if (!user) {
-            return res.status(500).json({ error: 'Falha ao criar usuário' });
+            return res.status(500).json({ error: 'Falha ao criar usu�rio' });
         }
 
         const token = generateToken(user);
@@ -1911,7 +1916,7 @@ app.post('/api/auth/refresh', (req, res) => {
     try {
         const { refreshToken } = req.body;
         if (!refreshToken) {
-            return res.status(400).json({ error: 'Refresh token é obrigatório' });
+            return res.status(400).json({ error: 'Refresh token � obrigat�rio' });
         }
         
         const { verifyToken, generateToken } = require('./middleware/auth');
@@ -1919,12 +1924,12 @@ app.post('/api/auth/refresh', (req, res) => {
         
         const decoded = verifyToken(refreshToken);
         if (!decoded || decoded.type !== 'refresh') {
-            return res.status(401).json({ error: 'Refresh token inválido' });
+            return res.status(401).json({ error: 'Refresh token inv�lido' });
         }
         
         const user = User.findById(decoded.id);
         if (!user || !user.is_active) {
-            return res.status(401).json({ error: 'Usuário não encontrado ou inativo' });
+            return res.status(401).json({ error: 'Usu�rio n�o encontrado ou inativo' });
         }
         
         const token = generateToken(user);
@@ -1955,7 +1960,7 @@ app.get('/api/leads', optionalAuth, (req, res) => {
 app.get('/api/leads/:id', optionalAuth, (req, res) => {
     const lead = Lead.findById(req.params.id);
     if (!lead) {
-        return res.status(404).json({ error: 'Lead não encontrado' });
+        return res.status(404).json({ error: 'Lead n�o encontrado' });
     }
     res.json({ success: true, lead });
 });
@@ -1976,7 +1981,7 @@ app.post('/api/leads', authenticate, (req, res) => {
 app.put('/api/leads/:id', authenticate, (req, res) => {
     const lead = Lead.findById(req.params.id);
     if (!lead) {
-        return res.status(404).json({ error: 'Lead não encontrado' });
+        return res.status(404).json({ error: 'Lead n�o encontrado' });
     }
     
     const oldStatus = lead.status;
@@ -2032,38 +2037,35 @@ app.get('/api/conversations', optionalAuth, (req, res) => {
         }
     };
 
+    const normalizePhoneSuffix = (value) => {
+        if (!value) return '';
+        const digits = String(value).replace(/\D/g, '');
+        if (!digits) return '';
+        return digits.length >= 11 ? digits.slice(-11) : digits;
+    };
+
     const normalized = conversations.map((c) => {
         const lastMessage = Message.getLastMessage(c.id);
         const decrypted = lastMessage?.content_encrypted
             ? decryptMessage(lastMessage.content_encrypted)
             : lastMessage?.content;
 
-        let metadata = {};
-        try {
-            metadata = c.metadata ? JSON.parse(c.metadata) : {};
-        } catch (e) {
-            metadata = {};
-        }
-
-        const metadataLast = metadata.last_message || '';
-        const metadataLastAt = metadata.last_message_at || null;
-
         const lastMessageText =
             (decrypted || '').trim() ||
-            (metadataLast ? String(metadataLast).trim() : '') ||
-            (lastMessage ? previewForMedia(lastMessage.media_type) : 'Clique para iniciar conversa');
+            (lastMessage ? previewForMedia(lastMessage.media_type) : '');
 
         const lastMessageAt =
             lastMessage?.sent_at ||
             lastMessage?.created_at ||
-            metadataLastAt ||
-            c.updated_at;
+            null;
 
         let name = c.lead_name;
         const sessionPhone = getSessionPhone(c.session_id);
-        if (sessionPhone && String(c.phone || '') === String(sessionPhone)) {
+        const phoneSuffix = normalizePhoneSuffix(c.phone);
+        const sessionSuffix = normalizePhoneSuffix(sessionPhone);
+        if (phoneSuffix && sessionSuffix && phoneSuffix === sessionSuffix) {
             const sessionName = getSessionDisplayName(c.session_id) || 'Usuario';
-            name = `${sessionName} (Você)`;
+            name = `${sessionName} (Voc�)`;
         }
 
         return {
@@ -2074,11 +2076,17 @@ app.get('/api/conversations', optionalAuth, (req, res) => {
             name,
             phone: c.phone
         };
+    }).filter((conv) => {
+        if (!conv.lastMessageAt && !conv.lastMessage) {
+            return false;
+        }
+        return true;
     });
 
     const deduped = new Map();
     for (const conv of normalized) {
-        const key = String(conv.lead_id || conv.id);
+        const phoneKey = normalizePhoneSuffix(conv.phone);
+        const key = phoneKey || String(conv.lead_id || conv.id);
         if (!deduped.has(key)) {
             deduped.set(key, conv);
             continue;
@@ -2104,7 +2112,7 @@ app.post('/api/send', authenticate, async (req, res) => {
     const { sessionId, to, message, type, options } = req.body;
     
     if (!sessionId || !to || !message) {
-        return res.status(400).json({ error: 'Parâmetros obrigatórios: sessionId, to, message' });
+        return res.status(400).json({ error: 'Par�metros obrigat�rios: sessionId, to, message' });
     }
     
     try {
@@ -2129,7 +2137,7 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
     }
 
     if (!to || !content) {
-        return res.status(400).json({ error: 'Parâmetros obrigatórios: phone/to e content' });
+        return res.status(400).json({ error: 'Par�metros obrigat�rios: phone/to e content' });
     }
 
     try {
@@ -2244,7 +2252,7 @@ app.get('/api/campaigns', optionalAuth, (req, res) => {
 app.get('/api/campaigns/:id', optionalAuth, (req, res) => {
     const campaign = Campaign.findById(req.params.id);
     if (!campaign) {
-        return res.status(404).json({ error: 'Campanha nÃ£o encontrada' });
+        return res.status(404).json({ error: 'Campanha não encontrada' });
     }
     res.json({ success: true, campaign });
 });
@@ -2266,7 +2274,7 @@ app.post('/api/campaigns', authenticate, (req, res) => {
 app.put('/api/campaigns/:id', authenticate, (req, res) => {
     const campaign = Campaign.findById(req.params.id);
     if (!campaign) {
-        return res.status(404).json({ error: 'Campanha nÃ£o encontrada' });
+        return res.status(404).json({ error: 'Campanha não encontrada' });
     }
 
     Campaign.update(req.params.id, req.body);
@@ -2299,7 +2307,7 @@ app.get('/api/automations', optionalAuth, (req, res) => {
 app.get('/api/automations/:id', optionalAuth, (req, res) => {
     const automation = Automation.findById(req.params.id);
     if (!automation) {
-        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
+        return res.status(404).json({ error: 'Automação não encontrada' });
     }
     res.json({ success: true, automation });
 });
@@ -2321,7 +2329,7 @@ app.post('/api/automations', authenticate, (req, res) => {
 app.put('/api/automations/:id', authenticate, (req, res) => {
     const automation = Automation.findById(req.params.id);
     if (!automation) {
-        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
+        return res.status(404).json({ error: 'Automação não encontrada' });
     }
 
     Automation.update(req.params.id, req.body);
@@ -2346,7 +2354,7 @@ app.get('/api/flows', optionalAuth, (req, res) => {
 app.get('/api/flows/:id', optionalAuth, (req, res) => {
     const flow = Flow.findById(req.params.id);
     if (!flow) {
-        return res.status(404).json({ error: 'Fluxo não encontrado' });
+        return res.status(404).json({ error: 'Fluxo n�o encontrado' });
     }
     res.json({ success: true, flow });
 });
@@ -2408,7 +2416,7 @@ app.post('/api/webhook/incoming', (req, res) => {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     
-    console.log(`📥 Webhook recebido: ${event}`);
+    console.log(`?? Webhook recebido: ${event}`);
     
     // Processar evento
     if (event === 'lead.create' && data) {
@@ -2424,7 +2432,7 @@ app.post('/api/webhook/incoming', (req, res) => {
 });
 
 // ============================================
-// API DE CONFIGURAÇÕES
+// API DE CONFIGURA��ES
 // ============================================
 
 app.get('/api/settings', authenticate, (req, res) => {
@@ -2440,7 +2448,7 @@ app.put('/api/settings', authenticate, (req, res) => {
         Settings.set(key, value, type);
     }
     
-    // Atualizar serviço de fila se necessário
+    // Atualizar servi�o de fila se necess�rio
     if (req.body.bulk_message_delay || req.body.max_messages_per_minute) {
         queueService.updateSettings({
             delay: req.body.bulk_message_delay,
@@ -2473,7 +2481,7 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
 });
 
 // ============================================
-// ROTAS DE PÁGINAS
+// ROTAS DE P�GINAS
 // ============================================
 
 app.get('/', (req, res) => {
@@ -2495,26 +2503,26 @@ app.get('*', (req, res) => {
 
 // Middleware de tratamento de erros
 app.use((err, req, res, next) => {
-    console.error('❌ Erro:', err);
+    console.error('? Erro:', err);
     
     // Erro de CORS
-    if (err.message === 'Não permitido por CORS') {
+    if (err.message === 'N�o permitido por CORS') {
         return res.status(403).json({ 
-            error: 'Origem não permitida',
+            error: 'Origem n�o permitida',
             code: 'CORS_ERROR'
         });
     }
     
-    // Erro de validação
+    // Erro de valida��o
     if (err.name === 'ValidationError') {
         return res.status(400).json({ 
-            error: 'Dados inválidos',
+            error: 'Dados inv�lidos',
             details: err.message,
             code: 'VALIDATION_ERROR'
         });
     }
     
-    // Erro genérico
+    // Erro gen�rico
     res.status(err.status || 500).json({ 
         error: process.env.NODE_ENV === 'production' 
             ? 'Erro interno do servidor' 
@@ -2523,61 +2531,66 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Handler para rotas não encontradas
+// Handler para rotas n�o encontradas
 app.use((req, res) => {
     res.status(404).json({ 
-        error: 'Rota não encontrada',
+        error: 'Rota n�o encontrada',
         code: 'NOT_FOUND'
     });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection:', reason);
+    console.error('? Unhandled Rejection:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
-    // Em produção, pode querer fazer graceful shutdown
+    console.error('? Uncaught Exception:', error);
+    // Em produ��o, pode querer fazer graceful shutdown
     if (process.env.NODE_ENV === 'production') {
         process.exit(1);
     }
 });
 
 // ============================================
-// LOG DE INICIALIZAÇÃO
+// LOG DE INICIALIZA��O
 // ============================================
 
     console.log('');
-    console.log('╔════════════════════════════════════════════════════════════╗');
-    console.log('║     SELF PROTEÇÃO VEICULAR - SERVIDOR v4.1                 ║');
-    console.log('║     Sistema de Automação de Mensagens WhatsApp             ║');
-    console.log('╠════════════════════════════════════════════════════════════╣');
-    console.log(`║  🚀 Servidor rodando na porta ${PORT}                          ║`);
-    console.log(`║  📁 Sessões: ${SESSIONS_DIR.substring(0, 42).padEnd(42)} ║`);
-    console.log(`║  🌐 URL: http://localhost:${PORT}                               ║`);
-    console.log(`║  🔄 Reconexão automática: ${MAX_RECONNECT_ATTEMPTS} tentativas                  ║`);
-    console.log(`║  📬 Fila de mensagens: Ativa                               ║`);
-    console.log(`║  🔒 Criptografia: Ativa                                    ║`);
-    console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log('+------------------------------------------------------------+');
+    console.log('�     SELF PROTE��O VEICULAR - SERVIDOR v4.1                 �');
+    console.log('�     Sistema de Automa��o de Mensagens WhatsApp             �');
+    console.log('�------------------------------------------------------------�');
+    console.log(`�  ?? Servidor rodando na porta ${PORT}                          �`);
+    console.log(`�  ?? Sess�es: ${SESSIONS_DIR.substring(0, 42).padEnd(42)} �`);
+    console.log(`�  ?? URL: http://localhost:${PORT}                               �`);
+    console.log(`�  ?? Reconex�o autom�tica: ${MAX_RECONNECT_ATTEMPTS} tentativas                  �`);
+    console.log(`�  ?? Fila de mensagens: Ativa                               �`);
+    console.log(`�  ?? Criptografia: Ativa                                    �`);
+    console.log('+------------------------------------------------------------+');
     console.log('');
-    console.log('✅ Servidor pronto para receber conexões!');
+    console.log('? Servidor pronto para receber conex�es!');
     console.log('');
 
-    // Graceful shutdown (referências em closure)
+    // Graceful shutdown (refer�ncias em closure)
     process.on('SIGTERM', async () => {
-        console.log('⚠️  SIGTERM recebido, encerrando servidor...');
+        console.log('??  SIGTERM recebido, encerrando servidor...');
         queueService.stopProcessing();
         for (const [sessionId, session] of sessions.entries()) {
             try { await session.socket.end(); } catch (e) {}
         }
         closeDatabase();
-        server.close(() => { console.log('✅ Servidor encerrado'); process.exit(0); });
+        server.close(() => { console.log('? Servidor encerrado'); process.exit(0); });
     });
 
     process.on('SIGINT', async () => {
-        console.log('⚠️  SIGINT recebido, encerrando servidor...');
+        console.log('??  SIGINT recebido, encerrando servidor...');
         queueService.stopProcessing();
         closeDatabase();
         process.exit(0);
     });
 };
+
+
+
+
+

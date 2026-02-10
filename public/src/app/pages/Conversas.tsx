@@ -654,7 +654,7 @@ export default function Conversas() {
         }
       `}</style>
           <aside className="sidebar" id="sidebar">
-              <div className="sidebar-logo"><img src="img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></div>
+              <div className="sidebar-logo"><img src="/img/logo-zapvender.svg" alt="ZapVender" className="brand-logo" /><span className="brand-text">ZapVender</span></div>
               
               <ul className="sidebar-menu">
                   <li>
