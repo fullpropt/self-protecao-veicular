@@ -81,6 +81,7 @@ try {
     cleanupLidLeads();
     cleanupInvalidPhones();
     cleanupEmptyWhatsappLeads();
+    cleanupDuplicatePhoneSuffixLeads();
 } catch (error) {
     console.error('❌ Erro ao inicializar banco de dados:', error.message);
 }
@@ -464,6 +465,54 @@ function cleanupEmptyWhatsappLeads() {
         console.log(`Removidos ${emptyLeads.length} leads WhatsApp sem mensagens`);
     } catch (error) {
         console.warn('Falha ao limpar leads WhatsApp sem mensagens:', error.message);
+    }
+}
+
+
+function cleanupDuplicatePhoneSuffixLeads() {
+    try {
+        const leads = query("SELECT id, phone, jid, name, last_message_at FROM leads WHERE phone IS NOT NULL");
+        if (!leads || leads.length === 0) return;
+
+        const groups = new Map();
+        for (const lead of leads) {
+            const digits = String(lead.phone || '').replace(/\D/g, '');
+            if (digits.length < 11) continue;
+            const key = digits.slice(-11);
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(lead);
+        }
+
+        for (const group of groups.values()) {
+            if (group.length < 2) continue;
+
+            group.sort((a, b) => {
+                const aScore = (a.jid && String(a.jid).includes('@s.whatsapp.net')) ? 2 : 0;
+                const bScore = (b.jid && String(b.jid).includes('@s.whatsapp.net')) ? 2 : 0;
+                if (aScore != bScore) return bScore - aScore;
+
+                const aName = String(a.name || '').trim();
+                const bName = String(b.name || '').trim();
+                const aNameScore = aName && !aName.match(/^\d+$/) ? 1 : 0;
+                const bNameScore = bName && !bName.match(/^\d+$/) ? 1 : 0;
+                if (aNameScore != bNameScore) return bNameScore - aNameScore;
+
+                const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+                const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+                return bTime - aTime;
+            });
+
+            const primary = Lead.findById(group[0].id);
+            if (!primary) continue;
+            for (const dup of group.slice(1)) {
+                const duplicate = Lead.findById(dup.id);
+                if (duplicate && duplicate.id != primary.id) {
+                    mergeLeads(primary, duplicate);
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('Falha ao mesclar leads duplicados por telefone:', error.message);
     }
 }
 
@@ -1588,6 +1637,8 @@ io.on('connection', (socket) => {
     
     socket.on('get-contacts', ({ sessionId }) => {
         const leads = Lead.list({ limit: 200 });
+        const sessionPhone = getSessionPhone(sessionId);
+        const sessionDisplayName = getSessionDisplayName(sessionId) || 'Usuario';
         
         const contacts = leads
             .map(lead => {
@@ -1598,10 +1649,15 @@ io.on('connection', (socket) => {
                     ? lastMsg.content.substring(0, 50)
                     : (lastMsg.media_type ? `[${lastMsg.media_type}]` : 'Sem mensagens');
 
+                let displayName = lead.name;
+                if (sessionPhone && String(lead.phone || '') === String(sessionPhone)) {
+                    displayName = `${sessionDisplayName} (Você)`;
+                }
+
                 return {
                     jid: lead.jid,
                     number: lead.phone,
-                    name: lead.name,
+                    name: displayName,
                     vehicle: lead.vehicle,
                     plate: lead.plate,
                     status: lead.status,
@@ -1610,7 +1666,8 @@ io.on('connection', (socket) => {
                     unreadCount: 0
                 };
             })
-            .filter(Boolean);
+            .filter(Boolean)
+            .sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
         
         socket.emit('contacts-list', { sessionId, contacts });
     });
