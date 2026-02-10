@@ -16,10 +16,10 @@
 
 :root {
     /* Cores Primarias */
-    --primary: #25D366;
-    --primary-light: #34D399;
-    --primary-dark: #16A34A;
-    --primary-rgb: 37, 211, 102;
+    --primary: #1FAA59;
+    --primary-light: #2FBF71;
+    --primary-dark: #128C3A;
+    --primary-rgb: 31, 170, 89;
     
     /* Cores de Status */
     --success: #10b981;
