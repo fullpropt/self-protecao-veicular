@@ -583,12 +583,6 @@ export default function Dashboard() {
                   Configurações
                 </Link>
               </li>
-              <li className="nav-item">
-                <Link to="/configuracoes?panel=copys" className="nav-link">
-                  <span className="icon icon-templates"></span>
-                  Modelos
-                </Link>
-              </li>
             </ul>
           </div>
         </nav>

@@ -35,13 +35,15 @@ export default function Whatsapp() {
   }, []);
 
   const globals = window as Window & WhatsappGlobals;
+  const toggleSidebar = () => {
+    document.querySelector('.sidebar')?.classList.toggle('open');
+    document.querySelector('.sidebar-overlay')?.classList.toggle('active');
+  };
 
   return (
     <div className="whatsapp-react">
-      <style>{`
-* { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        :root {
+            <style>{`
+        .whatsapp-react {
             --primary: #6d28d9;
             --primary-light: #7c3aed;
             --primary-dark: #5b21b6;
@@ -60,157 +62,8 @@ export default function Whatsapp() {
             --shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
             --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.2);
         }
-        
-        html { scroll-behavior: smooth; }
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background: var(--light);
-            min-height: 100vh; 
-            overflow-x: hidden; 
-        }
-        
-        /* SIDEBAR */
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 280px;
-            height: 100vh;
-            background: linear-gradient(180deg, #4c1d95 0%, #3b136f 100%);
-            color: white;
-            padding: 25px;
-            z-index: 1000;
-            transition: transform 0.3s ease;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .sidebar-logo {
-            padding: 15px 0 25px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 25px;
-            text-align: center;
-        }
-        
-        .sidebar-logo img {
-            height: 55px;
-            border-radius: 12px;
-        }
-        
-        .sidebar-menu {
-            list-style: none;
-            flex: 1;
-        }
-        
-        .sidebar-menu li {
-            margin-bottom: 8px;
-        }
-        
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            padding: 14px 18px;
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            border-radius: 12px;
-            transition: all 0.3s;
-            font-size: 15px;
-            font-weight: 500;
-        }
-        
-        .sidebar-menu a:hover,
-        .sidebar-menu a.active {
-            background: rgba(255,255,255,0.16);
-            color: white;
-            transform: translateX(2px);
-        }
-        
-        .sidebar-menu .icon {
-            width: 18px;
-            height: 18px;
-            display: inline-block;
-            background-color: currentColor;
-            -webkit-mask-size: contain;
-            -webkit-mask-repeat: no-repeat;
-            -webkit-mask-position: center;
-            mask-size: contain;
-            mask-repeat: no-repeat;
-            mask-position: center;
-            font-size: 0;
-        }
 
-        .icon-dashboard { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 3L3 10h2v10h6v-6h2v6h6V10h2z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 3L3 10h2v10h6v-6h2v6h6V10h2z'/%3E%3C/svg%3E"); }
-        .icon-funnel { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M3 5h18l-7 8v5l-4 2v-7L3 5z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M3 5h18l-7 8v5l-4 2v-7L3 5z'/%3E%3C/svg%3E"); }
-        .icon-whatsapp { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 5h16v10H8l-4 4V5z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 5h16v10H8l-4 4V5z'/%3E%3C/svg%3E"); }
-        .icon-message { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 4h16v12H7l-3 3V4z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M4 4h16v12H7l-3 3V4z'/%3E%3C/svg%3E"); }
-        .icon-settings { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 4l-2.1-.7a7.9 7.9 0 0 0-.7-1.7l1.2-1.9-1.4-1.4-1.9 1.2a7.9 7.9 0 0 0-1.7-.7L12 3 9.4 3.8a7.9 7.9 0 0 0-1.7.7L5.8 3.3 4.4 4.7l1.2 1.9a7.9 7.9 0 0 0-.7 1.7L3 12l2.1.7c.2.6.4 1.2.7 1.7l-1.2 1.9 1.4 1.4 1.9-1.2c.5.3 1.1.5 1.7.7L12 21l2.6-.8c.6-.2 1.2-.4 1.7-.7l1.9 1.2 1.4-1.4-1.2-1.9c.3-.5.5-1.1.7-1.7L21 12z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9 4l-2.1-.7a7.9 7.9 0 0 0-.7-1.7l1.2-1.9-1.4-1.4-1.9 1.2a7.9 7.9 0 0 0-1.7-.7L12 3 9.4 3.8a7.9 7.9 0 0 0-1.7.7L5.8 3.3 4.4 4.7l1.2 1.9a7.9 7.9 0 0 0-.7 1.7L3 12l2.1.7c.2.6.4 1.2.7 1.7l-1.2 1.9 1.4 1.4 1.9-1.2c.5.3 1.1.5 1.7.7L12 21l2.6-.8c.6-.2 1.2-.4 1.7-.7l1.9 1.2 1.4-1.4-1.2-1.9c.3-.5.5-1.1.7-1.7L21 12z'/%3E%3C/svg%3E"); }
-        .icon-contacts { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M16 14c2.2 0 4 1.8 4 4v3H4v-3c0-2.2 1.8-4 4-4h8zM12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M16 14c2.2 0 4 1.8 4 4v3H4v-3c0-2.2 1.8-4 4-4h8zM12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'/%3E%3C/svg%3E"); }
-        
-        .sidebar-footer {
-            padding-top: 20px;
-            border-top: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .btn-logout {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            width: 100%;
-            padding: 14px 18px;
-            background: rgba(239, 68, 68, 0.18);
-            border: none;
-            border-radius: 12px;
-            color: #fca5a5;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        .btn-logout:hover {
-            background: rgba(239, 68, 68, 0.4);
-            color: white;
-        }
-        
-        /* MOBILE MENU */
-        .mobile-menu-toggle {
-            display: none;
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 1100;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 14px 18px;
-            font-size: 22px;
-            cursor: pointer;
-            box-shadow: var(--shadow);
-        }
-        
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.6);
-            z-index: 999;
-        }
-        
-        /* MAIN CONTENT */
-        .main-content {
-            margin-left: 280px;
-            padding: 30px;
-            transition: margin-left 0.3s ease;
-            min-height: 100vh;
-        }
-        
-        /* HEADER */
-        .header {
+        .whatsapp-react .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -218,27 +71,27 @@ export default function Whatsapp() {
             flex-wrap: wrap;
             gap: 20px;
         }
-        
-        .header-title h1 {
+
+        .whatsapp-react .header-title h1 {
             color: var(--dark);
             font-size: 32px;
             font-weight: 800;
             margin-bottom: 5px;
         }
-        
-        .header-title p {
+
+        .whatsapp-react .header-title p {
             color: var(--gray);
             font-size: 15px;
         }
 
-        .whatsapp-tabs {
+        .whatsapp-react .whatsapp-tabs {
             display: flex;
             gap: 10px;
             margin-top: 12px;
             flex-wrap: wrap;
         }
 
-        .whatsapp-tab {
+        .whatsapp-react .whatsapp-tab {
             padding: 8px 16px;
             border-radius: 20px;
             background: var(--lighter);
@@ -249,17 +102,17 @@ export default function Whatsapp() {
             transition: all 0.2s;
         }
 
-        .whatsapp-tab:hover {
+        .whatsapp-react .whatsapp-tab:hover {
             background: rgba(109, 40, 217, 0.12);
             color: var(--primary);
         }
 
-        .whatsapp-tab.active {
+        .whatsapp-react .whatsapp-tab.active {
             background: var(--primary);
             color: white;
         }
-        
-        .status-badge {
+
+        .whatsapp-react .status-badge {
             display: flex;
             align-items: center;
             gap: 10px;
@@ -268,62 +121,55 @@ export default function Whatsapp() {
             font-weight: 600;
             font-size: 14px;
         }
-        
-        .status-badge.connected {
+
+        .whatsapp-react .status-badge.connected {
             background: rgba(16, 185, 129, 0.1);
             color: var(--success);
         }
-        
-        .status-badge.disconnected {
+
+        .whatsapp-react .status-badge.disconnected {
             background: rgba(239, 68, 68, 0.1);
             color: var(--danger);
         }
-        
-        .status-badge .dot {
+
+        .whatsapp-react .status-badge .dot {
             width: 10px;
             height: 10px;
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
-        
-        .status-badge.connected .dot {
+
+        .whatsapp-react .status-badge.connected .dot {
             background: var(--success);
         }
-        
-        .status-badge.disconnected .dot {
+
+        .whatsapp-react .status-badge.disconnected .dot {
             background: var(--danger);
         }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(0.9); }
-        }
-        
-        /* MAIN GRID */
-        .whatsapp-grid {
+
+        .whatsapp-react .whatsapp-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
         }
-        
-        /* CARD */
-        .card {
+
+        .whatsapp-react .card {
             background: white;
             border-radius: 24px;
             border: 1px solid var(--border);
             box-shadow: var(--shadow);
             overflow: hidden;
         }
-        
-        .card-header {
+
+        .whatsapp-react .card-header {
             padding: 24px 28px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             gap: 15px;
         }
-        
-        .card-header-icon {
+
+        .whatsapp-react .card-header-icon {
             width: 50px;
             height: 50px;
             border-radius: 14px;
@@ -335,40 +181,39 @@ export default function Whatsapp() {
             background: var(--lighter);
         }
 
-        .card-header-icon .icon {
+        .whatsapp-react .card-header-icon .icon {
             width: 20px;
             height: 20px;
         }
-        
-        .card-header-icon.green {
+
+        .whatsapp-react .card-header-icon.green {
             color: var(--success);
             background: rgba(16, 185, 129, 0.08);
             border-color: rgba(16, 185, 129, 0.18);
         }
-        
-        .card-header-icon.blue {
+
+        .whatsapp-react .card-header-icon.blue {
             color: var(--info);
             background: rgba(59, 130, 246, 0.08);
             border-color: rgba(59, 130, 246, 0.18);
         }
-        
-        .card-header h2 {
+
+        .whatsapp-react .card-header h2 {
             font-size: 20px;
             font-weight: 700;
             color: var(--dark);
         }
-        
-        .card-body {
+
+        .whatsapp-react .card-body {
             padding: 28px;
         }
-        
-        /* QR CODE SECTION */
-        .qr-container {
+
+        .whatsapp-react .qr-container {
             text-align: center;
             padding: 30px;
         }
-        
-        .qr-wrapper {
+
+        .whatsapp-react .qr-wrapper {
             background: white;
             padding: 25px;
             border-radius: 20px;
@@ -379,8 +224,8 @@ export default function Whatsapp() {
             min-width: 280px;
             min-height: 280px;
         }
-        
-        #qr-code {
+
+        .whatsapp-react #qr-code {
             width: 230px;
             height: 230px;
             display: flex;
@@ -388,22 +233,22 @@ export default function Whatsapp() {
             justify-content: center;
             margin: 0 auto;
         }
-        
-        #qr-code img {
+
+        .whatsapp-react #qr-code img {
             width: 100%;
             height: 100%;
             object-fit: contain;
         }
-        
-        .qr-loading {
+
+        .whatsapp-react .qr-loading {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 230px;
         }
-        
-        .spinner {
+
+        .whatsapp-react .spinner {
             width: 60px;
             height: 60px;
             border: 4px solid var(--border);
@@ -412,33 +257,28 @@ export default function Whatsapp() {
             animation: spin 1s linear infinite;
             margin-bottom: 20px;
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .qr-loading p {
+
+        .whatsapp-react .qr-loading p {
             color: var(--gray);
             font-size: 15px;
         }
-        
-        .qr-timer {
+
+        .whatsapp-react .qr-timer {
             color: var(--gray);
             font-size: 13px;
             margin-top: 15px;
         }
-        
-        .qr-timer strong {
+
+        .whatsapp-react .qr-timer strong {
             color: var(--primary);
         }
-        
-        /* CONNECTED STATE */
-        .connected-state {
+
+        .whatsapp-react .connected-state {
             text-align: center;
             padding: 40px 20px;
         }
-        
-        .connected-avatar {
+
+        .whatsapp-react .connected-avatar {
             width: 100px;
             height: 100px;
             background: var(--success);
@@ -452,50 +292,49 @@ export default function Whatsapp() {
             margin: 0 auto 25px;
             box-shadow: 0 10px 24px rgba(16, 185, 129, 0.3);
         }
-        
-        .connected-state h3 {
+
+        .whatsapp-react .connected-state h3 {
             font-size: 22px;
             color: var(--dark);
             margin-bottom: 8px;
         }
-        
-        .connected-state p {
+
+        .whatsapp-react .connected-state p {
             color: var(--gray);
             font-size: 15px;
             margin-bottom: 25px;
         }
-        
-        .connected-info {
+
+        .whatsapp-react .connected-info {
             background: var(--lighter);
             border-radius: 16px;
             padding: 20px;
             margin-bottom: 25px;
         }
-        
-        .connected-info-row {
+
+        .whatsapp-react .connected-info-row {
             display: flex;
             justify-content: space-between;
             padding: 10px 0;
             border-bottom: 1px solid var(--border);
         }
-        
-        .connected-info-row:last-child {
+
+        .whatsapp-react .connected-info-row:last-child {
             border-bottom: none;
         }
-        
-        .connected-info-label {
+
+        .whatsapp-react .connected-info-label {
             color: var(--gray);
             font-size: 14px;
         }
-        
-        .connected-info-value {
+
+        .whatsapp-react .connected-info-value {
             color: var(--dark);
             font-weight: 600;
             font-size: 14px;
         }
-        
-        /* BUTTONS */
-        .btn {
+
+        .whatsapp-react .btn {
             padding: 16px 28px;
             border: none;
             border-radius: 14px;
@@ -509,66 +348,65 @@ export default function Whatsapp() {
             transition: all 0.3s;
             width: 100%;
         }
-        
-        .btn-whatsapp {
+
+        .whatsapp-react .btn-whatsapp {
             background: var(--whatsapp);
             color: white;
             box-shadow: 0 6px 14px rgba(37, 211, 102, 0.2);
         }
-        
-        .btn-whatsapp:hover {
+
+        .whatsapp-react .btn-whatsapp:hover {
             transform: translateY(-1px);
             box-shadow: 0 8px 18px rgba(37, 211, 102, 0.25);
         }
-        
-        .btn-whatsapp:disabled {
+
+        .whatsapp-react .btn-whatsapp:disabled {
             background: var(--gray);
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
-        
-        .btn-danger {
+
+        .whatsapp-react .btn-danger {
             background: var(--danger);
             color: white;
             box-shadow: 0 6px 14px rgba(239, 68, 68, 0.2);
         }
-        
-        .btn-danger:hover {
+
+        .whatsapp-react .btn-danger:hover {
             transform: translateY(-1px);
             box-shadow: 0 8px 18px rgba(239, 68, 68, 0.25);
         }
-        
-        .btn-outline {
+
+        .whatsapp-react .btn-outline {
             background: white;
             border: 1px solid var(--border);
             color: var(--dark);
         }
-        
-        .btn-outline:hover {
+
+        .whatsapp-react .btn-outline:hover {
             border-color: var(--primary);
             color: var(--primary);
         }
-        
-        .btn-primary {
+
+        .whatsapp-react .btn-primary {
             background: var(--primary);
             color: white;
             box-shadow: 0 6px 14px rgba(109, 40, 217, 0.2);
         }
-        
-        .btn-primary:hover {
+
+        .whatsapp-react .btn-primary:hover {
             transform: translateY(-1px);
             box-shadow: 0 8px 18px rgba(109, 40, 217, 0.25);
         }
-        
-        /* INSTRUCTIONS */
-        .instructions {
+
+        .whatsapp-react .instructions {
             background: var(--lighter);
             border-radius: 16px;
             padding: 25px;
         }
-        
-        .instructions h3 {
+
+        .whatsapp-react .instructions h3 {
             font-size: 16px;
             color: var(--dark);
             margin-bottom: 20px;
@@ -576,19 +414,19 @@ export default function Whatsapp() {
             align-items: center;
             gap: 10px;
         }
-        
-        .instruction-step {
+
+        .whatsapp-react .instruction-step {
             display: flex;
             gap: 15px;
             margin-bottom: 16px;
             align-items: flex-start;
         }
-        
-        .instruction-step:last-child {
+
+        .whatsapp-react .instruction-step:last-child {
             margin-bottom: 0;
         }
-        
-        .step-number {
+
+        .whatsapp-react .step-number {
             width: 32px;
             height: 32px;
             background: var(--primary);
@@ -601,31 +439,30 @@ export default function Whatsapp() {
             font-weight: 700;
             flex-shrink: 0;
         }
-        
-        .step-text {
+
+        .whatsapp-react .step-text {
             color: var(--dark);
             font-size: 14px;
             line-height: 1.6;
             padding-top: 4px;
         }
-        
-        /* CONTACTS SECTION */
-        .contacts-header {
+
+        .whatsapp-react .contacts-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
         }
-        
-        .contacts-header h3 {
+
+        .whatsapp-react .contacts-header h3 {
             font-size: 16px;
             color: var(--dark);
             display: flex;
             align-items: center;
             gap: 10px;
         }
-        
-        .contacts-count {
+
+        .whatsapp-react .contacts-count {
             background: var(--primary);
             color: white;
             padding: 4px 12px;
@@ -633,13 +470,13 @@ export default function Whatsapp() {
             font-size: 12px;
             font-weight: 600;
         }
-        
-        .contacts-list {
+
+        .whatsapp-react .contacts-list {
             max-height: 400px;
             overflow-y: auto;
         }
-        
-        .contact-item {
+
+        .whatsapp-react .contact-item {
             display: flex;
             align-items: center;
             gap: 15px;
@@ -648,12 +485,12 @@ export default function Whatsapp() {
             transition: all 0.2s;
             cursor: pointer;
         }
-        
-        .contact-item:hover {
+
+        .whatsapp-react .contact-item:hover {
             background: var(--lighter);
         }
-        
-        .contact-avatar {
+
+        .whatsapp-react .contact-avatar {
             width: 48px;
             height: 48px;
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
@@ -665,23 +502,23 @@ export default function Whatsapp() {
             font-weight: 600;
             font-size: 18px;
         }
-        
-        .contact-info {
+
+        .whatsapp-react .contact-info {
             flex: 1;
         }
-        
-        .contact-name {
+
+        .whatsapp-react .contact-name {
             font-weight: 600;
             color: var(--dark);
             font-size: 15px;
         }
-        
-        .contact-phone {
+
+        .whatsapp-react .contact-phone {
             color: var(--gray);
             font-size: 13px;
         }
-        
-        .contact-action {
+
+        .whatsapp-react .contact-action {
             background: var(--whatsapp);
             color: white;
             border: none;
@@ -696,18 +533,18 @@ export default function Whatsapp() {
             letter-spacing: 0.3px;
             transition: all 0.2s;
         }
-        
-        .contact-action:hover {
+
+        .whatsapp-react .contact-action:hover {
             transform: scale(1.1);
         }
-        
-        .contacts-empty {
+
+        .whatsapp-react .contacts-empty {
             text-align: center;
             padding: 50px 20px;
             color: var(--gray);
         }
-        
-        .contacts-empty .icon {
+
+        .whatsapp-react .contacts-empty .icon {
             width: 64px;
             height: 64px;
             margin: 0 auto 15px;
@@ -721,16 +558,15 @@ export default function Whatsapp() {
             font-size: 14px;
             font-weight: 600;
         }
-        
-        /* TOAST */
-        .toast-container {
+
+        .whatsapp-react .toast-container {
             position: fixed;
             bottom: 30px;
             right: 30px;
             z-index: 9999;
         }
-        
-        .toast {
+
+        .whatsapp-react .toast {
             background: white;
             padding: 16px 24px;
             border-radius: 14px;
@@ -742,129 +578,129 @@ export default function Whatsapp() {
             animation: slideIn 0.3s ease;
             min-width: 280px;
         }
-        
-        .toast.success { border-left: 4px solid var(--success); }
-        .toast.error { border-left: 4px solid var(--danger); }
-        .toast.warning { border-left: 4px solid var(--warning); }
-        .toast.info { border-left: 4px solid var(--info); }
-        
-        .toast-icon { font-size: 22px; }
-        .toast-message { color: var(--dark); font-size: 14px; flex: 1; }
-        
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        
-        .toast.fade-out {
-            animation: slideOut 0.3s ease forwards;
-        }
-        
-        @keyframes slideOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-        
-        /* RESPONSIVE */
+
+        .whatsapp-react .toast.success { border-left: 4px solid var(--success); }
+        .whatsapp-react .toast.error { border-left: 4px solid var(--danger); }
+        .whatsapp-react .toast.warning { border-left: 4px solid var(--warning); }
+        .whatsapp-react .toast.info { border-left: 4px solid var(--info); }
+
+        .whatsapp-react .toast-icon { font-size: 22px; }
+        .whatsapp-react .toast-message { color: var(--dark); font-size: 14px; flex: 1; }
+
         @media (max-width: 1200px) {
-            .whatsapp-grid {
+            .whatsapp-react .whatsapp-grid {
                 grid-template-columns: 1fr;
             }
         }
-        
+
         @media (max-width: 768px) {
-            .mobile-menu-toggle {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .sidebar {
-                transform: translateX(-100%);
-                width: 85%;
-                max-width: 320px;
-            }
-            
-            .sidebar.active {
-                transform: translateX(0);
-            }
-            
-            .sidebar-overlay.active {
-                display: block;
-            }
-            
-            .main-content {
-                margin-left: 0;
-                padding: 80px 16px 20px;
-            }
-            
-            .header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .header-title h1 {
+            .whatsapp-react .header-title h1 {
                 font-size: 24px;
             }
-            
-            .qr-wrapper {
+
+            .whatsapp-react .qr-wrapper {
                 min-width: 240px;
                 min-height: 240px;
             }
-            
-            #qr-code {
+
+            .whatsapp-react #qr-code {
                 width: 200px;
                 height: 200px;
             }
         }
-      `}</style>
-          <aside className="sidebar" id="sidebar">
-              <div className="sidebar-logo">
-                  <img src="img/logo-self.png" alt="SELF Proteção Veicular" />
-              </div>
-              
-              <ul className="sidebar-menu">
-                  <li>
-                      <Link to="/dashboard">
-                          <span className="icon icon-dashboard"></span>
-                          Dashboard
-                      </Link>
-                  </li>
-                  <li>
-                      <Link to="/funil">
-                          <span className="icon icon-funnel"></span>
-                          Funil de Vendas
-                      </Link>
-                  </li>
-                  <li>
-                      <Link to="/whatsapp" className="active">
-                          <span className="icon icon-whatsapp"></span>
-                          WhatsApp
-                      </Link>
-                  </li>
-                  <li>
-                      <Link to="/inbox">
-                          <span className="icon icon-inbox"></span>
-                          Inbox
-                      </Link>
-                  </li>
-                  <li>
-                      <Link to="/configuracoes">
-                          <span className="icon icon-settings"></span>
-                          Configurações
-                      </Link>
-                  </li>
-              </ul>
-              
-              <div className="sidebar-footer">
-                  <button className="btn-logout" onClick={() => globals.logout?.()}>Sair</button>
-              </div>
-          </aside>
-          
-          <button className="mobile-menu-toggle" onClick={() => globals.toggleSidebar?.()}>☰</button>
-          <div className="sidebar-overlay" onClick={() => globals.toggleSidebar?.()}></div>
-          
-          <main className="main-content">
+            `}</style>
+      <button className="mobile-menu-toggle" type="button" onClick={toggleSidebar}>
+        {'\u2630'}
+      </button>
+      <div className="sidebar-overlay" onClick={toggleSidebar}></div>
+
+      <aside className="sidebar" id="sidebar">
+        <div className="sidebar-header">
+          <Link to="/dashboard" className="sidebar-logo">
+            <img src="img/logo-self.png" alt="SELF" />
+            <span>SELF</span>
+          </Link>
+        </div>
+        <nav className="sidebar-nav">
+          <div className="nav-section">
+            <ul className="nav-menu">
+              <li className="nav-item">
+                <Link to="/dashboard" className="nav-link">
+                  <span className="icon icon-dashboard"></span>Painel de Controle
+                </Link>
+              </li>
+              <li className="nav-item">
+                <Link to="/contatos" className="nav-link">
+                  <span className="icon icon-contacts"></span>Contatos
+                </Link>
+              </li>
+              <li className="nav-item">
+                <Link to="/campanhas" className="nav-link">
+                  <span className="icon icon-campaigns"></span>Campanhas
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div className="nav-section">
+            <div className="nav-section-title">Conversas</div>
+            <ul className="nav-menu">
+              <li className="nav-item">
+                <Link to="/inbox" className="nav-link">
+                  <span className="icon icon-inbox"></span>Inbox
+                  <span className="badge" id="unreadBadge" style={{ display: 'none' }}>0</span>
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div className="nav-section">
+            <div className="nav-section-title">Automação</div>
+            <ul className="nav-menu">
+              <li className="nav-item">
+                <Link to="/automacao" className="nav-link">
+                  <span className="icon icon-automation"></span>Automação
+                </Link>
+              </li>
+              <li className="nav-item">
+                <Link to="/fluxos" className="nav-link">
+                  <span className="icon icon-flows"></span>Fluxos de Conversa
+                </Link>
+              </li>
+              <li className="nav-item">
+                <Link to="/funil" className="nav-link">
+                  <span className="icon icon-funnel"></span>Funil de Vendas
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div className="nav-section">
+            <div className="nav-section-title">Sistema</div>
+            <ul className="nav-menu">
+              <li className="nav-item">
+                <Link to="/whatsapp" className="nav-link active">
+                  <span className="icon icon-whatsapp"></span>WhatsApp
+                </Link>
+              </li>
+              <li className="nav-item">
+                <Link to="/configuracoes" className="nav-link">
+                  <span className="icon icon-settings"></span>Configurações
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </nav>
+        <div className="sidebar-footer">
+          <div className="whatsapp-status">
+            <span className="status-indicator disconnected"></span>
+            <span className="whatsapp-status-text">Desconectado</span>
+          </div>
+          <button className="btn-logout" onClick={() => globals.logout?.()}>Sair</button>
+        </div>
+      </aside>
+
+      <main className="main-content">
               <div className="header">
                   <div className="header-title">
                       <h1>WhatsApp</h1>
@@ -954,7 +790,7 @@ export default function Whatsapp() {
                                   </div>
                                   
                                   <div style={{ display: 'flex', gap: '15px', flexDirection: 'column' }}>
-                                      <Link to="/conversas" className="btn btn-primary">Ir para Conversas</Link>
+                                      <Link to="/inbox" className="btn btn-primary">Ir para Conversas</Link>
                                       <button className="btn btn-danger" onClick={() => globals.disconnect?.()}>Desconectar</button>
                                   </div>
                               </div>
@@ -997,3 +833,5 @@ export default function Whatsapp() {
     </div>
   );
 }
+
+

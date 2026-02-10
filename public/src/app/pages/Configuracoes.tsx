@@ -176,7 +176,6 @@ export default function Configuracoes() {
                       <ul className="nav-menu">
                           <li className="nav-item"><Link to="/whatsapp" className="nav-link"><span className="icon icon-whatsapp"></span>WhatsApp</Link></li>
                           <li className="nav-item"><Link to="/configuracoes" className="nav-link active"><span className="icon icon-settings"></span>Configurações</Link></li>
-                          <li className="nav-item"><Link to="/configuracoes?panel=copys" className="nav-link"><span className="icon icon-templates"></span>Modelos</Link></li>
                       </ul>
                   </div>
               </nav>

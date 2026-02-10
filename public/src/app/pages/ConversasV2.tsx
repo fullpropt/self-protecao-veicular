@@ -44,7 +44,7 @@ export default function ConversasV2() {
                   <img src="img/logo-self.png" alt="SELF" onError={(event) => { (event.currentTarget as HTMLElement).style.display = 'none'; }} />
               </div>
               <ul className="sidebar-menu">
-                  <li><Link to="/dashboard"><span className="icon icon-dashboard"></span> Dashboard</Link></li>
+                  <li><Link to="/dashboard"><span className="icon icon-dashboard"></span> Painel de Controle</Link></li>
                   <li><Link to="/funil"><span className="icon icon-funnel"></span> Funil de Vendas</Link></li>
                   <li><Link to="/whatsapp"><span className="icon icon-whatsapp"></span> WhatsApp</Link></li>
                   <li><Link to="/conversas-v2" className="active"><span className="icon icon-message"></span> Conversas</Link></li>

@@ -381,11 +381,6 @@ export default function Inbox() {
                   <span className="icon icon-settings"></span>Configurações
                 </Link>
               </li>
-              <li className="nav-item">
-                <Link to="/configuracoes?panel=copys" className="nav-link" title="Copys e Mensagens">
-                  <span className="icon icon-templates"></span>Modelos
-                </Link>
-              </li>
             </ul>
           </div>
         </nav>

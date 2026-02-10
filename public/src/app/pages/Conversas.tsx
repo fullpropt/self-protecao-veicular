@@ -662,7 +662,7 @@ export default function Conversas() {
                   <li>
                       <Link to="/dashboard">
                           <span className="icon icon-dashboard"></span>
-                          Dashboard
+                          Painel de Controle
                       </Link>
                   </li>
                   <li>
