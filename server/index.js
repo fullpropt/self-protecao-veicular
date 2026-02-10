@@ -1013,6 +1013,11 @@ async function processIncomingMessage(sessionId, msg) {
         lead_id: lead.id,
         session_id: sessionId
     });
+
+    const existingMessage = Message.findByMessageId(msg.key.id);
+    if (existingMessage) {
+        return;
+    }
     
     // Salvar mensagem
     const normalizedStatus = isFromMe ? 'sent' : 'delivered';

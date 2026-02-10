@@ -35,6 +35,7 @@ let conversations: Conversation[] = [];
 let currentConversation: Conversation | null = null;
 let messages: ChatMessage[] = [];
 let socket: null | { on: (event: string, handler: (data?: any) => void) => void; emit: (event: string, payload?: any) => void } = null;
+let socketBound = false;
 let refreshInterval: number | null = null;
 
 function escapeHtml(value: string) {
@@ -71,11 +72,33 @@ onReady(initInbox);
 
 function initSocket() {
     try {
-        if (!io) {
+        const win = window as Window & { APP?: { socket?: any; socketUrl?: string } };
+        const appSocket = win.APP?.socket;
+        if (appSocket) {
+            socket = appSocket;
+        } else if (io) {
+            const token = sessionStorage.getItem('selfDashboardToken');
+            const socketOptions: {
+                transports: string[];
+                reconnection: boolean;
+                reconnectionAttempts: number;
+                reconnectionDelay: number;
+                auth?: { token: string };
+            } = {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 10,
+                reconnectionDelay: 2000
+            };
+            if (token) socketOptions.auth = { token };
+            socket = io(win.APP?.socketUrl, socketOptions);
+        } else {
             console.log('Socket não disponível');
             return;
         }
-        socket = io();
+
+        if (!socket || socketBound) return;
+        socketBound = true;
         
         socket.on('new-message', (data) => {
             const isCurrent =
