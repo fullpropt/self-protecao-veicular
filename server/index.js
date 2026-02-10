@@ -427,7 +427,7 @@ function cleanupLidLeads() {
 function cleanupInvalidPhones() {
     try {
         const candidates = query(
-            "SELECT id, jid, phone FROM leads WHERE (jid LIKE '%@s.whatsapp.net%' AND jid LIKE '%:%') OR length(phone) > 13"
+            "SELECT id, jid, phone FROM leads WHERE jid LIKE '%@s.whatsapp.net%'"
         );
         if (!candidates || candidates.length === 0) return;
 
@@ -1402,10 +1402,11 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     }
     
     const jid = formatJid(to);
+    const normalizedPhone = extractNumber(jid);
     
     // Buscar ou criar lead
     const { lead } = Lead.findOrCreate({
-        phone: to.replace(/\D/g, ''),
+        phone: normalizedPhone,
         jid,
         source: 'manual'
     });
