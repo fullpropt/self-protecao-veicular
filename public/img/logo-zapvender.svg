@@ -1,31 +1,11 @@
-<svg width="560" height="140" viewBox="0 0 560 140" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ZapVender - Automação WhatsApp">
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <defs>
-    <linearGradient id="logoGradient" x1="16" y1="10" x2="124" y2="130" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7C3AED"/>
-      <stop offset="0.55" stop-color="#4F46E5"/>
-      <stop offset="1" stop-color="#06B6D4"/>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1FAE5E"/>
+      <stop offset="1" stop-color="#0F6D35"/>
     </linearGradient>
-    <linearGradient id="accentGradient" x1="44" y1="42" x2="100" y2="98" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF" stop-opacity="0.96"/>
-      <stop offset="1" stop-color="#E0F2FE" stop-opacity="0.9"/>
-    </linearGradient>
-    <filter id="softShadow" x="0" y="0" width="160" height="160" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#4F46E5" flood-opacity="0.28"/>
-    </filter>
   </defs>
-
-  <g filter="url(#softShadow)">
-    <rect x="16" y="10" width="108" height="108" rx="30" fill="url(#logoGradient)"/>
-  </g>
-
-  <path d="M45 46C45 38.8203 50.8203 33 58 33H82C94.7025 33 105 43.2975 105 56V62C105 74.7025 94.7025 85 82 85H70.5L58.5 95.5C57.2462 96.5979 55.2528 95.7081 55.2528 94.0415V85.6174C49.4307 84.318 45 79.1124 45 72.9V46Z" fill="url(#accentGradient)"/>
-
-  <path d="M63 59L73.5 67.5L87 51" stroke="#4F46E5" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <text x="150" y="68" fill="#0F172A" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="52" font-weight="800" letter-spacing="-1">
-    ZapVender
-  </text>
-  <text x="152" y="98" fill="#64748B" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif" font-size="20" font-weight="500" letter-spacing="0.2">
-    Automação WhatsApp
-  </text>
+  <rect width="256" height="256" rx="56" fill="url(#g)"/>
+  <circle cx="128" cy="128" r="88" fill="#0B4F28"/>
+  <text x="128" y="148" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="700" fill="#FFFFFF">ZV</text>
 </svg>
