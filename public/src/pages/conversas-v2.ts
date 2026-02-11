@@ -70,7 +70,7 @@ function getFunilUrl(leadId: string | number) {
 }
 
 // ============================================
-// INICIALIZAÃ‡ÃƒO
+// INICIALIZAÇÃO
 // ============================================
 function initConversasV2() {
     initSocket();

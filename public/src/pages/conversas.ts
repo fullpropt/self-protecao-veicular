@@ -86,7 +86,7 @@ function initConversas() {
     initSocket();
     loadConversations();
     
-    // Verificar parÃ¢metros da URL
+    // Verificar parâmetros da URL
     const params = getQueryParams();
     const phone = params.get('phone');
     const name = params.get('name');

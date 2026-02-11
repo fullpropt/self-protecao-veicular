@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
 
@@ -51,7 +51,7 @@ function DashboardHeader() {
       <div className="page-title">
         <h1>Painel de Controle</h1>
         <p>
-          Bem-vindo, <span className="user-name">UsuÃ¡rio</span> |{' '}
+          Bem-vindo, <span className="user-name">Usuário</span> |{' '}
           <span className="current-date"></span>
         </p>
       </div>
@@ -81,20 +81,20 @@ function StatsPeriod() {
   return (
     <div className="dashboard-botconversa">
       <div className="stats-period-card">
-        <h3>EstatÃ­sticas por perÃ­odo</h3>
+        <h3>Estatísticas por período</h3>
         <div className="stats-period-controls">
           <input type="date" className="form-input" id="statsStartDate" />
           <input type="date" className="form-input" id="statsEndDate" />
           <select className="form-select" id="statsMetric" style={{ width: 'auto' }}>
             <option value="novos_contatos">Novos Contatos</option>
             <option value="mensagens">Mensagens</option>
-            <option value="interacoes">InteraÃ§Ãµes</option>
+            <option value="interacoes">Interações</option>
           </select>
           <div className="chart-type-toggle">
-            <button type="button" className="chart-btn active" title="GrÃ¡fico de linhas">
+            <button type="button" className="chart-btn active" title="Gráfico de linhas">
               <span className="icon icon-chart-line icon-sm"></span>
             </button>
-            <button type="button" className="chart-btn" title="GrÃ¡fico de barras">
+            <button type="button" className="chart-btn" title="Gráfico de barras">
               <span className="icon icon-chart-bar icon-sm"></span>
             </button>
           </div>
@@ -104,7 +104,7 @@ function StatsPeriod() {
         </div>
       </div>
       <div className="stats-general-card">
-        <h3>EstatÃ­sticas gerais</h3>
+        <h3>Estatísticas gerais</h3>
         <div className="stats-general-item">
           <span className="stats-general-label">Contatos que interagiram</span>
           <span className="stats-general-value" id="statsContacts">0</span>
@@ -114,7 +114,7 @@ function StatsPeriod() {
           <span className="stats-general-value" id="statsMessages">0</span>
         </div>
         <div className="stats-general-item">
-          <span className="stats-general-label">InteraÃ§Ãµes/Inscrito</span>
+          <span className="stats-general-label">Interações/Inscrito</span>
           <span className="stats-general-value" id="statsInteractionsPer">0</span>
         </div>
       </div>
@@ -130,13 +130,13 @@ function EventsCard() {
           Eventos personalizados{' '}
           <span
             className="info-icon"
-            title="Crie eventos personalizados, integre-os em fluxos com o Bloco de AÃ§Ã£o e rastreie suas estatÃ­sticas."
+            title="Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas."
           >
             <span className="icon icon-info icon-sm"></span>
           </span>
         </h3>
         <select className="form-select" style={{ width: 'auto' }}>
-          <option>Este mÃªs</option>
+          <option>Este mês</option>
           <option>Semana</option>
           <option>Ano</option>
         </select>
@@ -146,7 +146,7 @@ function EventsCard() {
         <span className="events-empty-emoji icon icon-empty"></span>
         <p><strong>Nenhum evento personalizado ainda</strong></p>
         <p className="text-muted">
-          Crie eventos personalizados, integre-os em fluxos com o Bloco de AÃ§Ã£o e rastreie suas estatÃ­sticas.
+          Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas.
         </p>
       </div>
     </div>
@@ -168,7 +168,7 @@ function StatsCards() {
         <div className="stat-icon success"><span className="icon icon-check"></span></div>
         <div className="stat-content">
           <div className="stat-value" id="completedLeads">0</div>
-          <div className="stat-label">ConcluÃ­dos</div>
+          <div className="stat-label">Concluídos</div>
           <div className="stat-change positive" id="completedChange">+0%</div>
         </div>
       </div>
@@ -184,7 +184,7 @@ function StatsCards() {
         <div className="stat-icon info"><span className="icon icon-chart-bar"></span></div>
         <div className="stat-content">
           <div className="stat-value" id="conversionRate">0.0%</div>
-          <div className="stat-label">ConversÃ£o</div>
+          <div className="stat-label">Conversão</div>
           <div className="stat-change positive" id="conversionChange">+0%</div>
         </div>
       </div>
@@ -195,7 +195,7 @@ function StatsCards() {
 function Funnel() {
   return (
     <div className="funnel-container">
-      <div className="funnel-title"><span className="icon icon-funnel icon-sm"></span> Funil de ConversÃ£o</div>
+      <div className="funnel-title"><span className="icon icon-funnel icon-sm"></span> Funil de Conversão</div>
       <div className="funnel-stages" id="funnelStages">
         <div className="funnel-stage" data-stage="1">
           <div className="funnel-value" id="funnel1">0</div>
@@ -217,7 +217,7 @@ function Funnel() {
         <div className="funnel-arrow">&rarr;</div>
         <div className="funnel-stage" data-stage="4">
           <div className="funnel-value" id="funnel4">0</div>
-          <div className="funnel-label">ConcluÃ­do</div>
+          <div className="funnel-label">Concluído</div>
           <div className="funnel-percent" id="funnel4Percent">0%</div>
         </div>
       </div>
@@ -251,7 +251,7 @@ function LeadsTable() {
             <option value="">Todos os Status</option>
             <option value="1">Novo</option>
             <option value="2">Em Andamento</option>
-            <option value="3">ConcluÃ­do</option>
+            <option value="3">Concluído</option>
             <option value="4">Perdido</option>
           </select>
         </div>
@@ -270,9 +270,9 @@ function LeadsTable() {
               <th>Nome</th>
               <th>WhatsApp</th>
               <th>Placa</th>
-              <th>VeÃ­culo</th>
+              <th>Veículo</th>
               <th>Status</th>
-              <th>AÃ§Ãµes</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody id="leadsTableBody">
@@ -303,7 +303,7 @@ function LeadModals() {
               className="modal-close"
               onClick={() => globals.closeModal?.('importModal')}
             >
-              Ã—
+              ×
             </button>
           </div>
           <div className="modal-body">
@@ -311,7 +311,7 @@ function LeadModals() {
               <label className="form-label">Arquivo CSV</label>
               <input type="file" className="form-input" id="importFile" accept=".csv,.txt" />
               <p className="form-help">
-                Formato esperado: nome, telefone, veiculo, placa (separados por vÃ­rgula)
+                Formato esperado: nome, telefone, veiculo, placa (separados por vírgula)
               </p>
             </div>
             <div className="form-group">
@@ -320,7 +320,7 @@ function LeadModals() {
                 className="form-textarea"
                 id="importText"
                 rows={10}
-                placeholder={`nome,telefone,veiculo,placa\nJoÃ£o Silva,27999999999,Honda Civic 2020,ABC1234\nMaria Santos,27988888888,Toyota Corolla 2021,XYZ5678`}
+                placeholder={`nome,telefone,veiculo,placa\nJoão Silva,27999999999,Honda Civic 2020,ABC1234\nMaria Santos,27988888888,Toyota Corolla 2021,XYZ5678`}
               ></textarea>
             </div>
           </div>
@@ -344,7 +344,7 @@ function LeadModals() {
               className="modal-close"
               onClick={() => globals.closeModal?.('addLeadModal')}
             >
-              Ã—
+              ×
             </button>
           </div>
           <div className="modal-body">
@@ -359,7 +359,7 @@ function LeadModals() {
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">VeÃ­culo</label>
+                  <label className="form-label">Veículo</label>
                   <input type="text" className="form-input" id="leadVehicle" placeholder="Ex: Honda Civic 2020" />
                 </div>
                 <div className="form-group">
@@ -400,7 +400,7 @@ function LeadModals() {
               className="modal-close"
               onClick={() => globals.closeModal?.('editLeadModal')}
             >
-              Ã—
+              ×
             </button>
           </div>
           <div className="modal-body">
@@ -416,7 +416,7 @@ function LeadModals() {
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">VeÃ­culo</label>
+                  <label className="form-label">Veículo</label>
                   <input type="text" className="form-input" id="editLeadVehicle" />
                 </div>
                 <div className="form-group">
@@ -433,7 +433,7 @@ function LeadModals() {
                 <select className="form-select" id="editLeadStatus">
                   <option value="1">Novo</option>
                   <option value="2">Em Andamento</option>
-                  <option value="3">ConcluÃ­do</option>
+                  <option value="3">Concluído</option>
                   <option value="4">Perdido</option>
                 </select>
               </div>
@@ -444,7 +444,7 @@ function LeadModals() {
               Cancelar
             </button>
             <button type="button" className="btn btn-primary" onClick={() => globals.updateLead?.()}>
-              Salvar AlteraÃ§Ãµes
+              Salvar Alterações
             </button>
           </div>
         </div>
@@ -543,12 +543,12 @@ export default function Dashboard() {
           </div>
 
           <div className="nav-section">
-            <div className="nav-section-title">AutomaÃ§Ã£o</div>
+            <div className="nav-section-title">Automação</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/automacao" className="nav-link">
                   <span className="icon icon-automation"></span>
-                  AutomaÃ§Ã£o
+                  Automação
                 </Link>
               </li>
               <li className="nav-item">
@@ -578,7 +578,7 @@ export default function Dashboard() {
               <li className="nav-item">
                 <Link to="/configuracoes" className="nav-link">
                   <span className="icon icon-settings"></span>
-                  ConfiguraÃ§Ãµes
+                  Configurações
                 </Link>
               </li>
             </ul>

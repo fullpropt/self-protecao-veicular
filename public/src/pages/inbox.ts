@@ -1,4 +1,4 @@
-﻿// Inbox page logic migrated to module
+// Inbox page logic migrated to module
 
 declare const io:
     | undefined
@@ -539,13 +539,13 @@ async function handleAudioUpload(event: Event) {
     if (!file || !currentConversation) return;
 
     try {
-        showLoading('Enviando Ã¡udio...');
+        showLoading('Enviando áudio...');
         const uploaded = await uploadFile(file);
         hideLoading();
 
         const newMessage: ChatMessage = {
             id: Date.now(),
-            content: 'Ãudio',
+            content: 'Áudio',
             direction: 'outgoing',
             status: 'pending',
             created_at: new Date().toISOString(),
@@ -569,7 +569,7 @@ async function handleAudioUpload(event: Event) {
         if (chatMessages) chatMessages.innerHTML = renderMessages();
     } catch (error) {
         hideLoading();
-        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel enviar o Ã¡udio');
+        showToast('error', 'Erro', 'Não foi possível enviar o áudio');
     } finally {
         if (target) target.value = '';
     }

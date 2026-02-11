@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ZapVender - JavaScript Global
  * Sistema estilo BotConversa
  * Versão: 4.0.0

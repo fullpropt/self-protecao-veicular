@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
@@ -372,11 +372,11 @@ export default function Inbox() {
             </ul>
           </div>
           <div className="nav-section">
-            <div className="nav-section-title">AutomaÃ§Ã£o</div>
+            <div className="nav-section-title">Automação</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/automacao" className="nav-link">
-                  <span className="icon icon-automation"></span>AutomaÃ§Ã£o
+                  <span className="icon icon-automation"></span>Automação
                 </Link>
               </li>
               <li className="nav-item">
@@ -401,7 +401,7 @@ export default function Inbox() {
               </li>
               <li className="nav-item">
                 <Link to="/configuracoes" className="nav-link">
-                  <span className="icon icon-settings"></span>ConfiguraÃ§Ãµes
+                  <span className="icon icon-settings"></span>Configurações
                 </Link>
               </li>
             </ul>
@@ -423,7 +423,7 @@ export default function Inbox() {
               <h2><span className="icon icon-inbox icon-sm"></span> Inbox</h2>
               <div className="conversations-tabs">
                 <button className="active" onClick={() => globals.filterConversations?.('all')}>Todos</button>
-                <button onClick={() => globals.filterConversations?.('unread')}>NÃ£o lidos</button>
+                <button onClick={() => globals.filterConversations?.('unread')}>Não lidos</button>
               </div>
               <div className="search-box" style={{ maxWidth: '100%' }}>
                 <span className="search-icon icon icon-search icon-sm"></span>
@@ -447,17 +447,17 @@ export default function Inbox() {
             <div className="chat-empty">
               <div className="chat-empty-icon icon icon-empty icon-lg"></div>
               <h3>Nenhum chat selecionado</h3>
-              <p>Selecione uma conversa da lista ao lado para comeÃ§ar a conversar</p>
+              <p>Selecione uma conversa da lista ao lado para começar a conversar</p>
             </div>
           </div>
 
           <div className="inbox-right-panel" id="inboxRightPanel">
             <div className="inbox-right-panel-content" id="inboxRightContent">
               <span className="inbox-right-panel-robot icon icon-automation icon-lg"></span>
-              <p><strong>Este cliente ainda nÃ£o estÃ¡ cadastrado na sua audiÃªncia.</strong></p>
-              <p>Vamos cadastrÃ¡-lo para que o cartÃ£o do usuÃ¡rio dele apareÃ§a aqui?</p>
+              <p><strong>Este cliente ainda não está cadastrado na sua audiência.</strong></p>
+              <p>Vamos cadastrá-lo para que o cartão do usuário dele apareça aqui?</p>
               <button className="btn-register-user" onClick={() => globals.registerCurrentUser?.()}>
-                SIM! Cadastrar este usuÃ¡rio
+                SIM! Cadastrar este usuário
               </button>
             </div>
           </div>

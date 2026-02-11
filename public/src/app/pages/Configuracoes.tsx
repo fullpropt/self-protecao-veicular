@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';

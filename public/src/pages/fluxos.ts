@@ -1,4 +1,4 @@
-﻿// Fluxos page logic migrated to module
+// Fluxos page logic migrated to module
 
 type FlowStep = {
     message: string;
@@ -206,13 +206,13 @@ async function loadFlows() {
             {
                 id: 1,
                 name: 'Boas-vindas',
-                description: 'SequÃªncia de boas-vindas para novos leads',
+                description: 'Sequência de boas-vindas para novos leads',
                 trigger: 'new_lead',
                 is_active: true,
                 steps: [
-                    { message: 'OlÃ¡ {{nome}}! Bem-vindo Ã  ZapVender!', delay: 0 },
-                    { message: 'Somos especialistas em proteÃ§Ã£o veicular com os melhores preÃ§os do mercado.', delay: 300 },
-                    { message: 'Posso ajudar com alguma informaÃ§Ã£o sobre seu veÃ­culo {{veiculo}}?', delay: 600 }
+                    { message: 'Olá {{nome}}! Bem-vindo à ZapVender!', delay: 0 },
+                    { message: 'Somos especialistas em proteção veicular com os melhores preços do mercado.', delay: 300 },
+                    { message: 'Posso ajudar com alguma informação sobre seu veículo {{veiculo}}?', delay: 600 }
                 ],
                 leads_count: 45,
                 messages_sent: 135
@@ -220,25 +220,25 @@ async function loadFlows() {
             {
                 id: 2,
                 name: 'Follow-up',
-                description: 'SequÃªncia de follow-up para leads sem resposta',
+                description: 'Sequência de follow-up para leads sem resposta',
                 trigger: 'manual',
                 is_active: true,
                 steps: [
-                    { message: 'OlÃ¡ {{nome}}! Vi que vocÃª demonstrou interesse em proteÃ§Ã£o veicular.', delay: 0 },
-                    { message: 'Temos condiÃ§Ãµes especiais essa semana. Posso te enviar uma cotaÃ§Ã£o?', delay: 86400 }
+                    { message: 'Olá {{nome}}! Vi que você demonstrou interesse em proteção veicular.', delay: 0 },
+                    { message: 'Temos condições especiais essa semana. Posso te enviar uma cotação?', delay: 86400 }
                 ],
                 leads_count: 28,
                 messages_sent: 56
             },
             {
                 id: 3,
-                name: 'PÃ³s-venda',
-                description: 'Mensagens apÃ³s fechamento do contrato',
+                name: 'Pós-venda',
+                description: 'Mensagens após fechamento do contrato',
                 trigger: 'manual',
                 is_active: false,
                 steps: [
-                    { message: 'ParabÃ©ns {{nome}}! Seu veÃ­culo agora estÃ¡ protegido!', delay: 0 },
-                    { message: 'Qualquer dÃºvida, estamos Ã  disposiÃ§Ã£o.', delay: 3600 }
+                    { message: 'Parabéns {{nome}}! Seu veículo agora está protegido!', delay: 0 },
+                    { message: 'Qualquer dúvida, estamos à disposição.', delay: 3600 }
                 ],
                 leads_count: 12,
                 messages_sent: 24
@@ -298,7 +298,7 @@ function renderFlows() {
             <div class="flow-header">
                 <div>
                     <h3 class="flow-title">${f.name}</h3>
-                    <p class="flow-description">${f.description || 'Sem descriÃ§Ã£o'}</p>
+                    <p class="flow-description">${f.description || 'Sem descrição'}</p>
                 </div>
                 <span class="badge badge-${f.is_active ? 'success' : 'secondary'}">
                     ${f.is_active ? 'Ativo' : 'Inativo'}
@@ -361,10 +361,10 @@ function addStep() {
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">CondiÃ§Ã£o</label>
+                        <label class="form-label">Condição</label>
                         <select class="form-select step-condition">
                             <option value="always">Sempre enviar</option>
-                            <option value="no_reply" selected>Se nÃ£o responder</option>
+                            <option value="no_reply" selected>Se não responder</option>
                             <option value="replied">Se responder</option>
                         </select>
                     </div>
@@ -404,7 +404,7 @@ async function saveFlow() {
     const description = (document.getElementById('flowDescription') as HTMLTextAreaElement | null)?.value.trim() || '';
 
     if (!name) {
-        showToast('error', 'Erro', 'Nome Ã© obrigatÃ³rio');
+        showToast('error', 'Erro', 'Nome é obrigatório');
         return;
     }
 
@@ -483,7 +483,7 @@ function resetFlowForm() {
             <div class="step-item-content">
                 <div class="form-group" style="margin-bottom: 10px;">
                     <label class="form-label">Mensagem</label>
-                    <textarea class="form-textarea step-message" rows="3" placeholder="OlÃ¡ {{nome}}! Seja bem-vindo..."></textarea>
+                    <textarea class="form-textarea step-message" rows="3" placeholder="Olá {{nome}}! Seja bem-vindo..."></textarea>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -497,10 +497,10 @@ function resetFlowForm() {
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">CondiÃ§Ã£o</label>
+                        <label class="form-label">Condição</label>
                         <select class="form-select step-condition">
                             <option value="always">Sempre enviar</option>
-                            <option value="no_reply">Se nÃ£o responder</option>
+                            <option value="no_reply">Se não responder</option>
                             <option value="replied">Se responder</option>
                         </select>
                     </div>
@@ -547,10 +547,10 @@ function editFlow(id: number) {
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">CondiÃ§Ã£o</label>
+                        <label class="form-label">Condição</label>
                         <select class="form-select step-condition">
                             <option value="always" ${s.condition === 'always' ? 'selected' : ''}>Sempre enviar</option>
-                            <option value="no_reply" ${s.condition === 'no_reply' ? 'selected' : ''}>Se nÃ£o responder</option>
+                            <option value="no_reply" ${s.condition === 'no_reply' ? 'selected' : ''}>Se não responder</option>
                             <option value="replied" ${s.condition === 'replied' ? 'selected' : ''}>Se responder</option>
                         </select>
                     </div>
@@ -567,7 +567,7 @@ function editFlow(id: number) {
             <input type="text" class="form-input" id="editFlowName" value="${flow.name}">
         </div>
         <div class="form-group">
-            <label class="form-label">DescriÃ§Ã£o</label>
+            <label class="form-label">Descrição</label>
             <textarea class="form-textarea" id="editFlowDescription" rows="2">${flow.description || ''}</textarea>
         </div>
         <hr style="margin: 20px 0;">
@@ -645,7 +645,7 @@ function deleteFlow(id: number) {
     flows = flows.filter(f => f.id !== id);
     renderFlows();
     updateStats();
-    showToast('success', 'Sucesso', 'Fluxo excluÃ­do!');
+    showToast('success', 'Sucesso', 'Fluxo excluído!');
 }
 
 const windowAny = window as Window & {

@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
@@ -144,7 +144,7 @@ export default function Automacao() {
             transform: translateX(24px);
         }
       `}</style>
-      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>â˜°</button>
+      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
           <div className="sidebar-overlay"></div>
       
           <aside className="sidebar">
@@ -167,9 +167,9 @@ export default function Automacao() {
                       </ul>
                   </div>
                   <div className="nav-section">
-                      <div className="nav-section-title">AutomaÃ§Ã£o</div>
+                      <div className="nav-section-title">Automação</div>
                       <ul className="nav-menu">
-                          <li className="nav-item"><Link to="/automacao" className="nav-link active"><span className="icon icon-automation"></span>AutomaÃ§Ã£o</Link></li>
+                          <li className="nav-item"><Link to="/automacao" className="nav-link active"><span className="icon icon-automation"></span>Automação</Link></li>
                           <li className="nav-item"><Link to="/fluxos" className="nav-link"><span className="icon icon-flows"></span>Fluxos de Conversa</Link></li>
                           <li className="nav-item"><Link to="/funil" className="nav-link"><span className="icon icon-funnel"></span>Funil de Vendas</Link></li>
                       </ul>
@@ -178,7 +178,7 @@ export default function Automacao() {
                       <div className="nav-section-title">Sistema</div>
                       <ul className="nav-menu">
                           <li className="nav-item"><Link to="/whatsapp" className="nav-link"><span className="icon icon-whatsapp"></span>WhatsApp</Link></li>
-                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>ConfiguraÃ§Ãµes</Link></li>
+                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>Configurações</Link></li>
                       </ul>
                   </div>
               </nav>
@@ -194,12 +194,12 @@ export default function Automacao() {
           <main className="main-content">
               <div className="page-header">
                   <div className="page-title">
-                      <h1><span className="icon icon-automation icon-sm"></span> AutomaÃ§Ã£o</h1>
-                      <p>Configure regras automÃ¡ticas para seus leads</p>
+                      <h1><span className="icon icon-automation icon-sm"></span> Automação</h1>
+                      <p>Configure regras automáticas para seus leads</p>
                   </div>
                   <div className="page-actions">
                       <button className="btn btn-outline" onClick={() => globals.loadAutomations?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
-                      <button className="btn btn-primary" onClick={() => (globals.openAutomationModal ? globals.openAutomationModal() : globals.openModal?.('newAutomationModal'))}><span className="icon icon-add icon-sm"></span> Nova AutomaÃ§Ã£o</button>
+                      <button className="btn btn-primary" onClick={() => (globals.openAutomationModal ? globals.openAutomationModal() : globals.openModal?.('newAutomationModal'))}><span className="icon icon-add icon-sm"></span> Nova Automação</button>
                   </div>
               </div>
       
@@ -208,7 +208,7 @@ export default function Automacao() {
                       <div className="stat-icon primary"><span className="icon icon-automation"></span></div>
                       <div className="stat-content">
                           <div className="stat-value" id="totalAutomations">0</div>
-                          <div className="stat-label">Total de AutomaÃ§Ãµes</div>
+                          <div className="stat-label">Total de Automações</div>
                       </div>
                   </div>
                   <div className="stat-card">
@@ -222,14 +222,14 @@ export default function Automacao() {
                       <div className="stat-icon info"><span className="icon icon-export"></span></div>
                       <div className="stat-content">
                           <div className="stat-value" id="totalExecutions">0</div>
-                          <div className="stat-label">ExecuÃ§Ãµes (7 dias)</div>
+                          <div className="stat-label">Execuções (7 dias)</div>
                       </div>
                   </div>
                   <div className="stat-card">
                       <div className="stat-icon warning"><span className="icon icon-bolt"></span></div>
                       <div className="stat-content">
                           <div className="stat-value" id="lastExecution">-</div>
-                          <div className="stat-label">Ãšltima ExecuÃ§Ã£o</div>
+                          <div className="stat-label">Última Execução</div>
                       </div>
                   </div>
               </div>
@@ -237,7 +237,7 @@ export default function Automacao() {
               <div className="automations-grid" id="automationsList">
                   <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
                       <div className="empty-state-icon icon icon-empty icon-lg"></div>
-                      <p>Carregando automaÃ§Ãµes...</p>
+                      <p>Carregando automações...</p>
                   </div>
               </div>
           </main>
@@ -245,20 +245,20 @@ export default function Automacao() {
           <div className="modal-overlay" id="newAutomationModal">
               <div className="modal modal-lg">
                   <div className="modal-header">
-                      <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Nova AutomaÃ§Ã£o</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('newAutomationModal')}>Ã—</button>
+                      <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Nova Automação</h3>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('newAutomationModal')}>×</button>
                   </div>
                   <div className="modal-body">
                       <form id="automationForm">
                           <input type="hidden" id="automationId" />
                           <div className="form-group">
-                              <label className="form-label required">Nome da AutomaÃ§Ã£o</label>
-                              <input type="text" className="form-input" id="automationName" required placeholder="Ex: Boas-vindas automÃ¡tica" />
+                              <label className="form-label required">Nome da Automação</label>
+                              <input type="text" className="form-input" id="automationName" required placeholder="Ex: Boas-vindas automática" />
                           </div>
                           
                           <div className="form-group">
-                              <label className="form-label">DescriÃ§Ã£o</label>
-                              <textarea className="form-textarea" id="automationDescription" rows="2" placeholder="Descreva o que esta automaÃ§Ã£o faz"></textarea>
+                              <label className="form-label">Descrição</label>
+                              <textarea className="form-textarea" id="automationDescription" rows="2" placeholder="Descreva o que esta automação faz"></textarea>
                           </div>
       
                           <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--border-color)' }} />
@@ -269,7 +269,7 @@ export default function Automacao() {
                               <label className="form-label required">Tipo de Gatilho</label>
                               <select className="form-select" id="triggerType" onChange={() => globals.updateTriggerOptions?.()}>
                                   <option value="new_lead">Novo lead cadastrado</option>
-                                  <option value="status_change">MudanÃ§a de status</option>
+                                  <option value="status_change">Mudança de status</option>
                                   <option value="message_received">Mensagem recebida</option>
                                   <option value="keyword">Palavra-chave detectada</option>
                                   <option value="schedule">Agendamento</option>
@@ -282,10 +282,10 @@ export default function Automacao() {
       
                           <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--border-color)' }} />
                           
-                          <h4 style={{ marginBottom: '15px' }}><span className="icon icon-target icon-sm"></span> AÃ§Ã£o (O que fazer)</h4>
+                          <h4 style={{ marginBottom: '15px' }}><span className="icon icon-target icon-sm"></span> Ação (O que fazer)</h4>
                           
                           <div className="form-group">
-                              <label className="form-label required">Tipo de AÃ§Ã£o</label>
+                              <label className="form-label required">Tipo de Ação</label>
                               <select className="form-select" id="actionType" onChange={() => globals.updateActionOptions?.()}>
                                   <option value="send_message">Enviar mensagem</option>
                                   <option value="change_status">Alterar status</option>
@@ -299,7 +299,7 @@ export default function Automacao() {
                           </div>
       
                           <div className="form-group">
-                              <label className="form-label">Atraso antes da execuÃ§Ã£o</label>
+                              <label className="form-label">Atraso antes da execução</label>
                               <select className="form-select" id="actionDelay">
                                   <option value="0">Imediatamente</option>
                                   <option value="60">1 minuto</option>
@@ -314,7 +314,7 @@ export default function Automacao() {
                   </div>
                   <div className="modal-footer">
                       <button className="btn btn-outline" onClick={() => globals.closeModal?.('newAutomationModal')}>Cancelar</button>
-                      <button className="btn btn-primary" onClick={() => globals.saveAutomation?.()}><span className="icon icon-save icon-sm"></span> Salvar AutomaÃ§Ã£o</button>
+                      <button className="btn btn-primary" onClick={() => globals.saveAutomation?.()}><span className="icon icon-save icon-sm"></span> Salvar Automação</button>
                   </div>
               </div>
           </div>

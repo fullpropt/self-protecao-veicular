@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
@@ -167,7 +167,7 @@ export default function Funil() {
         }
         .stage-item-info { flex: 1; }
       `}</style>
-      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>â˜°</button>
+      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
           <div className="sidebar-overlay"></div>
       
           <aside className="sidebar">
@@ -190,9 +190,9 @@ export default function Funil() {
                       </ul>
                   </div>
                   <div className="nav-section">
-                      <div className="nav-section-title">AutomaÃ§Ã£o</div>
+                      <div className="nav-section-title">Automação</div>
                       <ul className="nav-menu">
-                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>AutomaÃ§Ã£o</Link></li>
+                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>Automação</Link></li>
                           <li className="nav-item"><Link to="/fluxos" className="nav-link"><span className="icon icon-flows"></span>Fluxos de Conversa</Link></li>
                           <li className="nav-item"><Link to="/funil" className="nav-link active"><span className="icon icon-funnel"></span>Funil de Vendas</Link></li>
                       </ul>
@@ -201,7 +201,7 @@ export default function Funil() {
                       <div className="nav-section-title">Sistema</div>
                       <ul className="nav-menu">
                           <li className="nav-item"><Link to="/whatsapp" className="nav-link"><span className="icon icon-whatsapp"></span>WhatsApp</Link></li>
-                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>ConfiguraÃ§Ãµes</Link></li>
+                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>Configurações</Link></li>
                       </ul>
                   </div>
               </nav>
@@ -247,7 +247,7 @@ export default function Funil() {
                   <div className="funnel-stage-visual" onClick={() => globals.filterByStage?.(3)}>
                       <div className="funnel-stage-info">
                           <div className="funnel-stage-count" id="stage3Count">0</div>
-                          <div className="funnel-stage-name">ConcluÃ­do</div>
+                          <div className="funnel-stage-name">Concluído</div>
                           <div className="funnel-stage-percent" id="stage3Percent">0%</div>
                       </div>
                   </div>
@@ -277,7 +277,7 @@ export default function Funil() {
                   </div>
                   <div className="kanban-column" data-stage="3">
                       <div className="kanban-header stage-3">
-                          <span className="kanban-title"><span className="icon icon-check icon-sm"></span> ConcluÃ­do</span>
+                          <span className="kanban-title"><span className="icon icon-check icon-sm"></span> Concluído</span>
                           <span className="kanban-count" id="kanban3Count">0</span>
                       </div>
                       <div className="kanban-body" id="kanban3Body"></div>
@@ -296,45 +296,45 @@ export default function Funil() {
               <div className="modal modal-lg">
                   <div className="modal-header">
                       <h3 className="modal-title"><span className="icon icon-settings icon-sm"></span> Configurar Etapas do Funil</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('configModal')}>Ã—</button>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('configModal')}>×</button>
                   </div>
                   <div className="modal-body">
-                      <p className="text-muted mb-4">Configure as etapas do seu funil de vendas. Cada etapa representa um estÃ¡gio no processo de conversÃ£o.</p>
+                      <p className="text-muted mb-4">Configure as etapas do seu funil de vendas. Cada etapa representa um estágio no processo de conversão.</p>
                       
                       <div id="stagesConfig">
                           <div className="stage-item">
                               <div className="stage-color" style={{ background: '#667eea' }}></div>
                               <div className="stage-item-info">
                                   <input type="text" className="form-input" value="Novo" id="stage1Name" />
-                                  <input type="text" className="form-input mt-2" value="Lead recÃ©m cadastrado" id="stage1Desc" placeholder="DescriÃ§Ã£o" />
+                                  <input type="text" className="form-input mt-2" value="Lead recém cadastrado" id="stage1Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
                               <div className="stage-color" style={{ background: '#f5576c' }}></div>
                               <div className="stage-item-info">
                                   <input type="text" className="form-input" value="Em Andamento" id="stage2Name" />
-                                  <input type="text" className="form-input mt-2" value="Em negociaÃ§Ã£o" id="stage2Desc" placeholder="DescriÃ§Ã£o" />
+                                  <input type="text" className="form-input mt-2" value="Em negociação" id="stage2Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
                               <div className="stage-color" style={{ background: '#4facfe' }}></div>
                               <div className="stage-item-info">
-                                  <input type="text" className="form-input" value="ConcluÃ­do" id="stage3Name" />
-                                  <input type="text" className="form-input mt-2" value="Venda realizada" id="stage3Desc" placeholder="DescriÃ§Ã£o" />
+                                  <input type="text" className="form-input" value="Concluído" id="stage3Name" />
+                                  <input type="text" className="form-input mt-2" value="Venda realizada" id="stage3Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
                               <div className="stage-color" style={{ background: '#43e97b' }}></div>
                               <div className="stage-item-info">
                                   <input type="text" className="form-input" value="Perdido" id="stage4Name" />
-                                  <input type="text" className="form-input mt-2" value="NÃ£o converteu" id="stage4Desc" placeholder="DescriÃ§Ã£o" />
+                                  <input type="text" className="form-input mt-2" value="Não converteu" id="stage4Desc" placeholder="Descrição" />
                               </div>
                           </div>
                       </div>
                   </div>
                   <div className="modal-footer">
                       <button className="btn btn-outline" onClick={() => globals.closeModal?.('configModal')}>Cancelar</button>
-                      <button className="btn btn-primary" onClick={() => globals.saveStagesConfig?.()}><span className="icon icon-save icon-sm"></span> Salvar ConfiguraÃ§Ãµes</button>
+                      <button className="btn btn-primary" onClick={() => globals.saveStagesConfig?.()}><span className="icon icon-save icon-sm"></span> Salvar Configurações</button>
                   </div>
               </div>
           </div>
@@ -343,7 +343,7 @@ export default function Funil() {
               <div className="modal">
                   <div className="modal-header">
                       <h3 className="modal-title" id="leadModalTitle"><span className="icon icon-user icon-sm"></span> Detalhes do Lead</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('leadModal')}>Ã—</button>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('leadModal')}>×</button>
                   </div>
                   <div className="modal-body" id="leadModalBody"></div>
                   <div className="modal-footer">

@@ -4454,7 +4454,7 @@ app.get('/api/campaigns/:id', optionalAuth, (req, res) => {
 
     if (!campaign) {
 
-        return res.status(404).json({ error: 'Campanha nÃ£o encontrada' });
+        return res.status(404).json({ error: 'Campanha não encontrada' });
 
     }
 
@@ -4498,7 +4498,7 @@ app.put('/api/campaigns/:id', authenticate, (req, res) => {
 
     if (!campaign) {
 
-        return res.status(404).json({ error: 'Campanha nÃ£o encontrada' });
+        return res.status(404).json({ error: 'Campanha não encontrada' });
 
     }
 
@@ -4564,7 +4564,7 @@ app.get('/api/automations/:id', optionalAuth, (req, res) => {
 
     if (!automation) {
 
-        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
+        return res.status(404).json({ error: 'Automação não encontrada' });
 
     }
 
@@ -4608,7 +4608,7 @@ app.put('/api/automations/:id', authenticate, (req, res) => {
 
     if (!automation) {
 
-        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
+        return res.status(404).json({ error: 'Automação não encontrada' });
 
     }
 

@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
@@ -111,7 +111,7 @@ export default function Campanhas() {
             gap: 25px;
         }
       `}</style>
-      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>â˜°</button>
+      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
           <div className="sidebar-overlay"></div>
       
           <aside className="sidebar">
@@ -134,9 +134,9 @@ export default function Campanhas() {
                       </ul>
                   </div>
                   <div className="nav-section">
-                      <div className="nav-section-title">AutomaÃ§Ã£o</div>
+                      <div className="nav-section-title">Automação</div>
                       <ul className="nav-menu">
-                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>AutomaÃ§Ã£o</Link></li>
+                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>Automação</Link></li>
                           <li className="nav-item"><Link to="/fluxos" className="nav-link"><span className="icon icon-flows"></span>Fluxos de Conversa</Link></li>
                           <li className="nav-item"><Link to="/funil" className="nav-link"><span className="icon icon-funnel"></span>Funil de Vendas</Link></li>
                       </ul>
@@ -145,7 +145,7 @@ export default function Campanhas() {
                       <div className="nav-section-title">Sistema</div>
                       <ul className="nav-menu">
                           <li className="nav-item"><Link to="/whatsapp" className="nav-link"><span className="icon icon-whatsapp"></span>WhatsApp</Link></li>
-                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>ConfiguraÃ§Ãµes</Link></li>
+                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>Configurações</Link></li>
                       </ul>
                   </div>
               </nav>
@@ -166,7 +166,7 @@ export default function Campanhas() {
                   </div>
                   <div className="page-actions">
                       <button className="btn btn-outline" onClick={() => globals.loadCampaigns?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
-                      <button className="btn btn-outline" onClick={() => globals.openBroadcastModal?.()}><span className="icon icon-broadcast icon-sm"></span> Nova TransmissÃ£o</button>
+                      <button className="btn btn-outline" onClick={() => globals.openBroadcastModal?.()}><span className="icon icon-broadcast icon-sm"></span> Nova Transmissão</button>
                       <button className="btn btn-primary" onClick={() => (globals.openCampaignModal ? globals.openCampaignModal() : globals.openModal?.('newCampaignModal'))}><span className="icon icon-add icon-sm"></span> Nova Campanha</button>
                   </div>
               </div>
@@ -214,18 +214,18 @@ export default function Campanhas() {
               <div className="modal modal-lg">
                   <div className="modal-header">
                       <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Nova Campanha</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('newCampaignModal')}>Ã—</button>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('newCampaignModal')}>×</button>
                   </div>
                   <div className="modal-body">
                       <form id="campaignForm">
                           <input type="hidden" id="campaignId" />
                           <div className="form-group">
                               <label className="form-label required">Nome da Campanha</label>
-                              <input type="text" className="form-input" id="campaignName" required placeholder="Ex: PromoÃ§Ã£o Janeiro" />
+                              <input type="text" className="form-input" id="campaignName" required placeholder="Ex: Promoção Janeiro" />
                           </div>
                           
                           <div className="form-group">
-                              <label className="form-label">DescriÃ§Ã£o</label>
+                              <label className="form-label">Descrição</label>
                               <textarea className="form-textarea" id="campaignDescription" rows="2" placeholder="Descreva o objetivo da campanha"></textarea>
                           </div>
       
@@ -233,8 +233,8 @@ export default function Campanhas() {
                               <div className="form-group">
                                   <label className="form-label">Tipo</label>
                                   <select className="form-select" id="campaignType">
-                                      <option value="broadcast">TransmissÃ£o Ãšnica</option>
-                                      <option value="drip">SequÃªncia (Drip)</option>
+                                      <option value="broadcast">Transmissão Única</option>
+                                      <option value="drip">Sequência (Drip)</option>
                                       <option value="trigger">Gatilho</option>
                                   </select>
                               </div>
@@ -249,12 +249,12 @@ export default function Campanhas() {
                           </div>
       
                           <div className="form-group">
-                              <label className="form-label">SegmentaÃ§Ã£o</label>
+                              <label className="form-label">Segmentação</label>
                               <select className="form-select" id="campaignSegment">
                                   <option value="all">Todos os Contatos</option>
                                   <option value="new">Novos (Etapa 1)</option>
                                   <option value="progress">Em Andamento (Etapa 2)</option>
-                                  <option value="concluded">ConcluÃ­dos (Etapa 3)</option>
+                                  <option value="concluded">Concluídos (Etapa 3)</option>
                               </select>
                           </div>
       
@@ -262,9 +262,9 @@ export default function Campanhas() {
                               <label className="form-label required">Mensagem</label>
                               <textarea className="form-textarea" id="campaignMessage" rows="5" placeholder="Digite a mensagem da campanha...
       
-      VariÃ¡veis disponÃ­veis:
+      Variáveis disponíveis:
       {{nome}} - Nome do contato
-      {{veiculo}} - VeÃ­culo
+      {{veiculo}} - Veículo
       {{placa}} - Placa"></textarea>
                           </div>
       
@@ -279,7 +279,7 @@ export default function Campanhas() {
                                   </select>
                               </div>
                               <div className="form-group">
-                                  <label className="form-label">InÃ­cio</label>
+                                  <label className="form-label">Início</label>
                                   <input type="datetime-local" className="form-input" id="campaignStart" />
                               </div>
                           </div>
@@ -297,13 +297,13 @@ export default function Campanhas() {
               <div className="modal modal-lg">
                   <div className="modal-header">
                       <h3 className="modal-title" id="detailsTitle"><span className="icon icon-campaigns icon-sm"></span> Detalhes da Campanha</h3>
-                      <button className="modal-close" onClick={() => globals.closeModal?.('campaignDetailsModal')}>Ã—</button>
+                      <button className="modal-close" onClick={() => globals.closeModal?.('campaignDetailsModal')}>×</button>
                   </div>
                   <div className="modal-body">
                       <div className="tabs">
-                          <button className="tab active" onClick={() => globals.switchCampaignTab?.('overview')}><span className="icon icon-chart-bar icon-sm"></span> VisÃ£o Geral</button>
+                          <button className="tab active" onClick={() => globals.switchCampaignTab?.('overview')}><span className="icon icon-chart-bar icon-sm"></span> Visão Geral</button>
                           <button className="tab" onClick={() => globals.switchCampaignTab?.('messages')}><span className="icon icon-message icon-sm"></span> Mensagens</button>
-                          <button className="tab" onClick={() => globals.switchCampaignTab?.('recipients')}><span className="icon icon-contacts icon-sm"></span> DestinatÃ¡rios</button>
+                          <button className="tab" onClick={() => globals.switchCampaignTab?.('recipients')}><span className="icon icon-contacts icon-sm"></span> Destinatários</button>
                       </div>
                       
                       <div className="tab-content active" id="tab-overview">
