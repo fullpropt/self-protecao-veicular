@@ -536,7 +536,7 @@ function showToast(type, message) {
     toast.innerHTML = `
         <span class="toast-icon">${icons[type]}</span>
         <span class="toast-message">${message}</span>
-        <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+        <button class="toast-close" onclick="this.parentElement.remove()"></button>
     `;
     
     container.appendChild(toast);

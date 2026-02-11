@@ -1256,7 +1256,7 @@ tr:last-child td {
 
 .checkbox-custom::after,
 .radio-custom::after {
-    content: '✓';
+    content: '';
     color: white;
     font-size: 12px;
     opacity: 0;

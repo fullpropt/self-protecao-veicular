@@ -195,7 +195,7 @@ function fixMojibakeText(value: string): string {
         const decoded = new TextDecoder('utf-8').decode(bytes);
 
         // Evita substituir por resultado pior
-        if (!decoded || decoded.includes('�')) {
+        if (!decoded || decoded.includes('\uFFFD')) {
             return value;
         }
 

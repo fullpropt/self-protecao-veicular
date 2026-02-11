@@ -393,11 +393,11 @@ function renderMessages() {
         const status = msg.status || 'sent';
         
         const statusIcon = {
-            'pending': '•',
-            'sent': '✓',
-            'delivered': '✓✓',
-            'read': '✓✓'
-        }[status] || '✓';
+            'pending': '"',
+            'sent': '',
+            'delivered': '',
+            'read': ''
+        }[status] || '';
         
         const statusClass = status === 'read' ? 'read' : (status === 'delivered' ? 'delivered' : 'sent');
         
