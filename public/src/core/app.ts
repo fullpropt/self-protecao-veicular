@@ -249,6 +249,10 @@ function updateWhatsAppStatus(status: WhatsAppStatus) {
     });
 }
 
+function refreshWhatsAppStatus() {
+    updateWhatsAppStatus(APP.whatsappStatus);
+}
+
 // ============================================
 // SIDEBAR
 // ============================================
@@ -679,6 +683,16 @@ async function loadInitialData() {
         // Carregar status do servidor
         const status = await api.get('/api/status');
         console.log('Server status:', status);
+
+        // Sincronizar status do WhatsApp para a UI atual
+        try {
+            const waStatus = await api.get('/api/whatsapp/status');
+            if (typeof waStatus?.connected === 'boolean') {
+                updateWhatsAppStatus(waStatus.connected ? 'connected' : 'disconnected');
+            }
+        } catch (error) {
+            console.warn('Erro ao carregar status do WhatsApp:', error);
+        }
         
         // Atualizar contador de mensagens não lidas
         updateUnreadCount();
@@ -791,11 +805,11 @@ windowAny.exportToCSV = exportToCSV;
 windowAny.parseCSV = parseCSV;
 windowAny.debounce = debounce;
 windowAny.logout = logout;
+windowAny.refreshWhatsAppStatus = refreshWhatsAppStatus;
 windowAny.getStatusBadge = getStatusBadge;
 windowAny.LEAD_STATUS = LEAD_STATUS;
 windowAny.FUNNEL_STAGES = FUNNEL_STAGES;
 
 export {};
-
 
 

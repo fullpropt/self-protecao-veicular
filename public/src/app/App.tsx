@@ -1,4 +1,5 @@
-import { Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import Automacao from './pages/Automacao';
 import Campanhas from './pages/Campanhas';
 import Configuracoes from './pages/Configuracoes';
@@ -16,6 +17,12 @@ import Transmissao from './pages/Transmissao';
 import Whatsapp from './pages/Whatsapp';
 
 export default function App() {
+  const location = useLocation();
+
+  useEffect(() => {
+    (window as Window & { refreshWhatsAppStatus?: () => void }).refreshWhatsAppStatus?.();
+  }, [location.pathname, location.search, location.hash]);
+
   return (
     <Routes>
       <Route path="/" element={<Home />} />
