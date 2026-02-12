@@ -286,7 +286,8 @@ CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
 
-CREATE VIEW IF NOT EXISTS v_conversations AS
+DROP VIEW IF EXISTS v_conversations;
+CREATE VIEW v_conversations AS
 SELECT 
     c.id,
     c.uuid,

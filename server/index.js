@@ -167,7 +167,7 @@ async function bootstrapDatabase() {
     }
 }
 
-bootstrapDatabase();
+const bootstrapPromise = bootstrapDatabase();
 
 // ============================================
 
@@ -3241,42 +3241,26 @@ function sessionExists(sessionId) {
 
 // Inicializar serviço de fila
 
-Promise.resolve(queueService.init(async (options) => {
+(async () => {
+    await bootstrapPromise;
 
-    return await sendMessageToWhatsApp({
-
-        ...options,
-
-        sessionId: 'self_whatsapp_session'
-
+    await queueService.init(async (options) => {
+        return await sendMessageToWhatsApp({
+            ...options,
+            sessionId: 'self_whatsapp_session'
+        });
     });
 
-})).catch((error) => {
-    console.error('Erro ao inicializar fila de mensagens:', error.message);
-});
-
-
-
-// Inicializar serviço de fluxos
-
-flowService.init(async (options) => {
-
-    return await sendMessageToWhatsApp({
-
-        ...options,
-
-        sessionId: 'self_whatsapp_session'
-
+    flowService.init(async (options) => {
+        return await sendMessageToWhatsApp({
+            ...options,
+            sessionId: 'self_whatsapp_session'
+        });
     });
 
-});
-
-
-
-// Reidratar sessões armazenadas (após restart)
-
-rehydrateSessions(io).catch((error) => {
-    console.error('Erro ao reidratar sessoes:', error.message);
+    await rehydrateSessions(io);
+})().catch((error) => {
+    console.error('Erro ao inicializar servicos apos migracao:', error.message);
 });
 
 
