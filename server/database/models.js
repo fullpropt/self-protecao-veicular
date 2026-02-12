@@ -5,6 +5,72 @@
 
 const { query, queryOne, run, transaction, generateUUID } = require('./connection');
 
+function normalizeDigits(value) {
+    return String(value || '').replace(/\D/g, '');
+}
+
+function sanitizeLeadName(name) {
+    const value = String(name || '').trim();
+    if (!value) return '';
+    const lower = value.toLowerCase();
+    if (
+        lower === 'sem nome' ||
+        lower === 'unknown' ||
+        lower === 'undefined' ||
+        lower === 'null' ||
+        value.includes('@s.whatsapp.net') ||
+        value.includes('@lid')
+    ) {
+        return '';
+    }
+    if (/^\d+$/.test(value)) return '';
+    return value;
+}
+
+function shouldReplaceLeadName(currentName, incomingName, phone) {
+    const next = sanitizeLeadName(incomingName);
+    if (!next) return false;
+
+    const current = String(currentName || '').trim();
+    if (!current) return true;
+
+    const currentLower = current.toLowerCase();
+    if (
+        currentLower === 'sem nome' ||
+        currentLower === 'unknown' ||
+        currentLower === 'undefined' ||
+        currentLower === 'null' ||
+        currentLower === 'você' ||
+        currentLower === 'voce' ||
+        currentLower === 'usuário (você)' ||
+        currentLower === 'usuario (voce)' ||
+        currentLower === 'usuario (você)'
+    ) {
+        return true;
+    }
+
+    const phoneDigits = normalizeDigits(phone);
+    const currentDigits = normalizeDigits(current);
+    if (phoneDigits && currentDigits && currentDigits === phoneDigits) return true;
+    if (/^\d+$/.test(current)) return true;
+
+    return false;
+}
+
+function deriveUserName(name, email) {
+    const provided = String(name || '').trim();
+    if (provided) return provided;
+
+    const localPart = String(email || '').split('@')[0] || 'Usuario';
+    const normalized = localPart.replace(/[._-]+/g, ' ').trim();
+    if (!normalized) return 'Usuario';
+
+    return normalized
+        .split(/\s+/)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
 // ============================================
 // LEADS
 // ============================================
@@ -13,6 +79,7 @@ const Lead = {
     async create(data) {
         const uuid = generateUUID();
         const jid = data.jid || `55${data.phone.replace(/\D/g, '')}@s.whatsapp.net`;
+        const incomingName = sanitizeLeadName(data.name) || data.phone;
         
         const result = await run(`
             INSERT INTO leads (uuid, phone, phone_formatted, jid, name, email, vehicle, plate, status, tags, custom_fields, source, assigned_to)
@@ -22,7 +89,7 @@ const Lead = {
             data.phone?.replace(/\D/g, ''),
             data.phone_formatted || data.phone,
             jid,
-            data.name,
+            incomingName,
             data.email,
             data.vehicle,
             data.plate,
@@ -61,9 +128,10 @@ const Lead = {
         
         if (lead) {
             // Atualizar dados se necessario
-            if (data.name && !lead.name) {
-                await this.update(lead.id, { name: data.name });
-                lead.name = data.name;
+            const nextName = sanitizeLeadName(data.name);
+            if (shouldReplaceLeadName(lead.name, nextName, lead.phone || data.phone)) {
+                await this.update(lead.id, { name: nextName });
+                lead.name = nextName;
             }
             return { lead, created: false };
         }
@@ -977,13 +1045,14 @@ const Settings = {
 const User = {
     async create(data) {
         const uuid = generateUUID();
+        const safeName = deriveUserName(data.name, data.email);
         
         const result = await run(`
             INSERT INTO users (uuid, name, email, password_hash, role, avatar_url)
             VALUES (?, ?, ?, ?, ?, ?)
         `, [
             uuid,
-            data.name,
+            safeName,
             data.email,
             data.password_hash,
             data.role || 'agent',
