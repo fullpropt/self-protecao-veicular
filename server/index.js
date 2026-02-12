@@ -148,33 +148,26 @@ if (process.env.NODE_ENV === 'production') {
 
 
 
-// Migração roda aqui (servidor já está ouvindo via start.js)
+// Migracao roda aqui (servidor ja esta ouvindo via start.js)
+async function bootstrapDatabase() {
+    try {
+        const ok = await migrate();
+        if (ok) {
+            console.log('Banco de dados inicializado');
+        }
 
-try {
-
-    migrate();
-
-    console.log('? Banco de dados inicializado');
-
-    cleanupDuplicateMessages();
-
-    cleanupLidLeads();
-
-    cleanupInvalidPhones();
-
-    cleanupEmptyWhatsappLeads();
-
-    cleanupDuplicatePhoneSuffixLeads();
-
-    cleanupBrokenLeadNames();
-
-} catch (error) {
-
-    console.error('? Erro ao inicializar banco de dados:', error.message);
-
+        await cleanupDuplicateMessages();
+        await cleanupLidLeads();
+        await cleanupInvalidPhones();
+        await cleanupEmptyWhatsappLeads();
+        await cleanupDuplicatePhoneSuffixLeads();
+        await cleanupBrokenLeadNames();
+    } catch (error) {
+        console.error('Erro ao inicializar banco de dados:', error.message);
+    }
 }
 
-
+bootstrapDatabase();
 
 // ============================================
 
@@ -218,45 +211,83 @@ app.use('/api/', limiter);
 
 
 
-// CORS - Configurável via variável de ambiente
+// CORS - configuravel por CORS_ORIGINS.
+// Aceita:
+// - origem completa: https://dominio.com
+// - host sem protocolo: dominio.com
+// - varios valores separados por virgula
+const sanitizeOriginEntry = (value = '') =>
+    String(value).trim().replace(/^['"]|['"]$/g, '').replace(/\/$/, '');
 
-const allowedOrigins = process.env.CORS_ORIGINS 
+const parseOriginHost = (value) => {
+    if (!value) return '';
+    try {
+        return new URL(value).hostname.toLowerCase();
+    } catch (error) {
+        return sanitizeOriginEntry(value).replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
+    }
+};
 
-    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+const allowedOriginEntries = (process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(sanitizeOriginEntry).filter(Boolean)
+    : (process.env.NODE_ENV === 'production'
+        ? []
+        : ['http://localhost:3000', 'http://localhost:3001']))
+    .map(sanitizeOriginEntry);
 
-    : (process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3000', 'http://localhost:3001']);
-
-
-
-app.use(cors({
-
-    origin: (origin, callback) => {
-
-        // Permitir requisições sem origin (mobile apps, Postman, etc)
-
-        if (!origin) return callback(null, true);
-
-        
-
-        if (allowedOrigins.length === 0 || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-
-            callback(null, true);
-
-        } else {
-
-            callback(new Error('Não permitido por CORS'));
-
+const allowedOriginSet = new Set(allowedOriginEntries.map((entry) => {
+    if (/^https?:\/\//i.test(entry)) {
+        try {
+            return new URL(entry).origin;
+        } catch (error) {
+            return entry;
         }
-
-    },
-
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-
-    credentials: true,
-
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-
+    }
+    return entry;
 }));
+
+const allowedHostSet = new Set(allowedOriginEntries.map(parseOriginHost).filter(Boolean));
+
+const getRequestHost = (req) => {
+    const forwardedHost = req.header('X-Forwarded-Host');
+    const host = (forwardedHost || req.header('Host') || '').split(',')[0].trim();
+    return host.split(':')[0].toLowerCase();
+};
+
+const corsOptionsDelegate = (req, callback) => {
+    const origin = req.header('Origin');
+    const normalizedOrigin = sanitizeOriginEntry(origin);
+    const originHost = parseOriginHost(normalizedOrigin);
+    const requestHost = getRequestHost(req);
+
+    const isSameOrigin = Boolean(
+        origin &&
+        originHost &&
+        requestHost &&
+        originHost === requestHost
+    );
+
+    const isAllowed =
+        !origin ||
+        allowedOriginSet.has('*') ||
+        allowedOriginEntries.length === 0 ||
+        isSameOrigin ||
+        allowedOriginSet.has(normalizedOrigin) ||
+        allowedHostSet.has(originHost);
+
+    if (!isAllowed) {
+        return callback(new Error('Não permitido por CORS'));
+    }
+
+    return callback(null, {
+        origin: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        credentials: true,
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    });
+};
+
+app.use(cors(corsOptionsDelegate));
 
 
 
@@ -581,7 +612,7 @@ function normalizeJid(jid) {
 
 
 
-function registerContactAlias(contact) {
+async function registerContactAlias(contact) {
     if (!contact) return;
 
     const candidates = [
@@ -628,23 +659,23 @@ function registerContactAlias(contact) {
 
 
 
-        const primary = Lead.findByJid(userJid) || Lead.findByPhone(extractNumber(userJid));
+        const primary = await Lead.findByJid(userJid) || await Lead.findByPhone(extractNumber(userJid));
 
-        const duplicate = Lead.findByJid(lidJid) || Lead.findByPhone(extractNumber(lidJid));
+        const duplicate = await Lead.findByJid(lidJid) || await Lead.findByPhone(extractNumber(lidJid));
 
 
 
         if (primary && duplicate && primary.id !== duplicate.id) {
 
-            mergeLeads(primary, duplicate);
+            await mergeLeads(primary, duplicate);
 
         } else if (!primary && duplicate) {
 
-            updateLeadIdentity(duplicate, userJid, extractNumber(userJid));
+            await updateLeadIdentity(duplicate, userJid, extractNumber(userJid));
 
         } else if (primary && primary.jid !== userJid) {
 
-            updateLeadIdentity(primary, userJid, extractNumber(userJid));
+            await updateLeadIdentity(primary, userJid, extractNumber(userJid));
 
         }
 
@@ -721,9 +752,9 @@ function resolveMessageJid(msg) {
 
 
 
-function mergeConversationsForLeads(primaryLeadId, duplicateLeadId) {
+async function mergeConversationsForLeads(primaryLeadId, duplicateLeadId) {
 
-    const conversations = query(
+    const conversations = await query(
 
         'SELECT id, lead_id, unread_count, updated_at FROM conversations WHERE lead_id IN (?, ?) ORDER BY updated_at DESC',
 
@@ -751,9 +782,9 @@ function mergeConversationsForLeads(primaryLeadId, duplicateLeadId) {
 
         if (conversation.id === primaryConversationId) continue;
 
-        run('UPDATE messages SET conversation_id = ? WHERE conversation_id = ?', [primaryConversationId, conversation.id]);
+        await run('UPDATE messages SET conversation_id = ? WHERE conversation_id = ?', [primaryConversationId, conversation.id]);
 
-        run('DELETE FROM conversations WHERE id = ?', [conversation.id]);
+        await run('DELETE FROM conversations WHERE id = ?', [conversation.id]);
 
     }
 
@@ -761,7 +792,7 @@ function mergeConversationsForLeads(primaryLeadId, duplicateLeadId) {
 
     // Garantir lead correto na conversa principal
 
-    run('UPDATE conversations SET lead_id = ?, unread_count = ? WHERE id = ?', [
+    await run('UPDATE conversations SET lead_id = ?, unread_count = ? WHERE id = ?', [
 
         primaryLeadId,
 
@@ -775,7 +806,7 @@ function mergeConversationsForLeads(primaryLeadId, duplicateLeadId) {
 
 
 
-function mergeLeads(primaryLead, duplicateLead) {
+async function mergeLeads(primaryLead, duplicateLead) {
 
     if (!primaryLead || !duplicateLead || primaryLead.id === duplicateLead.id) return;
 
@@ -783,23 +814,23 @@ function mergeLeads(primaryLead, duplicateLead) {
 
     // Mesclar conversas e mensagens
 
-    mergeConversationsForLeads(primaryLead.id, duplicateLead.id);
+    await mergeConversationsForLeads(primaryLead.id, duplicateLead.id);
 
-    run('UPDATE messages SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
+    await run('UPDATE messages SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
 
-    run('UPDATE conversations SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
+    await run('UPDATE conversations SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
 
 
 
     // Remover lead duplicado
 
-    Lead.delete(duplicateLead.id);
+    await Lead.delete(duplicateLead.id);
 
 }
 
 
 
-function updateLeadIdentity(lead, jid, phone) {
+async function updateLeadIdentity(lead, jid, phone) {
     if (!lead || !jid) return lead;
 
     const cleanedPhone = phone ? String(phone).replace(/\D/g, '') : '';
@@ -815,23 +846,23 @@ function updateLeadIdentity(lead, jid, phone) {
         : lead.name;
 
     try {
-        run(
-            "UPDATE leads SET jid = ?, phone = ?, phone_formatted = ?, name = ?, updated_at = datetime('now') WHERE id = ?",
+        await run(
+            "UPDATE leads SET jid = ?, phone = ?, phone_formatted = ?, name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             [jid, cleanedPhone, cleanedPhone, nextName, lead.id]
         );
-        return Lead.findById(lead.id) || lead;
+        return await Lead.findById(lead.id) || lead;
     } catch (error) {
         console.warn('Falha ao atualizar identidade do lead:', error.message);
         return lead;
     }
 }
-function cleanupDuplicateMessages() {
+async function cleanupDuplicateMessages() {
 
     try {
 
         // Remover duplicados com message_id igual (segurança extra)
 
-        run(`
+        await run(`
 
             DELETE FROM messages
 
@@ -853,7 +884,7 @@ function cleanupDuplicateMessages() {
 
         // Remover duplicados sem message_id (mesmo conteúdo no mesmo segundo)
 
-        run(`
+        await run(`
 
             DELETE FROM messages
 
@@ -865,7 +896,7 @@ function cleanupDuplicateMessages() {
 
                 WHERE message_id IS NULL
 
-                GROUP BY conversation_id, lead_id, sender_type, content, media_type, is_from_me, strftime('%Y-%m-%d %H:%M:%S', created_at)
+                GROUP BY conversation_id, lead_id, sender_type, content, media_type, is_from_me, created_at
 
             )
 
@@ -883,11 +914,11 @@ function cleanupDuplicateMessages() {
 
 
 
-function cleanupLidLeads() {
+async function cleanupLidLeads() {
 
     try {
 
-        const lidLeads = query(
+        const lidLeads = await query(
 
             "SELECT id FROM leads WHERE jid LIKE '%@lid%' OR phone LIKE '%@lid%'"
 
@@ -899,7 +930,7 @@ function cleanupLidLeads() {
 
         for (const lead of lidLeads) {
 
-            run('DELETE FROM leads WHERE id = ?', [lead.id]);
+            await run('DELETE FROM leads WHERE id = ?', [lead.id]);
 
         }
 
@@ -915,11 +946,11 @@ function cleanupLidLeads() {
 
 
 
-function cleanupInvalidPhones() {
+async function cleanupInvalidPhones() {
 
     try {
 
-        const candidates = query(
+        const candidates = await query(
 
             "SELECT id, jid, phone FROM leads WHERE jid LIKE '%@s.whatsapp.net%'"
 
@@ -939,15 +970,15 @@ function cleanupInvalidPhones() {
 
 
 
-            const existing = Lead.findByPhone(normalized);
+            const existing = await Lead.findByPhone(normalized);
 
             if (existing && existing.id !== lead.id) {
 
-                mergeLeads(existing, lead);
+                await mergeLeads(existing, lead);
 
             } else {
 
-                updateLeadIdentity(lead, lead.jid, normalized);
+                await updateLeadIdentity(lead, lead.jid, normalized);
 
             }
 
@@ -963,11 +994,11 @@ function cleanupInvalidPhones() {
 
 
 
-function cleanupEmptyWhatsappLeads() {
+async function cleanupEmptyWhatsappLeads() {
 
     try {
 
-        const emptyLeads = query(`
+        const emptyLeads = await query(`
 
             SELECT l.id
 
@@ -985,7 +1016,7 @@ function cleanupEmptyWhatsappLeads() {
 
         for (const lead of emptyLeads) {
 
-            run('DELETE FROM leads WHERE id = ?', [lead.id]);
+            await run('DELETE FROM leads WHERE id = ?', [lead.id]);
 
         }
 
@@ -1003,11 +1034,11 @@ function cleanupEmptyWhatsappLeads() {
 
 
 
-function cleanupDuplicatePhoneSuffixLeads() {
+async function cleanupDuplicatePhoneSuffixLeads() {
 
     try {
 
-        const leads = query("SELECT id, phone, jid, name, last_message_at FROM leads WHERE phone IS NOT NULL");
+        const leads = await query("SELECT id, phone, jid, name, last_message_at FROM leads WHERE phone IS NOT NULL");
 
         if (!leads || leads.length === 0) return;
 
@@ -1069,17 +1100,17 @@ function cleanupDuplicatePhoneSuffixLeads() {
 
 
 
-            const primary = Lead.findById(group[0].id);
+            const primary = await Lead.findById(group[0].id);
 
             if (!primary) continue;
 
             for (const dup of group.slice(1)) {
 
-                const duplicate = Lead.findById(dup.id);
+                const duplicate = await Lead.findById(dup.id);
 
                 if (duplicate && duplicate.id != primary.id) {
 
-                    mergeLeads(primary, duplicate);
+                    await mergeLeads(primary, duplicate);
 
                 }
 
@@ -1097,9 +1128,9 @@ function cleanupDuplicatePhoneSuffixLeads() {
 
 
 
-function cleanupBrokenLeadNames() {
+async function cleanupBrokenLeadNames() {
     try {
-        const leads = query("SELECT id, name, phone FROM leads WHERE name IS NOT NULL");
+        const leads = await query("SELECT id, name, phone FROM leads WHERE name IS NOT NULL");
         if (!leads || leads.length === 0) return;
 
         for (const lead of leads) {
@@ -1117,14 +1148,14 @@ function cleanupBrokenLeadNames() {
             }
 
             if (nextName && nextName !== lead.name) {
-                run("UPDATE leads SET name = ?, updated_at = datetime('now') WHERE id = ?", [nextName, lead.id]);
+                await run("UPDATE leads SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [nextName, lead.id]);
             }
         }
     } catch (error) {
         console.warn('Falha ao corrigir nomes de leads:', error.message);
     }
 }
-function persistWhatsappSession(sessionId, status, options = {}) {
+async function persistWhatsappSession(sessionId, status, options = {}) {
 
     try {
 
@@ -1132,11 +1163,11 @@ function persistWhatsappSession(sessionId, status, options = {}) {
 
         const last_connected_at = options.last_connected_at || null;
 
-        run(`
+        await run(`
 
             INSERT INTO whatsapp_sessions (session_id, status, qr_code, last_connected_at, updated_at)
 
-            VALUES (?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
 
             ON CONFLICT(session_id) DO UPDATE SET
 
@@ -1146,7 +1177,7 @@ function persistWhatsappSession(sessionId, status, options = {}) {
 
                 last_connected_at = excluded.last_connected_at,
 
-                updated_at = datetime('now')
+                updated_at = CURRENT_TIMESTAMP
 
         `, [sessionId, status, qr_code, last_connected_at]);
 
@@ -1164,7 +1195,7 @@ async function rehydrateSessions(ioInstance) {
 
     try {
 
-        const stored = query(`SELECT session_id FROM whatsapp_sessions`);
+        const stored = await query(`SELECT session_id FROM whatsapp_sessions`);
 
         for (const row of stored) {
 
@@ -1446,7 +1477,7 @@ async function createSession(sessionId, socket, attempt = 0) {
 
             getMessage: async (key) => {
 
-                const msg = Message.findByMessageId(key.id);
+                const msg = await Message.findByMessageId(key.id);
 
                 if (msg) {
 
@@ -1804,7 +1835,7 @@ async function createSession(sessionId, socket, attempt = 0) {
 
         // Status de mensagens
 
-        sock.ev.on('messages.update', (updates) => {
+        sock.ev.on('messages.update', async (updates) => {
 
             for (const update of updates) {
 
@@ -1818,7 +1849,7 @@ async function createSession(sessionId, socket, attempt = 0) {
 
                     // Atualizar no banco
 
-                    Message.updateStatus(update.key.id, status, new Date().toISOString());
+                    await Message.updateStatus(update.key.id, status, new Date().toISOString());
 
                     
 
@@ -1856,13 +1887,13 @@ async function createSession(sessionId, socket, attempt = 0) {
 
 
 
-        sock.ev.on('contacts.set', (payload) => {
+        sock.ev.on('contacts.set', async (payload) => {
 
             const contacts = payload?.contacts || [];
 
             for (const contact of contacts) {
 
-                registerContactAlias(contact);
+                await registerContactAlias(contact);
 
             }
 
@@ -1870,13 +1901,13 @@ async function createSession(sessionId, socket, attempt = 0) {
 
 
 
-        sock.ev.on('contacts.upsert', (contacts) => {
+        sock.ev.on('contacts.upsert', async (contacts) => {
 
             const list = Array.isArray(contacts) ? contacts : [contacts];
 
             for (const contact of list) {
 
-                registerContactAlias(contact);
+                await registerContactAlias(contact);
 
             }
 
@@ -1886,11 +1917,11 @@ async function createSession(sessionId, socket, attempt = 0) {
 
         // Sincronizar lista de chats/contatos
 
-        sock.ev.on('chats.set', (payload) => {
+        sock.ev.on('chats.set', async (payload) => {
 
             try {
 
-                syncChatsToDatabase(sessionId, payload);
+                await syncChatsToDatabase(sessionId, payload);
 
             } catch (error) {
 
@@ -1902,11 +1933,11 @@ async function createSession(sessionId, socket, attempt = 0) {
 
 
 
-        sock.ev.on('chats.upsert', (payload) => {
+        sock.ev.on('chats.upsert', async (payload) => {
 
             try {
 
-                syncChatsToDatabase(sessionId, payload);
+                await syncChatsToDatabase(sessionId, payload);
 
             } catch (error) {
 
@@ -1918,11 +1949,11 @@ async function createSession(sessionId, socket, attempt = 0) {
 
 
 
-        sock.ev.on('chats.update', (payload) => {
+        sock.ev.on('chats.update', async (payload) => {
 
             try {
 
-                syncChatsToDatabase(sessionId, payload);
+                await syncChatsToDatabase(sessionId, payload);
 
             } catch (error) {
 
@@ -2164,7 +2195,7 @@ async function executeAutomationAction(automation, context) {
 
             if (!Number.isFinite(nextStatus)) return;
 
-            Lead.update(lead.id, { status: nextStatus });
+            await Lead.update(lead.id, { status: nextStatus });
 
             break;
 
@@ -2192,7 +2223,7 @@ async function executeAutomationAction(automation, context) {
 
                 tags.push(tag);
 
-                Lead.update(lead.id, { tags });
+                await Lead.update(lead.id, { tags });
 
             }
 
@@ -2206,7 +2237,7 @@ async function executeAutomationAction(automation, context) {
 
             if (!Number.isFinite(flowId)) return;
 
-            const flow = Flow.findById(flowId);
+            const flow = await Flow.findById(flowId);
 
             if (!flow) return;
 
@@ -2246,9 +2277,9 @@ async function executeAutomationAction(automation, context) {
 
 
 
-    run(
+    await run(
 
-        `UPDATE automations SET executions = executions + 1, last_execution = ?, updated_at = datetime('now') WHERE id = ?`,
+        `UPDATE automations SET executions = executions + 1, last_execution = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 
         [new Date().toISOString(), automation.id]
 
@@ -2258,9 +2289,9 @@ async function executeAutomationAction(automation, context) {
 
 
 
-function scheduleAutomations(context) {
+async function scheduleAutomations(context) {
 
-    const automations = Automation.list({ is_active: 1 });
+    const automations = await Automation.list({ is_active: 1 });
 
     if (!automations || automations.length === 0) return;
 
@@ -2360,7 +2391,7 @@ function extractLastMessageFromChat(chat) {
 
 
 
-function syncChatsToDatabase(sessionId, payload) {
+async function syncChatsToDatabase(sessionId, payload) {
 
     const chats = normalizeChatPayload(payload);
 
@@ -2405,23 +2436,23 @@ function syncChatsToDatabase(sessionId, payload) {
 
 
 
-        let lead = Lead.findByJid(jid) || Lead.findByPhone(phone);
+        let lead = await Lead.findByJid(jid) || await Lead.findByPhone(phone);
 
         if (rawJid && rawJid !== jid) {
 
-            const aliasLead = Lead.findByJid(rawJid) || Lead.findByPhone(extractNumber(rawJid));
+            const aliasLead = await Lead.findByJid(rawJid) || await Lead.findByPhone(extractNumber(rawJid));
 
             if (aliasLead && lead && aliasLead.id !== lead.id) {
 
-                mergeLeads(lead, aliasLead);
+                await mergeLeads(lead, aliasLead);
 
             } else if (aliasLead && !lead) {
 
-                lead = updateLeadIdentity(aliasLead, jid, phone);
+                lead = await updateLeadIdentity(aliasLead, jid, phone);
 
             } else if (aliasLead && lead && aliasLead.id === lead.id) {
 
-                lead = updateLeadIdentity(lead, jid, phone);
+                lead = await updateLeadIdentity(lead, jid, phone);
 
             }
 
@@ -2429,13 +2460,13 @@ function syncChatsToDatabase(sessionId, payload) {
 
         if (lead && lead.jid !== jid) {
 
-            lead = updateLeadIdentity(lead, jid, phone);
+            lead = await updateLeadIdentity(lead, jid, phone);
 
         }
 
         if (!lead) {
 
-            lead = Lead.findOrCreate({
+            const leadResult = await Lead.findOrCreate({
 
                 phone,
 
@@ -2445,7 +2476,8 @@ function syncChatsToDatabase(sessionId, payload) {
 
                 source: 'whatsapp'
 
-            }).lead;
+            });
+            lead = leadResult.lead;
 
         } else if (displayName) {
 
@@ -2463,9 +2495,9 @@ function syncChatsToDatabase(sessionId, payload) {
 
             if (shouldUpdateName) {
 
-                Lead.update(lead.id, { name: displayName });
+                await Lead.update(lead.id, { name: displayName });
 
-                lead = Lead.findById(lead.id);
+                lead = await Lead.findById(lead.id);
 
             }
 
@@ -2473,7 +2505,7 @@ function syncChatsToDatabase(sessionId, payload) {
 
 
 
-        const convResult = Conversation.findOrCreate({
+        const convResult = await Conversation.findOrCreate({
 
             lead_id: lead.id,
 
@@ -2527,7 +2559,7 @@ function syncChatsToDatabase(sessionId, payload) {
 
         if (Object.keys(updates).length > 0) {
 
-            Conversation.update(conversation.id, updates);
+            await Conversation.update(conversation.id, updates);
 
         }
 
@@ -2579,7 +2611,7 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
 
             if (chats?.length) {
 
-                syncChatsToDatabase(sessionId, chats);
+                await syncChatsToDatabase(sessionId, chats);
 
                 synced = true;
 
@@ -2591,7 +2623,7 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
 
             if (chats?.length) {
 
-                syncChatsToDatabase(sessionId, chats);
+                await syncChatsToDatabase(sessionId, chats);
 
                 synced = true;
 
@@ -2613,7 +2645,7 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
 
         if (chats.length > 0) {
 
-            syncChatsToDatabase(sessionId, chats);
+            await syncChatsToDatabase(sessionId, chats);
 
             synced = true;
 
@@ -2711,21 +2743,21 @@ async function processIncomingMessage(sessionId, msg) {
 
         const resolvedPhone = isUserJid(from) ? extractNumber(from) : null;
 
-        const primary = Lead.findByJid(from) || (resolvedPhone ? Lead.findByPhone(resolvedPhone) : null);
+        const primary = await Lead.findByJid(from) || (resolvedPhone ? await Lead.findByPhone(resolvedPhone) : null);
 
-        const duplicate = Lead.findByJid(fromRaw) || Lead.findByPhone(extractNumber(fromRaw));
+        const duplicate = await Lead.findByJid(fromRaw) || await Lead.findByPhone(extractNumber(fromRaw));
 
         if (primary && duplicate && primary.id !== duplicate.id) {
 
-            mergeLeads(primary, duplicate);
+            await mergeLeads(primary, duplicate);
 
         } else if (!primary && duplicate && resolvedPhone) {
 
-            updateLeadIdentity(duplicate, from, resolvedPhone);
+            await updateLeadIdentity(duplicate, from, resolvedPhone);
 
         } else if (primary && !duplicate && resolvedPhone) {
 
-            updateLeadIdentity(primary, from, resolvedPhone);
+            await updateLeadIdentity(primary, from, resolvedPhone);
 
         }
 
@@ -2757,7 +2789,7 @@ async function processIncomingMessage(sessionId, msg) {
 
     // Buscar ou criar lead
 
-    const { lead, created: leadCreated } = Lead.findOrCreate({
+    const { lead, created: leadCreated } = await Lead.findOrCreate({
 
         phone,
 
@@ -2775,7 +2807,7 @@ async function processIncomingMessage(sessionId, msg) {
 
         if (!lead.name || lead.name !== selfName) {
 
-            Lead.update(lead.id, { name: selfName });
+            await Lead.update(lead.id, { name: selfName });
 
         }
 
@@ -2795,7 +2827,7 @@ async function processIncomingMessage(sessionId, msg) {
 
         if (shouldUpdateName) {
 
-            Lead.update(lead.id, { name: pushName });
+            await Lead.update(lead.id, { name: pushName });
 
         }
 
@@ -2805,7 +2837,7 @@ async function processIncomingMessage(sessionId, msg) {
 
     // Buscar ou criar conversa
 
-    const { conversation, created: convCreated } = Conversation.findOrCreate({
+    const { conversation, created: convCreated } = await Conversation.findOrCreate({
 
         lead_id: lead.id,
 
@@ -2815,7 +2847,7 @@ async function processIncomingMessage(sessionId, msg) {
 
 
 
-    const existingMessage = Message.findByMessageId(msg.key.id);
+    const existingMessage = await Message.findByMessageId(msg.key.id);
 
     if (existingMessage) {
 
@@ -2855,7 +2887,7 @@ async function processIncomingMessage(sessionId, msg) {
 
     
 
-    const savedMessage = Message.create(messageData);
+    const savedMessage = await Message.create(messageData);
 
     const messageTimestampIso = messageData.sent_at || new Date().toISOString();
 
@@ -2863,15 +2895,15 @@ async function processIncomingMessage(sessionId, msg) {
 
     if (!isFromMe) {
 
-        Conversation.incrementUnread(conversation.id);
+        await Conversation.incrementUnread(conversation.id);
 
-        Conversation.touch(conversation.id, savedMessage.id, messageTimestampIso);
+        await Conversation.touch(conversation.id, savedMessage.id, messageTimestampIso);
 
-        Lead.update(lead.id, { last_message_at: messageTimestampIso });
+        await Lead.update(lead.id, { last_message_at: messageTimestampIso });
 
     } else {
 
-        Conversation.touch(conversation.id, savedMessage.id, messageTimestampIso);
+        await Conversation.touch(conversation.id, savedMessage.id, messageTimestampIso);
 
     }
 
@@ -2965,7 +2997,7 @@ async function processIncomingMessage(sessionId, msg) {
 
 
 
-        scheduleAutomations({
+        await scheduleAutomations({
 
             sessionId,
 
@@ -3017,7 +3049,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     // Buscar ou criar lead
 
-    const { lead } = Lead.findOrCreate({
+    const { lead } = await Lead.findOrCreate({
 
         phone: normalizedPhone,
 
@@ -3031,7 +3063,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     // Buscar ou criar conversa
 
-    const { conversation } = Conversation.findOrCreate({
+    const { conversation } = await Conversation.findOrCreate({
 
         lead_id: lead.id,
 
@@ -3099,7 +3131,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
 
 
-    const existingMessage = Message.findByMessageId(messageId);
+    const existingMessage = await Message.findByMessageId(messageId);
 
     if (existingMessage) {
 
@@ -3115,7 +3147,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     try {
 
-        savedMessage = Message.create({
+        savedMessage = await Message.create({
 
             message_id: messageId,
 
@@ -3145,7 +3177,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         if (String(error.message || '').includes('UNIQUE')) {
 
-            savedMessage = Message.findByMessageId(messageId);
+            savedMessage = await Message.findByMessageId(messageId);
 
         } else {
 
@@ -3157,7 +3189,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     
 
-    Conversation.touch(conversation.id, savedMessage?.id || null, new Date().toISOString());
+    await Conversation.touch(conversation.id, savedMessage?.id || null, new Date().toISOString());
 
     // Webhook
 
@@ -3219,6 +3251,8 @@ queueService.init(async (options) => {
 
     });
 
+}).catch((error) => {
+    console.error('Erro ao inicializar fila de mensagens:', error.message);
 });
 
 
@@ -3241,7 +3275,9 @@ flowService.init(async (options) => {
 
 // Reidratar sessões armazenadas (após restart)
 
-rehydrateSessions(io);
+rehydrateSessions(io).catch((error) => {
+    console.error('Erro ao reidratar sessoes:', error.message);
+});
 
 
 
@@ -3337,15 +3373,15 @@ io.on('connection', (socket) => {
 
     
 
-    socket.on('get-messages', ({ sessionId, contactJid, leadId }) => {
+    socket.on('get-messages', async ({ sessionId, contactJid, leadId }) => {
         let messages = [];
 
         if (leadId) {
-            messages = Message.listByLead(leadId, { limit: 100 });
+            messages = await Message.listByLead(leadId, { limit: 100 });
         } else if (contactJid) {
-            const lead = Lead.findByJid(contactJid);
+            const lead = await Lead.findByJid(contactJid);
             if (lead) {
-                messages = Message.listByLead(lead.id, { limit: 100 });
+                messages = await Message.listByLead(lead.id, { limit: 100 });
             }
         }
 
@@ -3369,15 +3405,14 @@ io.on('connection', (socket) => {
 
     
 
-    socket.on('get-contacts', ({ sessionId }) => {
-        const leads = Lead.list({ limit: 200 });
+    socket.on('get-contacts', async ({ sessionId }) => {
+        const leads = await Lead.list({ limit: 200 });
         const sessionPhone = getSessionPhone(sessionId);
         const sessionDisplayName = normalizeText(getSessionDisplayName(sessionId) || 'Usuário');
 
-        const contacts = leads
-            .map(lead => {
-                const lastMsg = Message.getLastByLead(lead.id);
-                if (!lastMsg) return null;
+        const contacts = (await Promise.all(leads.map(async (lead) => {
+            const lastMsg = await Message.getLastByLead(lead.id);
+            if (!lastMsg) return null;
 
                 const preview = normalizeText(lastMsg.content
                     ? lastMsg.content.substring(0, 50)
@@ -3391,18 +3426,18 @@ io.on('connection', (socket) => {
                     displayName = safeSessionName ? `${safeSessionName} (Você)` : 'Você';
                 }
 
-                return {
-                    jid: lead.jid,
-                    number: lead.phone,
-                    name: displayName,
-                    vehicle: lead.vehicle,
-                    plate: lead.plate,
-                    status: lead.status,
-                    lastMessage: preview,
-                    lastMessageTime: lastMsg?.created_at ? new Date(lastMsg.created_at).getTime() : new Date(lead.created_at).getTime(),
-                    unreadCount: 0
-                };
-            })
+            return {
+                jid: lead.jid,
+                number: lead.phone,
+                name: displayName,
+                vehicle: lead.vehicle,
+                plate: lead.plate,
+                status: lead.status,
+                lastMessage: preview,
+                lastMessageTime: lastMsg?.created_at ? new Date(lastMsg.created_at).getTime() : new Date(lead.created_at).getTime(),
+                unreadCount: 0
+            };
+        })))
             .filter(Boolean)
             .sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
 
@@ -3411,11 +3446,11 @@ io.on('connection', (socket) => {
 
     
 
-    socket.on('get-leads', (options = {}) => {
+    socket.on('get-leads', async (options = {}) => {
 
-        const leads = Lead.list(options);
+        const leads = await Lead.list(options);
 
-        const total = Lead.count(options);
+        const total = await Lead.count(options);
 
         socket.emit('leads-list', { leads, total });
 
@@ -3423,21 +3458,21 @@ io.on('connection', (socket) => {
 
     
 
-    socket.on('mark-read', ({ sessionId, contactJid, conversationId }) => {
+    socket.on('mark-read', async ({ sessionId, contactJid, conversationId }) => {
 
         if (conversationId) {
 
-            Conversation.markAsRead(conversationId);
+            await Conversation.markAsRead(conversationId);
 
         } else if (contactJid) {
 
-            const lead = Lead.findByJid(contactJid);
+            const lead = await Lead.findByJid(contactJid);
 
             if (lead) {
 
-                const conv = Conversation.findByLeadId(lead.id);
+                const conv = await Conversation.findByLeadId(lead.id);
 
-                if (conv) Conversation.markAsRead(conv.id);
+                if (conv) await Conversation.markAsRead(conv.id);
 
             }
 
@@ -3447,9 +3482,9 @@ io.on('connection', (socket) => {
 
     
 
-    socket.on('get-templates', () => {
+    socket.on('get-templates', async () => {
 
-        const templates = Template.list();
+        const templates = await Template.list();
 
         socket.emit('templates-list', { templates });
 
@@ -3457,9 +3492,9 @@ io.on('connection', (socket) => {
 
     
 
-    socket.on('get-flows', () => {
+    socket.on('get-flows', async () => {
 
-        const flows = Flow.list();
+        const flows = await Flow.list();
 
         socket.emit('flows-list', { flows });
 
@@ -3467,9 +3502,9 @@ io.on('connection', (socket) => {
 
     
 
-    socket.on('toggle-bot', ({ conversationId, active }) => {
+    socket.on('toggle-bot', async ({ conversationId, active }) => {
 
-        Conversation.update(conversationId, { is_bot_active: active ? 1 : 0 });
+        await Conversation.update(conversationId, { is_bot_active: active ? 1 : 0 });
 
         socket.emit('bot-toggled', { conversationId, active });
 
@@ -3477,9 +3512,9 @@ io.on('connection', (socket) => {
 
     
 
-    socket.on('assign-conversation', ({ conversationId, userId }) => {
+    socket.on('assign-conversation', async ({ conversationId, userId }) => {
 
-        Conversation.update(conversationId, { assigned_to: userId });
+        await Conversation.update(conversationId, { assigned_to: userId });
 
         socket.emit('conversation-assigned', { conversationId, userId });
 
@@ -3611,7 +3646,7 @@ app.post('/api/whatsapp/disconnect', authenticate, async (req, res) => {
 
 // Status do servidor
 
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
 
     const activeSessions = Array.from(sessions.entries()).map(([id, session]) => ({
 
@@ -3635,7 +3670,7 @@ app.get('/api/status', (req, res) => {
 
         activeSessions,
 
-        queue: queueService.getStatus(),
+        queue: await queueService.getStatus(),
 
         uptime: process.uptime(),
 
@@ -3679,7 +3714,7 @@ app.post('/api/auth/login', async (req, res) => {
 
         const normalizedEmail = String(email || '').trim().toLowerCase();
 
-        let user = User.findByEmail(normalizedEmail);
+        let user = await User.findByEmail(normalizedEmail);
 
 
 
@@ -3689,13 +3724,13 @@ app.post('/api/auth/login', async (req, res) => {
 
             const legacyEmail = 'thyago@self.com.br';
 
-            user = User.findByEmail(legacyEmail);
+            user = await User.findByEmail(legacyEmail);
 
 
 
             if (!user) {
 
-                const created = User.create({
+                const created = await User.create({
 
                     name: 'thyago',
 
@@ -3707,7 +3742,7 @@ app.post('/api/auth/login', async (req, res) => {
 
                 });
 
-                user = User.findByEmail(legacyEmail);
+                user = await User.findByEmail(legacyEmail);
 
             }
 
@@ -3731,7 +3766,7 @@ app.post('/api/auth/login', async (req, res) => {
 
         
 
-        User.updateLastLogin(user.id);
+        await User.updateLastLogin(user.id);
 
         
 
@@ -3807,7 +3842,7 @@ app.post('/api/auth/register', async (req, res) => {
 
         const normalizedEmail = String(email || '').trim().toLowerCase();
 
-        const existing = User.findByEmail(normalizedEmail);
+        const existing = await User.findByEmail(normalizedEmail);
 
         if (existing) {
 
@@ -3817,7 +3852,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 
-        User.create({
+        await User.create({
 
             name: String(name || '').trim(),
 
@@ -3831,7 +3866,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 
-        const user = User.findByEmail(normalizedEmail);
+        const user = await User.findByEmail(normalizedEmail);
 
         if (!user) {
 
@@ -3881,7 +3916,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 
-app.post('/api/auth/refresh', (req, res) => {
+app.post('/api/auth/refresh', async (req, res) => {
 
     try {
 
@@ -3911,7 +3946,7 @@ app.post('/api/auth/refresh', (req, res) => {
 
         
 
-        const user = User.findById(decoded.id);
+        const user = await User.findById(decoded.id);
 
         if (!user || !user.is_active) {
 
@@ -3945,11 +3980,11 @@ app.post('/api/auth/refresh', (req, res) => {
 
 
 
-app.get('/api/leads', optionalAuth, (req, res) => {
+app.get('/api/leads', optionalAuth, async (req, res) => {
 
     const { status, search, limit, offset } = req.query;
 
-    const leads = Lead.list({ 
+    const leads = await Lead.list({ 
 
         status: status ? parseInt(status) : undefined,
 
@@ -3961,7 +3996,7 @@ app.get('/api/leads', optionalAuth, (req, res) => {
 
     });
 
-    const total = Lead.count({ status: status ? parseInt(status) : undefined });
+    const total = await Lead.count({ status: status ? parseInt(status) : undefined });
 
     
 
@@ -3971,9 +4006,9 @@ app.get('/api/leads', optionalAuth, (req, res) => {
 
 
 
-app.get('/api/leads/:id', optionalAuth, (req, res) => {
+app.get('/api/leads/:id', optionalAuth, async (req, res) => {
 
-    const lead = Lead.findById(req.params.id);
+    const lead = await Lead.findById(req.params.id);
 
     if (!lead) {
 
@@ -3987,13 +4022,13 @@ app.get('/api/leads/:id', optionalAuth, (req, res) => {
 
 
 
-app.post('/api/leads', authenticate, (req, res) => {
+app.post('/api/leads', authenticate, async (req, res) => {
 
     try {
 
-        const result = Lead.create(req.body);
+        const result = await Lead.create(req.body);
 
-        const lead = Lead.findById(result.id);
+        const lead = await Lead.findById(result.id);
 
         
 
@@ -4013,9 +4048,9 @@ app.post('/api/leads', authenticate, (req, res) => {
 
 
 
-app.put('/api/leads/:id', authenticate, (req, res) => {
+app.put('/api/leads/:id', authenticate, async (req, res) => {
 
-    const lead = Lead.findById(req.params.id);
+    const lead = await Lead.findById(req.params.id);
 
     if (!lead) {
 
@@ -4027,9 +4062,9 @@ app.put('/api/leads/:id', authenticate, (req, res) => {
 
     const oldStatus = lead.status;
 
-    Lead.update(req.params.id, req.body);
+    await Lead.update(req.params.id, req.body);
 
-    const updatedLead = Lead.findById(req.params.id);
+    const updatedLead = await Lead.findById(req.params.id);
 
     
 
@@ -4059,9 +4094,9 @@ app.put('/api/leads/:id', authenticate, (req, res) => {
 
 
 
-app.delete('/api/leads/:id', authenticate, (req, res) => {
+app.delete('/api/leads/:id', authenticate, async (req, res) => {
 
-    Lead.delete(req.params.id);
+    await Lead.delete(req.params.id);
 
     res.json({ success: true });
 
@@ -4077,9 +4112,9 @@ app.delete('/api/leads/:id', authenticate, (req, res) => {
 
 
 
-app.get('/api/conversations', optionalAuth, (req, res) => {
+app.get('/api/conversations', optionalAuth, async (req, res) => {
     const { status, assigned_to, session_id, limit, offset } = req.query;
-    const conversations = Conversation.list({
+    const conversations = await Conversation.list({
         status,
         assigned_to: assigned_to ? parseInt(assigned_to) : undefined,
         session_id,
@@ -4111,8 +4146,8 @@ app.get('/api/conversations', optionalAuth, (req, res) => {
         return digits.length >= 11 ? digits.slice(-11) : digits;
     };
 
-    const normalized = conversations.map((c) => {
-        const lastMessage = Message.getLastMessage(c.id);
+    const normalized = (await Promise.all(conversations.map(async (c) => {
+        const lastMessage = await Message.getLastMessage(c.id);
         const decrypted = lastMessage?.content_encrypted
             ? decryptMessage(lastMessage.content_encrypted)
             : lastMessage?.content;
@@ -4143,7 +4178,7 @@ app.get('/api/conversations', optionalAuth, (req, res) => {
             name,
             phone: c.phone
         };
-    }).filter((conv) => {
+    }))).filter((conv) => {
         if (!conv.lastMessageAt && !conv.lastMessage) {
             return false;
         }
@@ -4225,7 +4260,7 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
 
     if (!to && leadId) {
 
-        const lead = Lead.findById(leadId);
+        const lead = await Lead.findById(leadId);
 
         to = lead?.phone;
 
@@ -4265,8 +4300,8 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
 
 
 
-app.get('/api/messages/:leadId', authenticate, (req, res) => {
-    const messages = Message.listByLead(req.params.leadId, { 
+app.get('/api/messages/:leadId', authenticate, async (req, res) => {
+    const messages = await Message.listByLead(req.params.leadId, { 
         limit: parseInt(req.query.limit) || 100 
     });
 
@@ -4296,21 +4331,21 @@ app.get('/api/messages/:leadId', authenticate, (req, res) => {
 
 
 
-app.get('/api/queue/status', authenticate, (req, res) => {
+app.get('/api/queue/status', authenticate, async (req, res) => {
 
-    res.json({ success: true, ...queueService.getStatus() });
+    res.json({ success: true, ...(await queueService.getStatus()) });
 
 });
 
 
 
-app.post('/api/queue/add', authenticate, (req, res) => {
+app.post('/api/queue/add', authenticate, async (req, res) => {
 
     const { leadId, content, mediaType, mediaUrl, priority, scheduledAt } = req.body;
 
     
 
-    const result = queueService.add({
+    const result = await queueService.add({
 
         leadId,
 
@@ -4334,13 +4369,13 @@ app.post('/api/queue/add', authenticate, (req, res) => {
 
 
 
-app.post('/api/queue/bulk', authenticate, (req, res) => {
+app.post('/api/queue/bulk', authenticate, async (req, res) => {
 
     const { leadIds, content, options } = req.body;
 
     
 
-    const results = queueService.addBulk(leadIds, content, options);
+    const results = await queueService.addBulk(leadIds, content, options);
 
     
 
@@ -4350,9 +4385,9 @@ app.post('/api/queue/bulk', authenticate, (req, res) => {
 
 
 
-app.delete('/api/queue/:id', authenticate, (req, res) => {
+app.delete('/api/queue/:id', authenticate, async (req, res) => {
 
-    queueService.cancel(req.params.id);
+    await queueService.cancel(req.params.id);
 
     res.json({ success: true });
 
@@ -4360,9 +4395,9 @@ app.delete('/api/queue/:id', authenticate, (req, res) => {
 
 
 
-app.delete('/api/queue', authenticate, (req, res) => {
+app.delete('/api/queue', authenticate, async (req, res) => {
 
-    const count = queueService.cancelAll();
+    const count = await queueService.cancelAll();
 
     res.json({ success: true, cancelled: count });
 
@@ -4378,9 +4413,9 @@ app.delete('/api/queue', authenticate, (req, res) => {
 
 
 
-app.get('/api/templates', optionalAuth, (req, res) => {
+app.get('/api/templates', optionalAuth, async (req, res) => {
 
-    const templates = Template.list(req.query);
+    const templates = await Template.list(req.query);
 
     res.json({ success: true, templates });
 
@@ -4388,23 +4423,11 @@ app.get('/api/templates', optionalAuth, (req, res) => {
 
 
 
-app.post('/api/templates', authenticate, (req, res) => {
+app.post('/api/templates', authenticate, async (req, res) => {
 
-    const result = Template.create(req.body);
+    const result = await Template.create(req.body);
 
-    const template = Template.findById(result.id);
-
-    res.json({ success: true, template });
-
-});
-
-
-
-app.put('/api/templates/:id', authenticate, (req, res) => {
-
-    Template.update(req.params.id, req.body);
-
-    const template = Template.findById(req.params.id);
+    const template = await Template.findById(result.id);
 
     res.json({ success: true, template });
 
@@ -4412,9 +4435,21 @@ app.put('/api/templates/:id', authenticate, (req, res) => {
 
 
 
-app.delete('/api/templates/:id', authenticate, (req, res) => {
+app.put('/api/templates/:id', authenticate, async (req, res) => {
 
-    Template.delete(req.params.id);
+    await Template.update(req.params.id, req.body);
+
+    const template = await Template.findById(req.params.id);
+
+    res.json({ success: true, template });
+
+});
+
+
+
+app.delete('/api/templates/:id', authenticate, async (req, res) => {
+
+    await Template.delete(req.params.id);
 
     res.json({ success: true });
 
@@ -4430,11 +4465,11 @@ app.delete('/api/templates/:id', authenticate, (req, res) => {
 
 
 
-app.get('/api/campaigns', optionalAuth, (req, res) => {
+app.get('/api/campaigns', optionalAuth, async (req, res) => {
 
     const { status, type, limit, offset, search } = req.query;
 
-    const campaigns = Campaign.list({
+    const campaigns = await Campaign.list({
 
         status,
 
@@ -4456,9 +4491,9 @@ app.get('/api/campaigns', optionalAuth, (req, res) => {
 
 
 
-app.get('/api/campaigns/:id', optionalAuth, (req, res) => {
+app.get('/api/campaigns/:id', optionalAuth, async (req, res) => {
 
-    const campaign = Campaign.findById(req.params.id);
+    const campaign = await Campaign.findById(req.params.id);
 
     if (!campaign) {
 
@@ -4472,7 +4507,7 @@ app.get('/api/campaigns/:id', optionalAuth, (req, res) => {
 
 
 
-app.post('/api/campaigns', authenticate, (req, res) => {
+app.post('/api/campaigns', authenticate, async (req, res) => {
 
     try {
 
@@ -4484,9 +4519,9 @@ app.post('/api/campaigns', authenticate, (req, res) => {
 
         };
 
-        const result = Campaign.create(payload);
+        const result = await Campaign.create(payload);
 
-        const campaign = Campaign.findById(result.id);
+        const campaign = await Campaign.findById(result.id);
 
         res.json({ success: true, campaign });
 
@@ -4500,9 +4535,9 @@ app.post('/api/campaigns', authenticate, (req, res) => {
 
 
 
-app.put('/api/campaigns/:id', authenticate, (req, res) => {
+app.put('/api/campaigns/:id', authenticate, async (req, res) => {
 
-    const campaign = Campaign.findById(req.params.id);
+    const campaign = await Campaign.findById(req.params.id);
 
     if (!campaign) {
 
@@ -4512,9 +4547,9 @@ app.put('/api/campaigns/:id', authenticate, (req, res) => {
 
 
 
-    Campaign.update(req.params.id, req.body);
+    await Campaign.update(req.params.id, req.body);
 
-    const updatedCampaign = Campaign.findById(req.params.id);
+    const updatedCampaign = await Campaign.findById(req.params.id);
 
     res.json({ success: true, campaign: updatedCampaign });
 
@@ -4522,9 +4557,9 @@ app.put('/api/campaigns/:id', authenticate, (req, res) => {
 
 
 
-app.delete('/api/campaigns/:id', authenticate, (req, res) => {
+app.delete('/api/campaigns/:id', authenticate, async (req, res) => {
 
-    Campaign.delete(req.params.id);
+    await Campaign.delete(req.params.id);
 
     res.json({ success: true });
 
@@ -4540,11 +4575,11 @@ app.delete('/api/campaigns/:id', authenticate, (req, res) => {
 
 
 
-app.get('/api/automations', optionalAuth, (req, res) => {
+app.get('/api/automations', optionalAuth, async (req, res) => {
 
     const { is_active, trigger_type, limit, offset, search } = req.query;
 
-    const automations = Automation.list({
+    const automations = await Automation.list({
 
         is_active: is_active !== undefined ? parseInt(is_active) : undefined,
 
@@ -4566,9 +4601,9 @@ app.get('/api/automations', optionalAuth, (req, res) => {
 
 
 
-app.get('/api/automations/:id', optionalAuth, (req, res) => {
+app.get('/api/automations/:id', optionalAuth, async (req, res) => {
 
-    const automation = Automation.findById(req.params.id);
+    const automation = await Automation.findById(req.params.id);
 
     if (!automation) {
 
@@ -4582,7 +4617,7 @@ app.get('/api/automations/:id', optionalAuth, (req, res) => {
 
 
 
-app.post('/api/automations', authenticate, (req, res) => {
+app.post('/api/automations', authenticate, async (req, res) => {
 
     try {
 
@@ -4594,9 +4629,9 @@ app.post('/api/automations', authenticate, (req, res) => {
 
         };
 
-        const result = Automation.create(payload);
+        const result = await Automation.create(payload);
 
-        const automation = Automation.findById(result.id);
+        const automation = await Automation.findById(result.id);
 
         res.json({ success: true, automation });
 
@@ -4610,9 +4645,9 @@ app.post('/api/automations', authenticate, (req, res) => {
 
 
 
-app.put('/api/automations/:id', authenticate, (req, res) => {
+app.put('/api/automations/:id', authenticate, async (req, res) => {
 
-    const automation = Automation.findById(req.params.id);
+    const automation = await Automation.findById(req.params.id);
 
     if (!automation) {
 
@@ -4622,9 +4657,9 @@ app.put('/api/automations/:id', authenticate, (req, res) => {
 
 
 
-    Automation.update(req.params.id, req.body);
+    await Automation.update(req.params.id, req.body);
 
-    const updatedAutomation = Automation.findById(req.params.id);
+    const updatedAutomation = await Automation.findById(req.params.id);
 
     res.json({ success: true, automation: updatedAutomation });
 
@@ -4632,9 +4667,9 @@ app.put('/api/automations/:id', authenticate, (req, res) => {
 
 
 
-app.delete('/api/automations/:id', authenticate, (req, res) => {
+app.delete('/api/automations/:id', authenticate, async (req, res) => {
 
-    Automation.delete(req.params.id);
+    await Automation.delete(req.params.id);
 
     res.json({ success: true });
 
@@ -4650,9 +4685,9 @@ app.delete('/api/automations/:id', authenticate, (req, res) => {
 
 
 
-app.get('/api/flows', optionalAuth, (req, res) => {
+app.get('/api/flows', optionalAuth, async (req, res) => {
 
-    const flows = Flow.list(req.query);
+    const flows = await Flow.list(req.query);
 
     res.json({ success: true, flows });
 
@@ -4660,9 +4695,9 @@ app.get('/api/flows', optionalAuth, (req, res) => {
 
 
 
-app.get('/api/flows/:id', optionalAuth, (req, res) => {
+app.get('/api/flows/:id', optionalAuth, async (req, res) => {
 
-    const flow = Flow.findById(req.params.id);
+    const flow = await Flow.findById(req.params.id);
 
     if (!flow) {
 
@@ -4676,23 +4711,11 @@ app.get('/api/flows/:id', optionalAuth, (req, res) => {
 
 
 
-app.post('/api/flows', authenticate, (req, res) => {
+app.post('/api/flows', authenticate, async (req, res) => {
 
-    const result = Flow.create(req.body);
+    const result = await Flow.create(req.body);
 
-    const flow = Flow.findById(result.id);
-
-    res.json({ success: true, flow });
-
-});
-
-
-
-app.put('/api/flows/:id', authenticate, (req, res) => {
-
-    Flow.update(req.params.id, req.body);
-
-    const flow = Flow.findById(req.params.id);
+    const flow = await Flow.findById(result.id);
 
     res.json({ success: true, flow });
 
@@ -4700,9 +4723,21 @@ app.put('/api/flows/:id', authenticate, (req, res) => {
 
 
 
-app.delete('/api/flows/:id', authenticate, (req, res) => {
+app.put('/api/flows/:id', authenticate, async (req, res) => {
 
-    Flow.delete(req.params.id);
+    await Flow.update(req.params.id, req.body);
+
+    const flow = await Flow.findById(req.params.id);
+
+    res.json({ success: true, flow });
+
+});
+
+
+
+app.delete('/api/flows/:id', authenticate, async (req, res) => {
+
+    await Flow.delete(req.params.id);
 
     res.json({ success: true });
 
@@ -4718,11 +4753,11 @@ app.delete('/api/flows/:id', authenticate, (req, res) => {
 
 
 
-app.get('/api/webhooks', authenticate, (req, res) => {
+app.get('/api/webhooks', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    const webhooks = Webhook.list();
+    const webhooks = await Webhook.list();
 
     res.json({ success: true, webhooks });
 
@@ -4730,13 +4765,13 @@ app.get('/api/webhooks', authenticate, (req, res) => {
 
 
 
-app.post('/api/webhooks', authenticate, (req, res) => {
+app.post('/api/webhooks', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    const result = Webhook.create(req.body);
+    const result = await Webhook.create(req.body);
 
-    const webhook = Webhook.findById(result.id);
+    const webhook = await Webhook.findById(result.id);
 
     res.json({ success: true, webhook });
 
@@ -4744,13 +4779,13 @@ app.post('/api/webhooks', authenticate, (req, res) => {
 
 
 
-app.put('/api/webhooks/:id', authenticate, (req, res) => {
+app.put('/api/webhooks/:id', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    Webhook.update(req.params.id, req.body);
+    await Webhook.update(req.params.id, req.body);
 
-    const webhook = Webhook.findById(req.params.id);
+    const webhook = await Webhook.findById(req.params.id);
 
     res.json({ success: true, webhook });
 
@@ -4758,11 +4793,11 @@ app.put('/api/webhooks/:id', authenticate, (req, res) => {
 
 
 
-app.delete('/api/webhooks/:id', authenticate, (req, res) => {
+app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    Webhook.delete(req.params.id);
+    await Webhook.delete(req.params.id);
 
     res.json({ success: true });
 
@@ -4772,7 +4807,7 @@ app.delete('/api/webhooks/:id', authenticate, (req, res) => {
 
 // Webhook de entrada (para receber dados externos)
 
-app.post('/api/webhook/incoming', (req, res) => {
+app.post('/api/webhook/incoming', async (req, res) => {
 
     const { event, data, secret } = req.body;
 
@@ -4800,7 +4835,7 @@ app.post('/api/webhook/incoming', (req, res) => {
 
         try {
 
-            const result = Lead.create(data);
+            const result = await Lead.create(data);
 
             res.json({ success: true, leadId: result.id });
 
@@ -4828,9 +4863,9 @@ app.post('/api/webhook/incoming', (req, res) => {
 
 
 
-app.get('/api/settings', authenticate, (req, res) => {
+app.get('/api/settings', authenticate, async (req, res) => {
 
-    const settings = Settings.getAll();
+    const settings = await Settings.getAll();
 
     res.json({ success: true, settings });
 
@@ -4838,7 +4873,7 @@ app.get('/api/settings', authenticate, (req, res) => {
 
 
 
-app.put('/api/settings', authenticate, (req, res) => {
+app.put('/api/settings', authenticate, async (req, res) => {
 
     for (const [key, value] of Object.entries(req.body)) {
 
@@ -4848,7 +4883,7 @@ app.put('/api/settings', authenticate, (req, res) => {
 
                      typeof value === 'object' ? 'json' : 'string';
 
-        Settings.set(key, value, type);
+        await Settings.set(key, value, type);
 
     }
 
@@ -4858,7 +4893,7 @@ app.put('/api/settings', authenticate, (req, res) => {
 
     if (req.body.bulk_message_delay || req.body.max_messages_per_minute) {
 
-        queueService.updateSettings({
+        await queueService.updateSettings({
 
             delay: req.body.bulk_message_delay,
 
@@ -4870,7 +4905,7 @@ app.put('/api/settings', authenticate, (req, res) => {
 
     
 
-    res.json({ success: true, settings: Settings.getAll() });
+    res.json({ success: true, settings: await Settings.getAll() });
 
 });
 
@@ -5114,7 +5149,7 @@ process.on('uncaughtException', (error) => {
 
         }
 
-        closeDatabase();
+        await closeDatabase();
 
         server.close(() => { console.log('? Servidor encerrado'); process.exit(0); });
 
@@ -5128,13 +5163,14 @@ process.on('uncaughtException', (error) => {
 
         queueService.stopProcessing();
 
-        closeDatabase();
+        await closeDatabase();
 
         process.exit(0);
 
     });
 
 };
+
 
 
 
