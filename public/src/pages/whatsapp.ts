@@ -16,6 +16,7 @@ const CONFIG = {
 
 // Estado
 let socket: null | { on: (event: string, handler: (data?: any) => void) => void; emit: (event: string, payload?: any) => void } = null;
+let socketBound = false;
 let isConnected = false;
 let isConnecting = false;
 let qrTimer: number | null = null;
@@ -62,6 +63,15 @@ function checkAuth() {
 
 // Inicializar Socket.IO
 function initSocket() {
+    const win = window as Window & {
+        APP?: {
+            socket?: { on: (event: string, handler: (data?: any) => void) => void; emit: (event: string, payload?: any) => void };
+        };
+    };
+
+    if (win.APP?.socket) {
+        socket = win.APP.socket;
+    }
     console.log('🔌 Conectando ao servidor:', CONFIG.SOCKET_URL);
 
     const token = sessionStorage.getItem('selfDashboardToken');
@@ -83,13 +93,17 @@ function initSocket() {
     if (token) {
         socketOptions.auth = { token };
     }
-
-    if (!io) {
-        console.warn('Socket.IO não carregado');
-        return;
+    if (!socket) {
+        if (!io) {
+            console.warn('Socket.IO nao carregado');
+            return;
+        }
+        socket = io(CONFIG.SOCKET_URL, socketOptions);
     }
-    socket = io(CONFIG.SOCKET_URL, socketOptions);
-    
+
+    if (socketBound) return;
+    socketBound = true;
+
     socket.on('connect', function() {
         console.log('✅ Socket conectado');
         showToast('success', 'Conectado ao servidor');
@@ -169,6 +183,7 @@ function initSocket() {
         showToast('error', 'Falha na autenticação. Tente novamente.');
         handleDisconnected();
     });
+    socket.emit('check-session', { sessionId: CONFIG.SESSION_ID });
 }
 
 // Iniciar conexão

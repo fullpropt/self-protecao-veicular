@@ -460,6 +460,7 @@ const logger = pino({ level: 'silent' });
 const typingStatus = new Map();
 
 const jidAliasMap = new Map();
+const sessionInitLocks = new Set();
 
 
 
@@ -1378,6 +1379,29 @@ async function createSession(sessionId, socket, attempt = 0) {
 
     const clientSocket = socket || { emit: () => {} };
 
+    if (sessionInitLocks.has(sessionId)) {
+        const existingSession = sessions.get(sessionId);
+        if (existingSession && socket) {
+            existingSession.clientSocket = socket;
+        }
+
+        clientSocket.emit('session-status', {
+            status: existingSession?.isConnected ? 'connected' : 'reconnecting',
+            sessionId,
+            user: existingSession?.user || null
+        });
+        return existingSession?.socket || null;
+    }
+
+    sessionInitLocks.add(sessionId);
+    let lockReleased = false;
+    const releaseSessionLock = () => {
+        if (!lockReleased) {
+            sessionInitLocks.delete(sessionId);
+            lockReleased = true;
+        }
+    };
+
     const sessionPath = path.join(SESSIONS_DIR, sessionId);
 
     
@@ -2023,7 +2047,7 @@ async function createSession(sessionId, socket, attempt = 0) {
             reconnectAttempts.set(sessionId, currentAttempt + 1);
 
             await baileys.delay(RECONNECT_DELAY);
-
+            releaseSessionLock();
             return await createSession(sessionId, clientSocket, currentAttempt + 1);
 
         } else {
@@ -2034,6 +2058,8 @@ async function createSession(sessionId, socket, attempt = 0) {
 
         }
 
+    } finally {
+        releaseSessionLock();
     }
 
 }
@@ -3292,24 +3318,23 @@ io.on('connection', (socket) => {
         const session = sessions.get(sessionId);
 
         
-
-        if (session && session.isConnected) {
-
+        if (session) {
             session.clientSocket = socket;
-
-            socket.emit('session-status', { status: 'connected', sessionId, user: session.user });
-
-        } else if (sessionExists(sessionId)) {
-
-            socket.emit('session-status', { status: 'reconnecting', sessionId });
-
-            await createSession(sessionId, socket);
-
-        } else {
-
-            socket.emit('session-status', { status: 'disconnected', sessionId });
-
+            socket.emit('session-status', {
+                status: session.isConnected ? 'connected' : 'reconnecting',
+                sessionId,
+                user: session.user
+            });
+            return;
         }
+
+        if (sessionExists(sessionId)) {
+            socket.emit('session-status', { status: 'reconnecting', sessionId });
+            await createSession(sessionId, socket);
+            return;
+        }
+
+        socket.emit('session-status', { status: 'disconnected', sessionId });
 
     });
 
@@ -3319,14 +3344,17 @@ io.on('connection', (socket) => {
 
         const existingSession = sessions.get(sessionId);
 
-        if (existingSession && existingSession.isConnected) {
-
+        if (existingSession) {
             existingSession.clientSocket = socket;
-
-            socket.emit('session-status', { status: 'connected', sessionId, user: existingSession.user });
-
+            socket.emit('session-status', {
+                status: existingSession.isConnected ? 'connected' : 'reconnecting',
+                sessionId,
+                user: existingSession.user
+            });
+            if (!existingSession.isConnected && !existingSession.reconnecting && !sessionInitLocks.has(sessionId)) {
+                await createSession(sessionId, socket);
+            }
             return;
-
         }
 
         await createSession(sessionId, socket);
@@ -5162,10 +5190,6 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
-
-
-
 
 
 
