@@ -593,9 +593,76 @@ function previewForMedia(mediaType) {
             return '[documento]';
         case 'sticker':
             return '[sticker]';
+        case 'contact':
+            return '[contato]';
+        case 'location':
+            return '[localizacao]';
         default:
             return '[mensagem]';
     }
+}
+
+function unwrapMessageContent(message) {
+    if (!message) return null;
+
+    let current = message;
+    for (let i = 0; i < 6; i += 1) {
+        if (current?.ephemeralMessage?.message) {
+            current = current.ephemeralMessage.message;
+            continue;
+        }
+        if (current?.viewOnceMessageV2Extension?.message) {
+            current = current.viewOnceMessageV2Extension.message;
+            continue;
+        }
+        if (current?.viewOnceMessageV2?.message) {
+            current = current.viewOnceMessageV2.message;
+            continue;
+        }
+        if (current?.viewOnceMessage?.message) {
+            current = current.viewOnceMessage.message;
+            continue;
+        }
+        if (current?.deviceSentMessage?.message) {
+            current = current.deviceSentMessage.message;
+            continue;
+        }
+        if (current?.editedMessage?.message) {
+            current = current.editedMessage.message;
+            continue;
+        }
+        if (current?.documentWithCaptionMessage?.message) {
+            current = current.documentWithCaptionMessage.message;
+            continue;
+        }
+        break;
+    }
+
+    return current;
+}
+
+function extractTextFromMessageContent(content) {
+    if (!content) return '';
+    return (
+        content.conversation ||
+        content.extendedTextMessage?.text ||
+        content.imageMessage?.caption ||
+        content.videoMessage?.caption ||
+        content.documentMessage?.caption ||
+        ''
+    );
+}
+
+function detectMediaTypeFromMessageContent(content) {
+    if (!content) return 'text';
+    if (content.imageMessage) return 'image';
+    if (content.videoMessage) return 'video';
+    if (content.audioMessage) return 'audio';
+    if (content.documentMessage) return 'document';
+    if (content.stickerMessage) return 'sticker';
+    if (content.contactMessage || content.contactsArrayMessage) return 'contact';
+    if (content.locationMessage || content.liveLocationMessage) return 'location';
+    return 'text';
 }
 function normalizeJid(jid) {
 
@@ -693,6 +760,7 @@ function isGroupMessage(msg) {
 }
 
 function resolveMessageJid(msg, sessionPhone = '') {
+    const content = unwrapMessageContent(msg?.message);
     const candidates = [
 
         msg?.key?.remoteJid,
@@ -701,7 +769,11 @@ function resolveMessageJid(msg, sessionPhone = '') {
 
         msg?.participant,
 
+        msg?.message?.deviceSentMessage?.destinationJid,
+
         msg?.message?.extendedTextMessage?.contextInfo?.participant,
+
+        content?.extendedTextMessage?.contextInfo?.participant,
 
         msg?.message?.senderKeyDistributionMessage?.groupId
 
@@ -2710,6 +2782,7 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
 async function processIncomingMessage(sessionId, msg) {
 
     if (isGroupMessage(msg)) return;
+    if (!msg?.message) return;
     const sessionDisplayName = getSessionDisplayName(sessionId);
     const sessionPhone = getSessionPhone(sessionId);
 
@@ -2720,44 +2793,12 @@ async function processIncomingMessage(sessionId, msg) {
     if (!from || !isUserJid(from)) return;
 
     const isFromMe = msg.key.fromMe;
+    const content = unwrapMessageContent(msg.message);
+    let text = extractTextFromMessageContent(content);
+    let mediaType = detectMediaTypeFromMessageContent(content);
 
-    
-
-    // Extrair texto
-
-    let text = '';
-
-    if (msg.message) {
-
-        text = msg.message.conversation || 
-
-               msg.message.extendedTextMessage?.text || 
-
-               msg.message.imageMessage?.caption ||
-
-               msg.message.videoMessage?.caption ||
-
-               msg.message.documentMessage?.caption ||
-
-               '';
-
-    }
-
-    
-
-    // Tipo de mídia
-
-    let mediaType = 'text';
-
-    if (msg.message?.imageMessage) mediaType = 'image';
-
-    else if (msg.message?.videoMessage) mediaType = 'video';
-
-    else if (msg.message?.audioMessage) mediaType = 'audio';
-
-    else if (msg.message?.documentMessage) mediaType = 'document';
-
-    else if (msg.message?.stickerMessage) mediaType = 'sticker';
+    // Ignora upserts de controle/protocolo sem conteudo renderizavel.
+    if (!text && mediaType === 'text') return;
 
     if (!text && mediaType !== 'text') {
         text = previewForMedia(mediaType);
@@ -5190,8 +5231,6 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
-
 
 
 
