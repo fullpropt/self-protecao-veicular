@@ -3241,7 +3241,7 @@ function sessionExists(sessionId) {
 
 // Inicializar serviço de fila
 
-queueService.init(async (options) => {
+Promise.resolve(queueService.init(async (options) => {
 
     return await sendMessageToWhatsApp({
 
@@ -3251,7 +3251,7 @@ queueService.init(async (options) => {
 
     });
 
-}).catch((error) => {
+})).catch((error) => {
     console.error('Erro ao inicializar fila de mensagens:', error.message);
 });
 
