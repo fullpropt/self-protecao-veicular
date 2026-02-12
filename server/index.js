@@ -691,7 +691,7 @@ function isGroupMessage(msg) {
     );
 }
 
-function resolveMessageJid(msg) {
+function resolveMessageJid(msg, sessionPhone = '') {
     const candidates = [
 
         msg?.key?.remoteJid,
@@ -706,45 +706,46 @@ function resolveMessageJid(msg) {
 
     ].filter(Boolean);
 
-
+    const sessionDigits = normalizePhoneDigits(sessionPhone);
 
     let lidJid = null;
-
-    let userJid = null;
-
-
+    const userJids = [];
 
     for (const jid of candidates) {
 
         if (!lidJid && isLidJid(jid)) lidJid = jid;
 
-        if (!userJid && isUserJid(jid)) userJid = jid;
+        if (isUserJid(jid)) userJids.push(jid);
 
     }
 
+    const nonSelfUserJid = userJids.find((jid) => {
+        const phoneDigits = normalizePhoneDigits(extractNumber(jid));
+        return !isSelfPhone(phoneDigits, sessionDigits);
+    });
 
+    const preferredUserJid = nonSelfUserJid || userJids[0] || null;
 
-    if (lidJid && userJid) {
+    if (lidJid && preferredUserJid) {
 
-        jidAliasMap.set(lidJid, userJid);
+        jidAliasMap.set(lidJid, preferredUserJid);
 
     }
 
-
-
-    for (const jid of candidates) {
-
+    for (const jid of userJids) {
         const normalized = normalizeJid(jid);
+        if (!normalized || !isUserJid(normalized)) continue;
 
-        if (normalized && isUserJid(normalized)) {
-
+        const phoneDigits = normalizePhoneDigits(extractNumber(normalized));
+        const isSelfJid = isSelfPhone(phoneDigits, sessionDigits);
+        if (!isSelfJid) {
             return normalized;
-
         }
-
     }
 
-
+    if (preferredUserJid) {
+        return normalizeJid(preferredUserJid);
+    }
 
     return normalizeJid(msg?.key?.remoteJid);
 
@@ -2438,7 +2439,10 @@ async function syncChatsToDatabase(sessionId, payload) {
 
         let lead = await Lead.findByJid(jid) || await Lead.findByPhone(phone);
 
-        if (rawJid && rawJid !== jid) {
+        const rawPhoneDigits = normalizePhoneDigits(extractNumber(rawJid));
+        const isRawSelfChat = isSelfPhone(rawPhoneDigits, sessionDigits);
+
+        if (rawJid && rawJid !== jid && !isSelfChat && !isRawSelfChat) {
 
             const aliasLead = await Lead.findByJid(rawJid) || await Lead.findByPhone(extractNumber(rawJid));
 
@@ -2680,18 +2684,16 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
 async function processIncomingMessage(sessionId, msg) {
 
     if (isGroupMessage(msg)) return;
+    const sessionDisplayName = getSessionDisplayName(sessionId);
+    const sessionPhone = getSessionPhone(sessionId);
 
     const fromRaw = msg.key.remoteJid;
 
-    const from = resolveMessageJid(msg);
+    const from = resolveMessageJid(msg, sessionPhone);
 
     if (!from || !isUserJid(from)) return;
 
     const isFromMe = msg.key.fromMe;
-
-    const sessionDisplayName = getSessionDisplayName(sessionId);
-
-    const sessionPhone = getSessionPhone(sessionId);
 
     
 
@@ -2739,7 +2741,13 @@ async function processIncomingMessage(sessionId, msg) {
 
     
 
-    if (fromRaw && from && fromRaw !== from) {
+    const sessionDigitsForAlias = normalizePhoneDigits(sessionPhone);
+    const fromRawDigits = normalizePhoneDigits(extractNumber(fromRaw));
+    const fromDigits = normalizePhoneDigits(extractNumber(from));
+    const isFromRawSelf = isSelfPhone(fromRawDigits, sessionDigitsForAlias);
+    const isFromResolvedSelf = isSelfPhone(fromDigits, sessionDigitsForAlias);
+
+    if (fromRaw && from && fromRaw !== from && !isFromRawSelf && !isFromResolvedSelf) {
 
         const resolvedPhone = isUserJid(from) ? extractNumber(from) : null;
 
