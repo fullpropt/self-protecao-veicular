@@ -323,6 +323,16 @@ function LeadModals() {
                 placeholder={`nome,telefone,veiculo,placa\nJoão Silva,27999999999,Honda Civic 2020,ABC1234\nMaria Santos,27988888888,Toyota Corolla 2021,XYZ5678`}
               ></textarea>
             </div>
+            <div className="form-group">
+              <label className="form-label">Tag para importação (opcional)</label>
+              <input
+                type="text"
+                className="form-input"
+                id="importTag"
+                placeholder="Ex: Prioridade, Premium, Indicação"
+              />
+              <p className="form-help">Aplicada em todos os leads importados.</p>
+            </div>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-outline" onClick={() => globals.closeModal?.('importModal')}>
@@ -608,3 +618,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

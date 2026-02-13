@@ -474,6 +474,16 @@ João Silva,27999999999,Honda Civic,ABC1234`}
                 <option value="2">Em Andamento</option>
               </select>
             </div>
+            <div className="form-group">
+              <label className="form-label">Tag para importação (opcional)</label>
+              <input
+                type="text"
+                className="form-input"
+                id="importTag"
+                placeholder="Ex: Prioridade, Premium, Indicação"
+              />
+              <p className="form-help">Aplicada em todos os contatos importados.</p>
+            </div>
           </div>
           <div className="modal-footer">
             <button className="btn btn-outline" onClick={() => globals.closeModal?.('importModal')}>Cancelar</button>

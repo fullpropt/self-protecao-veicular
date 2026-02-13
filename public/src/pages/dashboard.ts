@@ -370,6 +370,11 @@ function sendWhatsApp(phone: string) {
 async function importLeads() {
     const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
     const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const importTagRaw = (document.getElementById('importTag') as HTMLInputElement | null)?.value.trim() || '';
+    const importTags = importTagRaw
+        .split(/[,;|]/)
+        .map(t => t.trim())
+        .filter(Boolean);
 
     let data: Array<Record<string, string>> = [];
 
@@ -403,7 +408,9 @@ async function importLeads() {
                     phone: phone,
                     vehicle: row.veiculo || row.vehicle || '',
                     plate: row.placa || row.plate || '',
-                    status: 1
+                    status: 1,
+                    tags: importTags,
+                    source: 'import'
                 });
                 imported++;
             } catch (e) {
@@ -415,6 +422,8 @@ async function importLeads() {
         if (fileInput) fileInput.value = '';
         const importText = document.getElementById('importText') as HTMLTextAreaElement | null;
         if (importText) importText.value = '';
+        const importTag = document.getElementById('importTag') as HTMLInputElement | null;
+        if (importTag) importTag.value = '';
         
         await loadDashboardData();
         showToast('success', 'Sucesso', `${imported} leads importados com sucesso!`);

@@ -581,6 +581,121 @@ function normalizeText(value) {
     return text;
 }
 
+function sanitizeAutoName(value) {
+    const text = normalizeText(String(value || '').trim());
+    if (!text) return '';
+
+    const lower = text.toLowerCase();
+    if (
+        lower === 'sem nome' ||
+        lower === 'unknown' ||
+        lower === 'undefined' ||
+        lower === 'null' ||
+        lower === 'você' ||
+        lower === 'voce'
+    ) {
+        return '';
+    }
+
+    if (text.includes('@s.whatsapp.net') || text.includes('@lid')) return '';
+    if (/^\d+$/.test(text)) return '';
+
+    return text;
+}
+
+function parseLeadCustomFields(value) {
+    if (!value) return {};
+
+    if (typeof value === 'object') {
+        return Array.isArray(value) ? {} : { ...value };
+    }
+
+    if (typeof value !== 'string') return {};
+
+    try {
+        const parsed = JSON.parse(value);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return {};
+        }
+        return parsed;
+    } catch (_) {
+        return {};
+    }
+}
+
+function mergeLeadCustomFields(baseValue, overrideValue) {
+    const base = parseLeadCustomFields(baseValue);
+    const override = parseLeadCustomFields(overrideValue);
+    const merged = { ...base, ...override };
+
+    const baseSystem = base.__system && typeof base.__system === 'object' && !Array.isArray(base.__system)
+        ? base.__system
+        : {};
+    const overrideSystem = override.__system && typeof override.__system === 'object' && !Array.isArray(override.__system)
+        ? override.__system
+        : {};
+
+    if (Object.keys(baseSystem).length > 0 || Object.keys(overrideSystem).length > 0) {
+        merged.__system = { ...baseSystem, ...overrideSystem };
+    }
+
+    return merged;
+}
+
+function lockLeadNameAsManual(customFields) {
+    const merged = mergeLeadCustomFields(customFields);
+    const system = merged.__system && typeof merged.__system === 'object' && !Array.isArray(merged.__system)
+        ? merged.__system
+        : {};
+
+    merged.__system = {
+        ...system,
+        manual_name_locked: true,
+        manual_name_source: 'manual',
+        manual_name_updated_at: new Date().toISOString()
+    };
+
+    return merged;
+}
+
+function isLeadNameManuallyLocked(lead) {
+    const customFields = parseLeadCustomFields(lead?.custom_fields);
+    return customFields?.__system?.manual_name_locked === true;
+}
+
+function shouldAutoUpdateLeadName(lead, phone, sessionDisplayName = '') {
+    if (isLeadNameManuallyLocked(lead)) return false;
+
+    const currentRaw = normalizeText(String(lead?.name || '').trim());
+    if (!currentRaw) return true;
+
+    const current = currentRaw.toLowerCase();
+    if (
+        current === 'sem nome' ||
+        current === 'unknown' ||
+        current === 'undefined' ||
+        current === 'null' ||
+        current === 'você' ||
+        current === 'voce' ||
+        current === 'usuário (você)' ||
+        current === 'usuario (voce)'
+    ) {
+        return true;
+    }
+
+    const currentDigits = normalizePhoneDigits(currentRaw);
+    const phoneDigits = normalizePhoneDigits(phone);
+    if (phoneDigits && currentDigits && currentDigits === phoneDigits) return true;
+    if (/^\d+$/.test(currentRaw)) return true;
+
+    const sessionName = normalizeText(String(sessionDisplayName || '').trim());
+    if (sessionName && (currentRaw === sessionName || currentRaw === `${sessionName} (Você)`)) {
+        return true;
+    }
+
+    return false;
+}
+
 function previewForMedia(mediaType) {
     switch (mediaType) {
         case 'image':
@@ -680,7 +795,7 @@ function normalizeJid(jid) {
 
 
 
-async function registerContactAlias(contact, sessionPhone = '') {
+async function registerContactAlias(contact, sessionId = '', sessionPhone = '') {
     if (!contact) return;
 
     const candidates = [
@@ -701,13 +816,23 @@ async function registerContactAlias(contact, sessionPhone = '') {
 
 
 
-    if (candidates.length < 2) return;
+    if (candidates.length === 0) return;
 
+    const notifyName = sanitizeAutoName(
+        contact?.notify ||
+        contact?.name ||
+        contact?.verifiedName ||
+        contact?.pushName ||
+        contact?.vname ||
+        contact?.short
+    );
+    const sessionDisplayName = getSessionDisplayName(sessionId);
 
 
     let lidJid = null;
 
     let userJid = null;
+    const userJids = [];
     const sessionDigits = normalizePhoneDigits(sessionPhone);
 
 
@@ -716,14 +841,32 @@ async function registerContactAlias(contact, sessionPhone = '') {
 
         if (!lidJid && isLidJid(cand)) lidJid = cand;
 
-        if (!userJid && isUserJid(cand)) {
-            const candidateDigits = normalizePhoneDigits(extractNumber(cand));
-            if (!isSelfPhone(candidateDigits, sessionDigits)) {
-                userJid = cand;
+        if (isUserJid(cand)) {
+            userJids.push(cand);
+            if (!userJid) {
+                const candidateDigits = normalizePhoneDigits(extractNumber(cand));
+                if (!isSelfPhone(candidateDigits, sessionDigits)) {
+                    userJid = cand;
+                }
             }
         }
 
     }
+
+    if (notifyName) {
+        for (const candidateJid of userJids) {
+            const normalizedCandidateJid = normalizeJid(candidateJid) || candidateJid;
+            const candidatePhone = extractNumber(normalizedCandidateJid);
+            const lead = await Lead.findByJid(normalizedCandidateJid) || await Lead.findByPhone(candidatePhone);
+            if (!lead) continue;
+
+            if (shouldAutoUpdateLeadName(lead, lead.phone || candidatePhone, sessionDisplayName)) {
+                await Lead.update(lead.id, { name: notifyName });
+            }
+        }
+    }
+
+    if (candidates.length < 2) return;
 
 
 
@@ -2008,7 +2151,7 @@ async function createSession(sessionId, socket, attempt = 0) {
 
             for (const contact of contacts) {
 
-                await registerContactAlias(contact, sessionPhone);
+                await registerContactAlias(contact, sessionId, sessionPhone);
 
             }
 
@@ -2023,7 +2166,7 @@ async function createSession(sessionId, socket, attempt = 0) {
 
             for (const contact of list) {
 
-                await registerContactAlias(contact, sessionPhone);
+                await registerContactAlias(contact, sessionId, sessionPhone);
 
             }
 
@@ -2601,27 +2744,12 @@ async function syncChatsToDatabase(sessionId, payload) {
             lead = leadResult.lead;
 
         } else if (displayName) {
+            const sanitizedDisplayName = sanitizeAutoName(displayName);
 
-            const shouldUpdateName =
-
-                !lead.name ||
-
-                lead.name === phone ||
-
-                (sessionDisplayName && lead.name === sessionDisplayName) ||
-
-                (sessionDisplayName && lead.name === `${sessionDisplayName} (Você)`) ||
-
-                lead.name === 'Você';
-
-            if (shouldUpdateName) {
-
-                await Lead.update(lead.id, { name: displayName });
-
+            if (sanitizedDisplayName && shouldAutoUpdateLeadName(lead, lead.phone || phone, sessionDisplayName)) {
+                await Lead.update(lead.id, { name: sanitizedDisplayName });
                 lead = await Lead.findById(lead.id);
-
             }
-
         }
 
 
@@ -2929,32 +3057,16 @@ async function processIncomingMessage(sessionId, msg) {
 
     if (isSelfChat) {
 
-        if (!lead.name || lead.name !== selfName) {
+        if (!isLeadNameManuallyLocked(lead) && (!lead.name || lead.name !== selfName)) {
 
             await Lead.update(lead.id, { name: selfName });
 
         }
 
     } else if (!isFromMe && pushName) {
-
-        const shouldUpdateName =
-
-            !lead.name ||
-
-            lead.name === phone ||
-
-            (sessionDisplayName && lead.name === sessionDisplayName) ||
-
-            (sessionDisplayName && lead.name === `${sessionDisplayName} (Você)`) ||
-
-            lead.name === 'Você';
-
-        if (shouldUpdateName) {
-
+        if (shouldAutoUpdateLeadName(lead, lead.phone || phone, sessionDisplayName)) {
             await Lead.update(lead.id, { name: pushName });
-
         }
-
     }
 
     
@@ -4210,8 +4322,18 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
     
 
     const oldStatus = lead.status;
+    const updateData = { ...req.body };
 
-    await Lead.update(req.params.id, req.body);
+    if (Object.prototype.hasOwnProperty.call(updateData, 'name')) {
+        const manualName = sanitizeAutoName(updateData.name);
+        if (manualName) {
+            updateData.custom_fields = lockLeadNameAsManual(
+                mergeLeadCustomFields(lead.custom_fields, updateData.custom_fields)
+            );
+        }
+    }
+
+    await Lead.update(req.params.id, updateData);
 
     const updatedLead = await Lead.findById(req.params.id);
 
@@ -4221,7 +4343,7 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
     
 
-    if (req.body.status && req.body.status !== oldStatus) {
+    if (updateData.status && updateData.status !== oldStatus) {
 
         webhookService.trigger('lead.status_changed', { 
 
@@ -4229,7 +4351,7 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
             oldStatus, 
 
-            newStatus: req.body.status 
+            newStatus: updateData.status 
 
         });
 
@@ -5642,10 +5764,6 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
-
-
-
 
 
 

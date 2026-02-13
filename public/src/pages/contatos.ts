@@ -430,6 +430,11 @@ async function importContacts() {
     const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
     const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value.trim() || '';
     const status = parseInt((document.getElementById('importStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus;
+    const importTagRaw = (document.getElementById('importTag') as HTMLInputElement | null)?.value.trim() || '';
+    const importTags = importTagRaw
+        .split(/[,;|]/)
+        .map(t => t.trim())
+        .filter(Boolean);
 
     let data: Array<Record<string, string>> = [];
     if (fileInput?.files && fileInput.files.length > 0) {
@@ -451,6 +456,7 @@ async function importContacts() {
         for (const row of data) {
             const phone = (row.telefone || row.phone || '').replace(/\D/g, '');
             if (!phone) continue;
+            const mergedTags = Array.from(new Set(importTags));
             
             try {
                 await api.post('/api/leads', {
@@ -459,13 +465,17 @@ async function importContacts() {
                     vehicle: row.veiculo || row.vehicle || '',
                     plate: row.placa || row.plate || '',
                     email: row.email || '',
-                    status
+                    status,
+                    tags: mergedTags,
+                    source: 'import'
                 });
                 imported++;
             } catch (e) {}
         }
 
         closeModal('importModal');
+        const importTag = document.getElementById('importTag') as HTMLInputElement | null;
+        if (importTag) importTag.value = '';
         await loadContacts();
         showToast('success', 'Sucesso', `${imported} contatos importados!`);
     } catch (error) {

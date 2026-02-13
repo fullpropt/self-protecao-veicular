@@ -27,7 +27,69 @@ function sanitizeLeadName(name) {
     return value;
 }
 
-function shouldReplaceLeadName(currentName, incomingName, phone) {
+function parseLeadCustomFields(value) {
+    if (!value) return {};
+
+    if (typeof value === 'object') {
+        return Array.isArray(value) ? {} : { ...value };
+    }
+
+    if (typeof value !== 'string') return {};
+
+    try {
+        const parsed = JSON.parse(value);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return {};
+        }
+        return parsed;
+    } catch (_) {
+        return {};
+    }
+}
+
+function mergeLeadCustomFields(baseValue, overrideValue) {
+    const base = parseLeadCustomFields(baseValue);
+    const override = parseLeadCustomFields(overrideValue);
+    const merged = { ...base, ...override };
+
+    const baseSystem = base.__system && typeof base.__system === 'object' && !Array.isArray(base.__system)
+        ? base.__system
+        : {};
+    const overrideSystem = override.__system && typeof override.__system === 'object' && !Array.isArray(override.__system)
+        ? override.__system
+        : {};
+
+    if (Object.keys(baseSystem).length > 0 || Object.keys(overrideSystem).length > 0) {
+        merged.__system = { ...baseSystem, ...overrideSystem };
+    }
+
+    return merged;
+}
+
+function lockLeadNameAsManual(customFields) {
+    const merged = mergeLeadCustomFields(customFields);
+    const currentSystem = merged.__system && typeof merged.__system === 'object' && !Array.isArray(merged.__system)
+        ? merged.__system
+        : {};
+
+    merged.__system = {
+        ...currentSystem,
+        manual_name_locked: true,
+        manual_name_source: 'manual',
+        manual_name_updated_at: new Date().toISOString()
+    };
+
+    return merged;
+}
+
+function isLeadNameManuallyLocked(customFields) {
+    const parsed = parseLeadCustomFields(customFields);
+    return parsed?.__system?.manual_name_locked === true;
+}
+
+function shouldReplaceLeadName(currentName, incomingName, phone, options = {}) {
+    if (options.manualNameLocked) return false;
+
     const next = sanitizeLeadName(incomingName);
     if (!next) return false;
 
@@ -79,7 +141,14 @@ const Lead = {
     async create(data) {
         const uuid = generateUUID();
         const jid = data.jid || `55${data.phone.replace(/\D/g, '')}@s.whatsapp.net`;
-        const incomingName = sanitizeLeadName(data.name) || data.phone;
+        const source = String(data.source || 'manual');
+        const normalizedSource = source.toLowerCase();
+        const sanitizedName = sanitizeLeadName(data.name);
+        const incomingName = sanitizedName || data.phone;
+        const initialCustomFields = parseLeadCustomFields(data.custom_fields);
+        const customFields = normalizedSource !== 'whatsapp' && sanitizedName
+            ? lockLeadNameAsManual(initialCustomFields)
+            : initialCustomFields;
         
         const result = await run(`
             INSERT INTO leads (uuid, phone, phone_formatted, jid, name, email, vehicle, plate, status, tags, custom_fields, source, assigned_to)
@@ -95,8 +164,8 @@ const Lead = {
             data.plate,
             data.status || 1,
             JSON.stringify(data.tags || []),
-            JSON.stringify(data.custom_fields || {}),
-            data.source || 'manual',
+            JSON.stringify(customFields),
+            source,
             data.assigned_to
         ]);
         
@@ -129,7 +198,8 @@ const Lead = {
         if (lead) {
             // Atualizar dados se necessario
             const nextName = sanitizeLeadName(data.name);
-            if (shouldReplaceLeadName(lead.name, nextName, lead.phone || data.phone)) {
+            const manualNameLocked = isLeadNameManuallyLocked(lead.custom_fields);
+            if (shouldReplaceLeadName(lead.name, nextName, lead.phone || data.phone, { manualNameLocked })) {
                 await this.update(lead.id, { name: nextName });
                 lead.name = nextName;
             }
