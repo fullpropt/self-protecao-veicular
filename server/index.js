@@ -4273,6 +4273,32 @@ app.get('/api/conversations', optionalAuth, async (req, res) => {
 
 
 
+
+
+app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
+
+    const conversationId = parseInt(req.params.id, 10);
+
+    if (!conversationId) {
+
+        return res.status(400).json({ error: 'ID de conversa invalido' });
+
+    }
+
+    try {
+
+        await Conversation.markAsRead(conversationId);
+
+        res.json({ success: true });
+
+    } catch (error) {
+
+        res.status(500).json({ error: error.message });
+
+    }
+
+});
+
 app.post('/api/send', authenticate, async (req, res) => {
 
     const { sessionId, to, message, type, options } = req.body;

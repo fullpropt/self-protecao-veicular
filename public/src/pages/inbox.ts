@@ -50,6 +50,7 @@ let templates: TemplateItem[] = [];
 let socket: null | { on: (event: string, handler: (data?: any) => void) => void; emit: (event: string, payload?: any) => void } = null;
 let socketBound = false;
 let refreshInterval: number | null = null;
+let currentFilter: 'all' | 'unread' = 'all';
 
 function escapeHtml(value: string) {
     return String(value)
@@ -197,6 +198,7 @@ function renderConversations() {
 }
 
 function filterConversations(filter: 'all' | 'unread') {
+    currentFilter = filter;
     document.querySelectorAll('.conversations-tabs button').forEach(b => b.classList.remove('active'));
     const target = (window as any).event?.target as HTMLElement | undefined;
     target?.classList.add('active');
@@ -245,9 +247,32 @@ async function selectConversation(id: number) {
     currentConversation = conversations.find(c => c.id === id);
     if (!currentConversation) return;
 
+    // Marcar localmente como lida para atualizar badge imediatamente
+    if ((currentConversation.unread || 0) > 0) {
+        currentConversation.unread = 0;
+        conversations = conversations.map((c) => (c.id === id ? { ...c, unread: 0 } : c));
+        if (currentFilter === 'unread') {
+            renderFilteredConversations(conversations.filter((c) => (c.unread || 0) > 0));
+        } else {
+            renderConversations();
+        }
+        updateUnreadBadge();
+    }
+
     // Marcar como ativo
     document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('active'));
     document.querySelector(`.conversation-item[onclick="selectConversation(${id})"]`)?.classList.add('active');
+
+    // Persistir no backend que a conversa foi lida
+    try {
+        socket?.emit('mark-read', {
+            sessionId: APP.sessionId,
+            conversationId: id
+        });
+        await api.post(`/api/conversations/${id}/read`, {});
+    } catch {
+        // Não bloqueia abertura da conversa se falhar sincronização de leitura
+    }
 
     // Carregar mensagens
     await loadMessages(currentConversation.leadId);
@@ -700,5 +725,4 @@ windowAny.backToList = backToList;
 windowAny.logout = logout;
 
 export { initInbox };
-
 
