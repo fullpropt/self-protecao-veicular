@@ -1948,6 +1948,11 @@ async function createSession(sessionId, socket, attempt = 0) {
 
                     await Message.updateStatus(update.key.id, status, new Date().toISOString());
 
+                    const trackedMessage = await Message.findByMessageId(update.key.id);
+                    if (trackedMessage?.campaign_id) {
+                        await Campaign.refreshMetrics(trackedMessage.campaign_id);
+                    }
+
                     
 
                     io.emit('message-status', {
@@ -2976,6 +2981,8 @@ async function processIncomingMessage(sessionId, msg) {
 
         await Lead.update(lead.id, { last_message_at: messageTimestampIso });
 
+        await Campaign.refreshMetricsByLead(lead.id);
+
     } else {
 
         await Conversation.touch(conversation.id, savedMessage.id, messageTimestampIso);
@@ -3137,14 +3144,22 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     
 
     // Buscar ou criar conversa
+    let conversation = null;
 
-    const { conversation } = await Conversation.findOrCreate({
+    if (options.conversationId) {
+        const existingConversation = await Conversation.findById(options.conversationId);
+        if (existingConversation && Number(existingConversation.lead_id) === Number(lead.id)) {
+            conversation = existingConversation;
+        }
+    }
 
-        lead_id: lead.id,
-
-        session_id: sessionId
-
-    });
+    if (!conversation) {
+        const conversationResult = await Conversation.findOrCreate({
+            lead_id: lead.id,
+            session_id: sessionId
+        });
+        conversation = conversationResult.conversation;
+    }
 
     
 
@@ -3244,7 +3259,8 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             is_from_me: true,
 
-            sent_at: new Date().toISOString()
+            sent_at: new Date().toISOString(),
+            campaign_id: options.campaignId || null
 
         });
 
@@ -3265,6 +3281,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     
 
     await Conversation.touch(conversation.id, savedMessage?.id || null, new Date().toISOString());
+    if (options.campaignId) {
+        await Campaign.refreshMetrics(options.campaignId);
+    }
 
     // Webhook
 
@@ -3320,10 +3339,28 @@ function sessionExists(sessionId) {
     await bootstrapPromise;
 
     await queueService.init(async (options) => {
-        return await sendMessageToWhatsApp({
-            ...options,
-            sessionId: 'self_whatsapp_session'
-        });
+        const sid = options.sessionId || 'self_whatsapp_session';
+        const to = options.to || extractNumber(options.jid || '');
+
+        if (!to) {
+            throw new Error('Destino invalido para envio em fila');
+        }
+
+        return await sendMessage(
+            sid,
+            to,
+            options.content,
+            options.mediaType || 'text',
+            {
+                url: options.mediaUrl,
+                mimetype: options.mimetype,
+                fileName: options.fileName,
+                ptt: options.ptt,
+                duration: options.duration,
+                campaignId: options.campaignId || null,
+                conversationId: options.conversationId || null
+            }
+        );
     });
 
     flowService.init(async (options) => {
@@ -4428,13 +4465,17 @@ app.get('/api/queue/status', authenticate, async (req, res) => {
 
 app.post('/api/queue/add', authenticate, async (req, res) => {
 
-    const { leadId, content, mediaType, mediaUrl, priority, scheduledAt } = req.body;
+    const { leadId, conversationId, campaignId, content, mediaType, mediaUrl, priority, scheduledAt } = req.body;
 
     
 
     const result = await queueService.add({
 
         leadId,
+
+        conversationId,
+
+        campaignId,
 
         content,
 
@@ -4657,18 +4698,18 @@ async function queueCampaignMessages(campaign) {
 
         startAt,
 
-        delayMs
+        delayMs,
+
+        campaignId: campaign.id
 
     });
 
 
     await Campaign.update(campaign.id, {
-
-        status: 'active',
-
-        sent: results.length
-
+        status: 'active'
     });
+
+    await Campaign.refreshMetrics(campaign.id);
 
 
     return { queued: results.length, recipients: leadIds.length };

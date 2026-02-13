@@ -44,11 +44,12 @@ class QueueService extends EventEmitter {
      * Adicionar mensagem à fila
      */
     async add(options) {
-        const { leadId, conversationId, content, mediaType, mediaUrl, priority, scheduledAt } = options;
+        const { leadId, conversationId, campaignId, content, mediaType, mediaUrl, priority, scheduledAt } = options;
         
         const result = await MessageQueue.add({
             lead_id: leadId,
             conversation_id: conversationId,
+            campaign_id: campaignId || null,
             content,
             media_type: mediaType || 'text',
             media_url: mediaUrl,
@@ -85,6 +86,7 @@ class QueueService extends EventEmitter {
             
             const result = await this.add({
                 leadId,
+                campaignId: options.campaignId || null,
                 content,
                 mediaType: options.mediaType,
                 mediaUrl: options.mediaUrl,
@@ -165,7 +167,9 @@ class QueueService extends EventEmitter {
                 jid: lead.jid,
                 content: message.content,
                 mediaType: message.media_type,
-                mediaUrl: message.media_url
+                mediaUrl: message.media_url,
+                campaignId: message.campaign_id || null,
+                conversationId: message.conversation_id || null
             });
             
             // Marcar como enviada

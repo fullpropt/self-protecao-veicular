@@ -350,8 +350,8 @@ const Message = {
         const uuid = generateUUID();
         
         const result = await run(`
-            INSERT INTO messages (uuid, message_id, conversation_id, lead_id, sender_type, sender_id, content, content_encrypted, media_type, media_url, media_mime_type, media_filename, status, is_from_me, reply_to_id, metadata, sent_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO messages (uuid, message_id, conversation_id, lead_id, sender_type, sender_id, content, content_encrypted, media_type, media_url, media_mime_type, media_filename, status, is_from_me, reply_to_id, campaign_id, metadata, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             data.message_id,
@@ -368,6 +368,7 @@ const Message = {
             data.status || 'pending',
             data.is_from_me ? 1 : 0,
             data.reply_to_id,
+            data.campaign_id || null,
             JSON.stringify(data.metadata || {}),
             data.sent_at || new Date().toISOString()
         ]);
@@ -607,6 +608,58 @@ const Campaign = {
         return await run(`UPDATE campaigns SET ${fields.join(', ')} WHERE id = ?`, values);
     },
 
+    async refreshMetrics(id) {
+        const sentStats = await queryOne(`
+            SELECT
+                COUNT(*) as sent,
+                SUM(CASE WHEN status IN ('delivered', 'read') THEN 1 ELSE 0 END) as delivered,
+                SUM(CASE WHEN status = 'read' THEN 1 ELSE 0 END) as read
+            FROM messages
+            WHERE campaign_id = ?
+        `, [id]);
+
+        const repliedStats = await queryOne(`
+            SELECT COUNT(DISTINCT incoming.lead_id) as replied
+            FROM messages incoming
+            WHERE incoming.is_from_me = 0
+              AND EXISTS (
+                SELECT 1
+                FROM messages outgoing
+                WHERE outgoing.campaign_id = ?
+                  AND outgoing.is_from_me = 1
+                  AND outgoing.lead_id = incoming.lead_id
+                  AND COALESCE(outgoing.sent_at, outgoing.created_at) <= COALESCE(incoming.sent_at, incoming.created_at)
+              )
+        `, [id]);
+
+        const metrics = {
+            sent: Number(sentStats?.sent || 0),
+            delivered: Number(sentStats?.delivered || 0),
+            read: Number(sentStats?.read || 0),
+            replied: Number(repliedStats?.replied || 0)
+        };
+
+        await run(`
+            UPDATE campaigns
+            SET sent = ?, delivered = ?, read = ?, replied = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `, [metrics.sent, metrics.delivered, metrics.read, metrics.replied, id]);
+
+        return metrics;
+    },
+
+    async refreshMetricsByLead(leadId) {
+        const rows = await query(`
+            SELECT DISTINCT campaign_id
+            FROM messages
+            WHERE lead_id = ? AND campaign_id IS NOT NULL
+        `, [leadId]);
+
+        for (const row of rows) {
+            await this.refreshMetrics(row.campaign_id);
+        }
+    },
+
     async delete(id) {
         return await run('DELETE FROM campaigns WHERE id = ?', [id]);
     }
@@ -844,12 +897,13 @@ const MessageQueue = {
         const uuid = generateUUID();
         
         const result = await run(`
-            INSERT INTO message_queue (uuid, lead_id, conversation_id, content, media_type, media_url, priority, scheduled_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO message_queue (uuid, lead_id, conversation_id, campaign_id, content, media_type, media_url, priority, scheduled_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             data.lead_id,
             data.conversation_id,
+            data.campaign_id || null,
             data.content,
             data.media_type || 'text',
             data.media_url,

@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS messages (
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'sent', 'delivered', 'read', 'failed')),
     is_from_me INTEGER DEFAULT 0,
     reply_to_id INTEGER REFERENCES messages(id),
+    campaign_id INTEGER,
     metadata TEXT,
     sent_at TIMESTAMPTZ,
     delivered_at TIMESTAMPTZ,
@@ -168,6 +169,7 @@ CREATE TABLE IF NOT EXISTS message_queue (
     uuid TEXT UNIQUE NOT NULL,
     lead_id INTEGER NOT NULL REFERENCES leads(id),
     conversation_id INTEGER REFERENCES conversations(id),
+    campaign_id INTEGER,
     content TEXT NOT NULL,
     media_type TEXT DEFAULT 'text',
     media_url TEXT,
@@ -258,6 +260,9 @@ CREATE TABLE IF NOT EXISTS lead_tags (
     PRIMARY KEY (lead_id, tag_id)
 );
 
+ALTER TABLE messages ADD COLUMN campaign_id INTEGER;
+ALTER TABLE message_queue ADD COLUMN campaign_id INTEGER;
+
 CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
 CREATE INDEX IF NOT EXISTS idx_leads_jid ON leads(jid);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
@@ -274,6 +279,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id);
 CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_campaign ON messages(campaign_id);
 
 CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
 CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
@@ -281,6 +287,7 @@ CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
 CREATE INDEX IF NOT EXISTS idx_queue_status ON message_queue(status);
 CREATE INDEX IF NOT EXISTS idx_queue_scheduled ON message_queue(scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority DESC);
+CREATE INDEX IF NOT EXISTS idx_queue_campaign ON message_queue(campaign_id);
 
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);

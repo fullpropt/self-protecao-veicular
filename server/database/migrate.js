@@ -52,7 +52,12 @@ async function migrate() {
                 }
             } catch (error) {
                 const msg = String(error.message || error);
-                if (msg.includes('already exists') || msg.includes('UNIQUE constraint') || msg.includes('duplicate key')) {
+                if (
+                    msg.includes('already exists') ||
+                    msg.includes('UNIQUE constraint') ||
+                    msg.includes('duplicate key') ||
+                    msg.toLowerCase().includes('duplicate column')
+                ) {
                     skipCount++;
                 } else {
                     console.error(`   ? Erro: ${msg}`);
