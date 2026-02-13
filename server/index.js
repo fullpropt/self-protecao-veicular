@@ -42,7 +42,7 @@ const { getDatabase, close: closeDatabase, query, run } = require('./database/co
 
 const { migrate } = require('./database/migrate');
 
-const { Lead, Conversation, Message, Template, Campaign, Automation, Flow, Settings, User } = require('./database/models');
+const { Lead, Conversation, Message, MessageQueue, Template, Campaign, Automation, Flow, Settings, User } = require('./database/models');
 
 
 
@@ -3097,6 +3097,13 @@ async function processIncomingMessage(sessionId, msg) {
 
         });
 
+        if (!isSelfChat) {
+            await triggerCampaignsForIncomingLead({
+                lead,
+                conversation
+            });
+        }
+
     }
 
 }
@@ -4659,6 +4666,79 @@ async function resolveCampaignLeadIds(segment = 'all') {
 
 }
 
+function leadMatchesCampaignSegment(lead, segment = 'all') {
+    const normalizedSegment = String(segment || 'all').toLowerCase();
+    const leadStatus = Number(lead?.status || 0);
+
+    if (normalizedSegment === 'all') return true;
+    if (normalizedSegment === 'new') return leadStatus === 1;
+    if (normalizedSegment === 'progress') return leadStatus === 2;
+    if (normalizedSegment === 'concluded') return leadStatus === 3;
+    return true;
+}
+
+function resolveCampaignScheduledAt(campaign) {
+    const delay = Number(campaign?.delay || 0);
+    if (!Number.isFinite(delay) || delay <= 0) {
+        return null;
+    }
+    return new Date(Date.now() + delay).toISOString();
+}
+
+async function triggerCampaignsForIncomingLead({ lead, conversation }) {
+    if (!lead?.id || !conversation?.id) return { queued: 0, armed: 0 };
+
+    const activeTriggers = await Campaign.list({
+        status: 'active',
+        type: 'trigger',
+        limit: 200
+    });
+
+    if (!activeTriggers.length) {
+        return { queued: 0, armed: 0 };
+    }
+
+    let queued = 0;
+
+    for (const campaign of activeTriggers) {
+        const message = String(campaign?.message || '').trim();
+        if (!message) continue;
+
+        const startAt = campaign?.start_at ? Date.parse(campaign.start_at) : NaN;
+        if (Number.isFinite(startAt) && Date.now() < startAt) {
+            continue;
+        }
+
+        if (!leadMatchesCampaignSegment(lead, campaign.segment)) {
+            continue;
+        }
+
+        const alreadyDelivered = await Message.hasCampaignDelivery(campaign.id, lead.id);
+        if (alreadyDelivered) {
+            continue;
+        }
+
+        const alreadyQueued = await MessageQueue.hasQueuedOrSentForCampaignLead(campaign.id, lead.id);
+        if (alreadyQueued) {
+            continue;
+        }
+
+        await queueService.add({
+            leadId: lead.id,
+            conversationId: conversation.id,
+            campaignId: campaign.id,
+            content: message,
+            mediaType: 'text',
+            scheduledAt: resolveCampaignScheduledAt(campaign),
+            priority: 1
+        });
+
+        queued += 1;
+    }
+
+    return { queued, armed: activeTriggers.length };
+}
+
 
 async function queueCampaignMessages(campaign) {
 
@@ -4673,7 +4753,7 @@ async function queueCampaignMessages(campaign) {
 
     if (campaign.type === 'trigger') {
 
-        return { queued: 0, recipients: 0 };
+        return { queued: 0, recipients: 0, armed: true };
 
     }
 

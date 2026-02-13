@@ -438,6 +438,18 @@ const Message = {
     
     async getLastMessage(conversationId) {
         return await queryOne("SELECT * FROM messages WHERE conversation_id = ? ORDER BY COALESCE(sent_at, created_at) DESC, id DESC LIMIT 1", [conversationId]);
+    },
+
+    async hasCampaignDelivery(campaignId, leadId) {
+        const row = await queryOne(`
+            SELECT id
+            FROM messages
+            WHERE campaign_id = ?
+              AND lead_id = ?
+              AND is_from_me = 1
+            LIMIT 1
+        `, [campaignId, leadId]);
+        return !!row;
     }
 };
 
@@ -960,6 +972,18 @@ const MessageQueue = {
             WHERE status = 'pending' 
             ORDER BY priority DESC, created_at ASC
         `);
+    },
+
+    async hasQueuedOrSentForCampaignLead(campaignId, leadId) {
+        const row = await queryOne(`
+            SELECT id
+            FROM message_queue
+            WHERE campaign_id = ?
+              AND lead_id = ?
+              AND status IN ('pending', 'processing', 'sent')
+            LIMIT 1
+        `, [campaignId, leadId]);
+        return !!row;
     }
 };
 
