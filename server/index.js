@@ -680,7 +680,7 @@ function normalizeJid(jid) {
 
 
 
-async function registerContactAlias(contact) {
+async function registerContactAlias(contact, sessionPhone = '') {
     if (!contact) return;
 
     const candidates = [
@@ -708,6 +708,7 @@ async function registerContactAlias(contact) {
     let lidJid = null;
 
     let userJid = null;
+    const sessionDigits = normalizePhoneDigits(sessionPhone);
 
 
 
@@ -715,7 +716,12 @@ async function registerContactAlias(contact) {
 
         if (!lidJid && isLidJid(cand)) lidJid = cand;
 
-        if (!userJid && isUserJid(cand)) userJid = cand;
+        if (!userJid && isUserJid(cand)) {
+            const candidateDigits = normalizePhoneDigits(extractNumber(cand));
+            if (!isSelfPhone(candidateDigits, sessionDigits)) {
+                userJid = cand;
+            }
+        }
 
     }
 
@@ -751,11 +757,15 @@ async function registerContactAlias(contact) {
 }
 
 function isGroupMessage(msg) {
+    const remoteJid = msg?.key?.remoteJid || '';
+    const hasParticipant = Boolean(msg?.key?.participant || msg?.participant);
+    const hasGroupSenderKey = Boolean(msg?.message?.senderKeyDistributionMessage?.groupId);
+
     return Boolean(
-        msg?.key?.remoteJid?.endsWith('@g.us') ||
-        msg?.key?.participant ||
-        msg?.participant ||
-        msg?.message?.senderKeyDistributionMessage?.groupId
+        remoteJid.endsWith('@g.us') ||
+        remoteJid.endsWith('@broadcast') ||
+        hasGroupSenderKey ||
+        (hasParticipant && remoteJid && !isUserJid(remoteJid))
     );
 }
 
@@ -799,9 +809,11 @@ function resolveMessageJid(msg, sessionPhone = '') {
 
     const preferredUserJid = nonSelfUserJid || userJids[0] || null;
 
-    if (lidJid && preferredUserJid) {
+    // NÃ£o mapear LID para o prÃ³prio nÃºmero da sessÃ£o, pois isso causa
+    // roteamento incorreto para o chat "VocÃª".
+    if (lidJid && nonSelfUserJid) {
 
-        jidAliasMap.set(lidJid, preferredUserJid);
+        jidAliasMap.set(lidJid, nonSelfUserJid);
 
     }
 
@@ -1992,10 +2004,11 @@ async function createSession(sessionId, socket, attempt = 0) {
         sock.ev.on('contacts.set', async (payload) => {
 
             const contacts = payload?.contacts || [];
+            const sessionPhone = getSessionPhone(sessionId);
 
             for (const contact of contacts) {
 
-                await registerContactAlias(contact);
+                await registerContactAlias(contact, sessionPhone);
 
             }
 
@@ -2006,10 +2019,11 @@ async function createSession(sessionId, socket, attempt = 0) {
         sock.ev.on('contacts.upsert', async (contacts) => {
 
             const list = Array.isArray(contacts) ? contacts : [contacts];
+            const sessionPhone = getSessionPhone(sessionId);
 
             for (const contact of list) {
 
-                await registerContactAlias(contact);
+                await registerContactAlias(contact, sessionPhone);
 
             }
 
@@ -2792,12 +2806,50 @@ async function processIncomingMessage(sessionId, msg) {
     const sessionPhone = getSessionPhone(sessionId);
 
     const fromRaw = msg.key.remoteJid;
+    const isFromMe = msg.key.fromMe;
+    const sessionDigits = normalizePhoneDigits(sessionPhone);
 
-    const from = resolveMessageJid(msg, sessionPhone);
+    let from = resolveMessageJid(msg, sessionPhone);
+
+    const fromRawDigits = normalizePhoneDigits(extractNumber(fromRaw));
+    const isFromRawUser = isUserJid(fromRaw);
+    const isFromRawSelf = isSelfPhone(fromRawDigits, sessionDigits);
+
+    // Em mensagens recebidas, quando o remoteJid jÃ¡ vem como usuÃ¡rio vÃ¡lido
+    // (e nÃ£o Ã© self), ele Ã© a melhor fonte para evitar roteamento incorreto.
+    if (!isFromMe && isFromRawUser && !isFromRawSelf) {
+        from = fromRaw;
+    }
 
     if (!from || !isUserJid(from)) return;
 
-    const isFromMe = msg.key.fromMe;
+    const resolvedDigits = normalizePhoneDigits(extractNumber(from));
+    const isFromResolvedSelf = isSelfPhone(resolvedDigits, sessionDigits);
+
+    if (!isFromMe && isFromResolvedSelf) {
+        const contentForFallback = unwrapMessageContent(msg.message);
+        const fallbackCandidates = [
+            msg?.key?.participant,
+            msg?.participant,
+            msg?.message?.deviceSentMessage?.destinationJid,
+            msg?.message?.extendedTextMessage?.contextInfo?.participant,
+            contentForFallback?.extendedTextMessage?.contextInfo?.participant
+        ].filter(Boolean);
+
+        const fallbackJid = fallbackCandidates.find((candidate) => {
+            if (!isUserJid(candidate)) return false;
+            const candidateDigits = normalizePhoneDigits(extractNumber(candidate));
+            return !isSelfPhone(candidateDigits, sessionDigits);
+        });
+
+        if (fallbackJid) {
+            from = fallbackJid;
+        } else {
+            console.warn(`[${sessionId}] Ignorando inbound ambiguo roteado para self: ${fromRaw || 'sem-remoteJid'}`);
+            return;
+        }
+    }
+
     const content = unwrapMessageContent(msg.message);
     let text = extractTextFromMessageContent(content);
     let mediaType = detectMediaTypeFromMessageContent(content);
@@ -2812,12 +2864,6 @@ async function processIncomingMessage(sessionId, msg) {
     const pushName = normalizeText(msg.pushName || '');
 
     
-
-    const sessionDigitsForAlias = normalizePhoneDigits(sessionPhone);
-    const fromRawDigits = normalizePhoneDigits(extractNumber(fromRaw));
-    const fromDigits = normalizePhoneDigits(extractNumber(from));
-    const isFromRawSelf = isSelfPhone(fromRawDigits, sessionDigitsForAlias);
-    const isFromResolvedSelf = isSelfPhone(fromDigits, sessionDigitsForAlias);
 
     if (fromRaw && from && fromRaw !== from && !isFromRawSelf && !isFromResolvedSelf) {
 
@@ -2856,8 +2902,6 @@ async function processIncomingMessage(sessionId, msg) {
     }
 
     const phoneDigits = normalizePhoneDigits(phone);
-
-    const sessionDigits = normalizePhoneDigits(sessionPhone);
 
     const isSelfChat = isSelfPhone(phoneDigits, sessionDigits);
 
@@ -4626,6 +4670,36 @@ function sanitizeCampaignPayload(input = {}) {
 
 }
 
+function parseCampaignSteps(campaign) {
+
+    const raw = String(campaign?.message || '').replace(/\r\n/g, '\n').trim();
+
+    if (!raw) return [];
+
+    if (campaign?.type !== 'drip') {
+
+        return [raw];
+
+    }
+
+    // Sequencia drip: separar etapas usando uma linha com ---
+    return raw
+        .split(/\n\s*---+\s*\n/g)
+        .map((step) => step.trim())
+        .filter(Boolean);
+
+}
+
+function parseCampaignStartAt(startAt) {
+
+    if (!startAt) return null;
+
+    const parsed = Date.parse(String(startAt));
+
+    return Number.isFinite(parsed) ? parsed : null;
+
+}
+
 
 async function resolveCampaignLeadIds(segment = 'all') {
 
@@ -4742,9 +4816,9 @@ async function triggerCampaignsForIncomingLead({ lead, conversation }) {
 
 async function queueCampaignMessages(campaign) {
 
-    const message = String(campaign?.message || '').trim();
+    const steps = parseCampaignSteps(campaign);
 
-    if (!message) {
+    if (!steps.length) {
 
         throw new Error('Campanha sem mensagem configurada');
 
@@ -4767,22 +4841,67 @@ async function queueCampaignMessages(campaign) {
     }
 
 
-    const startAt = campaign.start_at ? new Date(campaign.start_at).toISOString() : null;
+    const startAtMs = parseCampaignStartAt(campaign.start_at);
+
+    const baseStartMs = startAtMs || Date.now();
 
     const delay = Number(campaign.delay);
 
-    const delayMs = Number.isFinite(delay) && delay > 0 ? delay : undefined;
+    const delayMs = Number.isFinite(delay) && delay > 0 ? delay : 5000;
 
+    let queuedCount = 0;
 
-    const results = await queueService.addBulk(leadIds, message, {
+    if (campaign.type === 'drip') {
 
-        startAt,
+        for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
 
-        delayMs,
+            const content = steps[stepIndex];
 
-        campaignId: campaign.id
+            for (let leadIndex = 0; leadIndex < leadIds.length; leadIndex++) {
 
-    });
+                const leadId = leadIds[leadIndex];
+
+                const scheduledAt = new Date(baseStartMs + (stepIndex * delayMs) + (leadIndex * 250)).toISOString();
+
+                await queueService.add({
+
+                    leadId,
+
+                    campaignId: campaign.id,
+
+                    content,
+
+                    mediaType: 'text',
+
+                    scheduledAt,
+
+                    priority: 0
+
+                });
+
+                queuedCount += 1;
+
+            }
+
+        }
+
+    } else {
+
+        const startAt = new Date(baseStartMs).toISOString();
+
+        const results = await queueService.addBulk(leadIds, steps[0], {
+
+            startAt,
+
+            delayMs,
+
+            campaignId: campaign.id
+
+        });
+
+        queuedCount = results.length;
+
+    }
 
 
     await Campaign.update(campaign.id, {
@@ -4792,7 +4911,7 @@ async function queueCampaignMessages(campaign) {
     await Campaign.refreshMetrics(campaign.id);
 
 
-    return { queued: results.length, recipients: leadIds.length };
+    return { queued: queuedCount, recipients: leadIds.length, steps: steps.length };
 
 }
 
