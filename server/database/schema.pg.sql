@@ -269,6 +269,13 @@ ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS delay_min INTEGER;
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS delay_max INTEGER;
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS tag_filter TEXT;
 
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_lead_id_fkey;
+ALTER TABLE messages ADD CONSTRAINT messages_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
+ALTER TABLE flow_executions DROP CONSTRAINT IF EXISTS flow_executions_lead_id_fkey;
+ALTER TABLE flow_executions ADD CONSTRAINT flow_executions_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
+ALTER TABLE message_queue DROP CONSTRAINT IF EXISTS message_queue_lead_id_fkey;
+ALTER TABLE message_queue ADD CONSTRAINT message_queue_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
+
 CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
 CREATE INDEX IF NOT EXISTS idx_leads_jid ON leads(jid);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);

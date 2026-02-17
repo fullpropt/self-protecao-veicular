@@ -260,7 +260,17 @@ const Lead = {
     },
     
     async delete(id) {
-        return await run('DELETE FROM leads WHERE id = ?', [id]);
+        return await transaction(async (client) => {
+            await client.query('DELETE FROM message_queue WHERE lead_id = $1', [id]);
+            await client.query('DELETE FROM flow_executions WHERE lead_id = $1', [id]);
+            await client.query('DELETE FROM messages WHERE lead_id = $1', [id]);
+
+            const result = await client.query('DELETE FROM leads WHERE id = $1', [id]);
+            return {
+                lastInsertRowid: null,
+                changes: result.rowCount
+            };
+        });
     },
     
     async list(options = {}) {

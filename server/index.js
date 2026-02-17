@@ -1160,6 +1160,8 @@ async function mergeLeads(primaryLead, duplicateLead) {
     await run('UPDATE messages SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
 
     await run('UPDATE conversations SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
+    await run('UPDATE message_queue SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
+    await run('UPDATE flow_executions SET lead_id = ? WHERE lead_id = ?', [primaryLead.id, duplicateLead.id]);
 
 
 
@@ -1270,9 +1272,7 @@ async function cleanupLidLeads() {
 
 
         for (const lead of lidLeads) {
-
-            await run('DELETE FROM leads WHERE id = ?', [lead.id]);
-
+            await Lead.delete(lead.id);
         }
 
         console.log(`Removidos ${lidLeads.length} leads com @lid`);
@@ -1356,9 +1356,7 @@ async function cleanupEmptyWhatsappLeads() {
 
 
         for (const lead of emptyLeads) {
-
-            await run('DELETE FROM leads WHERE id = ?', [lead.id]);
-
+            await Lead.delete(lead.id);
         }
 
         console.log(`Removidos ${emptyLeads.length} leads WhatsApp sem mensagens`);
@@ -4502,11 +4500,33 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
 
 app.delete('/api/leads/:id', authenticate, async (req, res) => {
+    try {
+        const leadId = parseInt(req.params.id, 10);
+        if (!Number.isInteger(leadId) || leadId <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'ID de lead invalido'
+            });
+        }
 
-    await Lead.delete(req.params.id);
+        const lead = await Lead.findById(leadId);
+        if (!lead) {
+            return res.status(404).json({
+                success: false,
+                error: 'Lead nao encontrado'
+            });
+        }
 
-    res.json({ success: true });
+        await Lead.delete(leadId);
 
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Falha ao excluir lead:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao excluir lead'
+        });
+    }
 });
 
 
@@ -6091,8 +6111,6 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
-
 
 
 
