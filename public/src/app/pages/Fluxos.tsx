@@ -49,8 +49,9 @@ export default function Fluxos() {
             grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
             gap: 25px;
         }
-        .flow-card {
-            background: white;
+.flow-card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-md);
             overflow: hidden;
@@ -115,7 +116,8 @@ export default function Fluxos() {
         }
         .flow-stat strong { color: var(--gray-700); }
         .flow-editor {
-            background: white;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-lg);
             min-height: 500px;

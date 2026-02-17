@@ -45,7 +45,8 @@ export default function Campanhas() {
     <div className="campanhas-react">
       <style>{`
 .campaign-card {
-            background: white;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-md);
             overflow: hidden;

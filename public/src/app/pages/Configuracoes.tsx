@@ -68,7 +68,8 @@ export default function Configuracoes() {
             .settings-container { grid-template-columns: 1fr; }
         }
         .settings-nav {
-            background: white;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-md);
             padding: 20px;
@@ -85,11 +86,13 @@ export default function Configuracoes() {
             cursor: pointer;
             transition: all 0.2s;
             margin-bottom: 5px;
+            color: var(--gray-800);
         }
-        .settings-nav-item:hover { background: var(--gray-100); }
-        .settings-nav-item.active { background: rgba(var(--primary-rgb), 0.1); color: var(--primary); font-weight: 600; }
+        .settings-nav-item:hover { background: var(--gray-50); color: var(--dark); }
+        .settings-nav-item.active { background: rgba(var(--primary-rgb), 0.16); color: #eafff4; font-weight: 700; border: 1px solid rgba(var(--primary-rgb), 0.35); }
         .settings-panel {
-            background: white;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-md);
             padding: 30px;
@@ -135,13 +138,13 @@ export default function Configuracoes() {
             cursor: pointer;
         }
         .variable-tag:hover { background: rgba(var(--primary-rgb), 0.2); }
-        .connection-status-card { background: white; border-radius: var(--border-radius); padding: 30px; border: 1px solid var(--border-color); }
+        .connection-status-card { background: var(--surface-muted); border-radius: var(--border-radius); padding: 30px; border: 1px solid var(--border-color); }
         .connection-icon { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; margin-bottom: 20px; }
         .connection-icon.success { background: #10b981; color: white; }
-        .connection-icon.disconnected { background: var(--gray-200); color: var(--gray-600); }
+        .connection-icon.disconnected { background: var(--gray-200); color: var(--gray-800); }
         .connection-status-card h4 { margin: 0 0 12px; font-size: 20px; }
-        .connection-status-card p { margin: 0 0 12px; color: var(--gray-600); line-height: 1.5; }
-        .connection-info { font-size: 13px; color: var(--gray-500); background: var(--gray-50); padding: 15px; border-radius: 8px; margin: 15px 0 !important; }
+        .connection-status-card p { margin: 0 0 12px; color: var(--gray-800); line-height: 1.5; }
+        .connection-info { font-size: 13px; color: var(--gray-700); background: var(--gray-50); padding: 15px; border-radius: 8px; margin: 15px 0 !important; border: 1px solid var(--border-color); }
       `}</style>
       <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>?</button>
           <div className="sidebar-overlay"></div>
@@ -381,7 +384,7 @@ export default function Configuracoes() {
                               </div>
                               <div id="qrCodeContainer" style={{ textAlign: 'center', display: 'none' }}>
                                   <p className="mb-3">Escaneie o QR Code com seu WhatsApp:</p>
-                                  <div id="qrCode" style={{ display: 'inline-block', padding: '20px', background: 'white', borderRadius: '10px' }}></div>
+                                  <div id="qrCode" style={{ display: 'inline-block', padding: '20px', background: 'var(--surface-muted)', border: '1px solid var(--border-color)', borderRadius: '10px' }}></div>
                               </div>
                               <div className="mt-4">
                                   <button className="btn btn-primary" onClick={() => globals.connectWhatsApp?.()}><span className="icon icon-link icon-sm"></span> Conectar WhatsApp</button>
@@ -591,4 +594,3 @@ export default function Configuracoes() {
     </div>
   );
 }
-

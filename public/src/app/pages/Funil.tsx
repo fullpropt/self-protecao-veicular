@@ -49,7 +49,8 @@ export default function Funil() {
             flex-direction: column;
             align-items: center;
             padding: 40px 20px;
-            background: white;
+            background: var(--surface);
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-md);
             margin-bottom: 30px;
@@ -123,7 +124,8 @@ export default function Funil() {
             overflow-y: auto;
         }
         .kanban-card {
-            background: white;
+            background: var(--surface-muted);
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius);
             padding: 15px;
             margin-bottom: 10px;
