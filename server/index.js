@@ -4710,7 +4710,29 @@ app.post('/api/queue/add', authenticate, async (req, res) => {
 
 app.post('/api/queue/bulk', authenticate, async (req, res) => {
 
-    const { leadIds, content, options } = req.body;
+    const { leadIds, content } = req.body || {};
+    const options = (req.body && typeof req.body.options === 'object' && req.body.options !== null)
+        ? { ...req.body.options }
+        : {};
+
+    const parseNonNegative = (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    };
+
+    const legacyDelay = parseNonNegative(req.body?.delay);
+    const legacyDelayMin = parseNonNegative(req.body?.delayMin ?? req.body?.delay_min);
+    const legacyDelayMax = parseNonNegative(req.body?.delayMax ?? req.body?.delay_max);
+
+    if (options.delayMs === undefined && legacyDelay !== null) {
+        options.delayMs = legacyDelay;
+    }
+    if (options.delayMinMs === undefined && legacyDelayMin !== null) {
+        options.delayMinMs = legacyDelayMin;
+    }
+    if (options.delayMaxMs === undefined && legacyDelayMax !== null) {
+        options.delayMaxMs = legacyDelayMax;
+    }
 
     
 
@@ -4817,17 +4839,72 @@ function sanitizeCampaignPayload(input = {}) {
     }
 
 
-    if (payload.delay !== undefined) {
+    const parseMs = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) && num >= 0 ? num : null;
+    };
 
-        const delay = Number(payload.delay);
+    const delay = parseMs(payload.delay);
+    const delayMin = parseMs(payload.delay_min);
+    const delayMax = parseMs(payload.delay_max);
 
-        payload.delay = Number.isFinite(delay) && delay >= 0 ? delay : 0;
+    let normalizedMin = delayMin;
+    let normalizedMax = delayMax;
 
+    if (normalizedMin === null && normalizedMax === null && delay !== null) {
+        normalizedMin = delay;
+        normalizedMax = delay;
+    }
+
+    if (normalizedMin === null && normalizedMax !== null) normalizedMin = normalizedMax;
+    if (normalizedMax === null && normalizedMin !== null) normalizedMax = normalizedMin;
+
+    if (normalizedMin !== null && normalizedMax !== null && normalizedMax < normalizedMin) {
+        const swap = normalizedMin;
+        normalizedMin = normalizedMax;
+        normalizedMax = swap;
+    }
+
+    if (normalizedMin !== null) payload.delay_min = normalizedMin;
+    if (normalizedMax !== null) payload.delay_max = normalizedMax;
+    if (normalizedMin !== null) {
+        // Campo legado mantido para compatibilidade.
+        payload.delay = normalizedMin;
+    } else if (delay !== null) {
+        payload.delay = delay;
     }
 
 
     return payload;
 
+}
+
+function resolveCampaignDelayRange(campaign, fallbackMs = 5000) {
+    const fallback = Number.isFinite(Number(fallbackMs)) && Number(fallbackMs) >= 0 ? Number(fallbackMs) : 0;
+    const legacyDelay = Number(campaign?.delay);
+    const minCandidate = Number(campaign?.delay_min);
+    const maxCandidate = Number(campaign?.delay_max);
+
+    let minMs = Number.isFinite(minCandidate) && minCandidate >= 0
+        ? minCandidate
+        : (Number.isFinite(legacyDelay) && legacyDelay >= 0 ? legacyDelay : fallback);
+
+    let maxMs = Number.isFinite(maxCandidate) && maxCandidate >= 0
+        ? maxCandidate
+        : minMs;
+
+    if (maxMs < minMs) {
+        const swap = minMs;
+        minMs = maxMs;
+        maxMs = swap;
+    }
+
+    return { minMs, maxMs };
+}
+
+function randomIntBetween(min, max) {
+    if (max <= min) return min;
+    return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 function parseCampaignSteps(campaign) {
@@ -4912,11 +4989,12 @@ function leadMatchesCampaignSegment(lead, segment = 'all') {
 }
 
 function resolveCampaignScheduledAt(campaign) {
-    const delay = Number(campaign?.delay || 0);
-    if (!Number.isFinite(delay) || delay <= 0) {
+    const { minMs, maxMs } = resolveCampaignDelayRange(campaign, 0);
+    if (maxMs <= 0) {
         return null;
     }
-    return new Date(Date.now() + delay).toISOString();
+    const delayMs = randomIntBetween(Math.max(0, minMs), Math.max(0, maxMs));
+    return new Date(Date.now() + delayMs).toISOString();
 }
 
 async function triggerCampaignsForIncomingLead({ lead, conversation }) {
@@ -5005,9 +5083,9 @@ async function queueCampaignMessages(campaign) {
 
     const baseStartMs = startAtMs || Date.now();
 
-    const delay = Number(campaign.delay);
-
-    const delayMs = Number.isFinite(delay) && delay > 0 ? delay : 5000;
+    const { minMs: delayMinMsRaw, maxMs: delayMaxMsRaw } = resolveCampaignDelayRange(campaign, 5000);
+    const delayMinMs = Math.max(250, delayMinMsRaw || 0);
+    const delayMaxMs = Math.max(delayMinMs, delayMaxMsRaw || 0);
 
     let queuedCount = 0;
 
@@ -5016,12 +5094,14 @@ async function queueCampaignMessages(campaign) {
         for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
 
             const content = steps[stepIndex];
+            const stepBaseMs = baseStartMs + (stepIndex * delayMaxMs);
+            let nextLeadAtMs = stepBaseMs;
 
             for (let leadIndex = 0; leadIndex < leadIds.length; leadIndex++) {
 
                 const leadId = leadIds[leadIndex];
 
-                const scheduledAt = new Date(baseStartMs + (stepIndex * delayMs) + (leadIndex * 250)).toISOString();
+                const scheduledAt = new Date(nextLeadAtMs).toISOString();
 
                 await queueService.add({
 
@@ -5041,6 +5121,8 @@ async function queueCampaignMessages(campaign) {
 
                 queuedCount += 1;
 
+                nextLeadAtMs += randomIntBetween(delayMinMs, delayMaxMs);
+
             }
 
         }
@@ -5053,7 +5135,9 @@ async function queueCampaignMessages(campaign) {
 
             startAt,
 
-            delayMs,
+            delayMinMs,
+
+            delayMaxMs,
 
             campaignId: campaign.id
 
@@ -5802,10 +5886,6 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
-
-
-
 
 
 

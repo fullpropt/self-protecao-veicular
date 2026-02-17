@@ -122,6 +122,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
     segment TEXT,
     message TEXT,
     delay INTEGER DEFAULT 0,
+    delay_min INTEGER DEFAULT 0,
+    delay_max INTEGER DEFAULT 0,
     start_at TIMESTAMPTZ,
     sent INTEGER DEFAULT 0,
     delivered INTEGER DEFAULT 0,
@@ -262,6 +264,8 @@ CREATE TABLE IF NOT EXISTS lead_tags (
 
 ALTER TABLE messages ADD COLUMN campaign_id INTEGER;
 ALTER TABLE message_queue ADD COLUMN campaign_id INTEGER;
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS delay_min INTEGER;
+ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS delay_max INTEGER;
 
 CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
 CREATE INDEX IF NOT EXISTS idx_leads_jid ON leads(jid);

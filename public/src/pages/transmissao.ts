@@ -177,9 +177,26 @@ function updatePreview() {
     preview.textContent = previewText;
 }
 
+function getDelayRangeMs() {
+    const minInput = parseInt((document.getElementById('messageDelayMin') as HTMLInputElement | null)?.value || '0', 10);
+    const maxInput = parseInt((document.getElementById('messageDelayMax') as HTMLInputElement | null)?.value || '0', 10);
+    const singleDelay = parseInt((document.getElementById('messageDelay') as HTMLSelectElement | null)?.value || '0', 10);
+
+    const baseMin = Number.isFinite(minInput) && minInput > 0 ? minInput : singleDelay;
+    const baseMax = Number.isFinite(maxInput) && maxInput > 0 ? maxInput : baseMin;
+
+    const minMs = Number.isFinite(baseMin) && baseMin > 0 ? baseMin : 5000;
+    const maxMs = Number.isFinite(baseMax) && baseMax > 0 ? baseMax : minMs;
+
+    return {
+        minMs: Math.min(minMs, maxMs),
+        maxMs: Math.max(minMs, maxMs)
+    };
+}
+
 async function startBroadcast() {
     const message = (document.getElementById('messageContent') as HTMLTextAreaElement | null)?.value.trim() || '';
-    const delay = parseInt((document.getElementById('messageDelay') as HTMLSelectElement | null)?.value || '0', 10);
+    const { minMs: delayMinMs, maxMs: delayMaxMs } = getDelayRangeMs();
     const startTime = (document.getElementById('startTime') as HTMLSelectElement | null)?.value || '';
 
     if (selectedContacts.size === 0) {
@@ -213,7 +230,10 @@ async function startBroadcast() {
         const response = await api.post('/api/queue/bulk', {
             leadIds,
             content: message,
-            delay
+            options: {
+                delayMinMs,
+                delayMaxMs
+            }
         });
 
         showToast('success', 'Sucesso', `${leadIds.length} mensagens adicionadas à fila!`);
@@ -262,9 +282,10 @@ async function loadQueueStatus() {
             if (failedCount) failedCount.textContent = String(failed);
             
             // Calcular ETA
-            const delay = parseInt((document.getElementById('messageDelay') as HTMLSelectElement | null)?.value || '5000', 10) || 5000;
+            const { minMs, maxMs } = getDelayRangeMs();
+            const averageDelay = Math.round((minMs + maxMs) / 2);
             const remaining = pending + processing;
-            const etaSeconds = Math.ceil((remaining * delay) / 1000);
+            const etaSeconds = Math.ceil((remaining * averageDelay) / 1000);
             const etaMinutes = Math.floor(etaSeconds / 60);
             const etaSecs = etaSeconds % 60;
             const etaTime = document.getElementById('etaTime') as HTMLElement | null;

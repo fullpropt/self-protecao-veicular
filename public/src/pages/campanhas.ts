@@ -17,6 +17,8 @@ type Campaign = {
     segment?: string;
     message?: string;
     delay?: number;
+    delay_min?: number;
+    delay_max?: number;
     start_at?: string;
 };
 
@@ -25,6 +27,8 @@ type CampaignResponse = {
 };
 
 let campaigns: Campaign[] = [];
+const DEFAULT_DELAY_MIN_SECONDS = 6;
+const DEFAULT_DELAY_MAX_SECONDS = 24;
 
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
@@ -50,6 +54,7 @@ function resetCampaignForm() {
     form?.reset();
     const idInput = document.getElementById('campaignId') as HTMLInputElement | null;
     if (idInput) idInput.value = '';
+    setDelayRangeInputs(DEFAULT_DELAY_MIN_SECONDS, DEFAULT_DELAY_MAX_SECONDS);
     setCampaignModalTitle('new');
 }
 
@@ -83,16 +88,38 @@ function setSelectValue(select: HTMLSelectElement | null, value: string) {
     }
 }
 
+function setDelayRangeInputs(minSeconds = DEFAULT_DELAY_MIN_SECONDS, maxSeconds = DEFAULT_DELAY_MAX_SECONDS) {
+    const minInput = document.getElementById('campaignDelayMin') as HTMLInputElement | null;
+    const maxInput = document.getElementById('campaignDelayMax') as HTMLInputElement | null;
+    if (minInput) minInput.value = String(minSeconds);
+    if (maxInput) maxInput.value = String(maxSeconds);
+}
+
+function resolveCampaignDelayRangeMs(campaign?: Partial<Campaign>) {
+    const fallbackMin = DEFAULT_DELAY_MIN_SECONDS * 1000;
+    const fallbackMax = DEFAULT_DELAY_MAX_SECONDS * 1000;
+
+    const minCandidate = Number(campaign?.delay_min ?? campaign?.delay ?? fallbackMin);
+    const maxCandidate = Number(campaign?.delay_max ?? campaign?.delay ?? minCandidate ?? fallbackMax);
+
+    let minMs = Number.isFinite(minCandidate) && minCandidate > 0 ? minCandidate : fallbackMin;
+    let maxMs = Number.isFinite(maxCandidate) && maxCandidate > 0 ? maxCandidate : minMs;
+
+    if (maxMs < minMs) {
+        const swap = minMs;
+        minMs = maxMs;
+        maxMs = swap;
+    }
+
+    return { minMs, maxMs };
+}
+
 function openBroadcastModal() {
     openCampaignModal();
 
     setSelectValue(document.getElementById('campaignType') as HTMLSelectElement | null, 'broadcast');
     setSelectValue(document.getElementById('campaignSegment') as HTMLSelectElement | null, 'all');
-
-    const delaySelect = document.getElementById('campaignDelay') as HTMLSelectElement | null;
-    if (delaySelect) {
-        setSelectValue(delaySelect, '5000');
-    }
+    setDelayRangeInputs(DEFAULT_DELAY_MIN_SECONDS, DEFAULT_DELAY_MAX_SECONDS);
 }
 
 function initCampanhas() {
@@ -122,6 +149,8 @@ async function loadCampaigns() {
                 segment: 'new',
                 message: 'Olá {{nome}}! Seja bem-vindo à ZapVender.',
                 delay: 5000,
+                delay_min: 5000,
+                delay_max: 5000,
                 start_at: new Date().toISOString(),
                 sent: 156,
                 delivered: 150,
@@ -138,6 +167,8 @@ async function loadCampaigns() {
                 segment: 'all',
                 message: 'Promoção especial para você!',
                 delay: 5000,
+                delay_min: 5000,
+                delay_max: 5000,
                 start_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
                 sent: 500,
                 delivered: 485,
@@ -249,6 +280,13 @@ async function saveCampaign(statusOverride?: CampaignStatus) {
     const campaignId = getCampaignId();
     const statusFromSelect = ((document.getElementById('campaignStatus') as HTMLSelectElement | null)?.value || '') as CampaignStatus;
     const status = campaignId ? (statusFromSelect || statusOverride || 'draft') : (statusOverride || statusFromSelect || 'draft');
+    const minSeconds = parseInt((document.getElementById('campaignDelayMin') as HTMLInputElement | null)?.value || String(DEFAULT_DELAY_MIN_SECONDS), 10);
+    const maxSeconds = parseInt((document.getElementById('campaignDelayMax') as HTMLInputElement | null)?.value || String(DEFAULT_DELAY_MAX_SECONDS), 10);
+
+    const normalizedMinSeconds = Number.isFinite(minSeconds) && minSeconds > 0 ? minSeconds : DEFAULT_DELAY_MIN_SECONDS;
+    const normalizedMaxSeconds = Number.isFinite(maxSeconds) && maxSeconds > 0 ? maxSeconds : normalizedMinSeconds;
+    const delayMinMs = Math.min(normalizedMinSeconds, normalizedMaxSeconds) * 1000;
+    const delayMaxMs = Math.max(normalizedMinSeconds, normalizedMaxSeconds) * 1000;
 
     const data = {
         name: (document.getElementById('campaignName') as HTMLInputElement | null)?.value.trim() || '',
@@ -257,7 +295,9 @@ async function saveCampaign(statusOverride?: CampaignStatus) {
         status,
         segment: (document.getElementById('campaignSegment') as HTMLSelectElement | null)?.value || '',
         message: (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)?.value.trim() || '',
-        delay: parseInt((document.getElementById('campaignDelay') as HTMLInputElement | null)?.value || '0', 10),
+        delay: delayMinMs,
+        delay_min: delayMinMs,
+        delay_max: delayMaxMs,
         start_at: (document.getElementById('campaignStart') as HTMLInputElement | null)?.value || ''
     };
 
@@ -377,11 +417,8 @@ function editCampaign(id: number) {
     const messageInput = document.getElementById('campaignMessage') as HTMLTextAreaElement | null;
     if (messageInput) messageInput.value = campaign.message || '';
 
-    const delaySelect = document.getElementById('campaignDelay') as HTMLSelectElement | null;
-    if (delaySelect) {
-        const delayValue = campaign.delay ? String(campaign.delay) : delaySelect.value;
-        setSelectValue(delaySelect, delayValue);
-    }
+    const { minMs, maxMs } = resolveCampaignDelayRangeMs(campaign);
+    setDelayRangeInputs(Math.round(minMs / 1000), Math.round(maxMs / 1000));
 
     const startInput = document.getElementById('campaignStart') as HTMLInputElement | null;
     if (startInput) startInput.value = formatInputDateTime(campaign.start_at);

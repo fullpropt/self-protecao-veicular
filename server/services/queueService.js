@@ -72,16 +72,43 @@ class QueueService extends EventEmitter {
 
         const results = [];
         const delayMs = Number(options.delayMs);
-        const stepDelay = Number.isFinite(delayMs) && delayMs > 0 ? delayMs : this.defaultDelay;
+        const delayMinInput = Number(options.delayMinMs);
+        const delayMaxInput = Number(options.delayMaxMs);
+        const hasRange = Number.isFinite(delayMinInput) || Number.isFinite(delayMaxInput);
+
+        let delayMin = Number.isFinite(delayMs) && delayMs > 0 ? delayMs : this.defaultDelay;
+        let delayMax = delayMin;
+
+        if (hasRange) {
+            if (Number.isFinite(delayMinInput) && delayMinInput > 0) delayMin = delayMinInput;
+            if (Number.isFinite(delayMaxInput) && delayMaxInput > 0) {
+                delayMax = delayMaxInput;
+            } else {
+                delayMax = delayMin;
+            }
+
+            if (delayMax < delayMin) {
+                const swap = delayMin;
+                delayMin = delayMax;
+                delayMax = swap;
+            }
+        }
+
+        const pickStepDelay = () => {
+            if (delayMax <= delayMin) return delayMin;
+            return Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
+        };
+
         const startAtMs = options.startAt ? Date.parse(options.startAt) : null;
         const hasValidStartAt = Number.isFinite(startAtMs);
+        let nextScheduledAtMs = hasValidStartAt ? startAtMs : null;
         
         for (let i = 0; i < leadIds.length; i++) {
             const leadId = leadIds[i];
             
-            // Calcular tempo de agendamento baseado na posição na fila
+            // Calcular tempo de agendamento baseado na posicao na fila
             const scheduledAt = hasValidStartAt
-                ? new Date(startAtMs + (i * stepDelay)).toISOString()
+                ? new Date(nextScheduledAtMs).toISOString()
                 : null;
             
             const result = await this.add({
@@ -95,6 +122,10 @@ class QueueService extends EventEmitter {
             });
             
             results.push(result);
+
+            if (hasValidStartAt) {
+                nextScheduledAtMs += pickStepDelay();
+            }
         }
         
         this.emit('bulk:queued', { count: results.length, leadIds });
