@@ -22,13 +22,13 @@ function DashboardStyles() {
     <style>{`
         .dashboard-botconversa { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
         @media (max-width: 900px) { .dashboard-botconversa { grid-template-columns: 1fr; } }
-        .stats-period-card, .stats-general-card, .events-personalized-card { background: white; border-radius: var(--border-radius-lg); box-shadow: var(--shadow-md); padding: 24px; border: 1px solid var(--border-color); }
+        .stats-period-card, .stats-general-card, .events-personalized-card { background: var(--surface); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-md); padding: 24px; border: 1px solid var(--border-color); }
         .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 600; }
         .stats-period-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
         .stats-period-controls .form-input, .stats-period-controls .form-select { height: 38px; padding: 0 12px; }
         .chart-type-toggle { display: flex; gap: 4px; }
-        .chart-type-toggle .chart-btn { padding: 8px 12px; border: 1px solid var(--border-color); background: white; border-radius: 8px; cursor: pointer; }
-        .chart-type-toggle .chart-btn.active { background: rgba(var(--primary-rgb), 0.1); border-color: var(--primary); color: var(--primary); }
+        .chart-type-toggle .chart-btn { padding: 8px 12px; border: 1px solid var(--border-color); background: var(--surface-muted); border-radius: 8px; cursor: pointer; color: var(--gray-700); }
+        .chart-type-toggle .chart-btn.active { background: rgba(var(--primary-rgb), 0.16); border-color: var(--primary); color: #eafff4; }
         .stats-general-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--gray-100); }
         .stats-general-item:last-child { border-bottom: none; }
         .stats-general-label { font-size: 13px; color: var(--gray-600); }

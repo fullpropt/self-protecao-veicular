@@ -70,8 +70,8 @@ export default function Login() {
         }
 
         .login-logo img {
-            height: 58px;
-            width: auto;
+            width: clamp(150px, 42vw, 210px);
+            height: auto;
             display: block;
             filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
         }
