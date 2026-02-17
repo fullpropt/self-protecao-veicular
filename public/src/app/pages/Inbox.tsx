@@ -184,10 +184,15 @@ export default function Inbox() {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            justify-content: flex-start;
+            align-items: stretch;
             min-height: 0;
         }
         .message {
             max-width: 70%;
+            width: fit-content;
+            min-width: 76px;
+            margin: 0;
             padding: 10px 15px;
             border-radius: 12px;
             font-size: 14px;
@@ -198,6 +203,7 @@ export default function Inbox() {
             background: rgba(var(--primary-rgb), 0.24);
             color: #ecfff6;
             align-self: flex-end;
+            margin-left: auto;
             border-bottom-right-radius: 4px;
         }
         .message.received {
@@ -205,6 +211,7 @@ export default function Inbox() {
             border: 1px solid var(--border-color);
             color: var(--dark);
             align-self: flex-start;
+            margin-right: auto;
             border-bottom-left-radius: 4px;
         }
         .message-time {

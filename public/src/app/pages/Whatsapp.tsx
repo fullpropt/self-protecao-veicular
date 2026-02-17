@@ -74,14 +74,14 @@ export default function Whatsapp() {
         }
 
         .whatsapp-react .header-title h1 {
-            color: var(--dark);
+            color: #f8fafc;
             font-size: 32px;
             font-weight: 800;
             margin-bottom: 5px;
         }
 
         .whatsapp-react .header-title p {
-            color: var(--gray);
+            color: #94a3b8;
             font-size: 15px;
         }
 
@@ -831,5 +831,4 @@ export default function Whatsapp() {
     </div>
   );
 }
-
 

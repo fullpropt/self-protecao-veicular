@@ -52,6 +52,22 @@ let socketBound = false;
 let refreshInterval: number | null = null;
 let currentFilter: 'all' | 'unread' = 'all';
 
+function normalizeDirection(message: Record<string, any>): 'outgoing' | 'incoming' {
+    const rawDirection = String(message.direction || '').trim().toLowerCase();
+    if (['outgoing', 'sent', 'agent', 'bot', 'me', 'from_me'].includes(rawDirection)) return 'outgoing';
+    if (['incoming', 'received', 'lead', 'contact', 'customer', 'from_them'].includes(rawDirection)) return 'incoming';
+
+    const senderType = String(message.sender_type || '').trim().toLowerCase();
+    if (['agent', 'bot', 'system'].includes(senderType)) return 'outgoing';
+    if (['lead', 'contact', 'customer'].includes(senderType)) return 'incoming';
+
+    const fromMe = message.is_from_me;
+    if (fromMe === true || fromMe === 1 || fromMe === '1' || fromMe === 'true') return 'outgoing';
+    if (fromMe === false || fromMe === 0 || fromMe === '0' || fromMe === 'false') return 'incoming';
+
+    return 'incoming';
+}
+
 function escapeHtml(value: string) {
     return String(value)
         .replace(/&/g, '&amp;')
@@ -286,7 +302,7 @@ async function loadMessages(leadId: number) {
         const response: MessagesResponse = await api.get(`/api/messages/${leadId}`);
         messages = (response.messages || []).map(m => ({
             ...m,
-            direction: m.direction || (m.is_from_me ? 'outgoing' : 'incoming'),
+            direction: normalizeDirection(m),
             created_at: m.created_at || m.sent_at || new Date().toISOString(),
             media_type: m.media_type || 'text',
             media_url: m.media_url || null
@@ -725,4 +741,3 @@ windowAny.backToList = backToList;
 windowAny.logout = logout;
 
 export { initInbox };
-
