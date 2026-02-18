@@ -111,6 +111,32 @@ const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'self-protecao-veicular-key-2024';
+const APP_BRAND_NAME = 'ZapVender';
+const WHATSAPP_BROWSER_VERSION = '120.0.0';
+const WHATSAPP_BROWSER_NAME_MAX_LENGTH = 40;
+
+function buildWhatsAppBrowserName(companyName) {
+    const cleanedCompany = String(companyName || '').replace(/\s+/g, ' ').trim();
+    if (!cleanedCompany) return APP_BRAND_NAME;
+
+    const brandLower = APP_BRAND_NAME.toLowerCase();
+    const companyLower = cleanedCompany.toLowerCase();
+    const combined = companyLower.startsWith(`${brandLower} `) || companyLower === brandLower
+        ? cleanedCompany
+        : `${APP_BRAND_NAME} ${cleanedCompany}`;
+
+    return combined.slice(0, WHATSAPP_BROWSER_NAME_MAX_LENGTH);
+}
+
+async function resolveWhatsAppBrowserName() {
+    try {
+        const configuredCompanyName = await Settings.get('company_name');
+        return buildWhatsAppBrowserName(configuredCompanyName);
+    } catch (error) {
+        console.warn('Falha ao carregar company_name para identificacao do WhatsApp:', error.message);
+        return APP_BRAND_NAME;
+    }
+}
 
 
 
@@ -1794,6 +1820,7 @@ async function createSession(sessionId, socket, attempt = 0) {
         
 
         const syncFullHistory = process.env.WHATSAPP_SYNC_FULL_HISTORY !== 'false';
+        const browserName = await resolveWhatsAppBrowserName();
 
         const store = typeof makeInMemoryStore === 'function' ? makeInMemoryStore({ logger }) : null;
 
@@ -1815,7 +1842,7 @@ async function createSession(sessionId, socket, attempt = 0) {
 
             },
 
-            browser: ['SELF Proteção Veicular', 'Chrome', '120.0.0'],
+            browser: [browserName, 'Chrome', WHATSAPP_BROWSER_VERSION],
 
             generateHighQualityLinkPreview: true,
 
@@ -6111,7 +6138,6 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
 
 
 

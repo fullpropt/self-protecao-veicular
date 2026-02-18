@@ -207,12 +207,10 @@ export default function Configuracoes() {
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('general')}><span className="icon icon-building icon-sm"></span> Campos</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Etiquetas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas rápidas</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('team')}><span className="icon icon-contacts icon-sm"></span> Equipe</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Horários</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('flows')}><span className="icon icon-flows icon-sm"></span> Fluxos Padrões</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('funnel')}><span className="icon icon-funnel icon-sm"></span> Funil de Vendas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('copys')}><span className="icon icon-templates icon-sm"></span> Copys e Mensagens</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('whatsapp')}><span className="icon icon-whatsapp icon-sm"></span> WhatsApp</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('notifications')}><span className="icon icon-bell icon-sm"></span> Notificações</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('users')}><span className="icon icon-user icon-sm"></span> Usuários</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('api')}><span className="icon icon-plug icon-sm"></span> API e Webhooks</div>
@@ -264,7 +262,6 @@ export default function Configuracoes() {
       
                       <div className="settings-panel" id="panel-labels"><h3 className="settings-section-title">Etiquetas</h3><p className="text-muted">Em breve.</p></div>
                       <div className="settings-panel" id="panel-quick"><h3 className="settings-section-title">Respostas rápidas</h3><p className="text-muted">Em breve.</p></div>
-                      <div className="settings-panel" id="panel-team"><h3 className="settings-section-title">Equipe</h3><p className="text-muted">Em breve.</p></div>
                       <div className="settings-panel" id="panel-hours"><h3 className="settings-section-title">Horários</h3><p className="text-muted">Em breve.</p></div>
                       <div className="settings-panel" id="panel-flows"><h3 className="settings-section-title">Fluxos Padrões</h3><p className="text-muted">Em breve.</p></div>
       
@@ -376,44 +373,6 @@ export default function Configuracoes() {
                           <button className="btn btn-primary" onClick={() => globals.saveCopysSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar Templates</button>
                       </div>
 
-                      <div className="settings-panel" id="panel-whatsapp">
-                          <div className="settings-section">
-                              <h3 className="settings-section-title"><span className="icon icon-whatsapp icon-sm"></span> Conexão WhatsApp</h3>
-                              <div className="alert alert-info mb-4">
-                                  <strong>Status:</strong> <span id="whatsappStatusText">Verificando...</span>
-                              </div>
-                              <div id="qrCodeContainer" style={{ textAlign: 'center', display: 'none' }}>
-                                  <p className="mb-3">Escaneie o QR Code com seu WhatsApp:</p>
-                                  <div id="qrCode" style={{ display: 'inline-block', padding: '20px', background: 'var(--surface-muted)', border: '1px solid var(--border-color)', borderRadius: '10px' }}></div>
-                              </div>
-                              <div className="mt-4">
-                                  <button className="btn btn-primary" onClick={() => globals.connectWhatsApp?.()}><span className="icon icon-link icon-sm"></span> Conectar WhatsApp</button>
-                                  <button className="btn btn-outline-danger ml-2" onClick={() => globals.disconnectWhatsApp?.()}><span className="icon icon-plug icon-sm"></span> Desconectar</button>
-                              </div>
-                          </div>
-      
-                          <div className="settings-section">
-                              <h3 className="settings-section-title"><span className="icon icon-settings icon-sm"></span> Configurações de Envio</h3>
-                              <div className="form-group">
-                                  <label className="form-label">Intervalo entre mensagens (segundos)</label>
-                                  <input type="number" className="form-input" id="messageInterval" defaultValue="30" min="10" max="300" />
-                                  <small className="text-muted">Mínimo: 10s | Máximo: 300s</small>
-                              </div>
-                              <div className="form-group">
-                                  <label className="form-label">Limite de mensagens por hora</label>
-                                  <input type="number" className="form-input" id="messagesPerHour" defaultValue="60" min="10" max="200" />
-                              </div>
-                              <div className="form-group">
-                                  <label className="form-label">Horário de funcionamento</label>
-                                  <div className="form-row">
-                                      <input type="time" className="form-input" id="workStart" defaultValue="08:00" />
-                                      <input type="time" className="form-input" id="workEnd" defaultValue="18:00" />
-                                  </div>
-                              </div>
-                          </div>
-                          <button className="btn btn-primary" onClick={() => globals.saveWhatsAppSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar Configurações</button>
-                      </div>
-      
                       <div className="settings-panel" id="panel-notifications">
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-bell icon-sm"></span> Preferências de Notificação</h3>

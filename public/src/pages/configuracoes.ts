@@ -74,30 +74,69 @@ function showPanel(panelId: string) {
     document.getElementById(`panel-${panelId}`).classList.add('active');
 }
 
-function loadSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
-    if (settings.company) {
-        const companyName = document.getElementById('companyName') as HTMLInputElement | null;
-        const companyCnpj = document.getElementById('companyCnpj') as HTMLInputElement | null;
-        const companyPhone = document.getElementById('companyPhone') as HTMLInputElement | null;
-        const companyEmail = document.getElementById('companyEmail') as HTMLInputElement | null;
-        if (companyName) companyName.value = settings.company.name || '';
-        if (companyCnpj) companyCnpj.value = settings.company.cnpj || '';
-        if (companyPhone) companyPhone.value = settings.company.phone || '';
-        if (companyEmail) companyEmail.value = settings.company.email || '';
+function applyCompanySettings(company: { name?: string; cnpj?: string; phone?: string; email?: string }) {
+    const companyName = document.getElementById('companyName') as HTMLInputElement | null;
+    const companyCnpj = document.getElementById('companyCnpj') as HTMLInputElement | null;
+    const companyPhone = document.getElementById('companyPhone') as HTMLInputElement | null;
+    const companyEmail = document.getElementById('companyEmail') as HTMLInputElement | null;
+    if (companyName) companyName.value = company.name || '';
+    if (companyCnpj) companyCnpj.value = company.cnpj || '';
+    if (companyPhone) companyPhone.value = company.phone || '';
+    if (companyEmail) companyEmail.value = company.email || '';
+}
+
+async function loadSettings() {
+    const localSettings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    applyCompanySettings(localSettings.company || {});
+
+    try {
+        const response = await api.get('/api/settings');
+        const serverSettings = response?.settings || {};
+        const hasCompanySettings = ['company_name', 'company_cnpj', 'company_phone', 'company_email']
+            .some((key) => Object.prototype.hasOwnProperty.call(serverSettings, key));
+
+        if (!hasCompanySettings) return;
+
+        const company = {
+            name: String(serverSettings.company_name || ''),
+            cnpj: String(serverSettings.company_cnpj || ''),
+            phone: String(serverSettings.company_phone || ''),
+            email: String(serverSettings.company_email || '')
+        };
+
+        applyCompanySettings(company);
+        localStorage.setItem('selfSettings', JSON.stringify({
+            ...localSettings,
+            company
+        }));
+    } catch (error) {
+        // Mantem fallback local sem interromper a pagina
     }
 }
 
-function saveGeneralSettings() {
+async function saveGeneralSettings() {
     const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
-    settings.company = {
-        name: (document.getElementById('companyName') as HTMLInputElement | null)?.value || '',
-        cnpj: (document.getElementById('companyCnpj') as HTMLInputElement | null)?.value || '',
-        phone: (document.getElementById('companyPhone') as HTMLInputElement | null)?.value || '',
-        email: (document.getElementById('companyEmail') as HTMLInputElement | null)?.value || ''
+    const company = {
+        name: ((document.getElementById('companyName') as HTMLInputElement | null)?.value || '').trim(),
+        cnpj: ((document.getElementById('companyCnpj') as HTMLInputElement | null)?.value || '').trim(),
+        phone: ((document.getElementById('companyPhone') as HTMLInputElement | null)?.value || '').trim(),
+        email: ((document.getElementById('companyEmail') as HTMLInputElement | null)?.value || '').trim()
     };
+
+    settings.company = company;
     localStorage.setItem('selfSettings', JSON.stringify(settings));
-    showToast('success', 'Sucesso', 'Configurações salvas!');
+
+    try {
+        await api.put('/api/settings', {
+            company_name: company.name || 'ZapVender',
+            company_cnpj: company.cnpj,
+            company_phone: company.phone,
+            company_email: company.email
+        });
+        showToast('success', 'Sucesso', 'Configuracoes salvas!');
+    } catch (error) {
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nao foi possivel sincronizar no servidor');
+    }
 }
 
 function saveFunnelSettings() {
