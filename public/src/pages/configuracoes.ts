@@ -23,8 +23,25 @@ type SettingsTag = {
     description?: string;
 };
 
+type ContactField = {
+    key: string;
+    label: string;
+    placeholder?: string;
+    is_default?: boolean;
+    required?: boolean;
+    source?: string;
+};
+
 let templatesCache: TemplateItem[] = [];
 let settingsTagsCache: SettingsTag[] = [];
+let contactFieldsCache: ContactField[] = [];
+let customContactFieldsCache: ContactField[] = [];
+
+const DEFAULT_CONTACT_FIELDS: ContactField[] = [
+    { key: 'nome', label: 'Nome', source: 'name', is_default: true, required: true, placeholder: 'Nome completo' },
+    { key: 'telefone', label: 'Telefone', source: 'phone', is_default: true, required: true, placeholder: 'Somente n\u00FAmeros com DDD' },
+    { key: 'email', label: 'Email', source: 'email', is_default: true, required: false, placeholder: 'email@exemplo.com' }
+];
 
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
@@ -53,6 +70,7 @@ function getPanelFromLocation() {
 
 function initConfiguracoes() {
     loadSettings();
+    loadContactFields();
     loadTemplates();
     loadSettingsTags();
     checkWhatsAppStatus();
@@ -263,6 +281,233 @@ async function deleteSettingsTag(id: number) {
     } catch (error) {
         showToast('error', 'Erro', 'Não foi possível remover a etiqueta');
     }
+}
+
+function normalizeContactFieldKey(value: string) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40);
+}
+
+function normalizeContactFieldLabel(value: string) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+function normalizeContactFieldPlaceholder(value: string) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+
+function sanitizeContactField(field: ContactField) {
+    const label = normalizeContactFieldLabel(field?.label || field?.key || '');
+    const key = normalizeContactFieldKey(field?.key || label);
+    if (!label || !key || key === '__system') return null;
+    if (DEFAULT_CONTACT_FIELDS.some((item) => item.key === key)) return null;
+    return {
+        key,
+        label,
+        placeholder: normalizeContactFieldPlaceholder(field?.placeholder || '')
+    };
+}
+
+function sanitizeCustomContactFields(fields: ContactField[]) {
+    const dedupe = new Set<string>();
+    const result: ContactField[] = [];
+
+    for (const field of fields || []) {
+        const sanitized = sanitizeContactField(field);
+        if (!sanitized) continue;
+        if (dedupe.has(sanitized.key)) continue;
+        dedupe.add(sanitized.key);
+        result.push(sanitized);
+    }
+
+    return result;
+}
+
+function renderContactVariableTags() {
+    const container = document.getElementById('contactVariablesList') as HTMLElement | null;
+    if (!container) return;
+
+    const fields = contactFieldsCache.length ? contactFieldsCache : DEFAULT_CONTACT_FIELDS;
+    container.innerHTML = fields
+        .map((field) => `<span class="variable-tag" onclick="insertVariable('{{${field.key}}}')">{{${field.key}}}</span>`)
+        .join('');
+}
+
+function renderDefaultContactFieldsList() {
+    const container = document.getElementById('defaultContactFieldsList') as HTMLElement | null;
+    if (!container) return;
+
+    container.innerHTML = DEFAULT_CONTACT_FIELDS
+        .map((field) => `<span class="variable-tag">{{${field.key}}} - ${escapeHtml(field.label)}</span>`)
+        .join('');
+}
+
+function renderContactFieldsTable() {
+    const tbody = document.getElementById('contactFieldsTableBody') as HTMLElement | null;
+    if (!tbody) return;
+
+    if (!customContactFieldsCache.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" class="table-empty">
+                    <div class="table-empty-icon icon icon-empty icon-lg"></div>
+                    <p>Nenhum campo personalizado cadastrado</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = customContactFieldsCache.map((field) => `
+        <tr data-field-key="${escapeHtml(field.key)}">
+            <td><code>{{${escapeHtml(field.key)}}}</code></td>
+            <td><input type="text" class="form-input contact-field-label" value="${escapeHtml(field.label || '')}" /></td>
+            <td><input type="text" class="form-input contact-field-placeholder" value="${escapeHtml(field.placeholder || '')}" placeholder="Opcional" /></td>
+            <td style="width: 180px;">
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-outline" onclick="updateContactField('${escapeHtml(field.key)}')">Salvar</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteContactField('${escapeHtml(field.key)}')">Remover</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderContactFieldsSection() {
+    renderDefaultContactFieldsList();
+    renderContactFieldsTable();
+    renderContactVariableTags();
+}
+
+async function loadContactFields() {
+    try {
+        const response = await api.get('/api/contact-fields');
+        const customFields = sanitizeCustomContactFields(response?.customFields || []);
+        const allFields = Array.isArray(response?.fields) && response.fields.length
+            ? response.fields
+            : [...DEFAULT_CONTACT_FIELDS, ...customFields];
+
+        customContactFieldsCache = customFields;
+        contactFieldsCache = allFields.map((field: ContactField) => {
+            const normalizedKey = normalizeContactFieldKey(field.key);
+            return {
+                key: normalizedKey,
+                label: normalizeContactFieldLabel(field.label || field.key),
+                placeholder: normalizeContactFieldPlaceholder(field.placeholder || ''),
+                is_default: Boolean(field.is_default || DEFAULT_CONTACT_FIELDS.some((item) => item.key === normalizedKey)),
+                required: Boolean(field.required),
+                source: field.source || (DEFAULT_CONTACT_FIELDS.some((item) => item.key === normalizedKey) ? 'default' : 'custom')
+            };
+        });
+    } catch (error) {
+        customContactFieldsCache = [];
+        contactFieldsCache = [...DEFAULT_CONTACT_FIELDS];
+    }
+
+    renderContactFieldsSection();
+}
+
+async function persistContactFields(showSuccess = true) {
+    const payload = sanitizeCustomContactFields(customContactFieldsCache);
+    await api.put('/api/contact-fields', { fields: payload });
+    await loadContactFields();
+    if (showSuccess) {
+        showToast('success', 'Sucesso', 'Campos de contato atualizados!');
+    }
+}
+
+async function createContactField() {
+    const labelInput = document.getElementById('newContactFieldLabel') as HTMLInputElement | null;
+    const placeholderInput = document.getElementById('newContactFieldPlaceholder') as HTMLInputElement | null;
+
+    const label = normalizeContactFieldLabel(labelInput?.value || '');
+    const placeholder = normalizeContactFieldPlaceholder(placeholderInput?.value || '');
+    const key = normalizeContactFieldKey(label);
+
+    if (!label || !key) {
+        showToast('warning', 'Aviso', 'Informe um nome v\u00E1lido para o campo');
+        labelInput?.focus();
+        return;
+    }
+
+    if (DEFAULT_CONTACT_FIELDS.some((field) => field.key === key)) {
+        showToast('warning', 'Aviso', 'Esse campo j\u00E1 existe como padr\u00E3o');
+        labelInput?.focus();
+        return;
+    }
+
+    if (customContactFieldsCache.some((field) => field.key === key)) {
+        showToast('warning', 'Aviso', 'J\u00E1 existe um campo com essa vari\u00E1vel');
+        labelInput?.focus();
+        return;
+    }
+
+    customContactFieldsCache.push({ key, label, placeholder });
+
+    try {
+        await persistContactFields(true);
+        if (labelInput) labelInput.value = '';
+        if (placeholderInput) placeholderInput.value = '';
+    } catch (error) {
+        showToast('error', 'Erro', 'N\u00E3o foi poss\u00EDvel criar o campo');
+    }
+}
+
+function getContactFieldRow(key: string) {
+    return document.querySelector(`#contactFieldsTableBody tr[data-field-key="${key}"]`) as HTMLElement | null;
+}
+
+async function updateContactField(key: string) {
+    const normalizedKey = normalizeContactFieldKey(key);
+    const row = getContactFieldRow(normalizedKey);
+    if (!row) return;
+
+    const label = normalizeContactFieldLabel(((row.querySelector('.contact-field-label') as HTMLInputElement | null)?.value || '').trim());
+    const placeholder = normalizeContactFieldPlaceholder(((row.querySelector('.contact-field-placeholder') as HTMLInputElement | null)?.value || '').trim());
+
+    if (!label) {
+        showToast('warning', 'Aviso', 'Informe o nome do campo');
+        return;
+    }
+
+    const index = customContactFieldsCache.findIndex((field) => field.key === normalizedKey);
+    if (index < 0) return;
+
+    customContactFieldsCache[index] = {
+        ...customContactFieldsCache[index],
+        label,
+        placeholder
+    };
+
+    try {
+        await persistContactFields(true);
+    } catch (error) {
+        showToast('error', 'Erro', 'N\u00E3o foi poss\u00EDvel atualizar o campo');
+    }
+}
+
+async function deleteContactField(key: string) {
+    const normalizedKey = normalizeContactFieldKey(key);
+    if (!normalizedKey) return;
+    if (!confirm('Deseja remover este campo personalizado?')) return;
+
+    customContactFieldsCache = customContactFieldsCache.filter((field) => field.key !== normalizedKey);
+
+    try {
+        await persistContactFields(true);
+    } catch (error) {
+        showToast('error', 'Erro', 'N\u00E3o foi poss\u00EDvel remover o campo');
+    }
+}
+
+function getQuickReplyVariableKeys() {
+    const fields = contactFieldsCache.length ? contactFieldsCache : DEFAULT_CONTACT_FIELDS;
+    return fields.map((field) => field.key);
 }
 
 function saveFunnelSettings() {
@@ -552,7 +797,7 @@ async function saveNewTemplate() {
                 name,
                 category: 'quick_reply',
                 content: message,
-                variables: ['nome', 'telefone', 'veiculo', 'placa', 'empresa']
+                variables: getQuickReplyVariableKeys()
             });
         }
         closeModal('addTemplateModal');
@@ -693,6 +938,9 @@ const windowAny = window as Window & {
     disconnectWhatsApp?: () => Promise<void>;
     saveWhatsAppSettings?: () => void;
     saveNotificationSettings?: () => void;
+    createContactField?: () => Promise<void>;
+    updateContactField?: (key: string) => Promise<void>;
+    deleteContactField?: (key: string) => Promise<void>;
     createSettingsTag?: () => Promise<void>;
     updateSettingsTag?: (id: number) => Promise<void>;
     deleteSettingsTag?: (id: number) => Promise<void>;
@@ -718,6 +966,9 @@ windowAny.connectWhatsApp = connectWhatsApp;
 windowAny.disconnectWhatsApp = disconnectWhatsApp;
 windowAny.saveWhatsAppSettings = saveWhatsAppSettings;
 windowAny.saveNotificationSettings = saveNotificationSettings;
+windowAny.createContactField = createContactField;
+windowAny.updateContactField = updateContactField;
+windowAny.deleteContactField = deleteContactField;
 windowAny.createSettingsTag = createSettingsTag;
 windowAny.updateSettingsTag = updateSettingsTag;
 windowAny.deleteSettingsTag = deleteSettingsTag;

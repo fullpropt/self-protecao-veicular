@@ -14,14 +14,23 @@ type Contact = {
     last_message_at?: string;
     created_at: string;
     notes?: string;
+    custom_fields?: string | Record<string, any> | null;
 };
 
 type Tag = { id: number; name: string };
 type Template = { id: number; name: string; content: string };
+type ContactField = {
+    key: string;
+    label: string;
+    placeholder?: string;
+    is_default?: boolean;
+    source?: string;
+};
 
 type LeadsResponse = { leads?: Contact[] };
 type TagsResponse = { tags?: Tag[] };
 type TemplatesResponse = { templates?: Template[] };
+type ContactFieldsResponse = { fields?: ContactField[]; customFields?: ContactField[] };
 
 let allContacts: Contact[] = [];
 let filteredContacts: Contact[] = [];
@@ -29,6 +38,49 @@ let selectedContacts: number[] = [];
 let currentPage = 1;
 const perPage = 20;
 let tags: Tag[] = [];
+let contactFieldsCache: ContactField[] = [];
+let customContactFieldsCache: ContactField[] = [];
+
+const DEFAULT_CONTACT_FIELDS: ContactField[] = [
+    { key: 'nome', label: 'Nome', source: 'name', is_default: true },
+    { key: 'telefone', label: 'Telefone', source: 'phone', is_default: true },
+    { key: 'email', label: 'Email', source: 'email', is_default: true }
+];
+
+function normalizeContactFieldKey(value: string) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40);
+}
+
+function parseLeadCustomFields(value: unknown) {
+    if (!value) return {};
+    if (typeof value === 'object') return Array.isArray(value) ? {} : { ...(value as Record<string, any>) };
+    if (typeof value !== 'string') return {};
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function normalizeCustomFieldValue(value: unknown) {
+    return String(value ?? '').trim();
+}
+
+function escapeHtml(value: string) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 
 function getQueryParams() {
@@ -67,6 +119,7 @@ function initContacts() {
         setTimeout(initContacts, 50);
         return;
     }
+    loadContactFields();
     loadContacts();
     loadTags();
     loadTemplates();
@@ -110,6 +163,95 @@ async function loadTemplates() {
             select.innerHTML += `<option value="${t.id}" data-content="${encodeURIComponent(t.content)}">${t.name}</option>`;
         });
     } catch (e) {}
+}
+
+function renderCustomFieldsInputs(containerId: string, inputClassName: string) {
+    const container = document.getElementById(containerId) as HTMLElement | null;
+    if (!container) return;
+
+    if (!customContactFieldsCache.length) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = customContactFieldsCache
+        .map((field) => `
+            <div class="form-group">
+                <label class="form-label">${escapeHtml(field.label || field.key)}</label>
+                <input
+                    type="text"
+                    class="form-input ${inputClassName}"
+                    data-custom-field-key="${escapeHtml(field.key)}"
+                    placeholder="${escapeHtml(field.placeholder || '')}"
+                />
+            </div>
+        `)
+        .join('');
+}
+
+function renderContactCustomFields() {
+    renderCustomFieldsInputs('contactCustomFields', 'contact-custom-field');
+    renderCustomFieldsInputs('editContactCustomFields', 'edit-contact-custom-field');
+}
+
+async function loadContactFields() {
+    try {
+        const response: ContactFieldsResponse = await api.get('/api/contact-fields');
+        const customFields = Array.isArray(response?.customFields) ? response.customFields : [];
+        const allFields = Array.isArray(response?.fields) ? response.fields : [];
+
+        customContactFieldsCache = customFields
+            .map((field) => ({
+                key: normalizeContactFieldKey(field.key),
+                label: String(field.label || field.key || '').trim(),
+                placeholder: String(field.placeholder || '').trim(),
+                is_default: false,
+                source: 'custom'
+            }))
+            .filter((field) => field.key && field.label);
+
+        contactFieldsCache = allFields.length
+            ? allFields.map((field) => ({
+                key: normalizeContactFieldKey(field.key),
+                label: String(field.label || field.key || '').trim(),
+                placeholder: String(field.placeholder || '').trim(),
+                is_default: Boolean(field.is_default),
+                source: field.source
+            }))
+            : [...DEFAULT_CONTACT_FIELDS, ...customContactFieldsCache];
+    } catch (error) {
+        customContactFieldsCache = [];
+        contactFieldsCache = [...DEFAULT_CONTACT_FIELDS];
+    }
+
+    renderContactCustomFields();
+}
+
+function collectCustomFieldsValues(inputClassName: string) {
+    const values: Record<string, string> = {};
+    const elements = Array.from(document.querySelectorAll(`.${inputClassName}`)) as HTMLInputElement[];
+
+    for (const element of elements) {
+        const key = normalizeContactFieldKey(element.dataset.customFieldKey || '');
+        if (!key) continue;
+
+        const value = normalizeCustomFieldValue(element.value);
+        if (value) {
+            values[key] = value;
+        }
+    }
+
+    return values;
+}
+
+function applyCustomFieldsValues(inputClassName: string, customFields: Record<string, any>) {
+    const elements = Array.from(document.querySelectorAll(`.${inputClassName}`)) as HTMLInputElement[];
+    for (const element of elements) {
+        const key = normalizeContactFieldKey(element.dataset.customFieldKey || '');
+        if (!key) continue;
+        const value = customFields[key];
+        element.value = value === undefined || value === null ? '' : String(value);
+    }
 }
 
 function loadTemplate() {
@@ -262,6 +404,10 @@ async function saveContact() {
         status: parseInt((document.getElementById('contactStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus,
         source: (document.getElementById('contactSource') as HTMLSelectElement | null)?.value || ''
     };
+    const customFields = collectCustomFieldsValues('contact-custom-field');
+    if (Object.keys(customFields).length > 0) {
+        (data as Record<string, any>).custom_fields = customFields;
+    }
 
     if (!data.name || !data.phone) {
         showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
@@ -273,6 +419,7 @@ async function saveContact() {
         await api.post('/api/leads', data);
         closeModal('addContactModal');
         (document.getElementById('addContactForm') as HTMLFormElement | null)?.reset();
+        applyCustomFieldsValues('contact-custom-field', {});
         await loadContacts();
         showToast('success', 'Sucesso', 'Contato adicionado!');
     } catch (error) {
@@ -302,19 +449,41 @@ function editContact(id: number) {
     if (editContactEmail) editContactEmail.value = contact.email || '';
     if (editContactStatus) editContactStatus.value = String(contact.status || 1);
     if (editContactNotes) editContactNotes.value = contact.notes || '';
+    const currentCustomFields = parseLeadCustomFields(contact.custom_fields);
+    applyCustomFieldsValues('edit-contact-custom-field', currentCustomFields);
+    if (!customContactFieldsCache.length) {
+        loadContactFields().then(() => applyCustomFieldsValues('edit-contact-custom-field', currentCustomFields));
+    }
 
     openModal('editContactModal');
 }
 
 async function updateContact() {
     const id = (document.getElementById('editContactId') as HTMLInputElement | null)?.value || '';
+    const numericId = parseInt(id, 10);
+    const existingContact = allContacts.find((contact) => contact.id === numericId);
+    const mergedCustomFields = parseLeadCustomFields(existingContact?.custom_fields);
+    const incomingCustomFields = collectCustomFieldsValues('edit-contact-custom-field');
+
+    for (const field of customContactFieldsCache) {
+        const key = normalizeContactFieldKey(field.key);
+        if (!key) continue;
+        const value = incomingCustomFields[key];
+        if (value) {
+            mergedCustomFields[key] = value;
+        } else {
+            delete mergedCustomFields[key];
+        }
+    }
+
     const data = {
         name: (document.getElementById('editContactName') as HTMLInputElement | null)?.value.trim() || '',
         phone: (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '',
         vehicle: (document.getElementById('editContactVehicle') as HTMLInputElement | null)?.value.trim() || '',
         plate: (document.getElementById('editContactPlate') as HTMLInputElement | null)?.value.trim().toUpperCase() || '',
         email: (document.getElementById('editContactEmail') as HTMLInputElement | null)?.value.trim() || '',
-        status: parseInt((document.getElementById('editContactStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus
+        status: parseInt((document.getElementById('editContactStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus,
+        custom_fields: mergedCustomFields
     };
 
     try {

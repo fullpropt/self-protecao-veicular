@@ -628,7 +628,7 @@ const Template = {
             data.name,
             data.category || 'general',
             data.content,
-            JSON.stringify(data.variables || ['nome', 'veiculo', 'placa']),
+            JSON.stringify(data.variables || ['nome', 'telefone', 'email']),
             data.media_url,
             data.media_type,
             data.created_by

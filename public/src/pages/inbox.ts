@@ -43,6 +43,21 @@ type TemplateItem = {
     media_url?: string;
 };
 
+type LeadDetails = {
+    id: number;
+    name?: string;
+    phone?: string;
+    email?: string;
+    custom_fields?: string | Record<string, any> | null;
+};
+
+type ContactField = {
+    key: string;
+    label?: string;
+    is_default?: boolean;
+    source?: string;
+};
+
 let conversations: Conversation[] = [];
 let currentConversation: Conversation | null = null;
 let messages: ChatMessage[] = [];
@@ -52,6 +67,14 @@ let socketBound = false;
 let refreshInterval: number | null = null;
 let currentFilter: 'all' | 'unread' = 'all';
 let quickReplyDismissBound = false;
+let currentLeadDetails: LeadDetails | null = null;
+let contactFieldsCache: ContactField[] = [];
+
+const DEFAULT_CONTACT_FIELDS: ContactField[] = [
+    { key: 'nome', label: 'Nome', is_default: true, source: 'name' },
+    { key: 'telefone', label: 'Telefone', is_default: true, source: 'phone' },
+    { key: 'email', label: 'Email', is_default: true, source: 'email' }
+];
 
 function normalizeDirection(message: Record<string, any>): 'outgoing' | 'incoming' {
     const rawDirection = String(message.direction || '').trim().toLowerCase();
@@ -86,6 +109,25 @@ function normalizeName(value: string) {
         .trim();
 }
 
+function normalizeContactFieldKey(value: string) {
+    return normalizeName(value)
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40);
+}
+
+function parseLeadCustomFields(value: unknown) {
+    if (!value) return {};
+    if (typeof value === 'object') return Array.isArray(value) ? {} : { ...(value as Record<string, any>) };
+    if (typeof value !== 'string') return {};
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', callback);
@@ -101,6 +143,7 @@ function getContatosUrl(id: string | number) {
 
 function initInbox() {
     bindQuickReplyDismiss();
+    loadContactFields();
     loadConversations();
     loadQuickReplies();
     initSocket();
@@ -285,6 +328,7 @@ function searchConversations() {
 async function selectConversation(id: number) {
     currentConversation = conversations.find(c => c.id === id);
     if (!currentConversation) return;
+    currentLeadDetails = null;
 
     // Marcar localmente como lida para atualizar badge imediatamente
     if ((currentConversation.unread || 0) > 0) {
@@ -313,8 +357,11 @@ async function selectConversation(id: number) {
         // Não bloqueia abertura da conversa se falhar sincronização de leitura
     }
 
-    // Carregar mensagens
-    await loadMessages(currentConversation.leadId);
+    // Carregar mensagens e dados completos do contato
+    await Promise.all([
+        loadMessages(currentConversation.leadId),
+        loadCurrentLeadDetails(currentConversation.leadId)
+    ]);
 
     // Renderizar chat
     renderChat();
@@ -332,6 +379,37 @@ async function loadMessages(leadId: number) {
         }));
     } catch (error) {
         messages = [];
+    }
+}
+
+async function loadContactFields() {
+    try {
+        const response = await api.get('/api/contact-fields');
+        const fields = Array.isArray(response?.fields) ? response.fields : [];
+
+        contactFieldsCache = fields.length
+            ? fields
+                .map((field: ContactField) => ({
+                    key: normalizeContactFieldKey(field.key),
+                    label: field.label || field.key,
+                    is_default: Boolean(field.is_default),
+                    source: field.source
+                }))
+                .filter((field: ContactField) => Boolean(field.key))
+            : [...DEFAULT_CONTACT_FIELDS];
+    } catch (error) {
+        contactFieldsCache = [...DEFAULT_CONTACT_FIELDS];
+    }
+}
+
+async function loadCurrentLeadDetails(leadId: number) {
+    currentLeadDetails = null;
+    if (!leadId) return;
+    try {
+        const response = await api.get(`/api/leads/${leadId}`);
+        currentLeadDetails = response?.lead || null;
+    } catch (error) {
+        currentLeadDetails = null;
     }
 }
 
@@ -372,12 +450,28 @@ function renderQuickReplyItems() {
 
 function applyQuickReplyVariables(content: string) {
     if (!currentConversation) return content;
-    return content
-        .replace(/\{\{\s*nome\s*\}\}/gi, currentConversation.name || '')
-        .replace(/\{\{\s*telefone\s*\}\}/gi, formatPhone(currentConversation.phone || ''))
-        .replace(/\{\{\s*veiculo\s*\}\}/gi, '')
-        .replace(/\{\{\s*placa\s*\}\}/gi, '')
-        .replace(/\{\{\s*empresa\s*\}\}/gi, 'ZapVender');
+
+    const customFields = parseLeadCustomFields(currentLeadDetails?.custom_fields);
+    const variables: Record<string, string> = {
+        nome: currentLeadDetails?.name || currentConversation.name || '',
+        telefone: formatPhone(currentLeadDetails?.phone || currentConversation.phone || ''),
+        email: currentLeadDetails?.email || '',
+        empresa: 'ZapVender'
+    };
+
+    const fields = contactFieldsCache.length ? contactFieldsCache : DEFAULT_CONTACT_FIELDS;
+    for (const field of fields) {
+        const key = normalizeContactFieldKey(field.key);
+        if (!key || variables[key]) continue;
+        const value = customFields[key];
+        variables[key] = value === undefined || value === null ? '' : String(value);
+    }
+
+    return String(content || '').replace(/\{\{\s*([\w-]+)\s*\}\}/gi, (match, rawKey) => {
+        const key = normalizeContactFieldKey(String(rawKey || ''));
+        if (!key) return '';
+        return Object.prototype.hasOwnProperty.call(variables, key) ? (variables[key] || '') : '';
+    });
 }
 
 function toggleQuickReplyPicker() {

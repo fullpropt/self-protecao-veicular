@@ -18,6 +18,9 @@ type ConfiguracoesGlobals = {
   disconnectWhatsApp?: () => void;
   saveWhatsAppSettings?: () => void;
   saveNotificationSettings?: () => void;
+  createContactField?: () => Promise<void>;
+  updateContactField?: (key: string) => Promise<void>;
+  deleteContactField?: (key: string) => Promise<void>;
   createSettingsTag?: () => Promise<void>;
   updateSettingsTag?: (id: number) => Promise<void>;
   deleteSettingsTag?: (id: number) => Promise<void>;
@@ -208,6 +211,7 @@ export default function Configuracoes() {
                   <nav className="settings-nav">
                       <div className="settings-nav-item active" onClick={() => globals.showPanel?.('conexao')}><span className="icon icon-whatsapp icon-sm"></span> Conexão</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('general')}><span className="icon icon-building icon-sm"></span> Campos</div>
+                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('contact-fields')}><span className="icon icon-contacts icon-sm"></span> Dados de contato</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Etiquetas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas rápidas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Horários</div>
@@ -262,6 +266,60 @@ export default function Configuracoes() {
                           <button className="btn btn-primary" onClick={() => globals.saveGeneralSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar Configurações</button>
                       </div>
       
+                      <div className="settings-panel" id="panel-contact-fields">
+                          <div className="settings-section">
+                              <h3 className="settings-section-title"><span className="icon icon-contacts icon-sm"></span> Dados de contato</h3>
+                              <p className="text-muted mb-3">Esses campos aparecem no cadastro de contato e viram vari&aacute;veis para respostas r&aacute;pidas.</p>
+
+                              <div className="copy-card">
+                                  <div className="copy-card-header">
+                                      <span className="copy-card-title">Campos padr&atilde;o (fixos)</span>
+                                  </div>
+                                  <div id="defaultContactFieldsList"></div>
+                              </div>
+
+                              <div className="copy-card" style={{ marginTop: '18px' }}>
+                                  <div className="copy-card-header">
+                                      <span className="copy-card-title">Novo campo personalizado</span>
+                                  </div>
+                                  <div className="form-row">
+                                      <div className="form-group">
+                                          <label className="form-label required">Nome do campo</label>
+                                          <input type="text" className="form-input" id="newContactFieldLabel" placeholder="Ex.: Cidade" />
+                                      </div>
+                                      <div className="form-group">
+                                          <label className="form-label">Placeholder</label>
+                                          <input type="text" className="form-input" id="newContactFieldPlaceholder" placeholder="Opcional" />
+                                      </div>
+                                  </div>
+                                  <button className="btn btn-primary" onClick={() => globals.createContactField?.()}>
+                                      <span className="icon icon-add icon-sm"></span> Adicionar campo
+                                  </button>
+                              </div>
+
+                              <div className="table-container" style={{ marginTop: '18px' }}>
+                                  <table className="data-table">
+                                      <thead>
+                                          <tr>
+                                              <th>Vari&aacute;vel</th>
+                                              <th>R&oacute;tulo</th>
+                                              <th>Placeholder</th>
+                                              <th>{'Ações'}</th>
+                                          </tr>
+                                      </thead>
+                                      <tbody id="contactFieldsTableBody">
+                                          <tr>
+                                              <td colSpan={4} className="table-empty">
+                                                  <div className="table-empty-icon icon icon-empty icon-lg"></div>
+                                                  <p>Carregando campos...</p>
+                                              </td>
+                                          </tr>
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </div>
+                      </div>
+
                       <div className="settings-panel" id="panel-labels">
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-tag icon-sm"></span> Etiquetas</h3>
@@ -317,13 +375,7 @@ export default function Configuracoes() {
                               <h3 className="settings-section-title"><span className="icon icon-bolt icon-sm"></span> Respostas rápidas</h3>
                               <p className="text-muted mb-3">Crie respostas de texto e áudio para usar no Inbox.</p>
 
-                              <div className="mb-4">
-                                  <span className="variable-tag" onClick={() => globals.insertVariable?.('{{nome}}')}>{'{{nome}}'}</span>
-                                  <span className="variable-tag" onClick={() => globals.insertVariable?.('{{telefone}}')}>{'{{telefone}}'}</span>
-                                  <span className="variable-tag" onClick={() => globals.insertVariable?.('{{veiculo}}')}>{'{{veiculo}}'}</span>
-                                  <span className="variable-tag" onClick={() => globals.insertVariable?.('{{placa}}')}>{'{{placa}}'}</span>
-                                  <span className="variable-tag" onClick={() => globals.insertVariable?.('{{empresa}}')}>{'{{empresa}}'}</span>
-                              </div>
+                              <div className="mb-4" id="contactVariablesList"></div>
 
                               <div className="copy-card">
                                   <div className="copy-card-header">

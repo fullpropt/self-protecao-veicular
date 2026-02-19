@@ -323,6 +323,7 @@ export default function Contatos() {
                 <label className="form-label">Email</label>
                 <input type="email" className="form-input" id="contactEmail" placeholder="email@exemplo.com" />
               </div>
+              <div className="form-row" id="contactCustomFields"></div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Status</label>
@@ -414,6 +415,7 @@ export default function Contatos() {
                     </select>
                   </div>
                 </div>
+                <div className="form-row" id="editContactCustomFields"></div>
                 <div className="form-group">
                   <label className="form-label">Observações</label>
                   <textarea className="form-textarea" id="editContactNotes" rows={3}></textarea>
@@ -551,4 +553,3 @@ Use {{nome}} para personalizar`}
     </div>
   );
 }
-
