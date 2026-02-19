@@ -114,6 +114,9 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'self-protecao-veicular-key
 const APP_BRAND_NAME = 'ZapVender';
 const WHATSAPP_BROWSER_VERSION = '120.0.0';
 const WHATSAPP_BROWSER_NAME_MAX_LENGTH = 40;
+const BUSINESS_HOURS_CACHE_TTL_MS = 30000;
+const OUTSIDE_HOURS_AUTO_REPLY_COOLDOWN_MS = 30 * 60 * 1000;
+const DEFAULT_BUSINESS_HOURS_AUTO_REPLY = 'Ol\u00E1! Nosso atendimento est\u00E1 fora do hor\u00E1rio de funcionamento no momento. Retornaremos assim que estivermos online.';
 
 function buildWhatsAppBrowserName(companyName) {
     const cleanedCompany = String(companyName || '').replace(/\s+/g, ' ').trim();
@@ -3043,6 +3046,133 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
 
 
 
+let cachedBusinessHoursSettings = null;
+let cachedBusinessHoursSettingsAt = 0;
+const outsideHoursAutoReplyTracker = new Map();
+
+function normalizeBusinessHoursTime(value, fallback) {
+    const raw = String(value || '').trim();
+    if (!raw) return fallback;
+    const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return fallback;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) return fallback;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function parseBusinessHoursMinutes(time, fallbackMinutes) {
+    const match = String(time || '').match(/^(\d{2}):(\d{2})$/);
+    if (!match) return fallbackMinutes;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) return fallbackMinutes;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallbackMinutes;
+    return (hour * 60) + minute;
+}
+
+function parseBusinessHoursBoolean(value, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value > 0;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+    }
+    return fallback;
+}
+
+function normalizeBusinessHoursSettings(raw = {}) {
+    const start = normalizeBusinessHoursTime(raw.start, '08:00');
+    const end = normalizeBusinessHoursTime(raw.end, '18:00');
+
+    return {
+        enabled: parseBusinessHoursBoolean(raw.enabled, false),
+        start,
+        end,
+        startMinutes: parseBusinessHoursMinutes(start, 8 * 60),
+        endMinutes: parseBusinessHoursMinutes(end, 18 * 60),
+        autoReplyMessage: String(raw.autoReplyMessage || DEFAULT_BUSINESS_HOURS_AUTO_REPLY).trim() || DEFAULT_BUSINESS_HOURS_AUTO_REPLY
+    };
+}
+
+function isWithinBusinessHours(settings, date = new Date()) {
+    if (!settings?.enabled) return true;
+    const nowMinutes = (date.getHours() * 60) + date.getMinutes();
+    const start = Number(settings.startMinutes);
+    const end = Number(settings.endMinutes);
+
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return true;
+    if (start === end) return true;
+
+    if (start < end) {
+        return nowMinutes >= start && nowMinutes < end;
+    }
+
+    return nowMinutes >= start || nowMinutes < end;
+}
+
+function shouldSendOutsideHoursAutoReply(conversationId) {
+    const key = String(conversationId || '');
+    if (!key) return true;
+    const now = Date.now();
+    const lastSentAt = Number(outsideHoursAutoReplyTracker.get(key) || 0);
+    if (lastSentAt && (now - lastSentAt) < OUTSIDE_HOURS_AUTO_REPLY_COOLDOWN_MS) {
+        return false;
+    }
+    return true;
+}
+
+function markOutsideHoursAutoReplySent(conversationId) {
+    const key = String(conversationId || '');
+    if (!key) return;
+
+    const now = Date.now();
+    outsideHoursAutoReplyTracker.set(key, now);
+
+    if (outsideHoursAutoReplyTracker.size > 5000) {
+        for (const [entryKey, entryTime] of outsideHoursAutoReplyTracker.entries()) {
+            if ((now - Number(entryTime || 0)) > (OUTSIDE_HOURS_AUTO_REPLY_COOLDOWN_MS * 4)) {
+                outsideHoursAutoReplyTracker.delete(entryKey);
+            }
+        }
+    }
+}
+
+function invalidateBusinessHoursSettingsCache() {
+    cachedBusinessHoursSettings = null;
+    cachedBusinessHoursSettingsAt = 0;
+}
+
+async function getBusinessHoursSettings(forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && cachedBusinessHoursSettings && (now - cachedBusinessHoursSettingsAt) < BUSINESS_HOURS_CACHE_TTL_MS) {
+        return cachedBusinessHoursSettings;
+    }
+
+    const [enabledValue, startValue, endValue, autoReplyMessageValue] = await Promise.all([
+        Settings.get('business_hours_enabled'),
+        Settings.get('business_hours_start'),
+        Settings.get('business_hours_end'),
+        Settings.get('business_hours_auto_reply_message')
+    ]);
+
+    const normalized = normalizeBusinessHoursSettings({
+        enabled: enabledValue,
+        start: startValue,
+        end: endValue,
+        autoReplyMessage: autoReplyMessageValue
+    });
+
+    cachedBusinessHoursSettings = normalized;
+    cachedBusinessHoursSettingsAt = now;
+
+    return normalized;
+}
+
+
+
 /**
 
  * Processar mensagem recebida
@@ -3375,6 +3505,27 @@ async function processIncomingMessage(sessionId, msg) {
         console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
 
         
+
+        const businessHoursSettings = await getBusinessHoursSettings();
+        const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
+
+        if (isOutsideBusinessHours && !isSelfChat) {
+            const autoReplyText = String(businessHoursSettings.autoReplyMessage || '').trim();
+
+            if (autoReplyText && shouldSendOutsideHoursAutoReply(conversation.id)) {
+                try {
+                    await sendMessage(sessionId, phone, autoReplyText, 'text', {
+                        conversationId: conversation.id
+                    });
+                    markOutsideHoursAutoReplySent(conversation.id);
+                } catch (autoReplyError) {
+                    console.error(`[${sessionId}] Erro ao enviar resposta fora do horario:`, autoReplyError.message);
+                }
+            }
+
+            return;
+        }
+
 
         // Processar fluxo de automação
 
@@ -6101,7 +6252,10 @@ app.get('/api/settings', authenticate, async (req, res) => {
 
 app.put('/api/settings', authenticate, async (req, res) => {
 
-    for (const [key, value] of Object.entries(req.body)) {
+    const incomingSettings = req.body && typeof req.body === 'object' ? req.body : {};
+    const changedKeys = Object.keys(incomingSettings);
+
+    for (const [key, value] of Object.entries(incomingSettings)) {
 
         const type = typeof value === 'number' ? 'number' : 
 
@@ -6117,16 +6271,28 @@ app.put('/api/settings', authenticate, async (req, res) => {
 
     // Atualizar serviço de fila se necessário
 
-    if (req.body.bulk_message_delay || req.body.max_messages_per_minute) {
+    const hasQueueSettings =
+        Object.prototype.hasOwnProperty.call(incomingSettings, 'bulk_message_delay') ||
+        Object.prototype.hasOwnProperty.call(incomingSettings, 'max_messages_per_minute');
+
+    if (hasQueueSettings) {
 
         await queueService.updateSettings({
 
-            delay: req.body.bulk_message_delay,
+            delay: incomingSettings.bulk_message_delay,
 
-            maxPerMinute: req.body.max_messages_per_minute
+            maxPerMinute: incomingSettings.max_messages_per_minute
 
         });
 
+    }
+
+    const touchedBusinessHours = changedKeys.some((key) => String(key || '').startsWith('business_hours_'));
+    if (touchedBusinessHours) {
+        invalidateBusinessHoursSettingsCache();
+        if (typeof queueService.invalidateBusinessHoursCache === 'function') {
+            queueService.invalidateBusinessHoursCache();
+        }
     }
 
     
@@ -6396,10 +6562,6 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
-
-
-
 
 
 

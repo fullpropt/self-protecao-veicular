@@ -4,6 +4,7 @@ type Settings = {
     company?: { name?: string; cnpj?: string; phone?: string; email?: string };
     funnel?: Array<{ name?: string; color?: string; description?: string }>;
     whatsapp?: { interval?: string; messagesPerHour?: string; workStart?: string; workEnd?: string };
+    businessHours?: { enabled?: boolean; start?: string; end?: string; autoReplyMessage?: string };
 };
 
 type TemplateItem = {
@@ -42,6 +43,13 @@ const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'telefone', label: 'Telefone', source: 'phone', is_default: true, required: true, placeholder: 'Somente n\u00FAmeros com DDD' },
     { key: 'email', label: 'Email', source: 'email', is_default: true, required: false, placeholder: 'email@exemplo.com' }
 ];
+
+const DEFAULT_BUSINESS_HOURS_SETTINGS = {
+    enabled: false,
+    start: '08:00',
+    end: '18:00',
+    autoReplyMessage: 'Ol\u00E1! Nosso atendimento est\u00E1 fora do hor\u00E1rio de funcionamento no momento. Retornaremos assim que estivermos online.'
+};
 
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
@@ -112,17 +120,71 @@ function applyCompanySettings(company: { name?: string; cnpj?: string; phone?: s
     if (companyEmail) companyEmail.value = company.email || '';
 }
 
+function normalizeBusinessHoursTime(value: unknown, fallback: string) {
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return fallback;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) return fallback;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function parseBooleanSetting(value: unknown, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value > 0;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+    }
+    return fallback;
+}
+
+function applyBusinessHoursSettings(values: Partial<{ enabled: boolean; start: string; end: string; autoReplyMessage: string }>) {
+    const enabledInput = document.getElementById('businessHoursEnabled') as HTMLInputElement | null;
+    const startInput = document.getElementById('businessHoursStart') as HTMLInputElement | null;
+    const endInput = document.getElementById('businessHoursEnd') as HTMLInputElement | null;
+    const messageInput = document.getElementById('outsideHoursAutoReplyMessage') as HTMLTextAreaElement | null;
+
+    const normalized = {
+        enabled: parseBooleanSetting(values?.enabled, DEFAULT_BUSINESS_HOURS_SETTINGS.enabled),
+        start: normalizeBusinessHoursTime(values?.start, DEFAULT_BUSINESS_HOURS_SETTINGS.start),
+        end: normalizeBusinessHoursTime(values?.end, DEFAULT_BUSINESS_HOURS_SETTINGS.end),
+        autoReplyMessage: String(values?.autoReplyMessage || DEFAULT_BUSINESS_HOURS_SETTINGS.autoReplyMessage).trim() || DEFAULT_BUSINESS_HOURS_SETTINGS.autoReplyMessage
+    };
+
+    if (enabledInput) enabledInput.checked = normalized.enabled;
+    if (startInput) startInput.value = normalized.start;
+    if (endInput) endInput.value = normalized.end;
+    if (messageInput) messageInput.value = normalized.autoReplyMessage;
+}
+
+function readBusinessHoursSettingsFromForm() {
+    const enabledInput = document.getElementById('businessHoursEnabled') as HTMLInputElement | null;
+    const startInput = document.getElementById('businessHoursStart') as HTMLInputElement | null;
+    const endInput = document.getElementById('businessHoursEnd') as HTMLInputElement | null;
+    const messageInput = document.getElementById('outsideHoursAutoReplyMessage') as HTMLTextAreaElement | null;
+
+    return {
+        enabled: Boolean(enabledInput?.checked),
+        start: normalizeBusinessHoursTime(startInput?.value, DEFAULT_BUSINESS_HOURS_SETTINGS.start),
+        end: normalizeBusinessHoursTime(endInput?.value, DEFAULT_BUSINESS_HOURS_SETTINGS.end),
+        autoReplyMessage: String(messageInput?.value || '').trim() || DEFAULT_BUSINESS_HOURS_SETTINGS.autoReplyMessage
+    };
+}
+
 async function loadSettings() {
     const localSettings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
     applyCompanySettings(localSettings.company || {});
+    applyBusinessHoursSettings(localSettings.businessHours || DEFAULT_BUSINESS_HOURS_SETTINGS);
 
     try {
         const response = await api.get('/api/settings');
         const serverSettings = response?.settings || {};
         const hasCompanySettings = ['company_name', 'company_cnpj', 'company_phone', 'company_email']
             .some((key) => Object.prototype.hasOwnProperty.call(serverSettings, key));
-
-        if (!hasCompanySettings) return;
 
         const company = {
             name: String(serverSettings.company_name || ''),
@@ -131,10 +193,22 @@ async function loadSettings() {
             email: String(serverSettings.company_email || '')
         };
 
-        applyCompanySettings(company);
+        const businessHours = {
+            enabled: parseBooleanSetting(serverSettings.business_hours_enabled, localSettings.businessHours?.enabled ?? DEFAULT_BUSINESS_HOURS_SETTINGS.enabled),
+            start: normalizeBusinessHoursTime(serverSettings.business_hours_start, localSettings.businessHours?.start || DEFAULT_BUSINESS_HOURS_SETTINGS.start),
+            end: normalizeBusinessHoursTime(serverSettings.business_hours_end, localSettings.businessHours?.end || DEFAULT_BUSINESS_HOURS_SETTINGS.end),
+            autoReplyMessage: String(serverSettings.business_hours_auto_reply_message || localSettings.businessHours?.autoReplyMessage || DEFAULT_BUSINESS_HOURS_SETTINGS.autoReplyMessage).trim() || DEFAULT_BUSINESS_HOURS_SETTINGS.autoReplyMessage
+        };
+
+        if (hasCompanySettings) {
+            applyCompanySettings(company);
+        }
+        applyBusinessHoursSettings(businessHours);
+
         localStorage.setItem('selfSettings', JSON.stringify({
             ...localSettings,
-            company
+            company: hasCompanySettings ? company : (localSettings.company || {}),
+            businessHours
         }));
     } catch (error) {
         // Mantem fallback local sem interromper a pagina
@@ -161,6 +235,26 @@ async function saveGeneralSettings() {
             company_email: company.email
         });
         showToast('success', 'Sucesso', 'Configurações salvas!');
+    } catch (error) {
+        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
+    }
+}
+
+async function saveBusinessHoursSettings() {
+    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const businessHours = readBusinessHoursSettingsFromForm();
+
+    settings.businessHours = businessHours;
+    localStorage.setItem('selfSettings', JSON.stringify(settings));
+
+    try {
+        await api.put('/api/settings', {
+            business_hours_enabled: businessHours.enabled,
+            business_hours_start: businessHours.start,
+            business_hours_end: businessHours.end,
+            business_hours_auto_reply_message: businessHours.autoReplyMessage
+        });
+        showToast('success', 'Sucesso', 'Horários atualizados!');
     } catch (error) {
         showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
     }
@@ -937,6 +1031,7 @@ const windowAny = window as Window & {
     connectWhatsApp?: () => Promise<void>;
     disconnectWhatsApp?: () => Promise<void>;
     saveWhatsAppSettings?: () => void;
+    saveBusinessHoursSettings?: () => Promise<void>;
     saveNotificationSettings?: () => void;
     createContactField?: () => Promise<void>;
     updateContactField?: (key: string) => Promise<void>;
@@ -965,6 +1060,7 @@ windowAny.updateNewTemplateForm = updateNewTemplateForm;
 windowAny.connectWhatsApp = connectWhatsApp;
 windowAny.disconnectWhatsApp = disconnectWhatsApp;
 windowAny.saveWhatsAppSettings = saveWhatsAppSettings;
+windowAny.saveBusinessHoursSettings = saveBusinessHoursSettings;
 windowAny.saveNotificationSettings = saveNotificationSettings;
 windowAny.createContactField = createContactField;
 windowAny.updateContactField = updateContactField;

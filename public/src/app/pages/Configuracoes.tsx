@@ -17,6 +17,7 @@ type ConfiguracoesGlobals = {
   connectWhatsApp?: () => void;
   disconnectWhatsApp?: () => void;
   saveWhatsAppSettings?: () => void;
+  saveBusinessHoursSettings?: () => void;
   saveNotificationSettings?: () => void;
   createContactField?: () => Promise<void>;
   updateContactField?: (key: string) => Promise<void>;
@@ -389,7 +390,48 @@ export default function Configuracoes() {
                           </div>
                           <button className="btn btn-primary" onClick={() => globals.saveCopysSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar respostas rápidas</button>
                       </div>
-                      <div className="settings-panel" id="panel-hours"><h3 className="settings-section-title">Horários</h3><p className="text-muted">Em breve.</p></div>
+                      <div className="settings-panel" id="panel-hours">
+                          <div className="settings-section">
+                              <h3 className="settings-section-title"><span className="icon icon-clock icon-sm"></span> Horários de funcionamento</h3>
+                              <p className="text-muted mb-3">Defina quando transmissões e campanhas podem enviar mensagens.</p>
+
+                              <div className="copy-card">
+                                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                      <label className="checkbox-wrapper">
+                                          <input type="checkbox" id="businessHoursEnabled" />
+                                          <span className="checkbox-custom"></span>
+                                      </label>
+                                      <label className="form-label" htmlFor="businessHoursEnabled" style={{ margin: 0 }}>Ativar controle de horários</label>
+                                  </div>
+
+                                  <div className="form-row">
+                                      <div className="form-group">
+                                          <label className="form-label">Início do expediente</label>
+                                          <input type="time" className="form-input" id="businessHoursStart" defaultValue="08:00" />
+                                      </div>
+                                      <div className="form-group">
+                                          <label className="form-label">Fim do expediente</label>
+                                          <input type="time" className="form-input" id="businessHoursEnd" defaultValue="18:00" />
+                                      </div>
+                                  </div>
+
+                                  <div className="form-group">
+                                      <label className="form-label">Mensagem automática fora do horário</label>
+                                      <textarea
+                                          className="form-textarea"
+                                          id="outsideHoursAutoReplyMessage"
+                                          rows={4}
+                                          placeholder="Olá! Nosso atendimento está fora do horário no momento. Retornaremos assim que estivermos online."
+                                      ></textarea>
+                                      <p className="form-help">Enviada quando receber mensagem fora do expediente.</p>
+                                  </div>
+                              </div>
+
+                              <button className="btn btn-primary" onClick={() => globals.saveBusinessHoursSettings?.()}>
+                                  <span className="icon icon-save icon-sm"></span> Salvar horários
+                              </button>
+                          </div>
+                      </div>
                       <div className="settings-panel" id="panel-flows"><h3 className="settings-section-title">Fluxos Padrões</h3><p className="text-muted">Em breve.</p></div>
       
                       <div className="settings-panel" id="panel-funnel">

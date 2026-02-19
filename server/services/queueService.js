@@ -17,6 +17,9 @@ class QueueService extends EventEmitter {
         this.maxMessagesPerMinute = 30;
         this.messagesSentThisMinute = 0;
         this.lastMinuteReset = Date.now();
+        this.businessHoursCache = null;
+        this.businessHoursCacheAt = 0;
+        this.businessHoursCacheTtlMs = 30000;
     }
     
     /**
@@ -132,6 +135,108 @@ class QueueService extends EventEmitter {
         
         return results;
     }
+
+    normalizeTimeInput(value, fallback) {
+        const raw = String(value || '').trim();
+        if (!raw) return fallback;
+        const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+        if (!match) return fallback;
+        const hour = Number(match[1]);
+        const minute = Number(match[2]);
+        if (!Number.isInteger(hour) || !Number.isInteger(minute)) return fallback;
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallback;
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    }
+
+    toMinutes(time, fallbackMinutes) {
+        const match = String(time || '').match(/^(\d{2}):(\d{2})$/);
+        if (!match) return fallbackMinutes;
+        const hour = Number(match[1]);
+        const minute = Number(match[2]);
+        if (!Number.isInteger(hour) || !Number.isInteger(minute)) return fallbackMinutes;
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return fallbackMinutes;
+        return (hour * 60) + minute;
+    }
+
+    coerceBoolean(value, fallback = false) {
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'number') return value > 0;
+        if (typeof value === 'string') {
+            const normalized = value.trim().toLowerCase();
+            if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+            if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+        }
+        return fallback;
+    }
+
+    normalizeBusinessHoursSettings(raw = {}) {
+        const start = this.normalizeTimeInput(raw.start, '08:00');
+        const end = this.normalizeTimeInput(raw.end, '18:00');
+
+        return {
+            enabled: this.coerceBoolean(raw.enabled, false),
+            start,
+            end,
+            startMinutes: this.toMinutes(start, 8 * 60),
+            endMinutes: this.toMinutes(end, 18 * 60)
+        };
+    }
+
+    async getBusinessHoursSettings(forceRefresh = false) {
+        const now = Date.now();
+        if (!forceRefresh && this.businessHoursCache && (now - this.businessHoursCacheAt) < this.businessHoursCacheTtlMs) {
+            return this.businessHoursCache;
+        }
+
+        const [enabledValue, startValue, endValue] = await Promise.all([
+            Settings.get('business_hours_enabled'),
+            Settings.get('business_hours_start'),
+            Settings.get('business_hours_end')
+        ]);
+
+        const normalized = this.normalizeBusinessHoursSettings({
+            enabled: enabledValue,
+            start: startValue,
+            end: endValue
+        });
+
+        this.businessHoursCache = normalized;
+        this.businessHoursCacheAt = now;
+
+        return normalized;
+    }
+
+    isWithinBusinessHours(settings, date = new Date()) {
+        if (!settings?.enabled) return true;
+
+        const nowMinutes = (date.getHours() * 60) + date.getMinutes();
+        const start = Number(settings.startMinutes);
+        const end = Number(settings.endMinutes);
+
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return true;
+        if (start === end) return true;
+
+        if (start < end) {
+            return nowMinutes >= start && nowMinutes < end;
+        }
+
+        return nowMinutes >= start || nowMinutes < end;
+    }
+
+    async canProcessQueueNow() {
+        try {
+            const settings = await this.getBusinessHoursSettings();
+            return this.isWithinBusinessHours(settings);
+        } catch (error) {
+            console.error('❌ Erro ao validar horário de funcionamento da fila:', error.message);
+            return true;
+        }
+    }
+
+    invalidateBusinessHoursCache() {
+        this.businessHoursCache = null;
+        this.businessHoursCacheAt = 0;
+    }
     
     /**
      * Iniciar processamento da fila
@@ -169,6 +274,11 @@ class QueueService extends EventEmitter {
         
         // Verificar limite por minuto
         if (this.messagesSentThisMinute >= this.maxMessagesPerMinute) {
+            return;
+        }
+
+        const canProcessNow = await this.canProcessQueueNow();
+        if (!canProcessNow) {
             return;
         }
         
@@ -303,6 +413,8 @@ class QueueService extends EventEmitter {
             this.maxMessagesPerMinute = settings.maxPerMinute;
             await Settings.set('max_messages_per_minute', settings.maxPerMinute, 'number');
         }
+
+        this.invalidateBusinessHoursCache();
     }
 }
 
