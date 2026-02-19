@@ -106,15 +106,22 @@ Abra no navegador: `http://localhost:3001`
 3. Conecte seu reposit√≥rio GitHub
 4. Configure as vari√°veis de ambiente:
 
-| Vari√°vel | Descri√ß√£o | Obrigat√≥rio |
+| Vari·vel | DescriÁ„o | ObrigatÛrio |
 |----------|-----------|-------------|
-| `PORT` | Porta do servidor (Railway define automaticamente) | N√£o |
+| `PORT` | Porta do servidor (Railway define automaticamente) | N„o |
 | `NODE_ENV` | `production` | Sim |
 | `JWT_SECRET` | Chave secreta para tokens JWT (min 32 chars) | Sim |
 | `ENCRYPTION_KEY` | Chave para criptografia de mensagens | Sim |
-| `WEBHOOK_SECRET` | Chave para validar webhooks externos | N√£o |
+| `WEBHOOK_SECRET` | Chave para validar webhooks externos | N„o |
+| `GEMINI_API_KEY` | Chave da API Gemini para classificador de intenÁ„o | N„o |
+| `GEMINI_MODEL` | Modelo Gemini usado no classificador | N„o |
+| `FLOW_INTENT_CLASSIFIER_ENABLED` | Habilita classificador de intenÁ„o para fluxos keyword | N„o |
+| `FLOW_INTENT_CLASSIFIER_MIN_CONFIDENCE` | ConfianÁa mÌnima para aceitar decis„o da IA | N„o |
+| `FLOW_INTENT_CLASSIFIER_MIN_CANDIDATES` | N˙mero mÌnimo de candidatos para chamar IA | N„o |
+| `FLOW_INTENT_CLASSIFIER_MAX_CANDIDATES` | N˙mero m·ximo de candidatos enviados ‡ IA | N„o |
+| `GEMINI_REQUEST_TIMEOUT_MS` | Timeout da chamada Gemini (ms) | N„o |
 | `CORS_ORIGINS` | URLs permitidas (ex.: https://web-production-a38e.up.railway.app) | Sim |
-| `SESSIONS_DIR` | Diretorio persistente das sess√µes Baileys (`/mnt/data/sessions` no Railway) | Sim |
+| `SESSIONS_DIR` | DiretÛrio persistente das sessıes Baileys (`/mnt/data/sessions` no Railway) | Sim |
 
 5. Deploy ser√° autom√°tico a cada push
 
@@ -452,7 +459,13 @@ sudo certbot --nginx -d seu-dominio.com
 | `RATE_LIMIT_WINDOW_MS` | Janela de rate limit (ms) | 60000 |
 | `RATE_LIMIT_MAX_REQUESTS` | M√°ximo de requisi√ß√µes | 100 |
 | `WEBHOOK_SECRET` | Chave para webhooks | - |
-
+| `GEMINI_API_KEY` | Chave da API Gemini para classificador de intenÁ„o | - |
+| `GEMINI_MODEL` | Modelo Gemini usado no classificador | gemini-2.0-flash-lite |
+| `FLOW_INTENT_CLASSIFIER_ENABLED` | Habilita classificador de intenÁ„o para fluxos keyword | true |
+| `FLOW_INTENT_CLASSIFIER_MIN_CONFIDENCE` | ConfianÁa mÌnima para aceitar decis„o da IA | 0.70 |
+| `FLOW_INTENT_CLASSIFIER_MIN_CANDIDATES` | N˙mero mÌnimo de candidatos para chamar IA | 1 |
+| `FLOW_INTENT_CLASSIFIER_MAX_CANDIDATES` | N˙mero m·ximo de candidatos enviados ‡ IA | 5 |
+| `GEMINI_REQUEST_TIMEOUT_MS` | Timeout da chamada Gemini (ms) | 4500 |
 ## ‚ùì Problemas Comuns
 
 ### QR Code n√£o aparece
@@ -490,3 +503,4 @@ MIT License - Livre para uso comercial e modifica√ß√µes.
 ---
 
 **SELF Prote√ß√£o Veicular** ¬© 2026 - Todos os direitos reservados
+

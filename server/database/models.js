@@ -206,6 +206,43 @@ function includesFlowKeyword(normalizedMessage, normalizedKeyword) {
     return ` ${normalizedMessage} `.includes(` ${normalizedKeyword} `);
 }
 
+function scoreFlowKeywordMatch(matchedKeywords = [], priority = 0) {
+    const longestMatchWords = matchedKeywords.reduce((max, keyword) => {
+        return Math.max(max, keyword.split(' ').length);
+    }, 0);
+
+    const longestMatchLength = matchedKeywords.reduce((max, keyword) => {
+        return Math.max(max, keyword.length);
+    }, 0);
+
+    return {
+        longestMatchWords,
+        longestMatchLength,
+        matchedCount: matchedKeywords.length,
+        priority: Number(priority) || 0
+    };
+}
+
+function compareFlowKeywordScoreDesc(a, b) {
+    if (a.longestMatchWords !== b.longestMatchWords) {
+        return b.longestMatchWords - a.longestMatchWords;
+    }
+
+    if (a.longestMatchLength !== b.longestMatchLength) {
+        return b.longestMatchLength - a.longestMatchLength;
+    }
+
+    if (a.matchedCount !== b.matchedCount) {
+        return b.matchedCount - a.matchedCount;
+    }
+
+    if (a.priority !== b.priority) {
+        return b.priority - a.priority;
+    }
+
+    return 0;
+}
+
 // ============================================
 // LEADS
 // ============================================
@@ -1020,9 +1057,9 @@ const Flow = {
         return flow;
     },
     
-    async findByKeyword(messageText) {
+    async findKeywordMatches(messageText) {
         const normalizedMessage = normalizeFlowKeywordText(messageText);
-        if (!normalizedMessage) return null;
+        if (!normalizedMessage) return [];
 
         const flows = await query(`
             SELECT * FROM flows 
@@ -1030,7 +1067,7 @@ const Flow = {
             ORDER BY priority DESC, id ASC
         `);
 
-        let bestMatch = null;
+        const matches = [];
 
         for (const flow of flows) {
             const keywords = extractFlowKeywords(flow.trigger_value || '');
@@ -1039,49 +1076,31 @@ const Flow = {
             const matchedKeywords = keywords.filter((keyword) => includesFlowKeyword(normalizedMessage, keyword));
             if (matchedKeywords.length === 0) continue;
 
-            const longestMatchWords = matchedKeywords.reduce((max, keyword) => {
-                return Math.max(max, keyword.split(' ').length);
-            }, 0);
-            const longestMatchLength = matchedKeywords.reduce((max, keyword) => {
-                return Math.max(max, keyword.length);
-            }, 0);
-
-            const score = {
-                longestMatchWords,
-                longestMatchLength,
-                matchedCount: matchedKeywords.length,
-                priority: Number(flow.priority) || 0
-            };
-
-            const isBetterMatch = !bestMatch
-                || score.longestMatchWords > bestMatch.score.longestMatchWords
-                || (
-                    score.longestMatchWords === bestMatch.score.longestMatchWords
-                    && score.longestMatchLength > bestMatch.score.longestMatchLength
-                )
-                || (
-                    score.longestMatchWords === bestMatch.score.longestMatchWords
-                    && score.longestMatchLength === bestMatch.score.longestMatchLength
-                    && score.matchedCount > bestMatch.score.matchedCount
-                )
-                || (
-                    score.longestMatchWords === bestMatch.score.longestMatchWords
-                    && score.longestMatchLength === bestMatch.score.longestMatchLength
-                    && score.matchedCount === bestMatch.score.matchedCount
-                    && score.priority > bestMatch.score.priority
-                );
-
-            if (isBetterMatch) {
-                bestMatch = { flow, score };
-            }
+            const score = scoreFlowKeywordMatch(matchedKeywords, flow.priority);
+            matches.push({ flow, score, matchedKeywords });
         }
 
-        if (!bestMatch) return null;
+        matches.sort((a, b) => {
+            const scoreCompare = compareFlowKeywordScoreDesc(a.score, b.score);
+            if (scoreCompare !== 0) return scoreCompare;
+            return Number(a.flow.id || 0) - Number(b.flow.id || 0);
+        });
 
-        const flow = bestMatch.flow;
-        flow.nodes = JSON.parse(flow.nodes || '[]');
-        flow.edges = JSON.parse(flow.edges || '[]');
-        return flow;
+        return matches.map(({ flow, score, matchedKeywords }) => ({
+            ...flow,
+            nodes: JSON.parse(flow.nodes || '[]'),
+            edges: JSON.parse(flow.edges || '[]'),
+            _keywordMatch: {
+                ...score,
+                matchedKeywords
+            }
+        }));
+    },
+
+    async findByKeyword(messageText) {
+        const matches = await this.findKeywordMatches(messageText);
+        if (matches.length === 0) return null;
+        return matches[0];
     },
     
     async list(options = {}) {

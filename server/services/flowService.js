@@ -6,6 +6,7 @@
 const { Flow, Lead, Conversation, Message } = require('../database/models');
 const { run, queryOne, generateUUID } = require('../database/connection');
 const EventEmitter = require('events');
+const { classifyKeywordFlowIntent } = require('./intentClassifierService');
 
 class FlowService extends EventEmitter {
     constructor() {
@@ -38,8 +39,26 @@ class FlowService extends EventEmitter {
         }
         
         // Procurar fluxo por palavra-chave
-        const text = message.text?.toLowerCase().trim() || '';
-        let flow = await Flow.findByKeyword(text);
+        const text = message.text?.trim() || '';
+        let flow = null;
+        let suppressKeywordFallback = false;
+
+        if (text) {
+            const keywordMatches = await Flow.findKeywordMatches(text);
+            if (keywordMatches.length > 0) {
+                const intentDecision = await classifyKeywordFlowIntent(text, keywordMatches);
+
+                if (intentDecision?.status === 'selected' && intentDecision.flowId) {
+                    flow = keywordMatches.find((item) => Number(item.id) === Number(intentDecision.flowId)) || null;
+                } else if (intentDecision?.status === 'no_match') {
+                    suppressKeywordFallback = true;
+                }
+
+                if (!flow && !suppressKeywordFallback) {
+                    flow = keywordMatches[0];
+                }
+            }
+        }
         
         // Se não encontrou por keyword, verificar se é novo contato
         if (!flow && conversation?.created) {
