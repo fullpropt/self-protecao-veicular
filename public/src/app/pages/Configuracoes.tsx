@@ -266,7 +266,7 @@ export default function Configuracoes() {
                       <div className="settings-panel" id="panel-labels">
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-tag icon-sm"></span> Etiquetas</h3>
-                              <p className="text-muted mb-3">Gerencie todas as tags usadas nos contatos e campanhas.</p>
+                              <p className="text-muted mb-3">Gerencie todas as tags usadas em contatos e campanhas.</p>
 
                               <div className="copy-card">
                                   <div className="copy-card-header">
@@ -275,7 +275,7 @@ export default function Configuracoes() {
                                   <div className="form-row">
                                       <div className="form-group">
                                           <label className="form-label required">Nome</label>
-                                          <input type="text" className="form-input" id="newTagName" placeholder="Ex: Lead Quente" />
+                                          <input type="text" className="form-input" id="newTagName" placeholder="Ex.: Lead quente" />
                                       </div>
                                       <div className="form-group" style={{ maxWidth: '140px' }}>
                                           <label className="form-label">Cor</label>
@@ -283,11 +283,11 @@ export default function Configuracoes() {
                                       </div>
                                   </div>
                                   <div className="form-group">
-                                      <label className="form-label">DescriÃ§Ã£o</label>
+                                      <label className="form-label">{'Descrição'}</label>
                                       <input type="text" className="form-input" id="newTagDescription" placeholder="Opcional" />
                                   </div>
                                   <button className="btn btn-primary" onClick={() => globals.createSettingsTag?.()}>
-                                      <span className="icon icon-add icon-sm"></span> Adicionar Etiqueta
+                                      <span className="icon icon-add icon-sm"></span> Adicionar etiqueta
                                   </button>
                               </div>
 
@@ -297,8 +297,8 @@ export default function Configuracoes() {
                                           <tr>
                                               <th>Nome</th>
                                               <th>Cor</th>
-                                              <th>DescriÃ§Ã£o</th>
-                                              <th>AÃ§Ãµes</th>
+                                              <th>{'Descrição'}</th>
+                                              <th>{'Ações'}</th>
                                           </tr>
                                       </thead>
                                       <tbody id="settingsTagsTableBody">

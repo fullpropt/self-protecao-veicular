@@ -4598,12 +4598,12 @@ app.post('/api/tags', authenticate, async (req, res) => {
         const description = normalizeTagDescriptionInput(req.body?.description);
 
         if (!name) {
-            return res.status(400).json({ success: false, error: 'Nome da tag e obrigatorio' });
+            return res.status(400).json({ success: false, error: 'Nome da tag é obrigatório' });
         }
 
         const existing = await Tag.findByName(name);
         if (existing) {
-            return res.status(409).json({ success: false, error: 'Ja existe uma tag com este nome' });
+            return res.status(409).json({ success: false, error: 'Já existe uma tag com este nome' });
         }
 
         const tag = await Tag.create({ name, color, description });
@@ -4618,24 +4618,24 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
     try {
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
-            return res.status(400).json({ success: false, error: 'ID de tag invalido' });
+            return res.status(400).json({ success: false, error: 'ID de tag inválido' });
         }
 
         const currentTag = await Tag.findById(tagId);
         if (!currentTag) {
-            return res.status(404).json({ success: false, error: 'Tag nao encontrada' });
+            return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
 
         const payload = {};
         if (Object.prototype.hasOwnProperty.call(req.body, 'name')) {
             const nextName = normalizeTagNameInput(req.body.name);
             if (!nextName) {
-                return res.status(400).json({ success: false, error: 'Nome da tag e obrigatorio' });
+                return res.status(400).json({ success: false, error: 'Nome da tag é obrigatório' });
             }
 
             const duplicate = await Tag.findByName(nextName);
             if (duplicate && Number(duplicate.id) !== tagId) {
-                return res.status(409).json({ success: false, error: 'Ja existe uma tag com este nome' });
+                return res.status(409).json({ success: false, error: 'Já existe uma tag com este nome' });
             }
             payload.name = nextName;
         }
@@ -4648,7 +4648,7 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
 
         const updatedTag = await Tag.update(tagId, payload);
         if (!updatedTag) {
-            return res.status(404).json({ success: false, error: 'Tag nao encontrada' });
+            return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
 
         if (
@@ -4673,12 +4673,12 @@ app.delete('/api/tags/:id', authenticate, async (req, res) => {
     try {
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
-            return res.status(400).json({ success: false, error: 'ID de tag invalido' });
+            return res.status(400).json({ success: false, error: 'ID de tag inválido' });
         }
 
         const currentTag = await Tag.findById(tagId);
         if (!currentTag) {
-            return res.status(404).json({ success: false, error: 'Tag nao encontrada' });
+            return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
 
         await Tag.delete(tagId);
@@ -6277,7 +6277,6 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
 
 
 

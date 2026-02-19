@@ -142,9 +142,9 @@ async function saveGeneralSettings() {
             company_phone: company.phone,
             company_email: company.email
         });
-        showToast('success', 'Sucesso', 'Configuracoes salvas!');
+        showToast('success', 'Sucesso', 'Configurações salvas!');
     } catch (error) {
-        showToast('warning', 'Aviso', 'Salvo localmente, mas nao foi possivel sincronizar no servidor');
+        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
     }
 }
 
@@ -215,10 +215,10 @@ async function createSettingsTag() {
     } catch (error: any) {
         const message = String(error?.message || '').toLowerCase();
         if (message.includes('409') || message.includes('ja existe')) {
-            showToast('warning', 'Aviso', 'Ja existe uma etiqueta com esse nome');
+            showToast('warning', 'Aviso', 'Já existe uma etiqueta com esse nome');
             return;
         }
-        showToast('error', 'Erro', 'Nao foi possivel criar a etiqueta');
+        showToast('error', 'Erro', 'Não foi possível criar a etiqueta');
     }
 }
 
@@ -235,7 +235,7 @@ async function updateSettingsTag(id: number) {
     const description = ((row.querySelector('.settings-tag-description') as HTMLInputElement | null)?.value || '').trim();
 
     if (!name) {
-        showToast('warning', 'Aviso', 'Nome da etiqueta e obrigatorio');
+        showToast('warning', 'Aviso', 'Nome da etiqueta é obrigatório');
         return;
     }
 
@@ -246,10 +246,10 @@ async function updateSettingsTag(id: number) {
     } catch (error: any) {
         const message = String(error?.message || '').toLowerCase();
         if (message.includes('409') || message.includes('ja existe')) {
-            showToast('warning', 'Aviso', 'Ja existe uma etiqueta com esse nome');
+            showToast('warning', 'Aviso', 'Já existe uma etiqueta com esse nome');
             return;
         }
-        showToast('error', 'Erro', 'Nao foi possivel atualizar a etiqueta');
+        showToast('error', 'Erro', 'Não foi possível atualizar a etiqueta');
     }
 }
 
@@ -261,7 +261,7 @@ async function deleteSettingsTag(id: number) {
         await loadSettingsTags();
         showToast('success', 'Sucesso', 'Etiqueta removida!');
     } catch (error) {
-        showToast('error', 'Erro', 'Nao foi possivel remover a etiqueta');
+        showToast('error', 'Erro', 'Não foi possível remover a etiqueta');
     }
 }
 
