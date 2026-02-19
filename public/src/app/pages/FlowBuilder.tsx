@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
@@ -154,7 +154,7 @@ export default function FlowBuilder() {
             box-shadow: 0 4px 25px rgba(0,0,0,0.08);
         }
         
-        /* Painel de Nós */
+        /* Painel de NÃ³s */
         .nodes-panel {
             background: var(--lighter);
             border-right: 1px solid var(--border);
@@ -344,7 +344,7 @@ export default function FlowBuilder() {
         .port.input { margin-left: -7px; }
         .port.output { margin-right: -7px; }
         
-        /* Conexões SVG */
+        /* ConexÃµes SVG */
         .connections-svg {
             position: absolute;
             top: 0;
@@ -749,28 +749,53 @@ export default function FlowBuilder() {
               {'\u2630'}
           </button>
           <div className="sidebar-overlay" onClick={toggleSidebar}></div>
-          <nav className="sidebar">
-              <div className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></div>
-              <ul className="sidebar-menu">
-                  <li><Link to="/dashboard"><span className="icon icon-dashboard"></span> Painel de Controle</Link></li>
-                  <li><Link to="/contatos"><span className="icon icon-contacts"></span> Contatos</Link></li>
-                  <li><Link to="/campanhas"><span className="icon icon-campaigns"></span> Campanhas</Link></li>
-                  <li><Link to="/funil"><span className="icon icon-funnel"></span> Funil de Vendas</Link></li>
-                  <li><Link to="/whatsapp"><span className="icon icon-whatsapp"></span> WhatsApp</Link></li>
-                  <li><Link to="/conversas"><span className="icon icon-message"></span> Conversas</Link></li>
-                  <li><Link to="/flow-builder" className="active"><span className="icon icon-flows"></span> Fluxos</Link></li>
-                  <li><Link to="/configuracoes"><span className="icon icon-settings"></span> Configurações</Link></li>
-              </ul>
+                    <aside className="sidebar">
+              <div className="sidebar-header">
+                  <Link to="/dashboard" className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></Link>
+              </div>
+              <nav className="sidebar-nav">
+                  <div className="nav-section">
+                      <ul className="nav-menu">
+                          <li className="nav-item"><Link to="/dashboard" className="nav-link"><span className="icon icon-dashboard"></span>Painel de Controle</Link></li>
+                          <li className="nav-item"><Link to="/contatos" className="nav-link"><span className="icon icon-contacts"></span>Contatos</Link></li>
+                          <li className="nav-item"><Link to="/campanhas" className="nav-link"><span className="icon icon-campaigns"></span>Campanhas</Link></li>
+                      </ul>
+                  </div>
+
+                  <div className="nav-section">
+                      <div className="nav-section-title">Conversas</div>
+                      <ul className="nav-menu">
+                          <li className="nav-item"><Link to="/inbox" className="nav-link"><span className="icon icon-inbox"></span>Inbox</Link></li>
+                      </ul>
+                  </div>
+
+                  <div className="nav-section">
+                      <div className="nav-section-title">Automação</div>
+                      <ul className="nav-menu">
+                          <li className="nav-item"><Link to="/automacao" className="nav-link"><span className="icon icon-automation"></span>Automação</Link></li>
+                          <li className="nav-item"><Link to="/flow-builder" className="nav-link active"><span className="icon icon-flows"></span>Fluxos de Conversa</Link></li>
+                          <li className="nav-item"><Link to="/funil" className="nav-link"><span className="icon icon-funnel"></span>Funil de Vendas</Link></li>
+                      </ul>
+                  </div>
+
+                  <div className="nav-section">
+                      <div className="nav-section-title">Sistema</div>
+                      <ul className="nav-menu">
+                          <li className="nav-item"><Link to="/whatsapp" className="nav-link"><span className="icon icon-whatsapp"></span>WhatsApp</Link></li>
+                          <li className="nav-item"><Link to="/configuracoes" className="nav-link"><span className="icon icon-settings"></span>Configurações</Link></li>
+                      </ul>
+                  </div>
+              </nav>
               <div className="sidebar-footer">
                   <Link to="/login" className="btn-logout">Sair</Link>
               </div>
-          </nav>
+          </aside>
           
           <main className="main-content">
               <div className="header">
                   <div className="header-title">
                       <h1><span className="icon icon-flows icon-sm"></span> Construtor de Fluxos</h1>
-                      <p>Crie automações visuais para suas conversas</p>
+                      <p>Crie automaÃ§Ãµes visuais para suas conversas</p>
                   </div>
                   <div className="header-actions">
                       <button className="toolbar-btn secondary" onClick={() => globals.openFlowsModal?.()}>
@@ -797,7 +822,7 @@ export default function FlowBuilder() {
                               <div className="icon trigger icon-lock"></div>
                               <div className="info">
                                   <div className="name">Palavra-chave</div>
-                                  <div className="desc">Inicia com palavra específica</div>
+                                  <div className="desc">Inicia com palavra especÃ­fica</div>
                               </div>
                           </div>
                       </div>
@@ -808,24 +833,24 @@ export default function FlowBuilder() {
                               <div className="icon message icon-message"></div>
                               <div className="info">
                                   <div className="name">Enviar Mensagem</div>
-                                  <div className="desc">Envia texto ou mídia</div>
+                                  <div className="desc">Envia texto ou mÃ­dia</div>
                               </div>
                           </div>
                           <div className="node-item" draggable="true" data-type="wait">
                               <div className="icon delay icon-clock"></div>
                               <div className="info">
                                   <div className="name">Aguardar Resposta</div>
-                                  <div className="desc">Espera input do usuário</div>
+                                  <div className="desc">Espera input do usuÃ¡rio</div>
                               </div>
                           </div>
                       </div>
                       
                       <div className="node-category">
-                          <h3>Lógica</h3>
+                          <h3>LÃ³gica</h3>
                           <div className="node-item" draggable="true" data-type="condition">
                               <div className="icon condition icon-bolt"></div>
                               <div className="info">
-                                  <div className="name">Condição</div>
+                                  <div className="name">CondiÃ§Ã£o</div>
                                   <div className="desc">Ramifica baseado em resposta</div>
                               </div>
                           </div>
@@ -833,13 +858,13 @@ export default function FlowBuilder() {
                               <div className="icon delay icon-clock"></div>
                               <div className="info">
                                   <div className="name">Delay</div>
-                                  <div className="desc">Aguarda tempo específico</div>
+                                  <div className="desc">Aguarda tempo especÃ­fico</div>
                               </div>
                           </div>
                       </div>
                       
                       <div className="node-category">
-                          <h3>Ações</h3>
+                          <h3>AÃ§Ãµes</h3>
                           <div className="node-item" draggable="true" data-type="transfer">
                               <div className="icon action icon-user"></div>
                               <div className="info">
@@ -890,8 +915,8 @@ export default function FlowBuilder() {
                       <div className="canvas-container" id="canvasContainer">
                           <div className="empty-canvas" id="emptyCanvas">
                               <div className="icon icon-flows"></div>
-                              <h3>Arraste os blocos para começar</h3>
-                              <p>Crie seu fluxo de automação visual</p>
+                              <h3>Arraste os blocos para comeÃ§ar</h3>
+                              <p>Crie seu fluxo de automaÃ§Ã£o visual</p>
                           </div>
                       </div>
                       
@@ -899,7 +924,7 @@ export default function FlowBuilder() {
                           <button className="zoom-btn" onClick={() => globals.zoomIn?.()}>+</button>
                           <div className="zoom-level" id="zoomLevel">100%</div>
                           <button className="zoom-btn" onClick={() => globals.zoomOut?.()}>-</button>
-                          <button className="zoom-btn" onClick={() => globals.resetZoom?.()}>⟲</button>
+                          <button className="zoom-btn" onClick={() => globals.resetZoom?.()}>âŸ²</button>
                       </div>
                   </div>
                   
@@ -910,7 +935,7 @@ export default function FlowBuilder() {
                       </div>
                       
                       <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
-                          <h4 style={{ fontSize: '13px', color: 'var(--gray)', marginBottom: '10px' }}>Variáveis Disponíveis</h4>
+                          <h4 style={{ fontSize: '13px', color: 'var(--gray)', marginBottom: '10px' }}>VariÃ¡veis DisponÃ­veis</h4>
                           <div className="variables-list">
                               <span className="variable-tag" onClick={() => globals.insertVariable?.('nome')}>{'{{nome}}'}</span>
                               <span className="variable-tag" onClick={() => globals.insertVariable?.('telefone')}>{'{{telefone}}'}</span>
@@ -936,3 +961,4 @@ export default function FlowBuilder() {
     </div>
   );
 }
+
