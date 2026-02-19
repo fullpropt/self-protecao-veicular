@@ -153,7 +153,7 @@ export default function Configuracoes() {
         .connection-status-card p { margin: 0 0 12px; color: var(--gray-800); line-height: 1.5; }
         .connection-info { font-size: 13px; color: var(--gray-700); background: var(--gray-50); padding: 15px; border-radius: 8px; margin: 15px 0 !important; border: 1px solid var(--border-color); }
       `}</style>
-      <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>?</button>
+      <button className="mobile-menu-toggle" type="button" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
           <div className="sidebar-overlay"></div>
       
           <aside className="sidebar">

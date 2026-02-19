@@ -19,9 +19,67 @@ import Whatsapp from './pages/Whatsapp';
 export default function App() {
   const location = useLocation();
 
+  const closeSidebar = () => {
+    const sidebar = document.querySelector('.sidebar') as HTMLElement | null;
+    const overlay = document.querySelector('.sidebar-overlay') as HTMLElement | null;
+
+    sidebar?.classList.remove('open');
+    overlay?.classList.remove('active');
+    document.body.classList.remove('sidebar-open');
+  };
+
+  const syncSidebarAccessibility = () => {
+    const sidebar = document.querySelector('.sidebar') as HTMLElement | null;
+    const isOpen = Boolean(sidebar?.classList.contains('open'));
+    const toggles = document.querySelectorAll('.mobile-menu-toggle');
+
+    toggles.forEach((toggle) => {
+      if (!(toggle instanceof HTMLButtonElement)) return;
+      toggle.type = 'button';
+      toggle.setAttribute('aria-label', isOpen ? 'Fechar menu de navegacao' : 'Abrir menu de navegacao');
+      toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    document.body.classList.toggle('sidebar-open', isOpen);
+  };
+
   useEffect(() => {
     (window as Window & { refreshWhatsAppStatus?: () => void }).refreshWhatsAppStatus?.();
+    closeSidebar();
+    syncSidebarAccessibility();
   }, [location.pathname, location.search, location.hash]);
+
+  useEffect(() => {
+    const onDocumentClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      if (target.closest('.mobile-menu-toggle') || target.closest('.sidebar-overlay')) {
+        window.setTimeout(() => {
+          syncSidebarAccessibility();
+        }, 0);
+        return;
+      }
+
+      if (target.closest('.sidebar .nav-link') && window.matchMedia('(max-width: 1024px)').matches) {
+        closeSidebar();
+      }
+    };
+
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeSidebar();
+      }
+    };
+
+    document.addEventListener('click', onDocumentClick);
+    document.addEventListener('keydown', onDocumentKeyDown);
+
+    return () => {
+      document.removeEventListener('click', onDocumentClick);
+      document.removeEventListener('keydown', onDocumentKeyDown);
+    };
+  }, []);
 
   return (
     <Routes>
