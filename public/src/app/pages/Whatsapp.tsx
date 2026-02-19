@@ -38,8 +38,14 @@ export default function Whatsapp() {
 
   const globals = window as Window & WhatsappGlobals;
   const toggleSidebar = () => {
-    document.querySelector('.sidebar')?.classList.toggle('open');
-    document.querySelector('.sidebar-overlay')?.classList.toggle('active');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    if (!sidebar || !overlay) return;
+
+    const willOpen = !sidebar.classList.contains('open');
+    sidebar.classList.toggle('open', willOpen);
+    overlay.classList.toggle('active', willOpen);
+    document.body.classList.toggle('sidebar-open', willOpen);
   };
 
   return (
@@ -153,6 +159,8 @@ export default function Whatsapp() {
             display: grid;
             grid-template-columns: 1fr;
             gap: 30px;
+            width: min(100%, 1060px);
+            margin: 0 auto;
         }
 
         .whatsapp-react .card {
@@ -161,6 +169,7 @@ export default function Whatsapp() {
             border: 1px solid var(--border);
             box-shadow: var(--shadow);
             overflow: hidden;
+            width: 100%;
         }
 
         .whatsapp-react .card-header {
@@ -567,6 +576,10 @@ export default function Whatsapp() {
         }
 
         @media (max-width: 768px) {
+            .whatsapp-react .whatsapp-grid {
+                width: 100%;
+            }
+
             .whatsapp-react .header-title h1 {
                 font-size: 24px;
             }

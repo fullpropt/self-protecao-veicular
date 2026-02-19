@@ -1400,7 +1400,7 @@ tr:last-child td {
     position: fixed;
     top: calc(env(safe-area-inset-top, 0px) + 12px);
     left: calc(env(safe-area-inset-left, 0px) + 12px);
-    z-index: 3600;
+    z-index: 5000;
     background: var(--primary);
     color: white;
     border: none;
@@ -1441,10 +1441,8 @@ body.sidebar-open {
 }
 
 body.sidebar-open .mobile-menu-toggle {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: translateY(-8px);
+    left: calc(min(86vw, 320px) + env(safe-area-inset-left, 0px) + 12px);
+    background: rgba(15, 23, 42, 0.95);
 }
 
 @media (max-width: 1024px) {
