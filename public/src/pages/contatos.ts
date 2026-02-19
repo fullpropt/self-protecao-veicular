@@ -299,7 +299,7 @@ function renderContacts() {
     const pageContacts = filteredContacts.slice(start, end);
 
     if (pageContacts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="table-empty"><div class="table-empty-icon icon icon-empty icon-lg"></div><p>Nenhum contato encontrado</p></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="table-empty"><div class="table-empty-icon icon icon-empty icon-lg"></div><p>Nenhum contato encontrado</p></td></tr>`;
     } else {
         tbody.innerHTML = pageContacts.map(c => `
             <tr data-id="${c.id}">
@@ -314,8 +314,6 @@ function renderContacts() {
                     </div>
                 </td>
                 <td><a href="https://wa.me/55${c.phone}" target="_blank" style="color: var(--whatsapp);">${formatPhone(c.phone)}</a></td>
-                <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${c.vehicle || '-'}</td>
-                <td>${c.plate || '-'}</td>
                 <td>${getStatusBadge(c.status)}</td>
                 <td>${c.tags || '-'}</td>
                 <td>${c.last_message_at ? timeAgo(c.last_message_at) : '-'}</td>
@@ -354,11 +352,9 @@ function filterContacts() {
     const tag = (document.getElementById('filterTag') as HTMLSelectElement | null)?.value || '';
 
     filteredContacts = allContacts.filter(c => {
-        const matchSearch = !search || 
+        const matchSearch = !search ||
             (c.name && c.name.toLowerCase().includes(search)) ||
-            (c.phone && c.phone.includes(search)) ||
-            (c.vehicle && c.vehicle.toLowerCase().includes(search)) ||
-            (c.plate && c.plate.toLowerCase().includes(search));
+            (c.phone && c.phone.includes(search));
         const matchStatus = !status || c.status == (parseInt(status, 10) as LeadStatus);
         const matchTag = !tag || (c.tags && c.tags.includes(tag));
         return matchSearch && matchStatus && matchTag;
@@ -398,8 +394,6 @@ async function saveContact() {
     const data = {
         name: (document.getElementById('contactName') as HTMLInputElement | null)?.value.trim() || '',
         phone: (document.getElementById('contactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '',
-        vehicle: (document.getElementById('contactVehicle') as HTMLInputElement | null)?.value.trim() || '',
-        plate: (document.getElementById('contactPlate') as HTMLInputElement | null)?.value.trim().toUpperCase() || '',
         email: (document.getElementById('contactEmail') as HTMLInputElement | null)?.value.trim() || '',
         status: parseInt((document.getElementById('contactStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus,
         source: (document.getElementById('contactSource') as HTMLSelectElement | null)?.value || ''
@@ -435,8 +429,6 @@ function editContact(id: number) {
     const editContactId = document.getElementById('editContactId') as HTMLInputElement | null;
     const editContactName = document.getElementById('editContactName') as HTMLInputElement | null;
     const editContactPhone = document.getElementById('editContactPhone') as HTMLInputElement | null;
-    const editContactVehicle = document.getElementById('editContactVehicle') as HTMLInputElement | null;
-    const editContactPlate = document.getElementById('editContactPlate') as HTMLInputElement | null;
     const editContactEmail = document.getElementById('editContactEmail') as HTMLInputElement | null;
     const editContactStatus = document.getElementById('editContactStatus') as HTMLSelectElement | null;
     const editContactNotes = document.getElementById('editContactNotes') as HTMLTextAreaElement | null;
@@ -444,8 +436,6 @@ function editContact(id: number) {
     if (editContactId) editContactId.value = String(contact.id);
     if (editContactName) editContactName.value = contact.name || '';
     if (editContactPhone) editContactPhone.value = contact.phone || '';
-    if (editContactVehicle) editContactVehicle.value = contact.vehicle || '';
-    if (editContactPlate) editContactPlate.value = contact.plate || '';
     if (editContactEmail) editContactEmail.value = contact.email || '';
     if (editContactStatus) editContactStatus.value = String(contact.status || 1);
     if (editContactNotes) editContactNotes.value = contact.notes || '';
@@ -479,8 +469,6 @@ async function updateContact() {
     const data = {
         name: (document.getElementById('editContactName') as HTMLInputElement | null)?.value.trim() || '',
         phone: (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '',
-        vehicle: (document.getElementById('editContactVehicle') as HTMLInputElement | null)?.value.trim() || '',
-        plate: (document.getElementById('editContactPlate') as HTMLInputElement | null)?.value.trim().toUpperCase() || '',
         email: (document.getElementById('editContactEmail') as HTMLInputElement | null)?.value.trim() || '',
         status: parseInt((document.getElementById('editContactStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus,
         custom_fields: mergedCustomFields
@@ -631,8 +619,6 @@ async function importContacts() {
                 await api.post('/api/leads', {
                     name: row.nome || row.name || 'Sem nome',
                     phone,
-                    vehicle: row.veiculo || row.vehicle || '',
-                    plate: row.placa || row.plate || '',
                     email: row.email || '',
                     status,
                     tags: mergedTags,
@@ -657,8 +643,6 @@ function exportContacts() {
     const data = filteredContacts.map(c => ({
         nome: c.name,
         telefone: c.phone,
-        veiculo: c.vehicle,
-        placa: c.plate,
         email: c.email,
         status: getStatusLabel(c.status)
     }));

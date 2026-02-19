@@ -260,8 +260,6 @@ export default function Contatos() {
                   </th>
                   <th>Contato</th>
                   <th>WhatsApp</th>
-                  <th>Veículo</th>
-                  <th>Placa</th>
                   <th>Status</th>
                   <th>Tags</th>
                   <th>Última Interação</th>
@@ -270,7 +268,7 @@ export default function Contatos() {
               </thead>
               <tbody id="contactsTableBody">
                 <tr>
-                  <td colSpan={9} className="table-empty">
+                  <td colSpan={7} className="table-empty">
                     <div className="table-empty-icon icon icon-empty icon-lg"></div>
                     <p>Carregando contatos...</p>
                   </td>
@@ -308,16 +306,6 @@ export default function Contatos() {
                 <label className="form-label required">WhatsApp</label>
                 <input type="tel" className="form-input" id="contactPhone" required placeholder="27999999999" />
                 <p className="form-help">Apenas números com DDD</p>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Veículo</label>
-                  <input type="text" className="form-input" id="contactVehicle" placeholder="Ex: Honda Civic 2020" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Placa</label>
-                  <input type="text" className="form-input" id="contactPlate" placeholder="ABC1234" style={{ textTransform: 'uppercase' }} />
-                </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Email</label>
@@ -392,16 +380,6 @@ export default function Contatos() {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Veículo</label>
-                    <input type="text" className="form-input" id="editContactVehicle" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Placa</label>
-                    <input type="text" className="form-input" id="editContactPlate" />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
                     <label className="form-label">Email</label>
                     <input type="email" className="form-input" id="editContactEmail" />
                   </div>
@@ -457,7 +435,7 @@ export default function Contatos() {
             <div className="form-group">
               <label className="form-label">Arquivo CSV</label>
               <input type="file" className="form-input" id="importFile" accept=".csv,.txt" />
-              <p className="form-help">Colunas: nome, telefone, veiculo, placa, email</p>
+              <p className="form-help">Colunas: nome, telefone, email</p>
             </div>
             <div className="form-group">
               <label className="form-label">Ou cole os dados</label>
@@ -465,8 +443,8 @@ export default function Contatos() {
                 className="form-textarea"
                 id="importText"
                 rows={8}
-                placeholder={`nome,telefone,veiculo,placa
-João Silva,27999999999,Honda Civic,ABC1234`}
+                placeholder={`nome,telefone,email
+João Silva,27999999999,joao@email.com`}
               ></textarea>
             </div>
             <div className="form-group">
@@ -520,7 +498,7 @@ João Silva,27999999999,Honda Civic,ABC1234`}
                 placeholder={`Digite a mensagem...
 Use {{nome}} para personalizar`}
               ></textarea>
-              <p className="form-help">{'Variáveis: {{nome}}, {{veiculo}}, {{placa}}'}</p>
+              <p className="form-help">{'Variáveis: {{nome}}, {{telefone}}, {{email}} e campos personalizados'}</p>
             </div>
             <div className="form-row">
               <div className="form-group">
