@@ -38,6 +38,16 @@ function DashboardStyles() {
         .info-icon { cursor: help; opacity: 0.7; }
         .events-empty { text-align: center; padding: 40px 20px; color: var(--gray-500); }
         .events-empty-emoji { width: 48px; height: 48px; display: block; margin-bottom: 16px; opacity: 0.6; background-color: var(--gray-400); }
+        @media (max-width: 640px) {
+          .stats-period-card, .stats-general-card, .events-personalized-card { padding: 16px; }
+          .stats-period-controls { gap: 8px; }
+          .stats-period-controls .form-input, .stats-period-controls .form-select { width: 100%; min-width: 0; }
+          .chart-type-toggle { width: 100%; justify-content: flex-start; }
+          .chart-type-toggle .chart-btn { flex: 1 1 0; }
+          .stats-general-item { gap: 12px; }
+          .stats-general-label { font-size: 12px; }
+          .stats-general-value { font-size: 16px; }
+        }
       `}</style>
   );
 }

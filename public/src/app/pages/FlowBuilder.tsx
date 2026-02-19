@@ -41,6 +41,10 @@ export default function FlowBuilder() {
   }, []);
 
   const globals = window as Window & FlowBuilderGlobals;
+  const toggleSidebar = () => {
+    document.querySelector('.sidebar')?.classList.toggle('open');
+    document.querySelector('.sidebar-overlay')?.classList.toggle('active');
+  };
 
   return (
     <div className="flow-builder-react">
@@ -624,7 +628,48 @@ export default function FlowBuilder() {
             background: rgba(100, 116, 139, 0.15);
             color: var(--gray);
         }
+        
+        @media (max-width: 1200px) {
+            .flow-container {
+                grid-template-columns: 240px 1fr;
+            }
+            .properties-panel {
+                display: none;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .flow-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+                height: calc(100vh - 150px);
+            }
+            .nodes-panel {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                padding: 12px;
+                max-height: 220px;
+            }
+            .header-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            .flow-toolbar {
+                left: 12px;
+                right: 12px;
+                transform: none;
+                width: calc(100% - 24px);
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+        }
       `}</style>
+          <button className="mobile-menu-toggle" type="button" onClick={toggleSidebar}>
+              {'\u2630'}
+          </button>
+          <div className="sidebar-overlay" onClick={toggleSidebar}></div>
           <nav className="sidebar">
               <div className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></div>
               <ul className="sidebar-menu">

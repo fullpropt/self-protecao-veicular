@@ -100,11 +100,26 @@ export default function Automacao() {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         .automations-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 25px;
+        }
+        @media (max-width: 640px) {
+            .automation-header,
+            .automation-body {
+                padding: 16px;
+            }
+            .automation-footer {
+                padding: 12px 16px;
+            }
+            .automation-trigger {
+                gap: 10px;
+                padding: 12px;
+            }
         }
         .toggle-switch {
             position: relative;

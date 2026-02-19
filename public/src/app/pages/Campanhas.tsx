@@ -135,9 +135,39 @@ export default function Campanhas() {
                 justify-content: center;
             }
         }
+        @media (max-width: 640px) {
+            .campaign-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+                padding: 16px;
+            }
+            .campaign-body {
+                padding: 16px;
+            }
+            .campaign-footer {
+                padding: 12px 16px;
+            }
+            .campaign-stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+            .campaign-actions {
+                gap: 6px;
+            }
+            .campaign-actions .btn {
+                flex: 1 1 calc(50% - 3px);
+                min-width: 0;
+            }
+        }
+        @media (max-width: 420px) {
+            .campaign-stats {
+                grid-template-columns: 1fr;
+            }
+        }
         .campaigns-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 25px;
         }
       `}</style>

@@ -46,7 +46,7 @@ export default function Fluxos() {
       <style>{`
 .flows-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 25px;
         }
 .flow-card {
@@ -107,6 +107,8 @@ export default function Fluxos() {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         .flow-stats {
             display: flex;
@@ -159,6 +161,28 @@ export default function Fluxos() {
         .step-item-actions {
             display: flex;
             gap: 5px;
+        }
+        @media (max-width: 640px) {
+            .flow-header,
+            .flow-body {
+                padding: 16px;
+            }
+            .flow-footer {
+                padding: 12px 16px;
+            }
+            .flow-stats {
+                width: 100%;
+                justify-content: space-between;
+                gap: 12px;
+            }
+            .step-item {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .step-item-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
         }
       `}</style>
       <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>

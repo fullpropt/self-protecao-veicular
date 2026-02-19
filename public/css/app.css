@@ -1481,20 +1481,78 @@ tr:last-child td {
     }
     
     .page-actions .btn {
-        flex: 1;
+        flex: 1 1 100%;
+        width: 100%;
     }
     
     .table-filters {
         width: 100%;
+        flex-direction: column;
     }
     
     .search-box {
         max-width: 100%;
     }
     
+    .table-wrapper table {
+        min-width: 680px;
+    }
+
+    .funnel-container,
+    .card-header,
+    .card-body,
+    .card-footer {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .campaigns-grid,
+    .automations-grid,
+    .flows-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+
     .modal {
+        width: calc(100% - 20px);
         margin: 10px;
         max-height: calc(100vh - 20px);
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .modal-footer {
+        flex-wrap: wrap;
+        justify-content: stretch;
+        gap: 8px;
+    }
+
+    .modal-footer .btn {
+        flex: 1 1 calc(50% - 4px);
+        min-width: 0;
+    }
+
+    .toast-container {
+        left: 12px;
+        right: 12px;
+        top: auto;
+        bottom: 12px;
+    }
+
+    .toast {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
     }
 }
 

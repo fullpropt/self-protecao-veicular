@@ -599,14 +599,31 @@ export default function Whatsapp() {
                 font-size: 24px;
             }
 
+            .whatsapp-react .card-header,
+            .whatsapp-react .card-body {
+                padding: 18px;
+            }
+
             .whatsapp-react .qr-wrapper {
-                min-width: 240px;
+                min-width: 0;
+                width: 100%;
                 min-height: 240px;
             }
 
             .whatsapp-react #qr-code {
                 width: 200px;
                 height: 200px;
+            }
+
+            .whatsapp-react .toast-container {
+                right: 12px;
+                left: 12px;
+                bottom: 12px;
+            }
+
+            .whatsapp-react .toast {
+                min-width: 0;
+                width: 100%;
             }
         }
             `}</style>
@@ -831,4 +848,3 @@ export default function Whatsapp() {
     </div>
   );
 }
-
