@@ -1,7 +1,7 @@
 ﻿// Campanhas page logic migrated to module
 
 type CampaignStatus = 'active' | 'paused' | 'completed' | 'draft';
-type CampaignType = 'trigger' | 'broadcast' | 'drip';
+type CampaignType = 'broadcast' | 'drip';
 
 type Campaign = {
     id: number;
@@ -55,10 +55,11 @@ function getCampaignStatusLabel(status: CampaignStatus) {
     return 'Rascunho';
 }
 
-function getCampaignTypeLabel(type: CampaignType) {
+function getCampaignTypeLabel(type: CampaignType | string) {
     if (type === 'broadcast') return 'Transmissão';
     if (type === 'drip') return 'Sequência';
-    return 'Gatilho';
+    if (type === 'trigger') return 'Legado (Gatilho)';
+    return 'Campanha';
 }
 
 function getLeadStatusLabel(status?: number) {
@@ -344,6 +345,17 @@ function initCampanhas() {
 
 onReady(initCampanhas);
 
+function shouldUseLocalCampaignFallback(error: unknown) {
+    const message = String((error as Error)?.message || '').toLowerCase();
+    if (!message) return true;
+    return (
+        message.includes('failed to fetch') ||
+        message.includes('networkerror') ||
+        message.includes('network request failed') ||
+        message.includes('load failed')
+    );
+}
+
 async function loadCampaigns() {
     try {
         showLoading('Carregando campanhas...');
@@ -360,7 +372,7 @@ async function loadCampaigns() {
                 id: 1,
                 name: 'Boas-vindas',
                 description: 'Mensagem de boas-vindas para novos leads',
-                type: 'trigger',
+                type: 'broadcast',
                 status: 'active',
                 segment: 'new',
                 message: 'OlÃ¡ {{nome}}! Seja bem-vindo Ã  ZapVender.',
@@ -507,7 +519,7 @@ async function saveCampaign(statusOverride?: CampaignStatus) {
     const data = {
         name: (document.getElementById('campaignName') as HTMLInputElement | null)?.value.trim() || '',
         description: (document.getElementById('campaignDescription') as HTMLInputElement | null)?.value.trim() || '',
-        type: ((document.getElementById('campaignType') as HTMLSelectElement | null)?.value || 'trigger') as CampaignType,
+        type: ((document.getElementById('campaignType') as HTMLSelectElement | null)?.value || 'broadcast') as CampaignType,
         status,
         segment: (document.getElementById('campaignSegment') as HTMLSelectElement | null)?.value || '',
         tag_filter: (document.getElementById('campaignTagFilter') as HTMLInputElement | null)?.value.trim() || '',
@@ -536,6 +548,10 @@ async function saveCampaign(statusOverride?: CampaignStatus) {
         showToast('success', 'Sucesso', campaignId ? 'Campanha atualizada com sucesso!' : 'Campanha criada com sucesso!');
     } catch (error) {
         hideLoading();
+        if (!shouldUseLocalCampaignFallback(error)) {
+            showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível salvar a campanha');
+            return;
+        }
         if (campaignId) {
             const index = campaigns.findIndex(c => c.id === campaignId);
             if (index >= 0) {
@@ -659,7 +675,10 @@ async function startCampaign(id: number) {
     try {
         await api.put(`/api/campaigns/${id}`, { status: 'active' });
     } catch (error) {
-        // fallback local
+        if (!shouldUseLocalCampaignFallback(error)) {
+            showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível iniciar a campanha');
+            return;
+        }
     }
     const campaign = campaigns.find(c => c.id === id);
     if (campaign) campaign.status = 'active';
@@ -673,7 +692,10 @@ async function pauseCampaign(id: number) {
     try {
         await api.put(`/api/campaigns/${id}`, { status: 'paused' });
     } catch (error) {
-        // fallback local
+        if (!shouldUseLocalCampaignFallback(error)) {
+            showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível pausar a campanha');
+            return;
+        }
     }
     const campaign = campaigns.find(c => c.id === id);
     if (campaign) campaign.status = 'paused';
@@ -687,7 +709,10 @@ async function deleteCampaign(id: number) {
     try {
         await api.delete(`/api/campaigns/${id}`);
     } catch (error) {
-        // fallback local
+        if (!shouldUseLocalCampaignFallback(error)) {
+            showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível excluir a campanha');
+            return;
+        }
     }
     campaigns = campaigns.filter(c => c.id !== id);
     renderCampaigns();

@@ -191,6 +191,7 @@ async function bootstrapDatabase() {
         await cleanupEmptyWhatsappLeads();
         await cleanupDuplicatePhoneSuffixLeads();
         await cleanupBrokenLeadNames();
+        await migrateLegacyTriggerCampaignsToAutomations();
     } catch (error) {
         console.error('Erro ao inicializar banco de dados:', error.message);
     }
@@ -2681,231 +2682,622 @@ function applyAutomationTemplate(template = '', variables = {}) {
 
 
 
+const SUPPORTED_AUTOMATION_TRIGGER_TYPES = new Set([
+    'new_lead',
+    'status_change',
+    'message_received',
+    'keyword',
+    'schedule',
+    'inactivity'
+]);
+const AUTOMATION_EVENT_TYPES = {
+    MESSAGE_RECEIVED: 'message_received',
+    STATUS_CHANGE: 'status_change',
+    SCHEDULE: 'schedule',
+    INACTIVITY: 'inactivity'
+};
+const DEFAULT_AUTOMATION_SESSION_ID = 'self_whatsapp_session';
+const AUTOMATION_SCHEDULE_POLL_MS = 30000;
+const LEGACY_CAMPAIGN_TRIGGER_MODE = 'legacy_campaign_trigger';
+
+const inactivityAutomationTimers = new Map();
+const scheduleAutomationSlots = new Map();
+let scheduleAutomationIntervalId = null;
+let scheduleAutomationsTickRunning = false;
+
+function isSupportedAutomationTriggerType(triggerType = '') {
+    const normalized = String(triggerType || '').trim().toLowerCase();
+    return SUPPORTED_AUTOMATION_TRIGGER_TYPES.has(normalized);
+}
+
+function normalizeAutomationStatus(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    const normalized = Math.trunc(parsed);
+    return normalized > 0 ? normalized : null;
+}
+
+function parseAutomationJsonValue(rawValue = '', fallback = {}) {
+    if (!rawValue) return fallback;
+    if (typeof rawValue === 'object') return rawValue;
+    const raw = String(rawValue || '').trim();
+    if (!raw) return fallback;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return fallback;
+    }
+}
+
+function parseStatusChangeTriggerValue(triggerValue = '') {
+    const parsed = parseAutomationJsonValue(triggerValue, {});
+    return {
+        from: normalizeAutomationStatus(parsed?.from),
+        to: normalizeAutomationStatus(parsed?.to)
+    };
+}
+
+function parseScheduleTriggerValue(triggerValue = '') {
+    const parsed = parseAutomationJsonValue(triggerValue, null);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const match = String(parsed.time || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+    const days = Array.from(new Set(
+        (Array.isArray(parsed.days) ? parsed.days : [])
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6)
+    ));
+
+    return {
+        time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+        days
+    };
+}
+
+function parseInactivitySeconds(triggerValue = '') {
+    const seconds = Number(triggerValue);
+    if (!Number.isFinite(seconds) || seconds <= 0) return null;
+    return Math.floor(seconds);
+}
+
+function parseAutomationTimestampMs(value) {
+    if (!value) return null;
+    const parsed = Date.parse(String(value));
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseMessageReceivedTriggerConfig(triggerValue = '') {
+    const parsed = parseAutomationJsonValue(triggerValue, null);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+
+    const hasConfigFields = (
+        Object.prototype.hasOwnProperty.call(parsed, 'mode') ||
+        Object.prototype.hasOwnProperty.call(parsed, 'segment') ||
+        Object.prototype.hasOwnProperty.call(parsed, 'tag_filter') ||
+        Object.prototype.hasOwnProperty.call(parsed, 'start_at') ||
+        Object.prototype.hasOwnProperty.call(parsed, 'once_per_lead') ||
+        Object.prototype.hasOwnProperty.call(parsed, 'delay_min_ms') ||
+        Object.prototype.hasOwnProperty.call(parsed, 'delay_max_ms') ||
+        Object.prototype.hasOwnProperty.call(parsed, 'source_campaign_id')
+    );
+    if (!hasConfigFields) return null;
+
+    const mode = String(parsed.mode || '').trim().toLowerCase();
+    const segment = String(parsed.segment || 'all').trim() || 'all';
+    const tagFilter = String(parsed.tag_filter || '').trim() || null;
+    const startAtMs = parseAutomationTimestampMs(parsed.start_at);
+    const oncePerLead = parsed.once_per_lead === true || String(parsed.once_per_lead || '').trim().toLowerCase() === 'true';
+    const sourceCampaignIdRaw = Number(parsed.source_campaign_id);
+    const sourceCampaignId = Number.isFinite(sourceCampaignIdRaw) && sourceCampaignIdRaw > 0
+        ? Math.trunc(sourceCampaignIdRaw)
+        : null;
+
+    let delayMinMs = Number(parsed.delay_min_ms);
+    let delayMaxMs = Number(parsed.delay_max_ms);
+    delayMinMs = Number.isFinite(delayMinMs) && delayMinMs >= 0 ? Math.floor(delayMinMs) : null;
+    delayMaxMs = Number.isFinite(delayMaxMs) && delayMaxMs >= 0 ? Math.floor(delayMaxMs) : null;
+    if (delayMinMs === null && delayMaxMs !== null) delayMinMs = delayMaxMs;
+    if (delayMaxMs === null && delayMinMs !== null) delayMaxMs = delayMinMs;
+    if (delayMinMs !== null && delayMaxMs !== null && delayMaxMs < delayMinMs) {
+        const swap = delayMinMs;
+        delayMinMs = delayMaxMs;
+        delayMaxMs = swap;
+    }
+
+    return {
+        mode,
+        segment,
+        tagFilter,
+        startAtMs,
+        oncePerLead,
+        delayMinMs,
+        delayMaxMs,
+        sourceCampaignId
+    };
+}
+
+function leadMatchesSegmentStatus(lead, segment = 'all') {
+    const normalizedSegment = String(segment || 'all').trim().toLowerCase();
+    const leadStatus = Number(lead?.status || 0);
+
+    if (!normalizedSegment || normalizedSegment === 'all') return true;
+
+    const segmentStatus = resolveCampaignSegmentStatus(normalizedSegment);
+    if (segmentStatus === null) return true;
+    return leadStatus === segmentStatus;
+}
+
+function matchesMessageReceivedTriggerConfig(config, context) {
+    if (!config) return true;
+
+    if (config.startAtMs !== null && Date.now() < config.startAtMs) {
+        return false;
+    }
+
+    const lead = context?.lead;
+    if (!lead?.id) return false;
+    if (!leadMatchesSegmentStatus(lead, config.segment)) return false;
+    if (!leadMatchesCampaignTag(lead, config.tagFilter || '')) return false;
+
+    return true;
+}
+
+function resolveAutomationDelayMs(automation, context) {
+    const delaySeconds = Number(automation?.delay || 0);
+    let minDelayMs = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds * 1000 : 0;
+    let maxDelayMs = minDelayMs;
+
+    const triggerType = String(automation?.trigger_type || '').trim().toLowerCase();
+    if (triggerType === 'message_received') {
+        const config = parseMessageReceivedTriggerConfig(automation?.trigger_value || '');
+        if (config?.delayMinMs !== null && config?.delayMaxMs !== null) {
+            minDelayMs = config.delayMinMs;
+            maxDelayMs = config.delayMaxMs;
+        }
+    }
+
+    const safeMin = Math.max(0, Math.floor(minDelayMs || 0));
+    const safeMax = Math.max(safeMin, Math.floor(maxDelayMs || 0));
+    return randomIntBetween(safeMin, safeMax);
+}
+
+function shouldTrackAutomationOncePerLead(automation) {
+    const triggerType = String(automation?.trigger_type || '').trim().toLowerCase();
+    if (triggerType !== 'message_received') return false;
+    const config = parseMessageReceivedTriggerConfig(automation?.trigger_value || '');
+    return !!config?.oncePerLead;
+}
+
+async function reserveAutomationLeadRun(automationId, leadId) {
+    const result = await run(`
+        INSERT INTO automation_lead_runs (automation_id, lead_id)
+        VALUES (?, ?)
+        ON CONFLICT (automation_id, lead_id) DO NOTHING
+    `, [automationId, leadId]);
+    return Number(result?.changes || 0) > 0;
+}
+
+async function releaseAutomationLeadRun(automationId, leadId) {
+    await run(`
+        DELETE FROM automation_lead_runs
+        WHERE automation_id = ?
+          AND lead_id = ?
+    `, [automationId, leadId]);
+}
+
+function formatAutomationSlot(date = new Date()) {
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function matchesScheduleSlot(date, scheduleConfig) {
+    if (!scheduleConfig?.time) return false;
+
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+    if (`${hour}:${minute}` !== scheduleConfig.time) return false;
+
+    if (Array.isArray(scheduleConfig.days) && scheduleConfig.days.length > 0) {
+        return scheduleConfig.days.includes(date.getDay());
+    }
+
+    return true;
+}
+
+function buildInactivityAutomationKey(automationId, leadId) {
+    return `${automationId}:${leadId}`;
+}
+
+async function fetchLastInboundLeadMessageTimestampMs(leadId) {
+    const rows = await query(`
+        SELECT COALESCE(sent_at, created_at) AS timestamp
+        FROM messages
+        WHERE lead_id = ?
+          AND is_from_me = 0
+        ORDER BY COALESCE(sent_at, created_at) DESC, id DESC
+        LIMIT 1
+    `, [leadId]);
+
+    const rawTimestamp = rows?.[0]?.timestamp;
+    if (!rawTimestamp) return null;
+
+    const parsed = Date.parse(String(rawTimestamp));
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeAutomationContext(context = {}) {
+    const event = String(context.event || AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED).trim().toLowerCase();
+    const sessionId = String(context.sessionId || DEFAULT_AUTOMATION_SESSION_ID).trim() || DEFAULT_AUTOMATION_SESSION_ID;
+
+    return {
+        ...context,
+        event,
+        sessionId
+    };
+}
+
+async function resolveAutomationConversation(lead, baseConversation = null, sessionId = DEFAULT_AUTOMATION_SESSION_ID) {
+    if (baseConversation && Number(baseConversation.lead_id) === Number(lead?.id)) {
+        return baseConversation;
+    }
+
+    const existingConversation = await Conversation.findByLeadId(lead.id);
+    if (existingConversation) return existingConversation;
+
+    const result = await Conversation.findOrCreate({
+        lead_id: lead.id,
+        session_id: sessionId
+    });
+
+    return result?.conversation || null;
+}
+
+function runAutomationWithDelay(automation, context) {
+    const delayMs = resolveAutomationDelayMs(automation, context);
+
+    const execute = () => {
+        executeAutomationAction(automation, context).catch((error) => {
+            console.error(`Erro ao executar automacao ${automation.id}:`, error.message);
+        });
+    };
+
+    if (delayMs > 0) {
+        setTimeout(execute, delayMs);
+        return;
+    }
+
+    execute();
+}
+
 function shouldTriggerAutomation(automation, context, normalizedText) {
+    const triggerType = String(automation?.trigger_type || '').trim().toLowerCase();
+    if (!isSupportedAutomationTriggerType(triggerType)) return false;
 
-    const triggerType = automation?.trigger_type;
-
-
+    const normalizedContext = normalizeAutomationContext(context);
+    const eventType = normalizedContext.event;
 
     if (triggerType === 'keyword') {
-
+        if (eventType !== AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED) return false;
         if (!normalizedText) return false;
 
         const keywords = extractAutomationKeywords(automation.trigger_value || '');
-
         if (keywords.length === 0) return false;
-
         return keywords.some((keyword) => normalizedText.includes(keyword));
-
     }
-
-
 
     if (triggerType === 'message_received') {
+        if (eventType !== AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED) return false;
 
-        return true;
+        const triggerConfig = parseMessageReceivedTriggerConfig(automation.trigger_value || '');
+        if (!triggerConfig) return true;
 
+        return matchesMessageReceivedTriggerConfig(triggerConfig, normalizedContext);
     }
-
-
 
     if (triggerType === 'new_lead') {
-
-        return !!context?.leadCreated;
-
+        return eventType === AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED && !!normalizedContext.leadCreated;
     }
 
+    if (triggerType === 'status_change') {
+        if (eventType !== AUTOMATION_EVENT_TYPES.STATUS_CHANGE) return false;
 
+        const oldStatus = normalizeAutomationStatus(normalizedContext.oldStatus);
+        const newStatus = normalizeAutomationStatus(normalizedContext.newStatus);
+        if (oldStatus === null || newStatus === null || oldStatus === newStatus) return false;
+
+        const filters = parseStatusChangeTriggerValue(automation.trigger_value || '');
+        if (filters.from !== null && filters.from !== oldStatus) return false;
+        if (filters.to !== null && filters.to !== newStatus) return false;
+        return true;
+    }
+
+    if (triggerType === 'schedule') {
+        return eventType === AUTOMATION_EVENT_TYPES.SCHEDULE;
+    }
+
+    if (triggerType === 'inactivity') {
+        return eventType === AUTOMATION_EVENT_TYPES.INACTIVITY;
+    }
 
     return false;
-
 }
 
+async function armInactivityAutomation(automation, context) {
+    const inactivitySeconds = parseInactivitySeconds(automation?.trigger_value);
+    const leadId = Number(context?.lead?.id);
 
+    if (!Number.isFinite(leadId) || leadId <= 0 || !inactivitySeconds) {
+        return;
+    }
+
+    const key = buildInactivityAutomationKey(automation.id, leadId);
+    const currentTimer = inactivityAutomationTimers.get(key);
+    if (currentTimer) {
+        clearTimeout(currentTimer.timeoutId);
+    }
+
+    const referenceTimestampMs = Number(context?.messageTimestampMs);
+    const safeReferenceTimestampMs = Number.isFinite(referenceTimestampMs) && referenceTimestampMs > 0
+        ? referenceTimestampMs
+        : Date.now();
+    const conversationId = Number(context?.conversation?.id) || null;
+    const sessionId = String(context?.sessionId || DEFAULT_AUTOMATION_SESSION_ID);
+
+    const timeoutId = setTimeout(async () => {
+        inactivityAutomationTimers.delete(key);
+
+        try {
+            const activeAutomation = await Automation.findById(automation.id);
+            const isActive = Number(activeAutomation?.is_active || 0) === 1;
+            const isStillInactivity = String(activeAutomation?.trigger_type || '').trim().toLowerCase() === 'inactivity';
+            if (!activeAutomation || !isActive || !isStillInactivity) return;
+
+            const latestInboundTimestampMs = await fetchLastInboundLeadMessageTimestampMs(leadId);
+            if (latestInboundTimestampMs === null) return;
+            if (latestInboundTimestampMs > safeReferenceTimestampMs) return;
+
+            const lead = await Lead.findById(leadId);
+            if (!lead || Number(lead.is_blocked || 0) === 1) return;
+
+            let conversation = null;
+            if (conversationId) {
+                conversation = await Conversation.findById(conversationId);
+            }
+            if (!conversation) {
+                conversation = await Conversation.findByLeadId(leadId);
+            }
+
+            const executionContext = normalizeAutomationContext({
+                event: AUTOMATION_EVENT_TYPES.INACTIVITY,
+                lead,
+                conversation,
+                sessionId: sessionId || conversation?.session_id || DEFAULT_AUTOMATION_SESSION_ID,
+                text: ''
+            });
+
+            runAutomationWithDelay(activeAutomation, executionContext);
+        } catch (error) {
+            console.error(`Erro ao disparar automacao de inatividade ${automation.id}:`, error.message);
+        }
+    }, inactivitySeconds * 1000);
+
+    inactivityAutomationTimers.set(key, {
+        timeoutId,
+        referenceTimestampMs: safeReferenceTimestampMs
+    });
+}
+
+async function processScheduledAutomationsTick() {
+    if (scheduleAutomationsTickRunning) return;
+    scheduleAutomationsTickRunning = true;
+
+    try {
+        const automations = await Automation.list({ is_active: 1, trigger_type: 'schedule', limit: 500 });
+        if (!automations || automations.length === 0) return;
+
+        const now = new Date();
+        const slot = formatAutomationSlot(now);
+        const dueAutomations = [];
+
+        for (const automation of automations) {
+            const scheduleConfig = parseScheduleTriggerValue(automation.trigger_value || '');
+            if (!scheduleConfig) continue;
+            if (!matchesScheduleSlot(now, scheduleConfig)) continue;
+
+            if (scheduleAutomationSlots.get(automation.id) === slot) {
+                continue;
+            }
+
+            scheduleAutomationSlots.set(automation.id, slot);
+            dueAutomations.push(automation);
+        }
+
+        if (dueAutomations.length === 0) return;
+
+        const leads = await query(`
+            SELECT *
+            FROM leads
+            WHERE COALESCE(is_blocked, 0) = 0
+            ORDER BY updated_at DESC
+        `);
+
+        for (const automation of dueAutomations) {
+            for (const lead of leads) {
+                if (!lead?.id || !lead?.phone) continue;
+
+                const executionContext = normalizeAutomationContext({
+                    event: AUTOMATION_EVENT_TYPES.SCHEDULE,
+                    lead,
+                    conversation: null,
+                    sessionId: DEFAULT_AUTOMATION_SESSION_ID,
+                    text: ''
+                });
+
+                runAutomationWithDelay(automation, executionContext);
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao processar automacoes agendadas:', error.message);
+    } finally {
+        scheduleAutomationsTickRunning = false;
+    }
+}
+
+function startScheduledAutomationsWorker() {
+    if (scheduleAutomationIntervalId) return;
+
+    scheduleAutomationIntervalId = setInterval(() => {
+        processScheduledAutomationsTick().catch((error) => {
+            console.error('Falha no worker de automacoes agendadas:', error.message);
+        });
+    }, AUTOMATION_SCHEDULE_POLL_MS);
+
+    processScheduledAutomationsTick().catch((error) => {
+        console.error('Falha no primeiro ciclo de automacoes agendadas:', error.message);
+    });
+}
 
 async function executeAutomationAction(automation, context) {
-
-    const { lead, conversation, sessionId, text } = context || {};
-
-
+    const normalizedContext = normalizeAutomationContext(context);
+    const { lead, conversation, sessionId, text } = normalizedContext;
 
     if (!automation || !lead) return;
 
-
-
     const variables = buildAutomationVariables(lead, text);
-
     const actionType = automation.action_type;
-
     const actionValue = automation.action_value || '';
 
-
-
     switch (actionType) {
-
         case 'send_message': {
-
             const content = applyAutomationTemplate(actionValue, variables).trim();
-
             if (!content) return;
+            const shouldTrackOnce = shouldTrackAutomationOncePerLead(automation);
+            const automationId = Number(automation.id);
+            const leadId = Number(lead.id);
 
-            await sendMessage(sessionId, lead.phone, content, 'text');
+            if (shouldTrackOnce && (!Number.isFinite(automationId) || automationId <= 0 || !Number.isFinite(leadId) || leadId <= 0)) {
+                return;
+            }
 
+            let reservationCreated = false;
+            if (shouldTrackOnce) {
+                reservationCreated = await reserveAutomationLeadRun(automationId, leadId);
+                if (!reservationCreated) return;
+            }
+
+            try {
+                await sendMessage(sessionId, lead.phone, content, 'text');
+            } catch (error) {
+                if (shouldTrackOnce && reservationCreated) {
+                    await releaseAutomationLeadRun(automationId, leadId);
+                }
+                throw error;
+            }
             break;
-
         }
 
         case 'change_status': {
-
-            const nextStatus = parseInt(actionValue, 10);
-
-            if (!Number.isFinite(nextStatus)) return;
+            const nextStatus = normalizeAutomationStatus(actionValue);
+            const oldStatus = normalizeAutomationStatus(lead.status);
+            if (nextStatus === null || oldStatus === null || nextStatus === oldStatus) return;
 
             await Lead.update(lead.id, { status: nextStatus });
+            const updatedLead = await Lead.findById(lead.id);
+            if (!updatedLead) return;
 
+            const statusConversation = await resolveAutomationConversation(updatedLead, conversation, sessionId);
+            await scheduleAutomations({
+                event: AUTOMATION_EVENT_TYPES.STATUS_CHANGE,
+                sessionId: statusConversation?.session_id || sessionId,
+                lead: updatedLead,
+                conversation: statusConversation,
+                oldStatus,
+                newStatus: nextStatus,
+                text: ''
+            });
             break;
-
         }
 
         case 'add_tag': {
-
             const tag = String(actionValue || '').trim();
-
             if (!tag) return;
 
             let tags = [];
-
             try {
-
                 tags = Array.isArray(lead.tags) ? lead.tags : JSON.parse(lead.tags || '[]');
-
-            } catch (e) {
-
+            } catch {
                 tags = [];
-
             }
 
             if (!tags.includes(tag)) {
-
                 tags.push(tag);
-
                 await Lead.update(lead.id, { tags });
-
             }
-
             break;
-
         }
 
         case 'start_flow': {
-
             const flowId = parseInt(actionValue, 10);
-
             if (!Number.isFinite(flowId)) return;
 
             const flow = await Flow.findById(flowId);
-
             if (!flow) return;
 
-            if (conversation && conversation.is_bot_active) {
-
-                await flowService.startFlow(flow, lead, conversation, { text });
-
+            const targetConversation = await resolveAutomationConversation(lead, conversation, sessionId);
+            if (targetConversation && Number(targetConversation.is_bot_active || 0) === 1) {
+                await flowService.startFlow(flow, lead, targetConversation, { text });
             }
-
             break;
-
         }
 
         case 'notify': {
-
             const message = applyAutomationTemplate(actionValue, variables).trim();
-
             webhookService.trigger('automation.notify', {
-
                 automationId: automation.id,
-
                 message,
-
                 lead: { id: lead.id, name: lead.name, phone: lead.phone }
-
             });
-
             break;
-
         }
 
         default:
-
             return;
-
     }
-
-
 
     await run(
-
         `UPDATE automations SET executions = executions + 1, last_execution = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-
         [new Date().toISOString(), automation.id]
-
     );
-
 }
-
-
 
 async function scheduleAutomations(context) {
-
+    const normalizedContext = normalizeAutomationContext(context);
     const automations = await Automation.list({ is_active: 1 });
-
     if (!automations || automations.length === 0) return;
 
+    const normalizedText = normalizeAutomationText(normalizedContext?.text || '');
 
-
-    const normalizedText = normalizeAutomationText(context?.text || '');
-
-
-
-    for (const automation of automations) {
-
-        if (!shouldTriggerAutomation(automation, context, normalizedText)) continue;
-
-
-
-        const delaySeconds = Number(automation.delay || 0);
-
-        const delayMs = Number.isFinite(delaySeconds) && delaySeconds > 0 ? delaySeconds * 1000 : 0;
-
-
-
-        if (delayMs > 0) {
-
-            setTimeout(() => {
-
-                executeAutomationAction(automation, context).catch((error) => {
-
-                    console.error(`? Erro ao executar automação ${automation.id}:`, error.message);
-
-                });
-
-            }, delayMs);
-
-        } else {
-
-            executeAutomationAction(automation, context).catch((error) => {
-
-                console.error(`? Erro ao executar automação ${automation.id}:`, error.message);
-
+    if (normalizedContext.event === AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED && normalizedContext?.lead?.id) {
+        for (const automation of automations) {
+            if (String(automation?.trigger_type || '').trim().toLowerCase() !== 'inactivity') continue;
+            armInactivityAutomation(automation, normalizedContext).catch((error) => {
+                console.error(`Erro ao armar automacao de inatividade ${automation.id}:`, error.message);
             });
-
         }
-
     }
 
+    for (const automation of automations) {
+        if (!shouldTriggerAutomation(automation, normalizedContext, normalizedText)) continue;
+        runAutomationWithDelay(automation, normalizedContext);
+    }
 }
-
-
 
 function normalizeChatPayload(payload) {
 
@@ -3727,6 +4119,7 @@ async function processIncomingMessage(sessionId, msg) {
 
 
         await scheduleAutomations({
+            event: AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED,
 
             sessionId,
 
@@ -3738,18 +4131,13 @@ async function processIncomingMessage(sessionId, msg) {
 
             conversation,
 
+            messageTimestampMs: Date.parse(messageTimestampIso) || Date.now(),
+
             leadCreated,
 
             conversationCreated: convCreated
 
         });
-
-        if (!isSelfChat) {
-            await triggerCampaignsForIncomingLead({
-                lead,
-                conversation
-            });
-        }
 
     }
 
@@ -4025,6 +4413,7 @@ function sessionExists(sessionId) {
     });
 
     await rehydrateSessions(io);
+    startScheduledAutomationsWorker();
 })().catch((error) => {
     console.error('Erro ao inicializar servicos apos migracao:', error.message);
 });
@@ -5141,7 +5530,7 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
     
 
-    const oldStatus = lead.status;
+    const oldStatus = normalizeAutomationStatus(lead.status);
     const updateData = { ...req.body };
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'name')) {
@@ -5163,18 +5552,29 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
     
 
-    if (updateData.status && updateData.status !== oldStatus) {
+    const hasStatusInPayload = Object.prototype.hasOwnProperty.call(updateData, 'status');
+    const newStatus = hasStatusInPayload
+        ? normalizeAutomationStatus(updateData.status)
+        : oldStatus;
+    const statusChanged = oldStatus !== null && newStatus !== null && oldStatus !== newStatus;
 
-        webhookService.trigger('lead.status_changed', { 
-
-            lead: updatedLead, 
-
-            oldStatus, 
-
-            newStatus: updateData.status 
-
+    if (statusChanged) {
+        webhookService.trigger('lead.status_changed', {
+            lead: updatedLead,
+            oldStatus,
+            newStatus
         });
 
+        const statusConversation = await Conversation.findByLeadId(updatedLead.id);
+        await scheduleAutomations({
+            event: AUTOMATION_EVENT_TYPES.STATUS_CHANGE,
+            sessionId: statusConversation?.session_id || DEFAULT_AUTOMATION_SESSION_ID,
+            lead: updatedLead,
+            conversation: statusConversation || null,
+            oldStatus,
+            newStatus,
+            text: ''
+        });
     }
 
     
@@ -5750,13 +6150,32 @@ app.delete('/api/templates/:id', authenticate, async (req, res) => {
 // API DE CAMPANHAS
 
 // ============================================
+const SUPPORTED_CAMPAIGN_TYPES = new Set(['broadcast', 'drip']);
 
-
-
-
-function sanitizeCampaignPayload(input = {}) {
+function sanitizeCampaignPayload(input = {}, options = {}) {
 
     const payload = { ...input };
+    const applyDefaultType = !!options.applyDefaultType;
+
+    const hasType = Object.prototype.hasOwnProperty.call(payload, 'type');
+    if (hasType) {
+        const normalizedType = String(payload.type || '').trim().toLowerCase();
+        if (!normalizedType) {
+            if (applyDefaultType) {
+                payload.type = 'broadcast';
+            } else {
+                delete payload.type;
+            }
+        } else if (normalizedType === 'trigger') {
+            throw new Error('Campanhas do tipo gatilho foram descontinuadas. Use Automacao para gatilhos.');
+        } else if (!SUPPORTED_CAMPAIGN_TYPES.has(normalizedType)) {
+            throw new Error('Tipo de campanha invalido. Use broadcast ou drip.');
+        } else {
+            payload.type = normalizedType;
+        }
+    } else if (applyDefaultType) {
+        payload.type = 'broadcast';
+    }
 
 
     if (payload.start_at === '') {
@@ -5970,99 +6389,153 @@ async function resolveCampaignLeadIds(options = {}) {
 
 }
 
-function leadMatchesCampaignSegment(lead, segment = 'all') {
-    const normalizedSegment = String(segment || 'all').trim().toLowerCase();
-    const leadStatus = Number(lead?.status || 0);
+async function migrateLegacyTriggerCampaignsToAutomations() {
+    let legacyCampaigns = [];
 
-    if (normalizedSegment === 'all') return true;
-    const segmentStatus = resolveCampaignSegmentStatus(segment);
-    if (segmentStatus !== null) return leadStatus === segmentStatus;
-    return true;
-}
-
-function leadMatchesCampaignFilters(lead, campaign = {}) {
-    if (!leadMatchesCampaignSegment(lead, campaign?.segment)) return false;
-    return leadMatchesCampaignTag(lead, campaign?.tag_filter);
-}
-
-function resolveCampaignScheduledAt(campaign) {
-    const { minMs, maxMs } = resolveCampaignDelayRange(campaign, 0);
-    if (maxMs <= 0) {
-        return null;
-    }
-    const delayMs = randomIntBetween(Math.max(0, minMs), Math.max(0, maxMs));
-    return new Date(Date.now() + delayMs).toISOString();
-}
-
-async function triggerCampaignsForIncomingLead({ lead, conversation }) {
-    if (!lead?.id || !conversation?.id) return { queued: 0, armed: 0 };
-
-    const activeTriggers = await Campaign.list({
-        status: 'active',
-        type: 'trigger',
-        limit: 200
-    });
-
-    if (!activeTriggers.length) {
-        return { queued: 0, armed: 0 };
+    try {
+        legacyCampaigns = await query(`
+            SELECT c.*
+            FROM campaigns c
+            LEFT JOIN campaign_automation_migrations m ON m.campaign_id = c.id
+            WHERE c.type = 'trigger'
+              AND m.campaign_id IS NULL
+              AND COALESCE(TRIM(c.message), '') <> ''
+            ORDER BY c.id ASC
+        `);
+    } catch (error) {
+        console.error('Falha ao buscar campanhas legado para migracao:', error.message);
+        return { total: 0, migrated: 0, linked: 0, skipped: 0, failed: 0 };
     }
 
-    let queued = 0;
-
-    for (const campaign of activeTriggers) {
-        const message = String(campaign?.message || '').trim();
-        if (!message) continue;
-
-        const startAt = campaign?.start_at ? Date.parse(campaign.start_at) : NaN;
-        if (Number.isFinite(startAt) && Date.now() < startAt) {
-            continue;
-        }
-
-        if (!leadMatchesCampaignFilters(lead, campaign)) {
-            continue;
-        }
-
-        const alreadyDelivered = await Message.hasCampaignDelivery(campaign.id, lead.id);
-        if (alreadyDelivered) {
-            continue;
-        }
-
-        const alreadyQueued = await MessageQueue.hasQueuedOrSentForCampaignLead(campaign.id, lead.id);
-        if (alreadyQueued) {
-            continue;
-        }
-
-        await queueService.add({
-            leadId: lead.id,
-            conversationId: conversation.id,
-            campaignId: campaign.id,
-            content: message,
-            mediaType: 'text',
-            scheduledAt: resolveCampaignScheduledAt(campaign),
-            priority: 1
-        });
-
-        queued += 1;
+    if (!legacyCampaigns.length) {
+        return { total: 0, migrated: 0, linked: 0, skipped: 0, failed: 0 };
     }
 
-    return { queued, armed: activeTriggers.length };
-}
+    let migrated = 0;
+    let linked = 0;
+    let skipped = 0;
+    let failed = 0;
 
+    for (const campaign of legacyCampaigns) {
+        try {
+            const message = String(campaign?.message || '').trim();
+            if (!message) {
+                skipped += 1;
+                continue;
+            }
+
+            const existingRows = await query(`
+                SELECT id
+                FROM automations
+                WHERE trigger_type = 'message_received'
+                  AND trigger_value LIKE ?
+                  AND trigger_value LIKE ?
+                ORDER BY id DESC
+                LIMIT 1
+            `, [
+                `%"mode":"${LEGACY_CAMPAIGN_TRIGGER_MODE}"%`,
+                `%"source_campaign_id":${campaign.id},%`
+            ]);
+
+            let automationId = Number(existingRows?.[0]?.id || 0);
+            if (!(Number.isFinite(automationId) && automationId > 0)) {
+                const { minMs, maxMs } = resolveCampaignDelayRange(campaign, 0);
+                const delayMinMs = Math.max(0, Math.floor(minMs || 0));
+                const delayMaxMs = Math.max(delayMinMs, Math.floor(maxMs || 0));
+                const delaySeconds = Math.max(0, Math.round(delayMinMs / 1000));
+                const normalizedSegment = String(campaign.segment || 'all').trim().toLowerCase() || 'all';
+                const normalizedTagFilter = String(campaign.tag_filter || '').trim() || null;
+                const normalizedStatus = String(campaign.status || '').trim().toLowerCase();
+                const isActive = normalizedStatus === 'active' ? 1 : 0;
+                const triggerValue = JSON.stringify({
+                    mode: LEGACY_CAMPAIGN_TRIGGER_MODE,
+                    segment: normalizedSegment,
+                    tag_filter: normalizedTagFilter,
+                    start_at: campaign.start_at || null,
+                    once_per_lead: true,
+                    delay_min_ms: delayMinMs,
+                    delay_max_ms: delayMaxMs,
+                    source_campaign_id: Number(campaign.id),
+                    source_campaign_uuid: campaign.uuid || null
+                });
+                const descriptionParts = [
+                    String(campaign.description || '').trim(),
+                    `Migrada da campanha gatilho #${campaign.id}.`
+                ].filter(Boolean);
+
+                const result = await Automation.create({
+                    name: String(campaign.name || `Campanha ${campaign.id}`).trim() || `Campanha ${campaign.id}`,
+                    description: descriptionParts.join(' '),
+                    trigger_type: 'message_received',
+                    trigger_value: triggerValue,
+                    action_type: 'send_message',
+                    action_value: message,
+                    delay: delaySeconds,
+                    is_active: isActive,
+                    created_by: campaign.created_by
+                });
+
+                automationId = Number(result?.id || 0);
+                if (!(Number.isFinite(automationId) && automationId > 0)) {
+                    throw new Error('Automacao nao retornou id valido');
+                }
+
+                migrated += 1;
+            } else {
+                linked += 1;
+            }
+
+            const migratedAt = new Date().toISOString();
+            const migrationNote = `Migrada automaticamente para automacao #${automationId} em ${migratedAt}`;
+            await run(`
+                INSERT INTO campaign_automation_migrations (campaign_id, automation_id, notes)
+                VALUES (?, ?, ?)
+                ON CONFLICT (campaign_id) DO NOTHING
+            `, [campaign.id, automationId, migrationNote]);
+
+            const currentDescription = String(campaign.description || '').trim();
+            const hasMigrationNote = currentDescription.includes('Migrada automaticamente para automacao #');
+            const updatedDescription = hasMigrationNote
+                ? currentDescription
+                : [currentDescription, migrationNote].filter(Boolean).join('\n');
+
+            await Campaign.update(campaign.id, {
+                status: 'completed',
+                description: updatedDescription
+            });
+        } catch (error) {
+            failed += 1;
+            console.error(`Falha ao migrar campanha legado #${campaign?.id}:`, error.message);
+        }
+    }
+
+    console.log(
+        `Migracao de campanhas gatilho: total=${legacyCampaigns.length}, criadas=${migrated}, vinculadas=${linked}, ignoradas=${skipped}, falhas=${failed}`
+    );
+
+    return {
+        total: legacyCampaigns.length,
+        migrated,
+        linked,
+        skipped,
+        failed
+    };
+}
 
 async function queueCampaignMessages(campaign) {
+    const campaignType = String(campaign?.type || '').trim().toLowerCase();
+    if (campaignType === 'trigger') {
+        throw new Error('Campanhas do tipo gatilho foram descontinuadas. Use Automacao para gatilhos.');
+    }
+    if (!SUPPORTED_CAMPAIGN_TYPES.has(campaignType)) {
+        throw new Error('Tipo de campanha invalido. Use broadcast ou drip.');
+    }
 
     const steps = parseCampaignSteps(campaign);
 
     if (!steps.length) {
 
         throw new Error('Campanha sem mensagem configurada');
-
-    }
-
-
-    if (campaign.type === 'trigger') {
-
-        return { queued: 0, recipients: 0, armed: true };
 
     }
 
@@ -6089,7 +6562,7 @@ async function queueCampaignMessages(campaign) {
 
     let queuedCount = 0;
 
-    if (campaign.type === 'drip') {
+    if (campaignType === 'drip') {
 
         for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
 
@@ -6262,7 +6735,7 @@ app.post('/api/campaigns', authenticate, async (req, res) => {
 
             created_by: req.user?.id
 
-        });
+        }, { applyDefaultType: true });
 
         const result = await Campaign.create(payload);
 
@@ -6298,7 +6771,7 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
 
         }
 
-        const payload = sanitizeCampaignPayload(req.body);
+        const payload = sanitizeCampaignPayload(req.body, { applyDefaultType: false });
         const shouldQueue = campaign.status !== 'active' && payload.status === 'active';
 
         await Campaign.update(req.params.id, payload);
@@ -6395,6 +6868,14 @@ app.post('/api/automations', authenticate, async (req, res) => {
 
         };
 
+        const triggerType = String(payload.trigger_type || '').trim().toLowerCase();
+        if (!isSupportedAutomationTriggerType(triggerType)) {
+            return res.status(400).json({
+                error: 'Trigger de automacao invalido. Use new_lead, status_change, message_received, keyword, schedule ou inactivity.'
+            });
+        }
+        payload.trigger_type = triggerType;
+
         const result = await Automation.create(payload);
 
         const automation = await Automation.findById(result.id);
@@ -6422,8 +6903,21 @@ app.put('/api/automations/:id', authenticate, async (req, res) => {
     }
 
 
+    const payload = {
+        ...req.body
+    };
 
-    await Automation.update(req.params.id, req.body);
+    if (Object.prototype.hasOwnProperty.call(payload, 'trigger_type')) {
+        const triggerType = String(payload.trigger_type || '').trim().toLowerCase();
+        if (!isSupportedAutomationTriggerType(triggerType)) {
+            return res.status(400).json({
+                error: 'Trigger de automacao invalido. Use new_lead, status_change, message_received, keyword, schedule ou inactivity.'
+            });
+        }
+        payload.trigger_type = triggerType;
+    }
+
+    await Automation.update(req.params.id, payload);
 
     const updatedAutomation = await Automation.findById(req.params.id);
 
@@ -6951,13 +7445,3 @@ process.on('uncaughtException', (error) => {
     });
 
 };
-
-
-
-
-
-
-
-
-
-

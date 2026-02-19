@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     uuid TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     description TEXT,
-    type TEXT DEFAULT 'broadcast' CHECK(type IN ('trigger', 'broadcast', 'drip')),
+    type TEXT DEFAULT 'broadcast' CHECK(type IN ('broadcast', 'drip')),
     status TEXT DEFAULT 'draft' CHECK(status IN ('active', 'paused', 'completed', 'draft')),
     segment TEXT,
     tag_filter TEXT,
@@ -151,6 +151,22 @@ CREATE TABLE IF NOT EXISTS automations (
     created_by INTEGER REFERENCES users(id),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS automation_lead_runs (
+    id SERIAL PRIMARY KEY,
+    automation_id INTEGER NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (automation_id, lead_id)
+);
+
+CREATE TABLE IF NOT EXISTS campaign_automation_migrations (
+    id SERIAL PRIMARY KEY,
+    campaign_id INTEGER NOT NULL UNIQUE REFERENCES campaigns(id) ON DELETE CASCADE,
+    automation_id INTEGER NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+    notes TEXT,
+    migrated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS flow_executions (
@@ -296,6 +312,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_campaign ON messages(campaign_id);
 
 CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
 CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
+CREATE INDEX IF NOT EXISTS idx_automation_lead_runs_lead ON automation_lead_runs(lead_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_automation_migrations_automation ON campaign_automation_migrations(automation_id);
 
 CREATE INDEX IF NOT EXISTS idx_queue_status ON message_queue(status);
 CREATE INDEX IF NOT EXISTS idx_queue_scheduled ON message_queue(scheduled_at);

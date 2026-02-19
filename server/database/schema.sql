@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     uuid TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     description TEXT,
-    type TEXT DEFAULT 'broadcast' CHECK(type IN ('trigger', 'broadcast', 'drip')),
+    type TEXT DEFAULT 'broadcast' CHECK(type IN ('broadcast', 'drip')),
     status TEXT DEFAULT 'draft' CHECK(status IN ('active', 'paused', 'completed', 'draft')),
     segment TEXT,
     tag_filter TEXT,
@@ -163,6 +163,24 @@ CREATE TABLE IF NOT EXISTS automations (
 );
 
 -- Tabela de Execuções de Fluxo
+-- Controle de execucao unica por lead para automacoes
+CREATE TABLE IF NOT EXISTS automation_lead_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    automation_id INTEGER NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    UNIQUE (automation_id, lead_id)
+);
+
+-- Mapeamento de campanhas legado migradas para automacoes
+CREATE TABLE IF NOT EXISTS campaign_automation_migrations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL UNIQUE REFERENCES campaigns(id) ON DELETE CASCADE,
+    automation_id INTEGER NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+    notes TEXT,
+    migrated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+
 CREATE TABLE IF NOT EXISTS flow_executions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid TEXT UNIQUE NOT NULL,
@@ -311,6 +329,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_campaign ON messages(campaign_id);
 
 CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
 CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
+CREATE INDEX IF NOT EXISTS idx_automation_lead_runs_lead ON automation_lead_runs(lead_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_automation_migrations_automation ON campaign_automation_migrations(automation_id);
 
 CREATE INDEX IF NOT EXISTS idx_queue_status ON message_queue(status);
 CREATE INDEX IF NOT EXISTS idx_queue_scheduled ON message_queue(scheduled_at);

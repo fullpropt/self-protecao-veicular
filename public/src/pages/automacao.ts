@@ -20,6 +20,18 @@ type Automation = {
 type AutomationsResponse = { automations?: Automation[] };
 
 let automations: Automation[] = [];
+const RUNTIME_SUPPORTED_TRIGGER_TYPES: TriggerType[] = [
+    'new_lead',
+    'status_change',
+    'message_received',
+    'keyword',
+    'schedule',
+    'inactivity'
+];
+
+function isRuntimeSupportedTriggerType(type: string): type is TriggerType {
+    return RUNTIME_SUPPORTED_TRIGGER_TYPES.includes(type as TriggerType);
+}
 
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
@@ -75,7 +87,8 @@ function getTriggerValue(type: TriggerType): string {
         case 'schedule': {
             const time = (document.getElementById('triggerTime') as HTMLInputElement | null)?.value || '';
             const days = Array.from(document.querySelectorAll('#triggerOptionsContainer input[type=\"checkbox\"]:checked'))
-                .map(input => (input as HTMLInputElement).value);
+                .map(input => Number((input as HTMLInputElement).value))
+                .filter(day => Number.isInteger(day) && day >= 0 && day <= 6);
             if (!time && days.length === 0) return '';
             return JSON.stringify({ time, days });
         }
@@ -102,9 +115,10 @@ function applyTriggerValue(type: TriggerType, value?: string | null) {
             const timeInput = document.getElementById('triggerTime') as HTMLInputElement | null;
             if (timeInput && parsed?.time) timeInput.value = parsed.time;
             if (Array.isArray(parsed?.days)) {
+                const selectedDays = new Set(parsed.days.map((day: unknown) => String(day)));
                 document.querySelectorAll('#triggerOptionsContainer input[type=\"checkbox\"]').forEach(input => {
                     const checkbox = input as HTMLInputElement;
-                    checkbox.checked = parsed.days.includes(checkbox.value);
+                    checkbox.checked = selectedDays.has(checkbox.value);
                 });
             }
             return;
@@ -204,9 +218,9 @@ async function loadAutomations() {
             {
                 id: 2,
                 name: 'Follow-up Automático',
-                description: 'Envia follow-up após 24h sem resposta',
-                trigger_type: 'inactivity',
-                trigger_value: '86400',
+                description: 'Envia follow-up a cada mensagem recebida',
+                trigger_type: 'message_received',
+                trigger_value: '',
                 action_type: 'send_message',
                 action_value: 'Oi {{nome}}, ainda posso te ajudar?',
                 delay: 0,
@@ -343,7 +357,7 @@ function updateTriggerOptions() {
     if (!container) return;
     
     let html = '';
-    
+
     switch (type) {
         case 'status_change':
             html = `
@@ -482,6 +496,14 @@ async function saveAutomation() {
 
     if (!name) {
         showToast('error', 'Erro', 'Nome ? obrigat?rio');
+        return;
+    }
+    if (!isRuntimeSupportedTriggerType(triggerType)) {
+        showToast(
+            'error',
+            'Erro',
+            'Gatilho invalido.'
+        );
         return;
     }
 

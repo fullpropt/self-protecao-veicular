@@ -295,7 +295,6 @@ export default function Campanhas() {
                                   <select className="form-select" id="campaignType">
                                       <option value="broadcast">Transmissão Única</option>
                                       <option value="drip">Sequência (Drip)</option>
-                                      <option value="trigger">Gatilho</option>
                                   </select>
                               </div>
                               <div className="form-group">
