@@ -49,9 +49,10 @@ export default function FlowBuilder() {
   return (
     <div className="flow-builder-react">
       <style>{`
-:root {
+        .flow-builder-react {
             --primary: #178C49;
             --primary-light: #1FAE5E;
+            --primary-rgb: 23, 140, 73;
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
@@ -62,6 +63,84 @@ export default function FlowBuilder() {
             --lighter: #f8fafc;
             --white: #ffffff;
             --border: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .flow-builder-react .main-content {
+            color: #e7edf7;
+        }
+
+        .flow-builder-react .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .flow-builder-react .header-title h1 {
+            color: #e7edf7;
+            font-size: 40px;
+            line-height: 1.1;
+        }
+
+        .flow-builder-react .header-title p {
+            color: #9fb0c8;
+            margin-top: 6px;
+        }
+
+        .flow-builder-react .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .flow-builder-react .sidebar-menu {
+            list-style: none;
+            margin: 0;
+            padding: 14px 10px;
+            flex: 1;
+        }
+
+        .flow-builder-react .sidebar-menu li {
+            margin-bottom: 4px;
+        }
+
+        .flow-builder-react .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 15px;
+            color: rgba(226, 232, 240, 0.82);
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all var(--transition);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .flow-builder-react .sidebar-menu a:hover {
+            background: rgba(var(--primary-rgb), 0.2);
+            color: #f0fdf4;
+            transform: translateX(3px);
+        }
+
+        .flow-builder-react .sidebar-menu a.active {
+            background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.26) 0%, rgba(var(--primary-rgb), 0.12) 100%);
+            color: #f0fdf4;
+            border: 1px solid rgba(var(--primary-rgb), 0.3);
+        }
+
+        .flow-builder-react .sidebar-footer {
+            margin-top: auto;
+            padding: 15px;
+            border-top: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .flow-builder-react .btn-logout {
+            text-decoration: none;
         }
         
         .flow-container {
@@ -650,7 +729,7 @@ export default function FlowBuilder() {
                 padding: 12px;
                 max-height: 220px;
             }
-            .header-actions {
+            .flow-builder-react .header-actions {
                 width: 100%;
                 display: grid;
                 grid-template-columns: 1fr;
