@@ -22,8 +22,6 @@ let isConnecting = false;
 let qrTimer: number | null = null;
 let timerCountdown = 30;
 let pairingCodeHideTimer: number | null = null;
-type WhatsAppContact = { number: string; name?: string };
-let contacts: WhatsAppContact[] = [];
 
 // Inicialização
 function onReady(callback: () => void) {
@@ -37,10 +35,6 @@ function onReady(callback: () => void) {
 
 function getLoginUrl() {
     return '#/login';
-}
-
-function getConversasUrl(params: URLSearchParams) {
-    return `#/conversas?${params.toString()}`;
 }
 
 function normalizePairingPhoneInput(value: string) {
@@ -179,14 +173,6 @@ function initSocket() {
     socket.on('disconnected', function(data) {
         console.log('❌ WhatsApp desconectado');
         handleDisconnected();
-    });
-    
-    socket.on('contacts-list', function(data) {
-        console.log('👥 Contatos recebidos:', data.contacts?.length);
-        if (data.contacts) {
-            contacts = data.contacts;
-            renderContacts();
-        }
     });
     
     socket.on('error', function(data) {
@@ -395,9 +381,6 @@ function handleConnected(user: { name?: string; phone?: string } | undefined) {
         if (userPhone) userPhone.textContent = user.phone ? formatPhone(user.phone) : '-';
     }
     
-    // Carregar contatos
-    socket?.emit('get-contacts', { sessionId: CONFIG.SESSION_ID });
-    
     showToast('success', 'WhatsApp conectado com sucesso!');
 }
 
@@ -422,12 +405,6 @@ function handleDisconnected() {
     if (qrTimerEl) qrTimerEl.style.display = 'none';
     
     showQRLoading('Aguardando conexão...');
-    
-    // Esconder contatos
-    const empty = document.getElementById('contacts-empty') as HTMLElement | null;
-    const listWrapper = document.getElementById('contacts-list-wrapper') as HTMLElement | null;
-    if (empty) empty.style.display = 'block';
-    if (listWrapper) listWrapper.style.display = 'none';
 }
 
 // Atualizar status
@@ -463,46 +440,6 @@ function updatePairingButton(loading: boolean) {
         btn.disabled = false;
         btn.textContent = 'Gerar codigo';
     }
-}
-
-// Renderizar contatos
-function renderContacts() {
-    const listWrapper = document.getElementById('contacts-list-wrapper') as HTMLElement | null;
-    const emptyState = document.getElementById('contacts-empty') as HTMLElement | null;
-    const listEl = document.getElementById('contacts-list') as HTMLElement | null;
-    const countEl = document.getElementById('contacts-count') as HTMLElement | null;
-    if (!listWrapper || !emptyState || !listEl || !countEl) return;
-    
-    if (contacts.length === 0) {
-        emptyState.style.display = 'block';
-        listWrapper.style.display = 'none';
-        return;
-    }
-    
-    emptyState.style.display = 'none';
-    listWrapper.style.display = 'block';
-    countEl.textContent = String(contacts.length);
-    
-    listEl.innerHTML = contacts.slice(0, 20).map(contact => `
-        <div class="contact-item" onclick="openChat('${contact.number}', '${contact.name || contact.number}')">
-            <div class="contact-avatar">
-                ${contact.name ? contact.name.charAt(0).toUpperCase() : 'U'}
-            </div>
-            <div class="contact-info">
-                <div class="contact-name">${contact.name || contact.number}</div>
-                <div class="contact-phone">${formatPhone(contact.number)}</div>
-            </div>
-            <button class="contact-action" onclick="event.stopPropagation(); openChat('${contact.number}', '${contact.name || contact.number}')">
-                CHAT
-            </button>
-        </div>
-    `).join('');
-}
-
-// Abrir chat
-function openChat(phone: string, name: string) {
-    const params = new URLSearchParams({ phone, name });
-    window.location.href = getConversasUrl(params);
 }
 
 // Formatar telefone
@@ -560,7 +497,6 @@ const windowAny = window as Window & {
     startConnection?: () => void;
     requestPairingCode?: () => void;
     disconnect?: () => void;
-    openChat?: (phone: string, name: string) => void;
     toggleSidebar?: () => void;
     logout?: () => void;
 };
@@ -568,7 +504,6 @@ windowAny.initWhatsapp = initWhatsapp;
 windowAny.startConnection = startConnection;
 windowAny.requestPairingCode = requestPairingCode;
 windowAny.disconnect = disconnect;
-windowAny.openChat = openChat;
 windowAny.toggleSidebar = toggleSidebar;
 windowAny.logout = logout;
 

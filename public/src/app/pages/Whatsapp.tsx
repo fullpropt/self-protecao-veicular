@@ -151,7 +151,7 @@ export default function Whatsapp() {
 
         .whatsapp-react .whatsapp-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 30px;
         }
 
@@ -532,118 +532,6 @@ export default function Whatsapp() {
             padding-top: 4px;
         }
 
-        .whatsapp-react .contacts-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .whatsapp-react .contacts-header h3 {
-            font-size: 16px;
-            color: var(--dark);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .whatsapp-react .contacts-count {
-            background: var(--primary);
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .whatsapp-react .contacts-list {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .whatsapp-react .contact-item {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            padding: 15px;
-            border-radius: 12px;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-
-        .whatsapp-react .contact-item:hover {
-            background: var(--lighter);
-        }
-
-        .whatsapp-react .contact-avatar {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 18px;
-        }
-
-        .whatsapp-react .contact-info {
-            flex: 1;
-        }
-
-        .whatsapp-react .contact-name {
-            font-weight: 600;
-            color: var(--dark);
-            font-size: 15px;
-        }
-
-        .whatsapp-react .contact-phone {
-            color: var(--gray);
-            font-size: 13px;
-        }
-
-        .whatsapp-react .contact-action {
-            background: var(--whatsapp);
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 10px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.3px;
-            transition: all 0.2s;
-        }
-
-        .whatsapp-react .contact-action:hover {
-            transform: scale(1.1);
-        }
-
-        .whatsapp-react .contacts-empty {
-            text-align: center;
-            padding: 50px 20px;
-            color: var(--gray);
-        }
-
-        .whatsapp-react .contacts-empty .icon {
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 15px;
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            background: var(--lighter);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--gray);
-            font-size: 14px;
-            font-weight: 600;
-        }
-
         .whatsapp-react .toast-container {
             position: fixed;
             bottom: 30px;
@@ -924,33 +812,6 @@ export default function Whatsapp() {
                       </div>
                   </div>
                   
-                  <div className="card">
-                      <div className="card-header">
-                          <div className="card-header-icon blue"><span className="icon icon-contacts"></span></div>
-                          <h2>Contatos Recentes</h2>
-                      </div>
-                      
-                      <div className="card-body">
-                          <div id="contacts-container">
-                              <div className="contacts-empty" id="contacts-empty">
-                                  <span className="icon icon-contacts"></span>
-                                  <h3>Conecte o WhatsApp</h3>
-                                  <p>Conecte seu WhatsApp para ver os contatos recentes</p>
-                              </div>
-                              
-                              <div id="contacts-list-wrapper" style={{ display: 'none' }}>
-                                  <div className="contacts-header">
-                                      <h3>
-                                          Lista de Contatos
-                                      </h3>
-                                      <span className="contacts-count" id="contacts-count">0</span>
-                                  </div>
-                                  <div className="contacts-list" id="contacts-list">
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
-                  </div>
               </div>
           </main>
           
