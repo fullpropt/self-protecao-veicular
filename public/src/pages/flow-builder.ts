@@ -42,10 +42,14 @@ let pan = { x: 0, y: 0 };
 let isDragging = false;
 let dragNode: FlowNode | null = null;
 let dragOffset = { x: 0, y: 0 };
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+let panOrigin = { x: 0, y: 0 };
 let isConnecting = false;
 let connectionStart: { nodeId: string; portType: string } | null = null;
 let connectionStartPort: HTMLElement | null = null;
 let connectionPreviewPath: SVGPathElement | null = null;
+let lastPointer = { x: 0, y: 0 };
 let hasInitialized = false;
 
 // Inicialização
@@ -109,6 +113,21 @@ function setupCanvasEvents() {
             deselectNode();
         }
     });
+
+    canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (e.button !== 2) return;
+        startPan(e.clientX, e.clientY, canvas);
+    });
+
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.1 : -0.1;
+        setZoom(zoom + delta);
+    }, { passive: false });
 
     document.addEventListener('mousemove', handleDocumentMouseMove);
     document.addEventListener('mouseup', handleDocumentMouseUp);
@@ -191,6 +210,8 @@ function renderNode(node: FlowNode) {
     
     // Eventos de arrastar
     nodeEl.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+
         const target = e.target as HTMLElement | null;
         if (target?.classList.contains('port')) {
             e.preventDefault();
@@ -213,7 +234,34 @@ function renderNode(node: FlowNode) {
     container.appendChild(nodeEl);
 }
 
+function startPan(clientX: number, clientY: number, canvas: HTMLElement) {
+    if (isConnecting) {
+        cancelConnection();
+    }
+
+    isPanning = true;
+    panStart = { x: clientX, y: clientY };
+    panOrigin = { ...pan };
+    canvas.classList.add('is-panning');
+}
+
+function stopPan() {
+    isPanning = false;
+    const canvas = document.getElementById('flowCanvas') as HTMLElement | null;
+    canvas?.classList.remove('is-panning');
+}
+
 function handleDocumentMouseMove(e: MouseEvent) {
+    lastPointer.x = e.clientX;
+    lastPointer.y = e.clientY;
+
+    if (isPanning) {
+        pan.x = panOrigin.x + (e.clientX - panStart.x);
+        pan.y = panOrigin.y + (e.clientY - panStart.y);
+        applyZoom();
+        return;
+    }
+
     if (isDragging && dragNode) {
         const canvas = document.getElementById('canvasContainer') as HTMLElement | null;
         if (!canvas) return;
@@ -240,6 +288,10 @@ function handleDocumentMouseMove(e: MouseEvent) {
 function handleDocumentMouseUp(e: MouseEvent) {
     isDragging = false;
     dragNode = null;
+
+    if (isPanning) {
+        stopPan();
+    }
 
     if (!isConnecting || !connectionStart) return;
 
@@ -511,6 +563,11 @@ function startConnection(nodeId: string, portType: string) {
     connectionPreviewPath.setAttribute('class', 'connection-line connection-line-preview');
 
     const sourcePoint = getPortCenter(sourcePort, svg);
+    const sourceRect = sourcePort.getBoundingClientRect();
+    lastPointer = {
+        x: sourceRect.left + sourceRect.width / 2,
+        y: sourceRect.top + sourceRect.height / 2
+    };
     connectionPreviewPath.setAttribute('d', buildConnectionPath(sourcePoint.x, sourcePoint.y, sourcePoint.x, sourcePoint.y));
     svg.appendChild(connectionPreviewPath);
 }
@@ -579,8 +636,8 @@ function clearConnectionTargetHighlights() {
 function getCanvasPointFromClient(clientX: number, clientY: number, svg: SVGSVGElement) {
     const canvasRect = svg.getBoundingClientRect();
     return {
-        x: (clientX - canvasRect.left) / zoom,
-        y: (clientY - canvasRect.top) / zoom
+        x: clientX - canvasRect.left,
+        y: clientY - canvasRect.top
     };
 }
 
@@ -619,35 +676,53 @@ function renderConnections() {
         path.setAttribute('data-source', edge.source);
         path.setAttribute('data-target', edge.target);
 
-        path.addEventListener('click', () => {
-            if (confirm('Remover esta conexão?')) {
-                edges = edges.filter(e => !(e.source === edge.source && e.target === edge.target));
-                renderConnections();
-            }
+        const removeConnection = () => {
+            if (!confirm('Remover esta conexão?')) return;
+            edges = edges.filter(e => !(e.source === edge.source && e.target === edge.target));
+            renderConnections();
+        };
+
+        path.addEventListener('click', (event) => {
+            event.stopPropagation();
+            removeConnection();
         });
 
         svg.appendChild(path);
     });
+
+    if (isConnecting && connectionPreviewPath && connectionStartPort) {
+        svg.appendChild(connectionPreviewPath);
+        const sourcePoint = getPortCenter(connectionStartPort, svg);
+        const targetPoint = getCanvasPointFromClient(lastPointer.x, lastPointer.y, svg);
+        connectionPreviewPath.setAttribute('d', buildConnectionPath(sourcePoint.x, sourcePoint.y, targetPoint.x, targetPoint.y));
+    }
 }
+
+function setZoom(value: number) {
+    zoom = Math.max(0.3, Math.min(value, 2));
+    applyZoom();
+}
+
 function zoomIn() {
     zoom = Math.min(zoom + 0.1, 2);
     applyZoom();
 }
 
 function zoomOut() {
-    zoom = Math.max(zoom - 0.1, 0.5);
+    zoom = Math.max(zoom - 0.1, 0.3);
     applyZoom();
 }
 
 function resetZoom() {
     zoom = 1;
+    pan = { x: 0, y: 0 };
     applyZoom();
 }
 
 function applyZoom() {
     const container = document.getElementById('canvasContainer') as HTMLElement | null;
     const zoomLevel = document.getElementById('zoomLevel') as HTMLElement | null;
-    if (container) container.style.transform = `scale(${zoom})`;
+    if (container) container.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
     if (zoomLevel) zoomLevel.textContent = Math.round(zoom * 100) + '%';
     renderConnections();
 }

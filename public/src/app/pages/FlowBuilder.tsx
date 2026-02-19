@@ -235,6 +235,12 @@ export default function FlowBuilder() {
                 radial-gradient(circle, #ddd 1px, transparent 1px);
             background-size: 20px 20px;
             overflow: hidden;
+            cursor: grab;
+        }
+
+        .flow-canvas.is-panning,
+        .flow-canvas.is-panning * {
+            cursor: grabbing !important;
         }
         
         .canvas-container {
@@ -244,6 +250,7 @@ export default function FlowBuilder() {
             width: 100%;
             height: 100%;
             transform-origin: 0 0;
+            z-index: 2;
         }
         
         .flow-node {
@@ -364,6 +371,7 @@ export default function FlowBuilder() {
             width: 100%;
             height: 100%;
             pointer-events: none;
+            z-index: 3;
         }
         
         .connection-line {
