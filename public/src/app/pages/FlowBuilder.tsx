@@ -753,6 +753,8 @@ export default function FlowBuilder() {
               <div className="sidebar-logo"><img src={brandLogoUrl} alt={brandName} className="brand-logo" /><span className="brand-text">{brandName}</span></div>
               <ul className="sidebar-menu">
                   <li><Link to="/dashboard"><span className="icon icon-dashboard"></span> Painel de Controle</Link></li>
+                  <li><Link to="/contatos"><span className="icon icon-contacts"></span> Contatos</Link></li>
+                  <li><Link to="/campanhas"><span className="icon icon-campaigns"></span> Campanhas</Link></li>
                   <li><Link to="/funil"><span className="icon icon-funnel"></span> Funil de Vendas</Link></li>
                   <li><Link to="/whatsapp"><span className="icon icon-whatsapp"></span> WhatsApp</Link></li>
                   <li><Link to="/conversas"><span className="icon icon-message"></span> Conversas</Link></li>
