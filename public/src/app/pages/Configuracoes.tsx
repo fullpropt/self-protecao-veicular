@@ -211,7 +211,7 @@ export default function Configuracoes() {
                   <nav className="settings-nav">
                       <div className="settings-nav-item active" onClick={() => globals.showPanel?.('conexao')}><span className="icon icon-whatsapp icon-sm"></span> Conexão</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('general')}><span className="icon icon-building icon-sm"></span> Campos</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('contact-fields')}><span className="icon icon-contacts icon-sm"></span> Dados de contato</div>
+                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('contact-fields')}><span className="icon icon-contacts icon-sm"></span> Campos Dinâmicos</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Etiquetas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas rápidas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Horários</div>
@@ -268,7 +268,7 @@ export default function Configuracoes() {
       
                       <div className="settings-panel" id="panel-contact-fields">
                           <div className="settings-section">
-                              <h3 className="settings-section-title"><span className="icon icon-contacts icon-sm"></span> Dados de contato</h3>
+                              <h3 className="settings-section-title"><span className="icon icon-contacts icon-sm"></span> Campos Dinâmicos</h3>
                               <p className="text-muted mb-3">Esses campos aparecem no cadastro de contato e viram vari&aacute;veis para respostas r&aacute;pidas.</p>
 
                               <div className="copy-card">

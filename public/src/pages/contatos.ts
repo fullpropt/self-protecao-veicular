@@ -73,6 +73,32 @@ function normalizeCustomFieldValue(value: unknown) {
     return String(value ?? '').trim();
 }
 
+function normalizeImportHeader(value: string) {
+    return normalizeContactFieldKey(value || '');
+}
+
+function buildNormalizedImportRow(row: Record<string, string>) {
+    const normalized: Record<string, string> = {};
+    for (const [rawKey, rawValue] of Object.entries(row || {})) {
+        const key = normalizeImportHeader(rawKey);
+        if (!key || Object.prototype.hasOwnProperty.call(normalized, key)) continue;
+        normalized[key] = String(rawValue || '').trim();
+    }
+    return normalized;
+}
+
+function getImportValue(normalizedRow: Record<string, string>, aliases: string[]) {
+    for (const alias of aliases) {
+        const key = normalizeImportHeader(alias);
+        if (!key) continue;
+        const value = normalizedRow[key];
+        if (value !== undefined && value !== null && String(value).trim()) {
+            return String(value).trim();
+        }
+    }
+    return '';
+}
+
 function escapeHtml(value: string) {
     return String(value)
         .replace(/&/g, '&amp;')
@@ -611,19 +637,35 @@ async function importContacts() {
         let imported = 0;
         
         for (const row of data) {
-            const phone = (row.telefone || row.phone || '').replace(/\D/g, '');
+            const normalizedRow = buildNormalizedImportRow(row);
+            const phone = getImportValue(normalizedRow, ['telefone', 'phone', 'whatsapp', 'celular', 'fone', 'numero']).replace(/\D/g, '');
             if (!phone) continue;
             const mergedTags = Array.from(new Set(importTags));
+            const customFields: Record<string, string> = {};
+
+            for (const field of customContactFieldsCache) {
+                const aliases = [field.key, field.label || field.key];
+                const value = getImportValue(normalizedRow, aliases);
+                if (value) {
+                    customFields[normalizeContactFieldKey(field.key)] = value;
+                }
+            }
             
             try {
-                await api.post('/api/leads', {
-                    name: row.nome || row.name || 'Sem nome',
+                const payload: Record<string, any> = {
+                    name: getImportValue(normalizedRow, ['nome', 'name', 'nome_completo', 'contato']) || 'Sem nome',
                     phone,
-                    email: row.email || '',
+                    email: getImportValue(normalizedRow, ['email', 'e-mail', 'mail']),
                     status,
                     tags: mergedTags,
                     source: 'import'
-                });
+                };
+
+                if (Object.keys(customFields).length > 0) {
+                    payload.custom_fields = customFields;
+                }
+
+                await api.post('/api/leads', payload);
                 imported++;
             } catch (e) {}
         }

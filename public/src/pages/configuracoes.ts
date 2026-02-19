@@ -417,7 +417,7 @@ async function persistContactFields(showSuccess = true) {
     await api.put('/api/contact-fields', { fields: payload });
     await loadContactFields();
     if (showSuccess) {
-        showToast('success', 'Sucesso', 'Campos de contato atualizados!');
+        showToast('success', 'Sucesso', 'Campos dinâmicos atualizados!');
     }
 }
 

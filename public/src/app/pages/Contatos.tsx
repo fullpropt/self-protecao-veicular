@@ -435,7 +435,7 @@ export default function Contatos() {
             <div className="form-group">
               <label className="form-label">Arquivo CSV</label>
               <input type="file" className="form-input" id="importFile" accept=".csv,.txt" />
-              <p className="form-help">Colunas: nome, telefone, email</p>
+              <p className="form-help">Colunas: nome, telefone, email. Campos dinâmicos: use o nome da variável ou o rótulo da coluna.</p>
             </div>
             <div className="form-group">
               <label className="form-label">Ou cole os dados</label>
