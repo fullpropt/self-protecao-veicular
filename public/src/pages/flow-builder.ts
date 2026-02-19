@@ -881,11 +881,45 @@ function renderFlowsList(flows: FlowSummary[]) {
                 <div class="meta">Gatilho: ${flow.trigger_type || 'manual'} | ${flow.nodes?.length || 0} blocos</div>
             </div>
             <div class="flow-list-actions">
+                <button class="flow-list-duplicate" title="Duplicar fluxo" onclick="duplicateFlow(${flow.id}, event)">Duplicar</button>
                 <button class="flow-list-delete" title="Descartar fluxo" onclick="discardFlow(${flow.id}, event)">Descartar</button>
             </div>
             <span class="status ${flow.is_active ? 'active' : 'inactive'}">${flow.is_active ? 'Ativo' : 'Inativo'}</span>
         </div>
     `).join('');
+}
+
+async function duplicateFlow(id: number, event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    try {
+        const response = await fetch(`/api/flows/${id}`, {
+            headers: buildAuthHeaders(false)
+        });
+        const result = await response.json();
+
+        if (!result.success) {
+            alert('Erro ao duplicar fluxo: ' + (result.error || 'Falha inesperada'));
+            return;
+        }
+
+        resetEditorState();
+        closeFlowsModal();
+
+        const flow = result.flow || {};
+        nodes = flow.nodes || [];
+        edges = flow.edges || [];
+        currentFlowId = null;
+
+        const flowName = document.getElementById('flowName') as HTMLInputElement | null;
+        if (flowName) flowName.value = `${flow.name || 'Fluxo'} (copia)`;
+
+        nodes.forEach(node => renderNode(node));
+        setTimeout(() => renderConnections(), 100);
+    } catch (error) {
+        alert('Erro ao duplicar fluxo: ' + (error instanceof Error ? error.message : 'Falha inesperada'));
+    }
 }
 
 async function discardFlow(id: number, event?: Event) {
@@ -958,10 +992,9 @@ async function loadFlow(id: number) {
 
 // Criar novo fluxo
 function createNewFlow() {
-    currentFlowId = null;
+    resetEditorState();
     const flowName = document.getElementById('flowName') as HTMLInputElement | null;
     if (flowName) {
-        flowName.value = '';
         flowName.focus();
     }
     closeFlowsModal();
@@ -993,6 +1026,7 @@ const windowAny = window as Window & {
     updateCondition?: (index: number, key: 'value' | 'next', value: string) => void;
     deleteNode?: (id: string) => void;
     loadFlow?: (id: number) => Promise<void>;
+    duplicateFlow?: (id: number, event?: Event) => Promise<void>;
     discardFlow?: (id: number, event?: Event) => Promise<void>;
     closeFlowsModal?: () => void;
 };
@@ -1011,11 +1045,9 @@ windowAny.removeCondition = removeCondition;
 windowAny.updateCondition = updateCondition;
 windowAny.deleteNode = deleteNode;
 windowAny.loadFlow = loadFlow;
+windowAny.duplicateFlow = duplicateFlow;
 windowAny.discardFlow = discardFlow;
 windowAny.closeFlowsModal = closeFlowsModal;
 
 export { initFlowBuilder };
-
-
-
 

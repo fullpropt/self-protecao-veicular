@@ -756,6 +756,23 @@ export default function FlowBuilder() {
             border-color: rgba(239, 68, 68, 0.5);
         }
 
+        .flow-list-duplicate {
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            background: rgba(59, 130, 246, 0.08);
+            color: #1d4ed8;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .flow-list-duplicate:hover {
+            background: rgba(59, 130, 246, 0.16);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+
         .flow-list-item .status {
             padding: 4px 10px;
             border-radius: 15px;
@@ -1053,4 +1070,3 @@ export default function FlowBuilder() {
     </div>
   );
 }
-
