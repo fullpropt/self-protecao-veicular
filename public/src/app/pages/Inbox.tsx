@@ -7,6 +7,7 @@ type InboxGlobals = {
   filterConversations?: (filter: string) => void;
   searchConversations?: () => void;
   registerCurrentUser?: () => void;
+  toggleContactInfo?: (forceOpen?: boolean) => void;
   logout?: () => void;
 };
 
@@ -175,8 +176,8 @@ export default function Inbox() {
             border-bottom: 1px solid var(--border-color);
         }
         .chat-header-info { flex: 1; }
-        .chat-header-name { font-weight: 600; font-size: 16px; }
-        .chat-header-status { font-size: 12px; color: var(--gray-700); }
+        .chat-header-name { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-header-status { font-size: 12px; color: var(--gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -367,14 +368,194 @@ export default function Inbox() {
             min-height: 0;
         }
         .inbox-right-panel-content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .inbox-right-panel-content.ready { align-items: stretch; justify-content: flex-start; text-align: left; }
         .inbox-right-panel-robot { font-size: 64px; margin-bottom: 20px; opacity: 0.6; }
         .inbox-right-panel p { color: var(--gray-700); line-height: 1.5; margin: 0 0 16px; font-size: 14px; }
         .inbox-right-panel .btn-register-user { background: var(--whatsapp, #25d366); color: white; padding: 12px 24px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; font-size: 14px; }
         .inbox-right-panel .btn-register-user:hover { opacity: 0.9; }
+        .inbox-main-content { padding: 20px; }
+        .chat-header-actions { display: flex; gap: 8px; align-items: center; }
+        .chat-back-btn { display: none; }
+        .contact-info-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.64);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity var(--transition), visibility var(--transition);
+            z-index: 3390;
+        }
+        .contact-info-backdrop.active {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+        .contact-card { width: 100%; display: flex; flex-direction: column; gap: 16px; text-align: left; }
+        .contact-card-empty { width: 100%; max-width: 260px; }
+        .contact-card-header { display: flex; align-items: center; gap: 12px; }
+        .contact-card-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-weight: 700;
+        }
+        .contact-card-title { font-size: 16px; font-weight: 700; color: var(--dark); }
+        .contact-card-subtitle { font-size: 12px; color: var(--gray-600); margin-top: 2px; }
+        .contact-card-section {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px;
+            background: rgba(15, 23, 42, 0.18);
+        }
+        .contact-card-section-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: var(--gray-600);
+            margin-bottom: 10px;
+        }
+        .contact-info-grid,
+        .contact-card-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .contact-info-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: baseline;
+            font-size: 13px;
+        }
+        .contact-info-label { color: var(--gray-600); }
+        .contact-info-value {
+            color: var(--dark);
+            font-weight: 600;
+            text-align: right;
+            max-width: 60%;
+            word-break: break-word;
+        }
+        .contact-tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+        .contact-tag-chip {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 3px 10px;
+            font-size: 12px;
+            color: var(--gray-700);
+            background: rgba(var(--primary-rgb), 0.12);
+        }
+        .contact-card-muted { color: var(--gray-600); font-size: 12px; margin: 0; }
+        .contact-card-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .contact-card-actions .btn { width: 100%; }
+
+        @media (max-width: 1024px) {
+            .inbox-container {
+                grid-template-columns: 340px 1fr !important;
+                height: calc(100vh - 105px);
+            }
+            .inbox-right-panel {
+                display: flex !important;
+                position: fixed;
+                right: 0;
+                top: 0;
+                width: min(92vw, 360px);
+                height: 100vh;
+                z-index: 3400;
+                transform: translateX(100%);
+                transition: transform var(--transition);
+                box-shadow: -12px 0 28px rgba(0, 0, 0, 0.28);
+            }
+            .inbox-right-panel.active {
+                transform: translateX(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .inbox-main-content { padding: 8px !important; }
+            .inbox-container {
+                grid-template-columns: 1fr !important;
+                border-radius: 12px;
+                height: calc(100vh - 86px);
+            }
+            .conversations-panel {
+                display: flex !important;
+                border-right: none;
+            }
+            .conversations-panel.hidden {
+                display: none !important;
+            }
+            .chat-panel {
+                display: none !important;
+            }
+            .chat-panel.active {
+                display: flex !important;
+            }
+            .chat-header {
+                padding: 10px 12px;
+                gap: 10px;
+            }
+            .chat-back-btn {
+                display: inline-flex;
+            }
+            .chat-header-actions {
+                gap: 6px;
+            }
+            .chat-header-actions .btn.btn-icon {
+                width: 34px;
+                height: 34px;
+            }
+            .chat-messages {
+                padding: 10px 12px;
+            }
+            .chat-messages .message {
+                max-width: 86%;
+                font-size: 13px;
+            }
+            .quick-reply-toolbar {
+                padding: 8px 12px 0;
+            }
+            .chat-input {
+                padding: 10px 12px;
+                gap: 10px;
+            }
+            .chat-input button {
+                width: 42px;
+                height: 42px;
+            }
+            .conversations-header {
+                padding: 14px 12px;
+            }
+            .conversations-header h2 {
+                font-size: 18px;
+                margin-bottom: 10px;
+            }
+            .conversations-tabs {
+                margin-bottom: 10px;
+            }
+            .conversations-list .conversation-item {
+                padding: 12px;
+            }
+            .contact-card-actions {
+                grid-template-columns: 1fr;
+            }
+        }
       `}</style>
 
       <button
         className="mobile-menu-toggle"
+        type="button"
         onClick={() => {
           document.querySelector('.sidebar')?.classList.toggle('open');
           document.querySelector('.sidebar-overlay')?.classList.toggle('active');
@@ -382,7 +563,13 @@ export default function Inbox() {
       >
         {'\u2630'}
       </button>
-      <div className="sidebar-overlay"></div>
+      <div
+        className="sidebar-overlay"
+        onClick={() => {
+          document.querySelector('.sidebar')?.classList.toggle('open');
+          document.querySelector('.sidebar-overlay')?.classList.toggle('active');
+        }}
+      ></div>
 
       <aside className="sidebar">
         <div className="sidebar-header">
@@ -453,14 +640,14 @@ export default function Inbox() {
         </div>
       </aside>
 
-      <main className="main-content" style={{ padding: '20px' }}>
+      <main className="main-content inbox-main-content">
         <div className="inbox-container">
           <div className="conversations-panel" id="conversationsPanel">
             <div className="conversations-header">
               <h2><span className="icon icon-inbox icon-sm"></span> Inbox</h2>
               <div className="conversations-tabs">
-                <button className="active" onClick={() => globals.filterConversations?.('all')}>Todos</button>
-                <button onClick={() => globals.filterConversations?.('unread')}>Não lidos</button>
+                <button id="filterAllBtn" className="active" onClick={() => globals.filterConversations?.('all')}>Todos</button>
+                <button id="filterUnreadBtn" onClick={() => globals.filterConversations?.('unread')}>Não lidos</button>
               </div>
               <div className="search-box" style={{ maxWidth: '100%' }}>
                 <span className="search-icon icon icon-search icon-sm"></span>
@@ -499,6 +686,7 @@ export default function Inbox() {
             </div>
           </div>
         </div>
+        <div className="contact-info-backdrop" id="contactInfoBackdrop" onClick={() => globals.toggleContactInfo?.(false)}></div>
       </main>
     </div>
   );

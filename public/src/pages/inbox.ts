@@ -48,6 +48,11 @@ type LeadDetails = {
     name?: string;
     phone?: string;
     email?: string;
+    status?: LeadStatus | number | string;
+    source?: string;
+    tags?: string[] | string | null;
+    created_at?: string;
+    updated_at?: string;
     custom_fields?: string | Record<string, any> | null;
 };
 
@@ -69,6 +74,7 @@ let currentFilter: 'all' | 'unread' = 'all';
 let quickReplyDismissBound = false;
 let currentLeadDetails: LeadDetails | null = null;
 let contactFieldsCache: ContactField[] = [];
+let isContactInfoOpen = false;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', is_default: true, source: 'name' },
@@ -128,6 +134,59 @@ function parseLeadCustomFields(value: unknown) {
     }
 }
 
+function parseLeadTags(value: unknown) {
+    if (!value) return [];
+
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => String(item || '').trim())
+            .filter(Boolean);
+    }
+
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            return parsed
+                .map((item) => String(item || '').trim())
+                .filter(Boolean);
+        }
+    } catch {
+        // fallback para texto legado
+    }
+
+    return raw
+        .split(/[,;|]/)
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+}
+
+function formatLeadStatus(status: unknown) {
+    const normalized = Number(status);
+    switch (normalized) {
+        case 1:
+            return 'Novo';
+        case 2:
+            return 'Em andamento';
+        case 3:
+            return 'Concluido';
+        case 4:
+            return 'Perdido';
+        default:
+            return 'Nao definido';
+    }
+}
+
+function formatLeadSource(source: unknown) {
+    const value = String(source || '').trim().toLowerCase();
+    if (!value) return 'Nao definido';
+    if (value === 'manual') return 'Manual';
+    if (value === 'whatsapp') return 'WhatsApp';
+    return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', callback);
@@ -147,12 +206,195 @@ function initInbox() {
     loadConversations();
     loadQuickReplies();
     initSocket();
+    renderContactInfoPanel();
+    setMobileConversationMode(false);
     if (refreshInterval === null) {
         refreshInterval = window.setInterval(loadConversations, 10000);
     }
 }
 
 onReady(initInbox);
+
+function isMobileInboxView() {
+    return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function isTabletOrMobileView() {
+    return window.matchMedia('(max-width: 1024px)').matches;
+}
+
+function setMobileConversationMode(chatOpen: boolean) {
+    const conversationsPanel = document.getElementById('conversationsPanel') as HTMLElement | null;
+    const chatPanel = document.getElementById('chatPanel') as HTMLElement | null;
+    if (!conversationsPanel || !chatPanel) return;
+
+    if (!isMobileInboxView()) {
+        conversationsPanel.classList.remove('hidden');
+        chatPanel.classList.remove('active');
+        return;
+    }
+
+    if (chatOpen) {
+        conversationsPanel.classList.add('hidden');
+        chatPanel.classList.add('active');
+    } else {
+        conversationsPanel.classList.remove('hidden');
+        chatPanel.classList.remove('active');
+    }
+}
+
+function setContactInfoPanelState(forceOpen?: boolean) {
+    const panel = document.getElementById('inboxRightPanel') as HTMLElement | null;
+    const backdrop = document.getElementById('contactInfoBackdrop') as HTMLElement | null;
+    if (!panel || !backdrop) return;
+
+    const nextState = typeof forceOpen === 'boolean' ? forceOpen : !isContactInfoOpen;
+    isContactInfoOpen = nextState;
+    panel.classList.toggle('active', isContactInfoOpen);
+    backdrop.classList.toggle('active', isContactInfoOpen);
+}
+
+function closeContactInfoPanel() {
+    setContactInfoPanelState(false);
+}
+
+function buildLeadInfoRows() {
+    const lead = currentLeadDetails;
+    const conversation = currentConversation;
+    const customFields = parseLeadCustomFields(lead?.custom_fields);
+    const fields = contactFieldsCache.length ? contactFieldsCache : DEFAULT_CONTACT_FIELDS;
+
+    const rows: Array<{ label: string; value: string }> = [];
+    for (const field of fields) {
+        const normalizedKey = normalizeContactFieldKey(field.key);
+        if (!normalizedKey) continue;
+
+        let value = '';
+        if (field.source === 'name' || normalizedKey === 'nome') {
+            value = String(lead?.name || conversation?.name || '').trim();
+        } else if (field.source === 'phone' || normalizedKey === 'telefone') {
+            value = formatPhone(String(lead?.phone || conversation?.phone || '').trim());
+        } else if (field.source === 'email' || normalizedKey === 'email') {
+            value = String(lead?.email || '').trim();
+        } else {
+            const byNormalizedKey = customFields[normalizedKey];
+            const byOriginalKey = customFields[field.key];
+            const resolved = byNormalizedKey !== undefined ? byNormalizedKey : byOriginalKey;
+            value = resolved === undefined || resolved === null ? '' : String(resolved).trim();
+        }
+
+        if (!value) continue;
+        rows.push({
+            label: field.label || field.key,
+            value
+        });
+    }
+
+    return rows;
+}
+
+function renderContactInfoPanel() {
+    const container = document.getElementById('inboxRightContent') as HTMLElement | null;
+    if (!container) return;
+    container.classList.remove('ready');
+
+    if (!currentConversation) {
+        closeContactInfoPanel();
+        container.innerHTML = `
+            <div class="contact-card-empty">
+                <span class="inbox-right-panel-robot icon icon-user icon-lg"></span>
+                <p><strong>Selecione uma conversa</strong></p>
+                <p>Abra um chat para visualizar os dados do contato aqui.</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (!currentLeadDetails?.id) {
+        container.innerHTML = `
+            <div class="contact-card-empty">
+                <span class="inbox-right-panel-robot icon icon-automation icon-lg"></span>
+                <p><strong>Este cliente ainda nao esta cadastrado na sua audiencia.</strong></p>
+                <p>Cadastre para liberar o cartao completo e os campos dinamicos.</p>
+                <button class="btn-register-user" onclick="registerCurrentUser()">
+                    Cadastrar contato
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    container.classList.add('ready');
+
+    const lead = currentLeadDetails;
+    const rows = buildLeadInfoRows();
+    const tags = parseLeadTags(lead.tags);
+    const rowsHtml = rows.length
+        ? rows
+            .map(
+                (row) => `
+                    <div class="contact-info-row">
+                        <span class="contact-info-label">${escapeHtml(row.label)}</span>
+                        <span class="contact-info-value">${escapeHtml(row.value)}</span>
+                    </div>
+                `
+            )
+            .join('')
+        : `<p class="contact-card-muted">Nenhum campo preenchido para este contato.</p>`;
+
+    const tagsHtml = tags.length
+        ? tags.map((tag) => `<span class="contact-tag-chip">${escapeHtml(tag)}</span>`).join('')
+        : `<span class="contact-card-muted">Sem etiquetas</span>`;
+
+    const createdAt = lead.created_at ? formatDate(lead.created_at, 'datetime') : '';
+    const headerName = escapeHtml(String(lead.name || currentConversation.name || 'Contato').trim() || 'Contato');
+
+    container.innerHTML = `
+        <div class="contact-card">
+            <div class="contact-card-header">
+                <div class="contact-card-avatar" style="background:${getAvatarColor(lead.name || currentConversation.name || '')}">
+                    ${getInitials(lead.name || currentConversation.name || 'Contato')}
+                </div>
+                <div>
+                    <div class="contact-card-title">${headerName}</div>
+                    <div class="contact-card-subtitle">${escapeHtml(formatPhone(lead.phone || currentConversation.phone || ''))}</div>
+                </div>
+            </div>
+
+            <div class="contact-info-grid">
+                <div class="contact-info-row">
+                    <span class="contact-info-label">Status</span>
+                    <span class="contact-info-value">${escapeHtml(formatLeadStatus(lead.status))}</span>
+                </div>
+                <div class="contact-info-row">
+                    <span class="contact-info-label">Origem</span>
+                    <span class="contact-info-value">${escapeHtml(formatLeadSource(lead.source))}</span>
+                </div>
+                ${createdAt ? `
+                    <div class="contact-info-row">
+                        <span class="contact-info-label">Criado em</span>
+                        <span class="contact-info-value">${escapeHtml(createdAt)}</span>
+                    </div>
+                ` : ''}
+            </div>
+
+            <div class="contact-card-section">
+                <div class="contact-card-section-title">Dados do contato</div>
+                ${rowsHtml}
+            </div>
+
+            <div class="contact-card-section">
+                <div class="contact-card-section-title">Etiquetas</div>
+                <div class="contact-tag-list">${tagsHtml}</div>
+            </div>
+
+            <div class="contact-card-actions">
+                <button class="btn btn-outline btn-sm" onclick="openWhatsApp()">Abrir no WhatsApp</button>
+                <button class="btn btn-primary btn-sm" onclick="viewContact()">Abrir contato</button>
+            </div>
+        </div>
+    `;
+}
 
 function bindQuickReplyDismiss() {
     if (quickReplyDismissBound) return;
@@ -239,7 +481,11 @@ async function loadConversations() {
             status: c.status
         }));
 
-        renderConversations();
+        if (currentFilter === 'unread') {
+            renderFilteredConversations(conversations.filter((conversation) => (conversation.unread || 0) > 0));
+        } else {
+            renderConversations();
+        }
         updateUnreadBadge();
     } catch (error) {
         console.error(error);
@@ -281,9 +527,9 @@ function renderConversations() {
 
 function filterConversations(filter: 'all' | 'unread') {
     currentFilter = filter;
-    document.querySelectorAll('.conversations-tabs button').forEach(b => b.classList.remove('active'));
-    const target = (window as any).event?.target as HTMLElement | undefined;
-    target?.classList.add('active');
+    document.querySelectorAll('.conversations-tabs button').forEach((button) => button.classList.remove('active'));
+    document.getElementById('filterAllBtn')?.classList.toggle('active', filter === 'all');
+    document.getElementById('filterUnreadBtn')?.classList.toggle('active', filter === 'unread');
     
     if (filter === 'unread') {
         const filtered = conversations.filter(c => c.unread > 0);
@@ -365,6 +611,11 @@ async function selectConversation(id: number) {
 
     // Renderizar chat
     renderChat();
+    renderContactInfoPanel();
+    setMobileConversationMode(true);
+    if (isTabletOrMobileView()) {
+        closeContactInfoPanel();
+    }
 }
 
 async function loadMessages(leadId: number) {
@@ -400,17 +651,22 @@ async function loadContactFields() {
     } catch (error) {
         contactFieldsCache = [...DEFAULT_CONTACT_FIELDS];
     }
+    renderContactInfoPanel();
 }
 
 async function loadCurrentLeadDetails(leadId: number) {
     currentLeadDetails = null;
-    if (!leadId) return;
+    if (!leadId) {
+        renderContactInfoPanel();
+        return;
+    }
     try {
         const response = await api.get(`/api/leads/${leadId}`);
         currentLeadDetails = response?.lead || null;
     } catch (error) {
         currentLeadDetails = null;
     }
+    renderContactInfoPanel();
 }
 
 async function loadQuickReplies() {
@@ -557,10 +813,12 @@ function renderChat() {
     if (!panel || !currentConversation) return;
 
     const quickReplyItems = renderQuickReplyItems();
-    
+
     panel.innerHTML = `
         <div class="chat-header">
-            <button class="btn btn-sm btn-outline btn-icon" onclick="backToList()" style="display: none;" id="backBtn">←</button>
+            <button class="btn btn-sm btn-outline btn-icon chat-back-btn" onclick="backToList()" id="backBtn" title="Voltar para lista">
+                <span class="icon icon-arrow-left icon-sm"></span>
+            </button>
             <div class="conversation-avatar" style="background: ${getAvatarColor(currentConversation.name)}; width: 40px; height: 40px; font-size: 14px;">
                 ${getInitials(currentConversation.name)}
             </div>
@@ -568,13 +826,12 @@ function renderChat() {
                 <div class="chat-header-name">${escapeHtml(currentConversation.name || 'Sem nome')}</div>
                 <div class="chat-header-status">${formatPhone(currentConversation.phone)}</div>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div class="chat-header-actions">
                 <button class="btn btn-sm btn-outline btn-icon" onclick="openWhatsApp()" title="Abrir no WhatsApp"><span class="icon icon-whatsapp icon-sm"></span></button>
-                <button class="btn btn-sm btn-outline btn-icon" onclick="viewContact()" title="Ver contato"><span class="icon icon-user icon-sm"></span></button>
-                <button class="btn btn-sm btn-outline btn-icon" onclick="toggleContactInfo()" title="Mais opções">⋮</button>
+                <button class="btn btn-sm btn-outline btn-icon" onclick="toggleContactInfo(true)" title="Dados do contato"><span class="icon icon-user icon-sm"></span></button>
             </div>
         </div>
-        
+
         <div class="chat-messages" id="chatMessages">
             <div class="chat-messages-stack">
                 ${renderMessages()}
@@ -582,8 +839,8 @@ function renderChat() {
         </div>
 
         <div class="quick-reply-toolbar">
-            <button class="btn btn-sm btn-outline quick-reply-trigger" onclick="toggleQuickReplyPicker()" title="Selecionar resposta r&aacute;pida">
-                <span class="icon icon-bolt icon-sm"></span> Respostas r&aacute;pidas
+            <button class="btn btn-sm btn-outline quick-reply-trigger" onclick="toggleQuickReplyPicker()" title="Selecionar resposta rapida">
+                <span class="icon icon-bolt icon-sm"></span> Respostas rapidas
             </button>
             <div class="quick-reply-picker" id="quickReplyPicker">
                 ${quickReplyItems}
@@ -596,17 +853,10 @@ function renderChat() {
         </div>
     `;
 
-    // Mostrar botão voltar em mobile
-    if (window.innerWidth <= 768) {
-        const backBtn = document.getElementById('backBtn') as HTMLElement | null;
-        if (backBtn) backBtn.style.display = 'block';
-        document.getElementById('conversationsPanel')?.classList.add('hidden');
-        panel.classList.add('active');
-    }
-
+    setMobileConversationMode(true);
+    closeContactInfoPanel();
     scrollToBottom();
 }
-
 function renderMessages() {
     if (messages.length === 0) {
         return `
@@ -700,7 +950,9 @@ async function sendMessage() {
 
 function openWhatsApp() {
     if (currentConversation?.phone) {
-        window.open(`https://wa.me/55${currentConversation.phone}`, '_blank');
+        const digits = String(currentConversation.phone || '').replace(/\D/g, '');
+        const normalized = digits.startsWith('55') ? digits : `55${digits}`;
+        window.open(`https://wa.me/${normalized}`, '_blank');
     }
 }
 
@@ -710,41 +962,57 @@ function viewContact() {
     }
 }
 
-function toggleContactInfo() {
-    showToast('info', 'Info', 'Painel de informações em desenvolvimento');
+function toggleContactInfo(forceOpen?: boolean) {
+    if (forceOpen === false) {
+        closeContactInfoPanel();
+        return;
+    }
+
+    if (!currentConversation) {
+        showToast('info', 'Info', 'Selecione uma conversa primeiro');
+        return;
+    }
+
+    renderContactInfoPanel();
+    if (!isTabletOrMobileView()) return;
+    setContactInfoPanelState(forceOpen);
 }
 
 async function registerCurrentUser() {
     if (!currentConversation) return;
     try {
-        showLoading('Cadastrando usuário...');
+        showLoading('Cadastrando usuario...');
         await api.post('/api/leads', {
             name: currentConversation.name || 'Contato',
             phone: currentConversation.phone,
             status: 1
         });
+
         hideLoading();
-        showToast('success', 'Sucesso', 'Usuário cadastrado na sua audiência!');
-        loadConversations();
-        const inboxRight = document.getElementById('inboxRightContent') as HTMLElement | null;
-        if (inboxRight) {
-            inboxRight.innerHTML = `
-            <span class="inbox-right-panel-robot icon icon-check icon-lg"></span>
-            <p><strong>Cliente cadastrado!</strong></p>
-            <p>O cartão do usuário está disponível em Contatos.</p>
-        `;
+        showToast('success', 'Sucesso', 'Contato cadastrado com sucesso');
+
+        await loadConversations();
+        const refreshedConversation =
+            conversations.find((conversation) => conversation.id === currentConversation?.id) ||
+            conversations.find((conversation) => conversation.phone === currentConversation?.phone) ||
+            null;
+        if (refreshedConversation) {
+            currentConversation = refreshedConversation;
+            await loadCurrentLeadDetails(refreshedConversation.leadId);
+        } else {
+            renderContactInfoPanel();
         }
+        closeContactInfoPanel();
     } catch (error) {
         hideLoading();
-        showToast('error', 'Erro', 'Não foi possível cadastrar');
+        showToast('error', 'Erro', 'Nao foi possivel cadastrar o contato');
     }
 }
 
 function backToList() {
-    document.getElementById('conversationsPanel')?.classList.remove('hidden');
-    document.getElementById('chatPanel')?.classList.remove('active');
+    setMobileConversationMode(false);
+    closeContactInfoPanel();
 }
-
 function updateUnreadBadge() {
     const unread = conversations.reduce((sum, c) => sum + (c.unread || 0), 0);
     const badge = document.getElementById('unreadBadge') as HTMLElement | null;
@@ -771,7 +1039,7 @@ const windowAny = window as Window & {
     sendMessage?: () => Promise<void>;
     openWhatsApp?: () => void;
     viewContact?: () => void;
-    toggleContactInfo?: () => void;
+    toggleContactInfo?: (forceOpen?: boolean) => void;
     registerCurrentUser?: () => Promise<void>;
     backToList?: () => void;
     logout?: () => void;
