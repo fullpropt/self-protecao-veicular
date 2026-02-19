@@ -4,6 +4,7 @@
  */
 
 const { MessageQueue, Settings, Lead } = require('../database/models');
+const { run } = require('../database/connection');
 const EventEmitter = require('events');
 
 class QueueService extends EventEmitter {
@@ -21,12 +22,12 @@ class QueueService extends EventEmitter {
     /**
      * Inicializar o serviço de fila
      */
-    init(sendFunction) {
+    async init(sendFunction) {
         this.sendFunction = sendFunction;
         
         // Carregar configurações do banco
-        const delay = Settings.get('bulk_message_delay');
-        const maxPerMinute = Settings.get('max_messages_per_minute');
+        const delay = await Settings.get('bulk_message_delay');
+        const maxPerMinute = await Settings.get('max_messages_per_minute');
         
         if (delay) this.defaultDelay = delay;
         if (maxPerMinute) this.maxMessagesPerMinute = maxPerMinute;
@@ -42,12 +43,13 @@ class QueueService extends EventEmitter {
     /**
      * Adicionar mensagem à fila
      */
-    add(options) {
-        const { leadId, conversationId, content, mediaType, mediaUrl, priority, scheduledAt } = options;
+    async add(options) {
+        const { leadId, conversationId, campaignId, content, mediaType, mediaUrl, priority, scheduledAt } = options;
         
-        const result = MessageQueue.add({
+        const result = await MessageQueue.add({
             lead_id: leadId,
             conversation_id: conversationId,
+            campaign_id: campaignId || null,
             content,
             media_type: mediaType || 'text',
             media_url: mediaUrl,
@@ -63,19 +65,28 @@ class QueueService extends EventEmitter {
     /**
      * Adicionar múltiplas mensagens (disparo em massa)
      */
-    addBulk(leadIds, content, options = {}) {
+    async addBulk(leadIds, content, options = {}) {
+        if (!Array.isArray(leadIds) || leadIds.length === 0) {
+            return [];
+        }
+
         const results = [];
+        const delayMs = Number(options.delayMs);
+        const stepDelay = Number.isFinite(delayMs) && delayMs > 0 ? delayMs : this.defaultDelay;
+        const startAtMs = options.startAt ? Date.parse(options.startAt) : null;
+        const hasValidStartAt = Number.isFinite(startAtMs);
         
         for (let i = 0; i < leadIds.length; i++) {
             const leadId = leadIds[i];
             
             // Calcular tempo de agendamento baseado na posição na fila
-            const scheduledAt = options.startAt 
-                ? new Date(new Date(options.startAt).getTime() + (i * this.defaultDelay)).toISOString()
+            const scheduledAt = hasValidStartAt
+                ? new Date(startAtMs + (i * stepDelay)).toISOString()
                 : null;
             
-            const result = this.add({
+            const result = await this.add({
                 leadId,
+                campaignId: options.campaignId || null,
                 content,
                 mediaType: options.mediaType,
                 mediaUrl: options.mediaUrl,
@@ -131,17 +142,17 @@ class QueueService extends EventEmitter {
         }
         
         // Buscar próxima mensagem
-        const message = MessageQueue.getNext();
+        const message = await MessageQueue.getNext();
         if (!message) return;
         
         this.isProcessing = true;
         
         try {
             // Marcar como processando
-            MessageQueue.markProcessing(message.id);
+            await MessageQueue.markProcessing(message.id);
             
             // Buscar lead
-            const lead = Lead.findById(message.lead_id);
+            const lead = await Lead.findById(message.lead_id);
             if (!lead) {
                 throw new Error('Lead não encontrado');
             }
@@ -156,11 +167,13 @@ class QueueService extends EventEmitter {
                 jid: lead.jid,
                 content: message.content,
                 mediaType: message.media_type,
-                mediaUrl: message.media_url
+                mediaUrl: message.media_url,
+                campaignId: message.campaign_id || null,
+                conversationId: message.conversation_id || null
             });
             
             // Marcar como enviada
-            MessageQueue.markSent(message.id);
+            await MessageQueue.markSent(message.id);
             this.messagesSentThisMinute++;
             
             this.emit('message:sent', { 
@@ -175,7 +188,17 @@ class QueueService extends EventEmitter {
         } catch (error) {
             console.error(`❌ Erro ao processar mensagem ${message.id}:`, error.message);
             
-            MessageQueue.markFailed(message.id, error.message);
+            await MessageQueue.markFailed(message.id, error.message);
+            try {
+                await run(
+                    `UPDATE messages
+                     SET status = 'failed'
+                     WHERE conversation_id = ? AND lead_id = ? AND status = 'pending'`,
+                    [message.conversation_id, message.lead_id]
+                );
+            } catch (dbError) {
+                console.error(`❌ Erro ao atualizar status da mensagem ${message.id}:`, dbError.message);
+            }
             
             this.emit('message:failed', { 
                 id: message.id, 
@@ -190,18 +213,18 @@ class QueueService extends EventEmitter {
     /**
      * Cancelar mensagem na fila
      */
-    cancel(messageId) {
-        MessageQueue.cancel(messageId);
+    async cancel(messageId) {
+        await MessageQueue.cancel(messageId);
         this.emit('message:cancelled', { id: messageId });
     }
     
     /**
      * Cancelar todas as mensagens pendentes
      */
-    cancelAll() {
-        const pending = MessageQueue.getPending();
+    async cancelAll() {
+        const pending = await MessageQueue.getPending();
         for (const message of pending) {
-            MessageQueue.cancel(message.id);
+            await MessageQueue.cancel(message.id);
         }
         this.emit('queue:cleared', { count: pending.length });
         return pending.length;
@@ -210,8 +233,8 @@ class QueueService extends EventEmitter {
     /**
      * Obter status da fila
      */
-    getStatus() {
-        const pending = MessageQueue.getPending();
+    async getStatus() {
+        const pending = await MessageQueue.getPending();
         
         return {
             isProcessing: this.isProcessing,
@@ -225,8 +248,8 @@ class QueueService extends EventEmitter {
     /**
      * Obter mensagens pendentes
      */
-    getPending() {
-        return MessageQueue.getPending();
+    async getPending() {
+        return await MessageQueue.getPending();
     }
     
     /**
@@ -239,15 +262,15 @@ class QueueService extends EventEmitter {
     /**
      * Atualizar configurações
      */
-    updateSettings(settings) {
+    async updateSettings(settings) {
         if (settings.delay) {
             this.defaultDelay = settings.delay;
-            Settings.set('bulk_message_delay', settings.delay, 'number');
+            await Settings.set('bulk_message_delay', settings.delay, 'number');
         }
         
         if (settings.maxPerMinute) {
             this.maxMessagesPerMinute = settings.maxPerMinute;
-            Settings.set('max_messages_per_minute', settings.maxPerMinute, 'number');
+            await Settings.set('max_messages_per_minute', settings.maxPerMinute, 'number');
         }
     }
 }

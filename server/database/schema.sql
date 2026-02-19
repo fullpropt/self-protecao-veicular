@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url TEXT,
     is_active INTEGER DEFAULT 1,
     last_login_at TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Leads/Contatos
@@ -36,8 +36,8 @@ CREATE TABLE IF NOT EXISTS leads (
     assigned_to INTEGER REFERENCES users(id),
     is_blocked INTEGER DEFAULT 0,
     last_message_at TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Fluxos de Automação (criada antes de conversations por causa da FK)
@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS flows (
     priority INTEGER DEFAULT 0,
     stats TEXT,
     created_by INTEGER REFERENCES users(id),
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Conversas
@@ -72,8 +72,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     current_flow_id INTEGER REFERENCES flows(id),
     current_flow_step TEXT,
     metadata TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Mensagens
@@ -94,11 +94,12 @@ CREATE TABLE IF NOT EXISTS messages (
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'sent', 'delivered', 'read', 'failed')),
     is_from_me INTEGER DEFAULT 0,
     reply_to_id INTEGER REFERENCES messages(id),
+    campaign_id INTEGER,
     metadata TEXT,
     sent_at TEXT,
     delivered_at TEXT,
     read_at TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Templates de Mensagem
@@ -114,8 +115,48 @@ CREATE TABLE IF NOT EXISTS templates (
     is_active INTEGER DEFAULT 1,
     usage_count INTEGER DEFAULT 0,
     created_by INTEGER REFERENCES users(id),
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+
+-- Tabela de Campanhas
+CREATE TABLE IF NOT EXISTS campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    type TEXT DEFAULT 'broadcast' CHECK(type IN ('trigger', 'broadcast', 'drip')),
+    status TEXT DEFAULT 'draft' CHECK(status IN ('active', 'paused', 'completed', 'draft')),
+    segment TEXT,
+    message TEXT,
+    delay INTEGER DEFAULT 0,
+    start_at TEXT,
+    sent INTEGER DEFAULT 0,
+    delivered INTEGER DEFAULT 0,
+    read INTEGER DEFAULT 0,
+    replied INTEGER DEFAULT 0,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+
+-- Tabela de Automações
+CREATE TABLE IF NOT EXISTS automations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    trigger_type TEXT NOT NULL CHECK(trigger_type IN ('new_lead', 'status_change', 'message_received', 'keyword', 'schedule', 'inactivity')),
+    trigger_value TEXT,
+    action_type TEXT NOT NULL CHECK(action_type IN ('send_message', 'change_status', 'add_tag', 'start_flow', 'notify')),
+    action_value TEXT,
+    delay INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    executions INTEGER DEFAULT 0,
+    last_execution TEXT,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Execuções de Fluxo
@@ -128,7 +169,7 @@ CREATE TABLE IF NOT EXISTS flow_executions (
     current_node TEXT,
     variables TEXT,
     status TEXT DEFAULT 'running' CHECK(status IN ('running', 'paused', 'completed', 'failed', 'cancelled')),
-    started_at TEXT DEFAULT (datetime('now')),
+    started_at TEXT DEFAULT (CURRENT_TIMESTAMP),
     completed_at TEXT,
     error_message TEXT
 );
@@ -139,6 +180,7 @@ CREATE TABLE IF NOT EXISTS message_queue (
     uuid TEXT UNIQUE NOT NULL,
     lead_id INTEGER NOT NULL REFERENCES leads(id),
     conversation_id INTEGER REFERENCES conversations(id),
+    campaign_id INTEGER,
     content TEXT NOT NULL,
     media_type TEXT DEFAULT 'text',
     media_url TEXT,
@@ -148,7 +190,7 @@ CREATE TABLE IF NOT EXISTS message_queue (
     max_attempts INTEGER DEFAULT 3,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'sent', 'failed', 'cancelled')),
     error_message TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
     processed_at TEXT
 );
 
@@ -166,8 +208,8 @@ CREATE TABLE IF NOT EXISTS webhooks (
     last_triggered_at TEXT,
     last_status INTEGER,
     created_by INTEGER REFERENCES users(id),
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Log de Webhooks
@@ -179,7 +221,7 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
     response_status INTEGER,
     response_body TEXT,
     duration_ms INTEGER,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Sessões WhatsApp
@@ -191,8 +233,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
     status TEXT DEFAULT 'disconnected' CHECK(status IN ('disconnected', 'connecting', 'connected', 'qr_pending')),
     qr_code TEXT,
     last_connected_at TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Configurações
@@ -202,7 +244,7 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT,
     type TEXT DEFAULT 'string' CHECK(type IN ('string', 'number', 'boolean', 'json')),
     description TEXT,
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Logs de Auditoria
@@ -216,7 +258,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     new_values TEXT,
     ip_address TEXT,
     user_agent TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de Tags
@@ -225,14 +267,14 @@ CREATE TABLE IF NOT EXISTS tags (
     name TEXT UNIQUE NOT NULL,
     color TEXT DEFAULT '#5a2a6b',
     description TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
 -- Tabela de relação Lead-Tag
 CREATE TABLE IF NOT EXISTS lead_tags (
     lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
     tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    created_at TEXT DEFAULT (datetime('now')),
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
     PRIMARY KEY (lead_id, tag_id)
 );
 
@@ -240,20 +282,26 @@ CREATE TABLE IF NOT EXISTS lead_tags (
 -- ÍNDICES
 -- ============================================
 
+ALTER TABLE messages ADD COLUMN campaign_id INTEGER;
+ALTER TABLE message_queue ADD COLUMN campaign_id INTEGER;
+
 CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
 CREATE INDEX IF NOT EXISTS idx_leads_jid ON leads(jid);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
+CREATE UNIQUE INDEX IF NOT EXISTS leads_phone_unique ON leads(phone);
 
 CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
 CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
+CREATE UNIQUE INDEX IF NOT EXISTS conv_lead_session_unique ON conversations(lead_id, session_id);
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id);
 CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_campaign ON messages(campaign_id);
 
 CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
 CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
@@ -261,6 +309,7 @@ CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
 CREATE INDEX IF NOT EXISTS idx_queue_status ON message_queue(status);
 CREATE INDEX IF NOT EXISTS idx_queue_scheduled ON message_queue(scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority DESC);
+CREATE INDEX IF NOT EXISTS idx_queue_campaign ON message_queue(campaign_id);
 
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);

@@ -5,16 +5,152 @@
 
 const { query, queryOne, run, transaction, generateUUID } = require('./connection');
 
+function normalizeDigits(value) {
+    return String(value || '').replace(/\D/g, '');
+}
+
+function sanitizeLeadName(name) {
+    const value = String(name || '').trim();
+    if (!value) return '';
+    const lower = value.toLowerCase();
+    if (
+        lower === 'sem nome' ||
+        lower === 'unknown' ||
+        lower === 'undefined' ||
+        lower === 'null' ||
+        value.includes('@s.whatsapp.net') ||
+        value.includes('@lid')
+    ) {
+        return '';
+    }
+    if (/^\d+$/.test(value)) return '';
+    return value;
+}
+
+function parseLeadCustomFields(value) {
+    if (!value) return {};
+
+    if (typeof value === 'object') {
+        return Array.isArray(value) ? {} : { ...value };
+    }
+
+    if (typeof value !== 'string') return {};
+
+    try {
+        const parsed = JSON.parse(value);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return {};
+        }
+        return parsed;
+    } catch (_) {
+        return {};
+    }
+}
+
+function mergeLeadCustomFields(baseValue, overrideValue) {
+    const base = parseLeadCustomFields(baseValue);
+    const override = parseLeadCustomFields(overrideValue);
+    const merged = { ...base, ...override };
+
+    const baseSystem = base.__system && typeof base.__system === 'object' && !Array.isArray(base.__system)
+        ? base.__system
+        : {};
+    const overrideSystem = override.__system && typeof override.__system === 'object' && !Array.isArray(override.__system)
+        ? override.__system
+        : {};
+
+    if (Object.keys(baseSystem).length > 0 || Object.keys(overrideSystem).length > 0) {
+        merged.__system = { ...baseSystem, ...overrideSystem };
+    }
+
+    return merged;
+}
+
+function lockLeadNameAsManual(customFields) {
+    const merged = mergeLeadCustomFields(customFields);
+    const currentSystem = merged.__system && typeof merged.__system === 'object' && !Array.isArray(merged.__system)
+        ? merged.__system
+        : {};
+
+    merged.__system = {
+        ...currentSystem,
+        manual_name_locked: true,
+        manual_name_source: 'manual',
+        manual_name_updated_at: new Date().toISOString()
+    };
+
+    return merged;
+}
+
+function isLeadNameManuallyLocked(customFields) {
+    const parsed = parseLeadCustomFields(customFields);
+    return parsed?.__system?.manual_name_locked === true;
+}
+
+function shouldReplaceLeadName(currentName, incomingName, phone, options = {}) {
+    if (options.manualNameLocked) return false;
+
+    const next = sanitizeLeadName(incomingName);
+    if (!next) return false;
+
+    const current = String(currentName || '').trim();
+    if (!current) return true;
+
+    const currentLower = current.toLowerCase();
+    if (
+        currentLower === 'sem nome' ||
+        currentLower === 'unknown' ||
+        currentLower === 'undefined' ||
+        currentLower === 'null' ||
+        currentLower === 'você' ||
+        currentLower === 'voce' ||
+        currentLower === 'usuário (você)' ||
+        currentLower === 'usuario (voce)' ||
+        currentLower === 'usuario (você)'
+    ) {
+        return true;
+    }
+
+    const phoneDigits = normalizeDigits(phone);
+    const currentDigits = normalizeDigits(current);
+    if (phoneDigits && currentDigits && currentDigits === phoneDigits) return true;
+    if (/^\d+$/.test(current)) return true;
+
+    return false;
+}
+
+function deriveUserName(name, email) {
+    const provided = String(name || '').trim();
+    if (provided) return provided;
+
+    const localPart = String(email || '').split('@')[0] || 'Usuario';
+    const normalized = localPart.replace(/[._-]+/g, ' ').trim();
+    if (!normalized) return 'Usuario';
+
+    return normalized
+        .split(/\s+/)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
 // ============================================
 // LEADS
 // ============================================
 
 const Lead = {
-    create(data) {
+    async create(data) {
         const uuid = generateUUID();
         const jid = data.jid || `55${data.phone.replace(/\D/g, '')}@s.whatsapp.net`;
+        const source = String(data.source || 'manual');
+        const normalizedSource = source.toLowerCase();
+        const sanitizedName = sanitizeLeadName(data.name);
+        const incomingName = sanitizedName || data.phone;
+        const initialCustomFields = parseLeadCustomFields(data.custom_fields);
+        const customFields = normalizedSource !== 'whatsapp' && sanitizedName
+            ? lockLeadNameAsManual(initialCustomFields)
+            : initialCustomFields;
         
-        const result = run(`
+        const result = await run(`
             INSERT INTO leads (uuid, phone, phone_formatted, jid, name, email, vehicle, plate, status, tags, custom_fields, source, assigned_to)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
@@ -22,57 +158,59 @@ const Lead = {
             data.phone?.replace(/\D/g, ''),
             data.phone_formatted || data.phone,
             jid,
-            data.name,
+            incomingName,
             data.email,
             data.vehicle,
             data.plate,
             data.status || 1,
             JSON.stringify(data.tags || []),
-            JSON.stringify(data.custom_fields || {}),
-            data.source || 'manual',
+            JSON.stringify(customFields),
+            source,
             data.assigned_to
         ]);
         
         return { id: result.lastInsertRowid, uuid };
     },
     
-    findById(id) {
-        return queryOne('SELECT * FROM leads WHERE id = ?', [id]);
+    async findById(id) {
+        return await queryOne('SELECT * FROM leads WHERE id = ?', [id]);
     },
     
-    findByUuid(uuid) {
-        return queryOne('SELECT * FROM leads WHERE uuid = ?', [uuid]);
+    async findByUuid(uuid) {
+        return await queryOne('SELECT * FROM leads WHERE uuid = ?', [uuid]);
     },
     
-    findByPhone(phone) {
+    async findByPhone(phone) {
         const cleaned = phone.replace(/\D/g, '');
-        return queryOne('SELECT * FROM leads WHERE phone = ? OR phone LIKE ?', [cleaned, `%${cleaned}`]);
+        return await queryOne('SELECT * FROM leads WHERE phone = ? OR phone LIKE ?', [cleaned, `%${cleaned}`]);
     },
     
-    findByJid(jid) {
-        return queryOne('SELECT * FROM leads WHERE jid = ?', [jid]);
+    async findByJid(jid) {
+        return await queryOne('SELECT * FROM leads WHERE jid = ?', [jid]);
     },
     
-    findOrCreate(data) {
-        let lead = this.findByPhone(data.phone);
+    async findOrCreate(data) {
+        let lead = await this.findByPhone(data.phone);
         if (!lead && data.jid) {
-            lead = this.findByJid(data.jid);
+            lead = await this.findByJid(data.jid);
         }
         
         if (lead) {
-            // Atualizar dados se necessário
-            if (data.name && !lead.name) {
-                this.update(lead.id, { name: data.name });
-                lead.name = data.name;
+            // Atualizar dados se necessario
+            const nextName = sanitizeLeadName(data.name);
+            const manualNameLocked = isLeadNameManuallyLocked(lead.custom_fields);
+            if (shouldReplaceLeadName(lead.name, nextName, lead.phone || data.phone, { manualNameLocked })) {
+                await this.update(lead.id, { name: nextName });
+                lead.name = nextName;
             }
             return { lead, created: false };
         }
         
-        const result = this.create(data);
-        return { lead: this.findById(result.id), created: true };
+        const result = await this.create(data);
+        return { lead: await this.findById(result.id), created: true };
     },
     
-    update(id, data) {
+    async update(id, data) {
         const fields = [];
         const values = [];
         
@@ -87,17 +225,17 @@ const Lead = {
         
         if (fields.length === 0) return null;
         
-        fields.push('updated_at = datetime("now")');
+        fields.push("updated_at = CURRENT_TIMESTAMP");
         values.push(id);
         
-        return run(`UPDATE leads SET ${fields.join(', ')} WHERE id = ?`, values);
+        return await run(`UPDATE leads SET ${fields.join(', ')} WHERE id = ?`, values);
     },
     
-    delete(id) {
-        return run('DELETE FROM leads WHERE id = ?', [id]);
+    async delete(id) {
+        return await run('DELETE FROM leads WHERE id = ?', [id]);
     },
     
-    list(options = {}) {
+    async list(options = {}) {
         let sql = 'SELECT * FROM leads WHERE 1=1';
         const params = [];
         
@@ -128,10 +266,10 @@ const Lead = {
             params.push(options.offset);
         }
         
-        return query(sql, params);
+        return await query(sql, params);
     },
     
-    count(options = {}) {
+    async count(options = {}) {
         let sql = 'SELECT COUNT(*) as total FROM leads WHERE 1=1';
         const params = [];
         
@@ -140,7 +278,7 @@ const Lead = {
             params.push(options.status);
         }
         
-        return queryOne(sql, params)?.total || 0;
+        return await queryOne(sql, params)?.total || 0;
     }
 };
 
@@ -149,10 +287,10 @@ const Lead = {
 // ============================================
 
 const Conversation = {
-    create(data) {
+    async create(data) {
         const uuid = generateUUID();
         
-        const result = run(`
+        const result = await run(`
             INSERT INTO conversations (uuid, lead_id, session_id, status, assigned_to, is_bot_active, current_flow_id, metadata)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [
@@ -169,26 +307,26 @@ const Conversation = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    findById(id) {
-        return queryOne('SELECT * FROM conversations WHERE id = ?', [id]);
+    async findById(id) {
+        return await queryOne('SELECT * FROM conversations WHERE id = ?', [id]);
     },
     
-    findByLeadId(leadId) {
-        return queryOne('SELECT * FROM conversations WHERE lead_id = ? ORDER BY updated_at DESC LIMIT 1', [leadId]);
+    async findByLeadId(leadId) {
+        return await queryOne('SELECT * FROM conversations WHERE lead_id = ? ORDER BY updated_at DESC LIMIT 1', [leadId]);
     },
     
-    findOrCreate(data) {
-        let conversation = this.findByLeadId(data.lead_id);
+    async findOrCreate(data) {
+        let conversation = await this.findByLeadId(data.lead_id);
         
         if (conversation) {
             return { conversation, created: false };
         }
         
-        const result = this.create(data);
-        return { conversation: this.findById(result.id), created: true };
+        const result = await this.create(data);
+        return { conversation: await this.findById(result.id), created: true };
     },
     
-    update(id, data) {
+    async update(id, data) {
         const fields = [];
         const values = [];
         
@@ -203,21 +341,41 @@ const Conversation = {
         
         if (fields.length === 0) return null;
         
-        fields.push('updated_at = datetime("now")');
+        fields.push("updated_at = CURRENT_TIMESTAMP");
         values.push(id);
         
-        return run(`UPDATE conversations SET ${fields.join(', ')} WHERE id = ?`, values);
+        return await run(`UPDATE conversations SET ${fields.join(', ')} WHERE id = ?`, values);
     },
     
-    incrementUnread(id) {
-        return run('UPDATE conversations SET unread_count = unread_count + 1, updated_at = datetime("now") WHERE id = ?', [id]);
+    async incrementUnread(id) {
+        return await run("UPDATE conversations SET unread_count = unread_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
     },
     
-    markAsRead(id) {
-        return run('UPDATE conversations SET unread_count = 0, updated_at = datetime("now") WHERE id = ?', [id]);
+    async touch(id, lastMessageId = null, sentAt = null) {
+        const updates = [];
+        const params = [];
+
+        if (lastMessageId) {
+            updates.push('last_message_id = ?');
+            params.push(lastMessageId);
+        }
+
+        if (sentAt) {
+            updates.push('updated_at = ?');
+            params.push(sentAt);
+        } else {
+            updates.push('updated_at = CURRENT_TIMESTAMP');
+        }
+
+        params.push(id);
+        return await run(`UPDATE conversations SET ${updates.join(', ')} WHERE id = ?`, params);
     },
     
-    list(options = {}) {
+    async markAsRead(id) {
+        return await run("UPDATE conversations SET unread_count = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
+    },
+    
+    async list(options = {}) {
         let sql = `
             SELECT c.*, l.name as lead_name, l.phone, l.vehicle, u.name as agent_name
             FROM conversations c
@@ -249,7 +407,7 @@ const Conversation = {
             params.push(options.limit);
         }
         
-        return query(sql, params);
+        return await query(sql, params);
     }
 };
 
@@ -258,12 +416,12 @@ const Conversation = {
 // ============================================
 
 const Message = {
-    create(data) {
+    async create(data) {
         const uuid = generateUUID();
         
-        const result = run(`
-            INSERT INTO messages (uuid, message_id, conversation_id, lead_id, sender_type, sender_id, content, content_encrypted, media_type, media_url, media_mime_type, media_filename, status, is_from_me, reply_to_id, metadata, sent_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        const result = await run(`
+            INSERT INTO messages (uuid, message_id, conversation_id, lead_id, sender_type, sender_id, content, content_encrypted, media_type, media_url, media_mime_type, media_filename, status, is_from_me, reply_to_id, campaign_id, metadata, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             data.message_id,
@@ -280,6 +438,7 @@ const Message = {
             data.status || 'pending',
             data.is_from_me ? 1 : 0,
             data.reply_to_id,
+            data.campaign_id || null,
             JSON.stringify(data.metadata || {}),
             data.sent_at || new Date().toISOString()
         ]);
@@ -287,15 +446,15 @@ const Message = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    findById(id) {
-        return queryOne('SELECT * FROM messages WHERE id = ?', [id]);
+    async findById(id) {
+        return await queryOne('SELECT * FROM messages WHERE id = ?', [id]);
     },
     
-    findByMessageId(messageId) {
-        return queryOne('SELECT * FROM messages WHERE message_id = ?', [messageId]);
+    async findByMessageId(messageId) {
+        return await queryOne('SELECT * FROM messages WHERE message_id = ?', [messageId]);
     },
     
-    updateStatus(messageId, status, timestamp = null) {
+    async updateStatus(messageId, status, timestamp = null) {
         const updates = { status };
         
         if (status === 'delivered' && timestamp) {
@@ -307,14 +466,14 @@ const Message = {
         const fields = Object.keys(updates).map(k => `${k} = ?`).join(', ');
         const values = [...Object.values(updates), messageId];
         
-        return run(`UPDATE messages SET ${fields} WHERE message_id = ?`, values);
+        return await run(`UPDATE messages SET ${fields} WHERE message_id = ?`, values);
     },
     
-    listByConversation(conversationId, options = {}) {
+    async listByConversation(conversationId, options = {}) {
         let sql = 'SELECT * FROM messages WHERE conversation_id = ?';
         const params = [conversationId];
         
-        sql += ' ORDER BY created_at ASC';
+        sql += " ORDER BY COALESCE(sent_at, created_at) ASC, id ASC";
         
         if (options.limit) {
             sql += ' LIMIT ?';
@@ -326,25 +485,41 @@ const Message = {
             params.push(options.offset);
         }
         
-        return query(sql, params);
+        return await query(sql, params);
     },
     
-    listByLead(leadId, options = {}) {
+    async listByLead(leadId, options = {}) {
         let sql = 'SELECT * FROM messages WHERE lead_id = ?';
         const params = [leadId];
         
-        sql += ' ORDER BY created_at ASC';
+        sql += " ORDER BY COALESCE(sent_at, created_at) ASC, id ASC";
         
         if (options.limit) {
             sql += ' LIMIT ?';
             params.push(options.limit);
         }
         
-        return query(sql, params);
+        return await query(sql, params);
+    },
+
+    async getLastByLead(leadId) {
+        return await queryOne("SELECT * FROM messages WHERE lead_id = ? ORDER BY COALESCE(sent_at, created_at) DESC, id DESC LIMIT 1", [leadId]);
     },
     
-    getLastMessage(conversationId) {
-        return queryOne('SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1', [conversationId]);
+    async getLastMessage(conversationId) {
+        return await queryOne("SELECT * FROM messages WHERE conversation_id = ? ORDER BY COALESCE(sent_at, created_at) DESC, id DESC LIMIT 1", [conversationId]);
+    },
+
+    async hasCampaignDelivery(campaignId, leadId) {
+        const row = await queryOne(`
+            SELECT id
+            FROM messages
+            WHERE campaign_id = ?
+              AND lead_id = ?
+              AND is_from_me = 1
+            LIMIT 1
+        `, [campaignId, leadId]);
+        return !!row;
     }
 };
 
@@ -353,10 +528,10 @@ const Message = {
 // ============================================
 
 const Template = {
-    create(data) {
+    async create(data) {
         const uuid = generateUUID();
         
-        const result = run(`
+        const result = await run(`
             INSERT INTO templates (uuid, name, category, content, variables, media_url, media_type, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `, [
@@ -373,11 +548,11 @@ const Template = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    findById(id) {
-        return queryOne('SELECT * FROM templates WHERE id = ?', [id]);
+    async findById(id) {
+        return await queryOne('SELECT * FROM templates WHERE id = ?', [id]);
     },
     
-    list(options = {}) {
+    async list(options = {}) {
         let sql = 'SELECT * FROM templates WHERE is_active = 1';
         const params = [];
         
@@ -388,14 +563,14 @@ const Template = {
         
         sql += ' ORDER BY usage_count DESC, name ASC';
         
-        return query(sql, params);
+        return await query(sql, params);
     },
     
-    incrementUsage(id) {
-        return run('UPDATE templates SET usage_count = usage_count + 1 WHERE id = ?', [id]);
+    async incrementUsage(id) {
+        return await run('UPDATE templates SET usage_count = usage_count + 1 WHERE id = ?', [id]);
     },
     
-    update(id, data) {
+    async update(id, data) {
         const fields = [];
         const values = [];
         
@@ -410,14 +585,269 @@ const Template = {
         
         if (fields.length === 0) return null;
         
-        fields.push('updated_at = datetime("now")');
+        fields.push("updated_at = CURRENT_TIMESTAMP");
         values.push(id);
         
-        return run(`UPDATE templates SET ${fields.join(', ')} WHERE id = ?`, values);
+        return await run(`UPDATE templates SET ${fields.join(', ')} WHERE id = ?`, values);
     },
     
-    delete(id) {
-        return run('UPDATE templates SET is_active = 0 WHERE id = ?', [id]);
+    async delete(id) {
+        return await run('UPDATE templates SET is_active = 0 WHERE id = ?', [id]);
+    }
+};
+
+// ============================================
+// CAMPAIGNS
+// ============================================
+
+const Campaign = {
+    async create(data) {
+        const uuid = generateUUID();
+
+        const result = await run(`
+            INSERT INTO campaigns (uuid, name, description, type, status, segment, message, delay, start_at, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            uuid,
+            data.name,
+            data.description,
+            data.type || 'broadcast',
+            data.status || 'draft',
+            data.segment,
+            data.message,
+            data.delay || 0,
+            data.start_at,
+            data.created_by
+        ]);
+
+        return { id: result.lastInsertRowid, uuid };
+    },
+
+    async findById(id) {
+        return await queryOne('SELECT * FROM campaigns WHERE id = ?', [id]);
+    },
+
+    async list(options = {}) {
+        let sql = 'SELECT * FROM campaigns WHERE 1=1';
+        const params = [];
+
+        if (options.status) {
+            sql += ' AND status = ?';
+            params.push(options.status);
+        }
+
+        if (options.type) {
+            sql += ' AND type = ?';
+            params.push(options.type);
+        }
+
+        if (options.created_by) {
+            sql += ' AND created_by = ?';
+            params.push(options.created_by);
+        }
+
+        if (options.search) {
+            sql += ' AND (name LIKE ? OR description LIKE ?)';
+            params.push(`%${options.search}%`, `%${options.search}%`);
+        }
+
+        sql += ' ORDER BY created_at DESC';
+
+        if (options.limit) {
+            sql += ' LIMIT ?';
+            params.push(options.limit);
+        }
+
+        if (options.offset) {
+            sql += ' OFFSET ?';
+            params.push(options.offset);
+        }
+
+        return await query(sql, params);
+    },
+
+    async update(id, data) {
+        const fields = [];
+        const values = [];
+
+        const allowedFields = [
+            'name', 'description', 'type', 'status', 'segment',
+            'message', 'delay', 'start_at', 'sent', 'delivered', 'read', 'replied'
+        ];
+
+        for (const [key, value] of Object.entries(data)) {
+            if (allowedFields.includes(key)) {
+                fields.push(`${key} = ?`);
+                values.push(value);
+            }
+        }
+
+        if (fields.length === 0) return null;
+
+        fields.push("updated_at = CURRENT_TIMESTAMP");
+        values.push(id);
+
+        return await run(`UPDATE campaigns SET ${fields.join(', ')} WHERE id = ?`, values);
+    },
+
+    async refreshMetrics(id) {
+        const sentStats = await queryOne(`
+            SELECT
+                COUNT(*) as sent,
+                SUM(CASE WHEN status IN ('delivered', 'read') THEN 1 ELSE 0 END) as delivered,
+                SUM(CASE WHEN status = 'read' THEN 1 ELSE 0 END) as read
+            FROM messages
+            WHERE campaign_id = ?
+        `, [id]);
+
+        const repliedStats = await queryOne(`
+            SELECT COUNT(DISTINCT incoming.lead_id) as replied
+            FROM messages incoming
+            WHERE incoming.is_from_me = 0
+              AND EXISTS (
+                SELECT 1
+                FROM messages outgoing
+                WHERE outgoing.campaign_id = ?
+                  AND outgoing.is_from_me = 1
+                  AND outgoing.lead_id = incoming.lead_id
+                  AND COALESCE(outgoing.sent_at, outgoing.created_at) <= COALESCE(incoming.sent_at, incoming.created_at)
+              )
+        `, [id]);
+
+        const metrics = {
+            sent: Number(sentStats?.sent || 0),
+            delivered: Number(sentStats?.delivered || 0),
+            read: Number(sentStats?.read || 0),
+            replied: Number(repliedStats?.replied || 0)
+        };
+
+        await run(`
+            UPDATE campaigns
+            SET sent = ?, delivered = ?, read = ?, replied = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `, [metrics.sent, metrics.delivered, metrics.read, metrics.replied, id]);
+
+        return metrics;
+    },
+
+    async refreshMetricsByLead(leadId) {
+        const rows = await query(`
+            SELECT DISTINCT campaign_id
+            FROM messages
+            WHERE lead_id = ? AND campaign_id IS NOT NULL
+        `, [leadId]);
+
+        for (const row of rows) {
+            await this.refreshMetrics(row.campaign_id);
+        }
+    },
+
+    async delete(id) {
+        return await run('DELETE FROM campaigns WHERE id = ?', [id]);
+    }
+};
+
+// ============================================
+// AUTOMATIONS
+// ============================================
+
+const Automation = {
+    async create(data) {
+        const uuid = generateUUID();
+        const isActive = typeof data.is_active === 'boolean' ? (data.is_active ? 1 : 0) : (data.is_active ?? 1);
+
+        const result = await run(`
+            INSERT INTO automations (uuid, name, description, trigger_type, trigger_value, action_type, action_value, delay, is_active, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            uuid,
+            data.name,
+            data.description,
+            data.trigger_type,
+            data.trigger_value,
+            data.action_type,
+            data.action_value,
+            data.delay || 0,
+            isActive,
+            data.created_by
+        ]);
+
+        return { id: result.lastInsertRowid, uuid };
+    },
+
+    async findById(id) {
+        return await queryOne('SELECT * FROM automations WHERE id = ?', [id]);
+    },
+
+    async list(options = {}) {
+        let sql = 'SELECT * FROM automations WHERE 1=1';
+        const params = [];
+
+        if (options.is_active !== undefined) {
+            sql += ' AND is_active = ?';
+            params.push(options.is_active ? 1 : 0);
+        }
+
+        if (options.trigger_type) {
+            sql += ' AND trigger_type = ?';
+            params.push(options.trigger_type);
+        }
+
+        if (options.created_by) {
+            sql += ' AND created_by = ?';
+            params.push(options.created_by);
+        }
+
+        if (options.search) {
+            sql += ' AND (name LIKE ? OR description LIKE ?)';
+            params.push(`%${options.search}%`, `%${options.search}%`);
+        }
+
+        sql += ' ORDER BY created_at DESC';
+
+        if (options.limit) {
+            sql += ' LIMIT ?';
+            params.push(options.limit);
+        }
+
+        if (options.offset) {
+            sql += ' OFFSET ?';
+            params.push(options.offset);
+        }
+
+        return await query(sql, params);
+    },
+
+    async update(id, data) {
+        const fields = [];
+        const values = [];
+
+        const allowedFields = [
+            'name', 'description', 'trigger_type', 'trigger_value',
+            'action_type', 'action_value', 'delay', 'is_active', 'executions', 'last_execution'
+        ];
+
+        for (const [key, value] of Object.entries(data)) {
+            if (allowedFields.includes(key)) {
+                fields.push(`${key} = ?`);
+                if (key === 'is_active' && typeof value === 'boolean') {
+                    values.push(value ? 1 : 0);
+                } else {
+                    values.push(value);
+                }
+            }
+        }
+
+        if (fields.length === 0) return null;
+
+        fields.push("updated_at = CURRENT_TIMESTAMP");
+        values.push(id);
+
+        return await run(`UPDATE automations SET ${fields.join(', ')} WHERE id = ?`, values);
+    },
+
+    async delete(id) {
+        return await run('DELETE FROM automations WHERE id = ?', [id]);
     }
 };
 
@@ -426,10 +856,10 @@ const Template = {
 // ============================================
 
 const Flow = {
-    create(data) {
+    async create(data) {
         const uuid = generateUUID();
         
-        const result = run(`
+        const result = await run(`
             INSERT INTO flows (uuid, name, description, trigger_type, trigger_value, nodes, edges, is_active, priority, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
@@ -448,8 +878,8 @@ const Flow = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    findById(id) {
-        const flow = queryOne('SELECT * FROM flows WHERE id = ?', [id]);
+    async findById(id) {
+        const flow = await queryOne('SELECT * FROM flows WHERE id = ?', [id]);
         if (flow) {
             flow.nodes = JSON.parse(flow.nodes || '[]');
             flow.edges = JSON.parse(flow.edges || '[]');
@@ -457,7 +887,7 @@ const Flow = {
         return flow;
     },
     
-    findByTrigger(triggerType, triggerValue = null) {
+    async findByTrigger(triggerType, triggerValue = null) {
         let sql = 'SELECT * FROM flows WHERE trigger_type = ? AND is_active = 1';
         const params = [triggerType];
         
@@ -468,7 +898,7 @@ const Flow = {
         
         sql += ' ORDER BY priority DESC LIMIT 1';
         
-        const flow = queryOne(sql, params);
+        const flow = await queryOne(sql, params);
         if (flow) {
             flow.nodes = JSON.parse(flow.nodes || '[]');
             flow.edges = JSON.parse(flow.edges || '[]');
@@ -476,8 +906,8 @@ const Flow = {
         return flow;
     },
     
-    findByKeyword(keyword) {
-        const flows = query(`
+    async findByKeyword(keyword) {
+        const flows = await query(`
             SELECT * FROM flows 
             WHERE trigger_type = 'keyword' AND is_active = 1
             ORDER BY priority DESC
@@ -495,7 +925,7 @@ const Flow = {
         return null;
     },
     
-    list(options = {}) {
+    async list(options = {}) {
         let sql = 'SELECT * FROM flows WHERE 1=1';
         const params = [];
         
@@ -506,14 +936,15 @@ const Flow = {
         
         sql += ' ORDER BY priority DESC, name ASC';
         
-        return query(sql, params).map(flow => ({
+        const rows = await query(sql, params);
+        return rows.map(flow => ({
             ...flow,
             nodes: JSON.parse(flow.nodes || '[]'),
             edges: JSON.parse(flow.edges || '[]')
         }));
     },
     
-    update(id, data) {
+    async update(id, data) {
         const fields = [];
         const values = [];
         
@@ -528,14 +959,14 @@ const Flow = {
         
         if (fields.length === 0) return null;
         
-        fields.push('updated_at = datetime("now")');
+        fields.push("updated_at = CURRENT_TIMESTAMP");
         values.push(id);
         
-        return run(`UPDATE flows SET ${fields.join(', ')} WHERE id = ?`, values);
+        return await run(`UPDATE flows SET ${fields.join(', ')} WHERE id = ?`, values);
     },
     
-    delete(id) {
-        return run('DELETE FROM flows WHERE id = ?', [id]);
+    async delete(id) {
+        return await run('DELETE FROM flows WHERE id = ?', [id]);
     }
 };
 
@@ -544,16 +975,17 @@ const Flow = {
 // ============================================
 
 const MessageQueue = {
-    add(data) {
+    async add(data) {
         const uuid = generateUUID();
         
-        const result = run(`
-            INSERT INTO message_queue (uuid, lead_id, conversation_id, content, media_type, media_url, priority, scheduled_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        const result = await run(`
+            INSERT INTO message_queue (uuid, lead_id, conversation_id, campaign_id, content, media_type, media_url, priority, scheduled_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             data.lead_id,
             data.conversation_id,
+            data.campaign_id || null,
             data.content,
             data.media_type || 'text',
             data.media_url,
@@ -564,35 +996,35 @@ const MessageQueue = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    getNext() {
-        return queryOne(`
+    async getNext() {
+        return await queryOne(`
             SELECT * FROM message_queue 
             WHERE status = 'pending' 
-            AND (scheduled_at IS NULL OR scheduled_at <= datetime('now'))
+            AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
             AND attempts < max_attempts
             ORDER BY priority DESC, created_at ASC
             LIMIT 1
         `);
     },
     
-    markProcessing(id) {
-        return run(`
+    async markProcessing(id) {
+        return await run(`
             UPDATE message_queue 
             SET status = 'processing', attempts = attempts + 1 
             WHERE id = ?
         `, [id]);
     },
     
-    markSent(id) {
-        return run(`
+    async markSent(id) {
+        return await run(`
             UPDATE message_queue 
-            SET status = 'sent', processed_at = datetime('now') 
+            SET status = 'sent', processed_at = CURRENT_TIMESTAMP 
             WHERE id = ?
         `, [id]);
     },
     
-    markFailed(id, errorMessage) {
-        return run(`
+    async markFailed(id, errorMessage) {
+        return await run(`
             UPDATE message_queue 
             SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
                 error_message = ?
@@ -600,16 +1032,28 @@ const MessageQueue = {
         `, [errorMessage, id]);
     },
     
-    cancel(id) {
-        return run(`UPDATE message_queue SET status = 'cancelled' WHERE id = ?`, [id]);
+    async cancel(id) {
+        return await run(`UPDATE message_queue SET status = 'cancelled' WHERE id = ?`, [id]);
     },
     
-    getPending() {
-        return query(`
+    async getPending() {
+        return await query(`
             SELECT * FROM message_queue 
             WHERE status = 'pending' 
             ORDER BY priority DESC, created_at ASC
         `);
+    },
+
+    async hasQueuedOrSentForCampaignLead(campaignId, leadId) {
+        const row = await queryOne(`
+            SELECT id
+            FROM message_queue
+            WHERE campaign_id = ?
+              AND lead_id = ?
+              AND status IN ('pending', 'processing', 'sent')
+            LIMIT 1
+        `, [campaignId, leadId]);
+        return !!row;
     }
 };
 
@@ -618,10 +1062,10 @@ const MessageQueue = {
 // ============================================
 
 const Webhook = {
-    create(data) {
+    async create(data) {
         const uuid = generateUUID();
         
-        const result = run(`
+        const result = await run(`
             INSERT INTO webhooks (uuid, name, url, secret, events, headers, is_active, retry_count, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
@@ -639,22 +1083,22 @@ const Webhook = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    findById(id) {
-        return queryOne('SELECT * FROM webhooks WHERE id = ?', [id]);
+    async findById(id) {
+        return await queryOne('SELECT * FROM webhooks WHERE id = ?', [id]);
     },
     
-    findByEvent(event) {
-        return query(`
+    async findByEvent(event) {
+        return await query(`
             SELECT * FROM webhooks 
             WHERE is_active = 1 AND events LIKE ?
         `, [`%"${event}"%`]);
     },
     
-    list() {
-        return query('SELECT * FROM webhooks ORDER BY name ASC');
+    async list() {
+        return await query('SELECT * FROM webhooks ORDER BY name ASC');
     },
     
-    update(id, data) {
+    async update(id, data) {
         const fields = [];
         const values = [];
         
@@ -669,21 +1113,21 @@ const Webhook = {
         
         if (fields.length === 0) return null;
         
-        fields.push('updated_at = datetime("now")');
+        fields.push("updated_at = CURRENT_TIMESTAMP");
         values.push(id);
         
-        return run(`UPDATE webhooks SET ${fields.join(', ')} WHERE id = ?`, values);
+        return await run(`UPDATE webhooks SET ${fields.join(', ')} WHERE id = ?`, values);
     },
     
-    logTrigger(webhookId, event, payload, responseStatus, responseBody, durationMs) {
-        return run(`
+    async logTrigger(webhookId, event, payload, responseStatus, responseBody, durationMs) {
+        return await run(`
             INSERT INTO webhook_logs (webhook_id, event, payload, response_status, response_body, duration_ms)
             VALUES (?, ?, ?, ?, ?, ?)
         `, [webhookId, event, JSON.stringify(payload), responseStatus, responseBody, durationMs]);
     },
     
-    delete(id) {
-        return run('DELETE FROM webhooks WHERE id = ?', [id]);
+    async delete(id) {
+        return await run('DELETE FROM webhooks WHERE id = ?', [id]);
     }
 };
 
@@ -692,8 +1136,8 @@ const Webhook = {
 // ============================================
 
 const Settings = {
-    get(key) {
-        const setting = queryOne('SELECT * FROM settings WHERE key = ?', [key]);
+    async get(key) {
+        const setting = await queryOne('SELECT * FROM settings WHERE key = ?', [key]);
         if (!setting) return null;
         
         switch (setting.type) {
@@ -708,18 +1152,18 @@ const Settings = {
         }
     },
     
-    set(key, value, type = 'string') {
+    async set(key, value, type = 'string') {
         const stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
         
-        return run(`
+        return await run(`
             INSERT INTO settings (key, value, type, updated_at) 
-            VALUES (?, ?, ?, datetime('now'))
-            ON CONFLICT(key) DO UPDATE SET value = ?, type = ?, updated_at = datetime('now')
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET value = ?, type = ?, updated_at = CURRENT_TIMESTAMP
         `, [key, stringValue, type, stringValue, type]);
     },
     
-    getAll() {
-        const settings = query('SELECT * FROM settings');
+    async getAll() {
+        const settings = await query('SELECT * FROM settings');
         const result = {};
         
         for (const setting of settings) {
@@ -747,15 +1191,16 @@ const Settings = {
 // ============================================
 
 const User = {
-    create(data) {
+    async create(data) {
         const uuid = generateUUID();
+        const safeName = deriveUserName(data.name, data.email);
         
-        const result = run(`
+        const result = await run(`
             INSERT INTO users (uuid, name, email, password_hash, role, avatar_url)
             VALUES (?, ?, ?, ?, ?, ?)
         `, [
             uuid,
-            data.name,
+            safeName,
             data.email,
             data.password_hash,
             data.role || 'agent',
@@ -765,20 +1210,20 @@ const User = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    findById(id) {
-        return queryOne('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users WHERE id = ?', [id]);
+    async findById(id) {
+        return await queryOne('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users WHERE id = ?', [id]);
     },
     
-    findByEmail(email) {
-        return queryOne('SELECT * FROM users WHERE email = ?', [email]);
+    async findByEmail(email) {
+        return await queryOne('SELECT * FROM users WHERE email = ?', [email]);
     },
     
-    updateLastLogin(id) {
-        return run('UPDATE users SET last_login_at = datetime("now") WHERE id = ?', [id]);
+    async updateLastLogin(id) {
+        return await run("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
     },
     
-    list() {
-        return query('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users WHERE is_active = 1 ORDER BY name ASC');
+    async list() {
+        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users WHERE is_active = 1 ORDER BY name ASC');
     }
 };
 
@@ -787,6 +1232,8 @@ module.exports = {
     Conversation,
     Message,
     Template,
+    Campaign,
+    Automation,
     Flow,
     MessageQueue,
     Webhook,
