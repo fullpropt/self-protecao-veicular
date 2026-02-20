@@ -21,6 +21,19 @@ const INTENT_STOPWORDS = new Set([
 const DEFAULT_INTENT_FUZZY_THRESHOLD = 0.34;
 const DEFAULT_INTENT_FUZZY_MIN_SCORE = 0.58;
 const DEFAULT_INTENT_FUZZY_MIN_TOKEN_COVERAGE = 0.45;
+const INTENT_DIRECTION_GROUPS = [
+    {
+        id: 'buy',
+        roots: ['compr', 'adquir', 'consig', 'encontr', 'acha']
+    },
+    {
+        id: 'sell',
+        roots: ['vend', 'revend', 'ofert', 'comercializ']
+    }
+];
+const INTENT_DIRECTION_CONFLICT_PAIRS = [
+    ['buy', 'sell']
+];
 
 function isStrictFlowIntentRoutingEnabled() {
     const value = String(process.env.FLOW_INTENT_CLASSIFIER_STRICT || '').trim().toLowerCase();
@@ -95,6 +108,74 @@ function normalizeIntentToken(token = '') {
     return normalized;
 }
 
+function tokenMatchesIntentRoot(token = '', root = '') {
+    const normalizedToken = String(token || '').trim();
+    const normalizedRoot = String(root || '').trim();
+    if (!normalizedToken || !normalizedRoot) return false;
+    return normalizedToken === normalizedRoot || normalizedToken.startsWith(normalizedRoot);
+}
+
+function tokenListHasAnyIntentRoot(tokens = [], roots = []) {
+    if (!Array.isArray(tokens) || tokens.length === 0) return false;
+    if (!Array.isArray(roots) || roots.length === 0) return false;
+
+    return tokens.some((token) => roots.some((root) => tokenMatchesIntentRoot(token, root)));
+}
+
+function resolveIntentDirectionGroupMatches(tokens = []) {
+    const matchedGroups = new Set();
+    for (const group of INTENT_DIRECTION_GROUPS) {
+        if (tokenListHasAnyIntentRoot(tokens, group.roots)) {
+            matchedGroups.add(group.id);
+        }
+    }
+    return matchedGroups;
+}
+
+function hasIntentDirectionConflict(messageTokens = [], phraseTokens = []) {
+    const phraseGroups = resolveIntentDirectionGroupMatches(phraseTokens);
+    if (phraseGroups.size === 0) return false;
+
+    const messageGroups = resolveIntentDirectionGroupMatches(messageTokens);
+    if (messageGroups.size === 0) return false;
+
+    for (const [groupA, groupB] of INTENT_DIRECTION_CONFLICT_PAIRS) {
+        if (
+            phraseGroups.has(groupA)
+            && !phraseGroups.has(groupB)
+            && messageGroups.has(groupB)
+            && !messageGroups.has(groupA)
+        ) {
+            return true;
+        }
+
+        if (
+            phraseGroups.has(groupB)
+            && !phraseGroups.has(groupA)
+            && messageGroups.has(groupA)
+            && !messageGroups.has(groupB)
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function hasIntentDirectionAnchorMatch(messageTokens = [], phraseTokens = []) {
+    const phraseGroups = resolveIntentDirectionGroupMatches(phraseTokens);
+    if (phraseGroups.size === 0) return true;
+
+    const messageGroups = resolveIntentDirectionGroupMatches(messageTokens);
+    if (messageGroups.size === 0) return false;
+
+    for (const groupId of phraseGroups) {
+        if (messageGroups.has(groupId)) return true;
+    }
+
+    return false;
+}
+
 function getCommonPrefixLength(a = '', b = '') {
     const max = Math.min(a.length, b.length);
     let length = 0;
@@ -134,6 +215,12 @@ function scoreIntentPhraseMatch(normalizedMessage = '', messageTokens = [], norm
 
     const phraseTokens = tokenizeIntentText(normalizedPhrase);
     if (phraseTokens.length === 0) return { matched: false, exact: false, score: 0, strongMatches: 0 };
+    if (hasIntentDirectionConflict(messageTokens, phraseTokens)) {
+        return { matched: false, exact: false, score: 0, strongMatches: 0 };
+    }
+    if (!hasIntentDirectionAnchorMatch(messageTokens, phraseTokens)) {
+        return { matched: false, exact: false, score: 0, strongMatches: 0 };
+    }
 
     const messageTokenSet = new Set(messageTokens);
     let strongMatches = 0;
@@ -345,6 +432,8 @@ function findBestKeywordFlowByFuzzy(normalizedMessage = '', messageTokens = [], 
     for (const result of results) {
         const item = result?.item;
         if (!item?.flowId) continue;
+        if (hasIntentDirectionConflict(messageTokens, item.keywordTokens)) continue;
+        if (!hasIntentDirectionAnchorMatch(messageTokens, item.keywordTokens)) continue;
 
         const rawFuseScore = Number(result?.score);
         const normalizedFuseScore = Number.isFinite(rawFuseScore)
@@ -509,6 +598,8 @@ function findBestIntentRouteByFuzzy(normalizedMessage = '', messageTokens = [], 
     for (const result of results) {
         const item = result?.item;
         if (!item?.routeId) continue;
+        if (hasIntentDirectionConflict(messageTokens, item.phraseTokens)) continue;
+        if (!hasIntentDirectionAnchorMatch(messageTokens, item.phraseTokens)) continue;
 
         const rawFuseScore = Number(result?.score);
         const normalizedFuseScore = Number.isFinite(rawFuseScore)
