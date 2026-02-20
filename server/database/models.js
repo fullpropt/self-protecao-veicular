@@ -1056,6 +1056,20 @@ const Flow = {
         }
         return flow;
     },
+
+    async findActiveKeywordFlows() {
+        const rows = await query(`
+            SELECT * FROM flows
+            WHERE trigger_type = 'keyword' AND is_active = 1
+            ORDER BY priority DESC, id ASC
+        `);
+
+        return rows.map((flow) => ({
+            ...flow,
+            nodes: JSON.parse(flow.nodes || '[]'),
+            edges: JSON.parse(flow.edges || '[]')
+        }));
+    },
     
     async findKeywordMatches(messageText) {
         const normalizedMessage = normalizeFlowKeywordText(messageText);

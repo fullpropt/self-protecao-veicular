@@ -6,11 +6,41 @@
 const { Flow, Lead, Conversation, Message } = require('../database/models');
 const { run, queryOne, generateUUID } = require('../database/connection');
 const EventEmitter = require('events');
-const { classifyKeywordFlowIntent } = require('./intentClassifierService');
+const { classifyKeywordFlowIntent, classifyIntentRoute } = require('./intentClassifierService');
 
 function isStrictFlowIntentRoutingEnabled() {
     const value = String(process.env.FLOW_INTENT_CLASSIFIER_STRICT || '').trim().toLowerCase();
     return value === '1' || value === 'true' || value === 'on';
+}
+
+function isFlowIntentClassifierConfigured() {
+    const enabledValue = String(process.env.FLOW_INTENT_CLASSIFIER_ENABLED || '').trim().toLowerCase();
+    if (enabledValue === '0' || enabledValue === 'false' || enabledValue === 'off') {
+        return false;
+    }
+    return Boolean(String(process.env.GEMINI_API_KEY || '').trim());
+}
+
+function normalizeIntentText(value = '') {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function parseIntentPhrases(value = '') {
+    return String(value || '')
+        .split(',')
+        .map((item) => normalizeIntentText(item))
+        .filter(Boolean);
+}
+
+function includesIntentPhrase(normalizedMessage = '', normalizedPhrase = '') {
+    if (!normalizedMessage || !normalizedPhrase) return false;
+    return ` ${normalizedMessage} `.includes(` ${normalizedPhrase} `);
 }
 
 class FlowService extends EventEmitter {
@@ -49,22 +79,22 @@ class FlowService extends EventEmitter {
         let suppressKeywordFallback = false;
 
         if (text) {
-            const strictIntentRouting = isStrictFlowIntentRoutingEnabled();
+            const strictIntentRouting = isStrictFlowIntentRoutingEnabled() && isFlowIntentClassifierConfigured();
             const keywordMatches = await Flow.findKeywordMatches(text);
-            if (keywordMatches.length > 0) {
-                const intentDecision = await classifyKeywordFlowIntent(text, keywordMatches);
-
+            const semanticCandidates = await Flow.findActiveKeywordFlows();
+            if (semanticCandidates.length > 0) {
+                const intentDecision = await classifyKeywordFlowIntent(text, semanticCandidates);
                 if (intentDecision?.status === 'selected' && intentDecision.flowId) {
-                    flow = keywordMatches.find((item) => Number(item.id) === Number(intentDecision.flowId)) || null;
+                    flow = semanticCandidates.find((item) => Number(item.id) === Number(intentDecision.flowId)) || null;
                 } else if (intentDecision?.status === 'no_match') {
                     suppressKeywordFallback = true;
                 } else if (strictIntentRouting) {
                     suppressKeywordFallback = true;
                 }
+            }
 
-                if (!flow && !suppressKeywordFallback) {
-                    flow = keywordMatches[0];
-                }
+            if (!flow && !suppressKeywordFallback && keywordMatches.length > 0) {
+                flow = keywordMatches[0];
             }
         }
         
@@ -118,8 +148,10 @@ class FlowService extends EventEmitter {
                 nome: lead.name || 'Cliente',
                 telefone: lead.phone,
                 veiculo: lead.vehicle || '',
-                placa: lead.plate || ''
-            }
+                placa: lead.plate || '',
+                trigger_message: triggerMessage?.text || ''
+            },
+            triggerMessageText: triggerMessage?.text || ''
         };
         
         // Armazenar execução ativa
@@ -191,8 +223,7 @@ class FlowService extends EventEmitter {
         try {
             switch (node.type) {
                 case 'trigger':
-                    // Nó inicial, ir para próximo
-                    await this.goToNextNode(execution, node);
+                    await this.executeTriggerNode(execution, node);
                     break;
                     
                 case 'message':
@@ -300,9 +331,131 @@ class FlowService extends EventEmitter {
     /**
      * Ir para próximo nó
      */
-    async goToNextNode(execution, currentNode) {
-        const edge = execution.flow.edges.find(e => e.source === currentNode.id);
-        
+    resolveTriggerIntentRoutes(node) {
+        const subtype = String(node?.subtype || '').trim().toLowerCase();
+        if (node?.type !== 'trigger' || (subtype !== 'keyword' && subtype !== 'intent')) {
+            return [];
+        }
+
+        const routes = Array.isArray(node?.data?.intentRoutes) ? node.data.intentRoutes : [];
+        if (routes.length > 0) {
+            return routes
+                .map((route, index) => {
+                    const id = String(route?.id || `intent-${index + 1}`).trim();
+                    const label = String(route?.label || '').trim() || `Intencao ${index + 1}`;
+                    const phrases = String(route?.phrases || '').trim();
+                    const normalizedPhrases = parseIntentPhrases(phrases);
+                    if (!id || normalizedPhrases.length === 0) return null;
+                    return { id, label, phrases, normalizedPhrases };
+                })
+                .filter(Boolean);
+        }
+
+        const fallbackPhrases = parseIntentPhrases(node?.data?.keyword || '');
+        return fallbackPhrases.map((phrase, index) => ({
+            id: `intent-${index + 1}`,
+            label: `Intencao ${index + 1}`,
+            phrases: phrase,
+            normalizedPhrases: [phrase]
+        }));
+    }
+
+    async pickTriggerIntentHandle(execution, node) {
+        const routes = this.resolveTriggerIntentRoutes(node);
+        if (routes.length === 0) return null;
+
+        const messageText = String(execution?.triggerMessageText || execution?.variables?.trigger_message || '').trim();
+        if (!messageText) return null;
+
+        const semanticDecision = await classifyIntentRoute(messageText, routes);
+        if (semanticDecision?.status === 'selected' && semanticDecision.routeId) {
+            return String(semanticDecision.routeId);
+        }
+        if (semanticDecision?.status === 'no_match') {
+            return null;
+        }
+
+        const normalizedMessage = normalizeIntentText(messageText);
+        if (!normalizedMessage) return null;
+
+        let best = null;
+        for (const route of routes) {
+            const matchedPhrases = route.normalizedPhrases.filter((phrase) => includesIntentPhrase(normalizedMessage, phrase));
+            if (matchedPhrases.length === 0) continue;
+
+            const longestWords = matchedPhrases.reduce((max, phrase) => Math.max(max, phrase.split(' ').length), 0);
+            const longestLength = matchedPhrases.reduce((max, phrase) => Math.max(max, phrase.length), 0);
+            const score = {
+                longestWords,
+                longestLength,
+                matchedCount: matchedPhrases.length
+            };
+
+            const isBetter = !best
+                || score.longestWords > best.score.longestWords
+                || (
+                    score.longestWords === best.score.longestWords
+                    && score.longestLength > best.score.longestLength
+                )
+                || (
+                    score.longestWords === best.score.longestWords
+                    && score.longestLength === best.score.longestLength
+                    && score.matchedCount > best.score.matchedCount
+                );
+
+            if (isBetter) {
+                best = { id: route.id, score };
+            }
+        }
+
+        return best?.id || null;
+    }
+
+    async executeTriggerNode(execution, node) {
+        const selectedHandle = await this.pickTriggerIntentHandle(execution, node);
+
+        if (selectedHandle) {
+            execution.variables.trigger_intent_handle = selectedHandle;
+        } else {
+            delete execution.variables.trigger_intent_handle;
+        }
+
+        await run(`
+            UPDATE flow_executions
+            SET variables = ?
+            WHERE id = ?
+        `, [JSON.stringify(execution.variables), execution.id]);
+
+        await this.goToNextNode(execution, node, selectedHandle);
+    }
+
+    async goToNextNode(execution, currentNode, preferredSourceHandle = null) {
+        const outgoingEdges = (execution.flow.edges || []).filter((edge) => edge.source === currentNode.id);
+        if (outgoingEdges.length === 0) {
+            await this.endFlow(execution, 'completed');
+            return;
+        }
+
+        const subtype = String(currentNode?.subtype || '').trim().toLowerCase();
+        const isIntentNode = currentNode?.type === 'trigger' && (subtype === 'keyword' || subtype === 'intent');
+        const normalizeHandle = (value) => {
+            const normalized = String(value || '').trim();
+            return normalized || 'default';
+        };
+
+        let edge = null;
+        if (isIntentNode && preferredSourceHandle) {
+            edge = outgoingEdges.find((item) => normalizeHandle(item.sourceHandle) === normalizeHandle(preferredSourceHandle));
+        }
+
+        if (!edge) {
+            edge = outgoingEdges.find((item) => normalizeHandle(item.sourceHandle) === 'default');
+        }
+
+        if (!edge && !isIntentNode) {
+            edge = outgoingEdges[0];
+        }
+
         if (edge) {
             await this.executeNode(execution, edge.target);
         } else {
@@ -424,3 +577,5 @@ class FlowService extends EventEmitter {
 
 module.exports = new FlowService();
 module.exports.FlowService = FlowService;
+
+

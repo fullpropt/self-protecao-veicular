@@ -5,6 +5,7 @@ type NodeType = 'trigger' | 'message' | 'wait' | 'condition' | 'delay' | 'transf
 type NodeData = {
     label: string;
     keyword?: string;
+    intentRoutes?: Array<{ id: string; label: string; phrases: string }>;
     content?: string;
     timeout?: number;
     conditions?: Array<{ value: string; next?: string }>;
@@ -23,7 +24,13 @@ type FlowNode = {
     data: NodeData;
 };
 
-type Edge = { source: string; target: string };
+type Edge = {
+    source: string;
+    target: string;
+    sourceHandle?: string;
+    targetHandle?: string;
+    label?: string;
+};
 
 type FlowSummary = {
     id: number;
@@ -46,11 +53,131 @@ let isPanning = false;
 let panStart = { x: 0, y: 0 };
 let panOrigin = { x: 0, y: 0 };
 let isConnecting = false;
-let connectionStart: { nodeId: string; portType: string } | null = null;
+let connectionStart: { nodeId: string; portType: string; handle: string; label?: string } | null = null;
 let connectionStartPort: HTMLElement | null = null;
 let connectionPreviewPath: SVGPathElement | null = null;
 let lastPointer = { x: 0, y: 0 };
 let hasInitialized = false;
+
+const DEFAULT_HANDLE = 'default';
+
+function isIntentTrigger(node?: FlowNode | null) {
+    return !!node && node.type === 'trigger' && (node.subtype === 'keyword' || node.subtype === 'intent');
+}
+
+function normalizeRouteId(value: string) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 48) || `intent-${Date.now()}`;
+}
+
+function parsePhraseList(value: string) {
+    return String(value || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function buildRouteLabel(route: { label?: string; phrases?: string }, index: number) {
+    const explicitLabel = String(route.label || '').trim();
+    if (explicitLabel) return explicitLabel;
+    const firstPhrase = parsePhraseList(route.phrases || '')[0];
+    if (firstPhrase) return firstPhrase;
+    return `Intenção ${index + 1}`;
+}
+
+function getIntentRoutes(node?: FlowNode | null) {
+    if (!isIntentTrigger(node)) return [];
+
+    const routes = Array.isArray(node?.data?.intentRoutes) ? node.data.intentRoutes : [];
+    if (routes.length > 0) {
+        const usedIds = new Set<string>();
+        return routes.map((route, index) => {
+            const baseId = normalizeRouteId(route.id || route.label || `intent-${index + 1}`);
+            let id = baseId;
+            let suffix = 1;
+            while (usedIds.has(id)) {
+                id = `${baseId}-${suffix}`;
+                suffix += 1;
+            }
+            usedIds.add(id);
+            return {
+                id,
+                label: buildRouteLabel(route, index),
+                phrases: String(route.phrases || '').trim()
+            };
+        });
+    }
+
+    const fallbackPhrases = parsePhraseList(node?.data?.keyword || '');
+    return fallbackPhrases.map((phrase, index) => ({
+        id: normalizeRouteId(`intent-${index + 1}`),
+        label: phrase,
+        phrases: phrase
+    }));
+}
+
+function syncIntentRoutesFromNode(node?: FlowNode | null) {
+    if (!isIntentTrigger(node)) return;
+    const routes = getIntentRoutes(node);
+    node!.data.intentRoutes = routes;
+    const allPhrases = routes.flatMap((route) => parsePhraseList(route.phrases));
+    node!.data.keyword = Array.from(new Set(allPhrases)).join(', ');
+}
+
+function getOutputHandles(node: FlowNode) {
+    if (!isIntentTrigger(node)) {
+        return [{ handle: DEFAULT_HANDLE, label: '' }];
+    }
+
+    const routes = getIntentRoutes(node);
+    const routeHandles = routes.map((route) => ({
+        handle: route.id || normalizeRouteId(route.label || route.phrases || ''),
+        label: route.label || route.phrases || 'Intenção'
+    }));
+
+    return [...routeHandles, { handle: DEFAULT_HANDLE, label: 'Padrão' }];
+}
+
+function edgeHandle(handle?: string) {
+    const normalized = String(handle || '').trim();
+    return normalized || DEFAULT_HANDLE;
+}
+
+function isSameEdge(a: Edge, b: Edge) {
+    return (
+        a.source === b.source &&
+        a.target === b.target &&
+        edgeHandle(a.sourceHandle) === edgeHandle(b.sourceHandle) &&
+        edgeHandle(a.targetHandle) === edgeHandle(b.targetHandle)
+    );
+}
+
+function findPortByHandle(nodeEl: Element, selector: string, handle?: string) {
+    const normalizedHandle = edgeHandle(handle);
+    const ports = Array.from(nodeEl.querySelectorAll(selector)) as HTMLElement[];
+    const exact = ports.find((port) => edgeHandle(port.dataset.handle) === normalizedHandle);
+    return exact || ports[0] || null;
+}
+
+function truncateLabel(value: string, max = 18) {
+    const text = String(value || '').trim();
+    if (text.length <= max) return text;
+    return `${text.slice(0, max - 1)}…`;
+}
+
+function escapeHtml(value: string) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 function getSessionToken() {
     return sessionStorage.getItem('selfDashboardToken');
@@ -171,7 +298,7 @@ function addNode(type: NodeType, subtype: string, x: number, y: number) {
 // Dados padrao do no
 function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
     const defaults = {
-        trigger: { label: subtype === 'keyword' ? 'Palavra-chave' : 'Novo Contato', keyword: '' },
+        trigger: { label: subtype === 'keyword' || subtype === 'intent' ? 'Intenção' : 'Novo Contato', keyword: '', intentRoutes: [] },
         message: { label: 'Mensagem', content: 'Olá! Como posso ajudar?' },
         wait: { label: 'Aguardar Resposta', timeout: 300 },
         condition: { label: 'Condição', conditions: [] },
@@ -183,6 +310,22 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
         end: { label: 'Fim' }
     };
     return defaults[type] || { label: type };
+}
+
+function getNodeOutputPortsMarkup(node: FlowNode) {
+    if (node.type === 'end') return '<div></div>';
+
+    const handles = getOutputHandles(node);
+    return `
+        <div class="node-output-ports">
+            ${handles.map((item) => `
+                <div class="node-output-port">
+                    ${item.label ? `<span class="node-output-label" title="${escapeHtml(item.label)}">${escapeHtml(truncateLabel(item.label))}</span>` : ''}
+                    <div class="port output" data-port="output" data-handle="${escapeHtml(item.handle)}" data-label="${escapeHtml(item.label || '')}" title="${escapeHtml(item.label || 'Saída')}"></div>
+                </div>
+            `).join('')}
+        </div>
+    `;
 }
 
 // Renderizar no
@@ -219,8 +362,8 @@ function renderNode(node: FlowNode) {
             ${getNodePreview(node)}
         </div>
         <div class="flow-node-ports">
-            ${node.type !== 'trigger' ? '<div class="port input" data-port="input"></div>' : '<div></div>'}
-            ${node.type !== 'end' ? '<div class="port output" data-port="output"></div>' : '<div></div>'}
+            ${node.type !== 'trigger' ? '<div class="port input" data-port="input" data-handle="default"></div>' : '<div></div>'}
+            ${getNodeOutputPortsMarkup(node)}
         </div>
     `;
     
@@ -232,7 +375,13 @@ function renderNode(node: FlowNode) {
         if (target?.classList.contains('port')) {
             e.preventDefault();
             e.stopPropagation();
-            startConnection(node.id, target.dataset.port || '');
+            startConnection(
+                node.id,
+                target.dataset.port || '',
+                target.dataset.handle || DEFAULT_HANDLE,
+                target.dataset.label || '',
+                target
+            );
             return;
         }
         if (target?.classList.contains('delete-btn')) return;
@@ -333,7 +482,12 @@ function getNodePreview(node: FlowNode) {
         case 'delay':
             return `Aguardar ${node.data.seconds}s`;
         case 'trigger':
-            return node.subtype === 'keyword' ? `Palavra: ${node.data.keyword || '...'}` : 'Novo contato';
+            if (isIntentTrigger(node)) {
+                const routes = getIntentRoutes(node);
+                if (routes.length === 0) return 'Defina as intenções para iniciar o fluxo';
+                return `${routes.length} intenção(ões) configurada(s)`;
+            }
+            return 'Novo contato';
         default:
             return '';
     }
@@ -404,12 +558,23 @@ function renderProperties() {
     
     switch (selectedNode.type) {
         case 'trigger':
-            if (selectedNode.subtype === 'keyword') {
+            if (isIntentTrigger(selectedNode)) {
+                syncIntentRoutesFromNode(selectedNode);
+                const routes = getIntentRoutes(selectedNode);
                 html += `
                     <div class="property-group">
-                        <label>Palavra-chave</label>
-                        <input type="text" value="${selectedNode.data.keyword || ''}" onchange="updateNodeProperty('keyword', this.value)" placeholder="Ex: oi, olá, cotação">
-                        <div class="hint">Separe múltiplas palavras por vírgula</div>
+                        <label>Intenções</label>
+                        <div class="intent-routes-editor">
+                            ${routes.map((route, index) => `
+                                <div class="intent-route-row">
+                                    <input type="text" value="${escapeHtml(route.label)}" placeholder="Nome da saída" onchange="updateIntentRoute(${index}, 'label', this.value)">
+                                    <input type="text" value="${escapeHtml(route.phrases)}" placeholder="Frases separadas por vírgula" onchange="updateIntentRoute(${index}, 'phrases', this.value)">
+                                    <button class="remove-btn" onclick="removeIntentRoute(${index})">×</button>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="add-condition-btn" onclick="addIntentRoute()">+ Adicionar Intenção</button>
+                        <div class="hint">Conecte cada saída do bloco para o caminho correspondente. A saída "Padrão" cobre casos sem match.</div>
                     </div>
                 `;
             }
@@ -511,15 +676,85 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
     if (!selectedNode) return;
     
     selectedNode.data[key] = value;
-    
-    // Atualizar visual
-    const nodeEl = document.getElementById(selectedNode.id);
-    if (nodeEl) {
-        const title = nodeEl.querySelector('.title') as HTMLElement | null;
-        const body = nodeEl.querySelector('.flow-node-body') as HTMLElement | null;
-        if (title) title.textContent = selectedNode.data.label;
-        if (body) body.innerHTML = getNodePreview(selectedNode);
+
+    if (isIntentTrigger(selectedNode) && key === 'keyword') {
+        selectedNode.data.intentRoutes = parsePhraseList(String(value || '')).map((phrase, index) => ({
+            id: normalizeRouteId(`intent-${index + 1}`),
+            label: phrase,
+            phrases: phrase
+        }));
     }
+
+    rerenderNode(selectedNode.id);
+}
+
+function rerenderNode(nodeId: string) {
+    const node = nodes.find((item) => item.id === nodeId);
+    if (!node) return;
+
+    const wasSelected = selectedNode?.id === nodeId;
+    const oldNodeEl = document.getElementById(nodeId);
+    oldNodeEl?.remove();
+
+    renderNode(node);
+
+    if (wasSelected) {
+        const nodeEl = document.getElementById(nodeId);
+        nodeEl?.classList.add('selected');
+    }
+
+    cleanupInvalidEdgesForNode(nodeId);
+    renderConnections();
+}
+
+function cleanupInvalidEdgesForNode(nodeId: string) {
+    const node = nodes.find((item) => item.id === nodeId);
+    if (!node) return;
+
+    const validHandles = new Set(getOutputHandles(node).map((item) => edgeHandle(item.handle)));
+    edges = edges.filter((edge) => {
+        if (edge.source !== nodeId) return true;
+        return validHandles.has(edgeHandle(edge.sourceHandle));
+    });
+}
+
+function addIntentRoute() {
+    if (!selectedNode || !isIntentTrigger(selectedNode)) return;
+    syncIntentRoutesFromNode(selectedNode);
+
+    const nextIndex = (selectedNode.data.intentRoutes?.length || 0) + 1;
+    const nextRoute = {
+        id: normalizeRouteId(`intent-${Date.now()}-${nextIndex}`),
+        label: `Intenção ${nextIndex}`,
+        phrases: ''
+    };
+
+    selectedNode.data.intentRoutes = [...(selectedNode.data.intentRoutes || []), nextRoute];
+    syncIntentRoutesFromNode(selectedNode);
+    rerenderNode(selectedNode.id);
+    renderProperties();
+}
+
+function updateIntentRoute(index: number, key: 'label' | 'phrases', value: string) {
+    if (!selectedNode || !isIntentTrigger(selectedNode)) return;
+    syncIntentRoutesFromNode(selectedNode);
+
+    if (!selectedNode.data.intentRoutes?.[index]) return;
+    selectedNode.data.intentRoutes[index][key] = String(value || '');
+    syncIntentRoutesFromNode(selectedNode);
+    rerenderNode(selectedNode.id);
+    renderProperties();
+}
+
+function removeIntentRoute(index: number) {
+    if (!selectedNode || !isIntentTrigger(selectedNode)) return;
+    syncIntentRoutesFromNode(selectedNode);
+
+    if (!selectedNode.data.intentRoutes) return;
+    selectedNode.data.intentRoutes.splice(index, 1);
+    syncIntentRoutesFromNode(selectedNode);
+    rerenderNode(selectedNode.id);
+    renderProperties();
 }
 
 // Condicoes
@@ -560,18 +795,30 @@ function insertVariable(variable: string) {
 }
 
 // Conexoes
-function startConnection(nodeId: string, portType: string) {
+function startConnection(
+    nodeId: string,
+    portType: string,
+    handle = DEFAULT_HANDLE,
+    label = '',
+    sourcePortOverride?: HTMLElement | null
+) {
     if (portType !== 'output') return;
 
     const sourceNode = document.getElementById(nodeId);
-    const sourcePort = sourceNode?.querySelector('.port.output') as HTMLElement | null;
+    const sourcePort = sourcePortOverride
+        || (sourceNode ? findPortByHandle(sourceNode, '.port.output', handle) : null);
     const svg = document.getElementById('connectionsSvg') as SVGSVGElement | null;
     if (!sourcePort || !svg) return;
 
     cancelConnection();
 
     isConnecting = true;
-    connectionStart = { nodeId, portType };
+    connectionStart = {
+        nodeId,
+        portType,
+        handle: edgeHandle(handle),
+        label: String(label || '').trim()
+    };
     connectionStartPort = sourcePort;
     connectionStartPort.classList.add('is-connecting');
 
@@ -596,12 +843,24 @@ function endConnection(nodeId: string, portType: string) {
         return;
     }
 
-    const exists = edges.some(e => e.source === connectionStart.nodeId && e.target === nodeId);
+    const newEdge: Edge = {
+        source: connectionStart.nodeId,
+        target: nodeId,
+        sourceHandle: edgeHandle(connectionStart.handle),
+        targetHandle: DEFAULT_HANDLE,
+        label: connectionStart.label || undefined
+    };
+    const exists = edges.some((edge) => isSameEdge(edge, newEdge));
     if (!exists) {
-        edges.push({
-            source: connectionStart.nodeId,
-            target: nodeId
-        });
+        const sourceNode = nodes.find((node) => node.id === newEdge.source);
+        if (isIntentTrigger(sourceNode)) {
+            edges = edges.filter((edge) => !(
+                edge.source === newEdge.source
+                && edgeHandle(edge.sourceHandle) === edgeHandle(newEdge.sourceHandle)
+            ));
+        }
+
+        edges.push(newEdge);
         renderConnections();
     }
 
@@ -678,8 +937,8 @@ function renderConnections() {
 
         if (!sourceNode || !targetNode) return;
 
-        const sourcePort = sourceNode.querySelector('.port.output') as HTMLElement | null;
-        const targetPort = targetNode.querySelector('.port.input') as HTMLElement | null;
+        const sourcePort = findPortByHandle(sourceNode, '.port.output', edge.sourceHandle);
+        const targetPort = findPortByHandle(targetNode, '.port.input', edge.targetHandle);
 
         if (!sourcePort || !targetPort) return;
 
@@ -694,7 +953,7 @@ function renderConnections() {
 
         const removeConnection = () => {
             if (!confirm('Remover esta conexão?')) return;
-            edges = edges.filter(e => !(e.source === edge.source && e.target === edge.target));
+            edges = edges.filter((item) => !isSameEdge(item, edge));
             renderConnections();
         };
 
@@ -780,6 +1039,48 @@ function resetEditorState() {
     applyZoom();
 }
 
+function buildTriggerPayload(trigger?: FlowNode) {
+    if (!trigger) {
+        return { triggerType: 'manual', triggerValue: null as string | null };
+    }
+
+    const subtype = String(trigger.subtype || '').trim().toLowerCase();
+    if (subtype === 'keyword' || subtype === 'intent') {
+        syncIntentRoutesFromNode(trigger);
+        const routes = getIntentRoutes(trigger);
+        const allPhrases = routes.flatMap((route) => parsePhraseList(route.phrases));
+        const uniquePhrases = Array.from(new Set(allPhrases));
+        return {
+            triggerType: 'keyword',
+            triggerValue: uniquePhrases.length > 0 ? uniquePhrases.join(', ') : null
+        };
+    }
+
+    return {
+        triggerType: subtype || 'manual',
+        triggerValue: trigger.data?.keyword || null
+    };
+}
+
+function normalizeLoadedFlowData() {
+    nodes = nodes.map((node) => {
+        if (isIntentTrigger(node)) {
+            node.subtype = 'keyword';
+            if (!node.data.label || node.data.label.toLowerCase() === 'palavra-chave') {
+                node.data.label = 'Intenção';
+            }
+            syncIntentRoutesFromNode(node);
+        }
+        return node;
+    });
+
+    edges = (edges || []).map((edge) => ({
+        ...edge,
+        sourceHandle: edgeHandle(edge.sourceHandle),
+        targetHandle: edgeHandle(edge.targetHandle)
+    }));
+}
+
 // Salvar fluxo
 async function saveFlow() {
     const name = (document.getElementById('flowName') as HTMLInputElement | null)?.value.trim() || '';
@@ -800,12 +1101,13 @@ async function saveFlow() {
     }
 
     const trigger = nodes.find(n => n.type === 'trigger');
+    const triggerPayload = buildTriggerPayload(trigger);
 
     const flowData = {
         name,
         description: '',
-        trigger_type: trigger?.subtype || 'manual',
-        trigger_value: trigger?.data?.keyword || null,
+        trigger_type: triggerPayload.triggerType,
+        trigger_value: triggerPayload.triggerValue,
         nodes,
         edges,
         is_active: 1
@@ -873,12 +1175,19 @@ function renderFlowsList(flows: FlowSummary[]) {
         return;
     }
 
+    const getTriggerLabel = (triggerType?: string) => {
+        if (triggerType === 'keyword') return 'intenção';
+        if (triggerType === 'new_contact') return 'novo contato';
+        if (triggerType === 'manual') return 'manual';
+        return triggerType || 'manual';
+    };
+
     container.innerHTML = flows.map(flow => `
         <div class="flow-list-item" onclick="loadFlow(${flow.id})">
             <div class="icon icon-flows"></div>
             <div class="info">
                 <div class="name">${flow.name}</div>
-                <div class="meta">Gatilho: ${flow.trigger_type || 'manual'} | ${flow.nodes?.length || 0} blocos</div>
+                <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | ${flow.nodes?.length || 0} blocos</div>
             </div>
             <div class="flow-list-actions">
                 <button class="flow-list-duplicate" title="Duplicar fluxo" onclick="duplicateFlow(${flow.id}, event)">Duplicar</button>
@@ -910,6 +1219,7 @@ async function duplicateFlow(id: number, event?: Event) {
         const flow = result.flow || {};
         nodes = flow.nodes || [];
         edges = flow.edges || [];
+        normalizeLoadedFlowData();
         currentFlowId = null;
 
         const flowName = document.getElementById('flowName') as HTMLInputElement | null;
@@ -973,6 +1283,7 @@ async function loadFlow(id: number) {
             currentFlowId = result.flow.id;
             nodes = result.flow.nodes || [];
             edges = result.flow.edges || [];
+            normalizeLoadedFlowData();
             
             const flowName = document.getElementById('flowName') as HTMLInputElement | null;
             if (flowName) flowName.value = result.flow.name;
@@ -1021,6 +1332,9 @@ const windowAny = window as Window & {
     resetZoom?: () => void;
     insertVariable?: (variable: string) => void;
     updateNodeProperty?: (key: keyof NodeData, value: any) => void;
+    addIntentRoute?: () => void;
+    updateIntentRoute?: (index: number, key: 'label' | 'phrases', value: string) => void;
+    removeIntentRoute?: (index: number) => void;
     addCondition?: () => void;
     removeCondition?: (index: number) => void;
     updateCondition?: (index: number, key: 'value' | 'next', value: string) => void;
@@ -1040,6 +1354,9 @@ windowAny.zoomOut = zoomOut;
 windowAny.resetZoom = resetZoom;
 windowAny.insertVariable = insertVariable;
 windowAny.updateNodeProperty = updateNodeProperty;
+windowAny.addIntentRoute = addIntentRoute;
+windowAny.updateIntentRoute = updateIntentRoute;
+windowAny.removeIntentRoute = removeIntentRoute;
 windowAny.addCondition = addCondition;
 windowAny.removeCondition = removeCondition;
 windowAny.updateCondition = updateCondition;
@@ -1050,4 +1367,3 @@ windowAny.discardFlow = discardFlow;
 windowAny.closeFlowsModal = closeFlowsModal;
 
 export { initFlowBuilder };
-

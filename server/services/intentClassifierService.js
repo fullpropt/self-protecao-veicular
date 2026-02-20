@@ -176,6 +176,42 @@ function normalizeSelectedFlowId(value) {
     return Math.trunc(parsed);
 }
 
+function normalizeSelectedRouteId(value) {
+    if (value === null || value === undefined) return null;
+    const normalized = String(value).trim();
+    return normalized || null;
+}
+
+function parseRoutePhrases(value = '') {
+    return String(value || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function buildIntentRouteCandidatesPayload(intentRoutes = []) {
+    return intentRoutes.map((route) => ({
+        id: String(route.id || ''),
+        nome: String(route.label || route.name || ''),
+        frases: parseRoutePhrases(route.phrases || route.keywords || '')
+    })).filter((route) => route.id && route.frases.length > 0);
+}
+
+function buildIntentRoutePrompt(messageText, routesPayload) {
+    return [
+        'Voce e um classificador de intencao para escolher a melhor rota de um bloco de fluxo.',
+        'Analise a mensagem e escolha a rota mais adequada.',
+        'Se a mensagem nao corresponder claramente a nenhuma rota, retorne selected_route_id = null.',
+        'Em caso de duvida, retorne null.',
+        '',
+        'Retorne SOMENTE JSON valido no formato:',
+        '{"selected_route_id": string|null, "confidence": number, "reason": string}',
+        '',
+        `Mensagem do usuario: "${String(messageText || '').trim()}"`,
+        `Rotas disponiveis: ${JSON.stringify(routesPayload)}`
+    ].join('\n');
+}
+
 async function classifyKeywordFlowIntent(messageText, candidateFlows = []) {
     if (!isFlowIntentClassifierEnabled()) return null;
     if (!Array.isArray(candidateFlows) || candidateFlows.length === 0) return null;
@@ -229,6 +265,52 @@ async function classifyKeywordFlowIntent(messageText, candidateFlows = []) {
     }
 }
 
+async function classifyIntentRoute(messageText, intentRoutes = []) {
+    if (!isFlowIntentClassifierEnabled()) return null;
+    if (!Array.isArray(intentRoutes) || intentRoutes.length === 0) return null;
+
+    const routesPayload = buildIntentRouteCandidatesPayload(intentRoutes);
+    if (routesPayload.length === 0) return null;
+
+    const prompt = buildIntentRoutePrompt(messageText, routesPayload);
+
+    try {
+        const rawResponse = await callGemini(prompt);
+        if (!rawResponse) return null;
+
+        const parsed = parseJsonFromText(rawResponse);
+        if (!parsed || typeof parsed !== 'object') return null;
+
+        const confidence = normalizeConfidence(parsed.confidence);
+        const minConfidence = readEnvNumber('FLOW_INTENT_CLASSIFIER_MIN_CONFIDENCE', DEFAULT_MIN_CONFIDENCE, 0, 1);
+        if (confidence < minConfidence) {
+            return { status: 'indeterminate', confidence };
+        }
+
+        const selectedRouteId = normalizeSelectedRouteId(parsed.selected_route_id);
+        const reason = String(parsed.reason || '').trim();
+        if (!selectedRouteId) {
+            return { status: 'no_match', confidence, reason };
+        }
+
+        const availableIds = new Set(routesPayload.map((route) => String(route.id)));
+        if (!availableIds.has(String(selectedRouteId))) {
+            return { status: 'indeterminate', confidence };
+        }
+
+        return {
+            status: 'selected',
+            routeId: String(selectedRouteId),
+            confidence,
+            reason
+        };
+    } catch (error) {
+        console.warn('[flow-intent] Falha ao classificar rota de intencao com Gemini:', error.message);
+        return null;
+    }
+}
+
 module.exports = {
-    classifyKeywordFlowIntent
+    classifyKeywordFlowIntent,
+    classifyIntentRoute
 };

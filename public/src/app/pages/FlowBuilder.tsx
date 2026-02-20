@@ -334,8 +334,32 @@ export default function FlowBuilder() {
         .flow-node-ports {
             display: flex;
             justify-content: space-between;
+            align-items: flex-end;
+            gap: 8px;
             padding: 8px 14px;
             border-top: 1px solid var(--border);
+        }
+
+        .node-output-ports {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: flex-end;
+        }
+
+        .node-output-port {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .node-output-label {
+            font-size: 10px;
+            color: var(--gray);
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         
         .port {
@@ -589,6 +613,20 @@ export default function FlowBuilder() {
         .conditions-editor {
             margin-top: 15px;
         }
+
+        .intent-routes-editor {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .intent-route-row {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr 32px;
+            gap: 8px;
+            align-items: center;
+        }
         
         .condition-row {
             display: flex;
@@ -601,7 +639,8 @@ export default function FlowBuilder() {
             flex: 1;
         }
         
-        .condition-row .remove-btn {
+        .condition-row .remove-btn,
+        .intent-route-row .remove-btn {
             width: 32px;
             height: 32px;
             border: none;
@@ -924,8 +963,8 @@ export default function FlowBuilder() {
                           <div className="node-item" draggable="true" data-type="trigger" data-subtype="keyword">
                               <div className="icon trigger icon-lock"></div>
                               <div className="info">
-                                  <div className="name">Palavra-chave</div>
-                                  <div className="desc">Inicia com palavra específica</div>
+                                  <div className="name">Intenção</div>
+                                  <div className="desc">Inicia pela intenção detectada</div>
                               </div>
                           </div>
                       </div>
