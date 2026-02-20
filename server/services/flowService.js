@@ -199,6 +199,218 @@ function scoreIntentTokenCoverage(messageTokens = [], phraseTokens = []) {
     return matched / phraseTokens.length;
 }
 
+function parseFlowIntentKeywords(value = '') {
+    return parseIntentPhrases(value);
+}
+
+function resolveFlowIntentKeywordList(flow = null) {
+    const keywords = parseFlowIntentKeywords(flow?.trigger_value || '');
+    const unique = new Set(keywords);
+    return Array.from(unique);
+}
+
+function findBestKeywordFlowByHeuristic(normalizedMessage = '', messageTokens = [], candidateFlows = []) {
+    if (!normalizedMessage) return null;
+    if (!Array.isArray(candidateFlows) || candidateFlows.length === 0) return null;
+
+    let best = null;
+
+    for (const flow of candidateFlows) {
+        const flowId = Number(flow?.id);
+        if (!Number.isFinite(flowId) || flowId <= 0) continue;
+
+        const priority = Number(flow?.priority) || 0;
+        const keywords = resolveFlowIntentKeywordList(flow);
+        if (keywords.length === 0) continue;
+
+        let bestFlowKeywordMatch = null;
+        for (const keyword of keywords) {
+            const currentMatch = scoreIntentPhraseMatch(normalizedMessage, messageTokens, keyword);
+            if (!currentMatch.matched) continue;
+
+            if (
+                !bestFlowKeywordMatch
+                || (currentMatch.exact && !bestFlowKeywordMatch.exact)
+                || (
+                    currentMatch.exact === bestFlowKeywordMatch.exact
+                    && currentMatch.score > bestFlowKeywordMatch.score
+                )
+                || (
+                    currentMatch.exact === bestFlowKeywordMatch.exact
+                    && currentMatch.score === bestFlowKeywordMatch.score
+                    && currentMatch.strongMatches > bestFlowKeywordMatch.strongMatches
+                )
+            ) {
+                bestFlowKeywordMatch = currentMatch;
+            }
+        }
+
+        if (!bestFlowKeywordMatch) continue;
+
+        const isBetter = (
+            !best
+            || (bestFlowKeywordMatch.exact && !best.match.exact)
+            || (
+                bestFlowKeywordMatch.exact === best.match.exact
+                && bestFlowKeywordMatch.score > best.match.score
+            )
+            || (
+                bestFlowKeywordMatch.exact === best.match.exact
+                && bestFlowKeywordMatch.score === best.match.score
+                && bestFlowKeywordMatch.strongMatches > best.match.strongMatches
+            )
+            || (
+                bestFlowKeywordMatch.exact === best.match.exact
+                && bestFlowKeywordMatch.score === best.match.score
+                && bestFlowKeywordMatch.strongMatches === best.match.strongMatches
+                && priority > best.priority
+            )
+        );
+
+        if (isBetter) {
+            best = {
+                flowId,
+                priority,
+                match: bestFlowKeywordMatch
+            };
+        }
+    }
+
+    return best;
+}
+
+function buildKeywordFlowFuzzyCandidates(candidateFlows = []) {
+    const candidates = [];
+
+    for (const flow of candidateFlows) {
+        const flowId = Number(flow?.id);
+        if (!Number.isFinite(flowId) || flowId <= 0) continue;
+
+        const priority = Number(flow?.priority) || 0;
+        const keywords = resolveFlowIntentKeywordList(flow);
+        const normalizedName = normalizeIntentText(flow?.name || '');
+        if (normalizedName) keywords.push(normalizedName);
+
+        const uniqueKeywords = new Set(
+            keywords
+                .map((keyword) => String(keyword || '').trim())
+                .filter(Boolean)
+        );
+
+        for (const keyword of uniqueKeywords) {
+            const keywordTokens = tokenizeIntentText(keyword);
+            if (keywordTokens.length === 0) continue;
+
+            candidates.push({
+                flowId,
+                priority,
+                keyword,
+                keywordTokens,
+                keywordCompact: keyword.replace(/\s+/g, '')
+            });
+        }
+    }
+
+    return candidates;
+}
+
+function findBestKeywordFlowByFuzzy(normalizedMessage = '', messageTokens = [], candidateFlows = []) {
+    if (!normalizedMessage) return null;
+    if (!Array.isArray(candidateFlows) || candidateFlows.length === 0) return null;
+
+    const candidates = buildKeywordFlowFuzzyCandidates(candidateFlows);
+    if (candidates.length === 0) return null;
+
+    const fuzzyThreshold = readIntentNumberEnv('FLOW_INTENT_FUZZY_THRESHOLD', DEFAULT_INTENT_FUZZY_THRESHOLD, 0.1, 0.8);
+    const minCombinedScore = readIntentNumberEnv('FLOW_INTENT_FUZZY_MIN_SCORE', DEFAULT_INTENT_FUZZY_MIN_SCORE, 0.35, 0.95);
+    const minTokenCoverage = readIntentNumberEnv('FLOW_INTENT_FUZZY_MIN_TOKEN_COVERAGE', DEFAULT_INTENT_FUZZY_MIN_TOKEN_COVERAGE, 0.2, 1);
+
+    const fuse = new Fuse(candidates, {
+        includeScore: true,
+        threshold: fuzzyThreshold,
+        ignoreLocation: true,
+        shouldSort: true,
+        minMatchCharLength: 3,
+        keys: [
+            { name: 'keyword', weight: 0.9 },
+            { name: 'keywordCompact', weight: 0.1 }
+        ]
+    });
+
+    const results = fuse.search(normalizedMessage, {
+        limit: Math.min(20, candidates.length)
+    });
+
+    let best = null;
+    for (const result of results) {
+        const item = result?.item;
+        if (!item?.flowId) continue;
+
+        const rawFuseScore = Number(result?.score);
+        const normalizedFuseScore = Number.isFinite(rawFuseScore)
+            ? Math.max(0, Math.min(1, rawFuseScore))
+            : 1;
+        const fuzzyConfidence = 1 - normalizedFuseScore;
+        const tokenCoverage = scoreIntentTokenCoverage(messageTokens, item.keywordTokens);
+        const priorityBoost = Math.max(0, Math.min(0.1, (Number(item.priority) || 0) * 0.005));
+        const combinedScore = (fuzzyConfidence * 0.72) + (tokenCoverage * 0.28) + priorityBoost;
+
+        if (tokenCoverage < minTokenCoverage && fuzzyConfidence < 0.9) {
+            continue;
+        }
+        if (combinedScore < minCombinedScore) {
+            continue;
+        }
+
+        const isBetter = (
+            !best
+            || combinedScore > best.combinedScore
+            || (
+                combinedScore === best.combinedScore
+                && tokenCoverage > best.tokenCoverage
+            )
+            || (
+                combinedScore === best.combinedScore
+                && tokenCoverage === best.tokenCoverage
+                && fuzzyConfidence > best.fuzzyConfidence
+            )
+            || (
+                combinedScore === best.combinedScore
+                && tokenCoverage === best.tokenCoverage
+                && fuzzyConfidence === best.fuzzyConfidence
+                && Number(item.priority) > Number(best.priority)
+            )
+        );
+
+        if (isBetter) {
+            best = {
+                flowId: Number(item.flowId),
+                priority: Number(item.priority) || 0,
+                combinedScore,
+                tokenCoverage,
+                fuzzyConfidence
+            };
+        }
+    }
+
+    return best;
+}
+
+function pickKeywordFlowIdByLocalFallback(messageText = '', candidateFlows = []) {
+    const normalizedMessage = normalizeIntentText(messageText);
+    if (!normalizedMessage) return null;
+
+    const messageTokens = tokenizeIntentText(normalizedMessage);
+
+    const heuristicMatch = findBestKeywordFlowByHeuristic(normalizedMessage, messageTokens, candidateFlows);
+    if (heuristicMatch?.flowId) {
+        return heuristicMatch.flowId;
+    }
+
+    const fuzzyMatch = findBestKeywordFlowByFuzzy(normalizedMessage, messageTokens, candidateFlows);
+    return fuzzyMatch?.flowId || null;
+}
+
 function buildIntentFuzzyCandidates(routes = []) {
     const candidates = [];
     for (const route of routes) {
@@ -316,6 +528,10 @@ class FlowService extends EventEmitter {
         this.sendFunction = sendFunction;
         console.log('🔄 Serviço de fluxos de automação iniciado');
     }
+
+    pickKeywordFlowByLocalFallback(messageText, candidateFlows = []) {
+        return pickKeywordFlowIdByLocalFallback(messageText, candidateFlows);
+    }
     
     /**
      * Processar mensagem recebida e verificar triggers
@@ -354,6 +570,16 @@ class FlowService extends EventEmitter {
 
             if (!flow && !suppressKeywordFallback && keywordMatches.length > 0) {
                 flow = keywordMatches[0];
+            }
+
+            if (!flow && !suppressKeywordFallback && semanticCandidates.length > 0) {
+                const localFlowId = this.pickKeywordFlowByLocalFallback(text, semanticCandidates);
+                if (localFlowId) {
+                    flow = semanticCandidates.find((item) => Number(item.id) === Number(localFlowId)) || null;
+                    if (flow) {
+                        console.info(`[flow-intent] Fallback local selecionou fluxo ${flow.id} (${flow.name || 'sem-nome'})`);
+                    }
+                }
             }
         }
         
