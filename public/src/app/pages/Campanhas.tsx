@@ -321,7 +321,7 @@ export default function Campanhas() {
       
               <div className="campaigns-grid" id="campaignsList">
                   <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
-                      <div className="empty-state-icon icon icon-empty icon-lg"></div>
+                      <div className="empty-state-icon icon icon-campaigns icon-lg"></div>
                       <p>Carregando campanhas...</p>
                   </div>
               </div>

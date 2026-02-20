@@ -682,7 +682,7 @@ function renderCampaigns() {
     if (campaigns.length === 0) {
         container.innerHTML = `
             <div class="empty-state" style="grid-column: 1 / -1;">
-                <div class="empty-state-icon icon icon-empty icon-lg"></div>
+                <div class="empty-state-icon icon icon-campaigns icon-lg"></div>
                 <p>Nenhuma campanha criada</p>
                 <button class="btn btn-primary mt-3" onclick="openCampaignModal()"><span class="icon icon-add icon-sm"></span> Criar Campanha</button>
             </div>
