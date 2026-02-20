@@ -732,9 +732,8 @@ function renderProperties() {
     const selectedTypeLabel = getNodeTypeLabel(selectedNode);
     
     html += `
-        <div class="property-group">
-            <label>Tipo do Bloco</label>
-            <input type="text" value="${escapeHtml(selectedTypeLabel)}" readonly>
+        <div class="property-type-summary">
+            <h4 class="property-type-summary-value">${escapeHtml(selectedTypeLabel)}</h4>
         </div>
         <div class="property-group">
             <label>Nome do Bloco</label>

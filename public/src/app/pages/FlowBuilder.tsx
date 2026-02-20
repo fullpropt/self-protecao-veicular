@@ -529,6 +529,20 @@ export default function FlowBuilder() {
             padding-bottom: 15px;
             border-bottom: 1px solid var(--border);
         }
+
+        .property-type-summary {
+            margin-bottom: 18px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .property-type-summary-value {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.2;
+            font-weight: 700;
+            color: var(--dark);
+        }
         
         .property-group {
             margin-bottom: 20px;
