@@ -103,8 +103,14 @@ export default function Inbox() {
             margin-bottom: 12px;
             padding: 10px 12px;
             border-radius: 12px;
-            border: 1px solid var(--border-color);
-            background: rgba(15, 23, 42, 0.2);
+            border: 1px solid rgba(var(--primary-rgb), 0.28);
+            border-left: 3px solid rgba(var(--primary-rgb), 0.85);
+            background: linear-gradient(
+                90deg,
+                rgba(var(--primary-rgb), 0.08) 0%,
+                rgba(15, 23, 42, 0.22) 38%,
+                rgba(15, 23, 42, 0.2) 100%
+            );
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -114,7 +120,7 @@ export default function Inbox() {
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            color: var(--gray-600);
+            color: rgba(var(--primary-rgb), 0.9);
             font-weight: 700;
             margin-bottom: 2px;
         }
@@ -126,34 +132,34 @@ export default function Inbox() {
         }
         .inbox-session-highlight-meta {
             font-size: 11px;
-            color: var(--gray-700);
+            color: var(--gray-600);
             margin-top: 3px;
             line-height: 1.3;
         }
         .inbox-session-highlight-status {
             border-radius: 999px;
-            border: 1px solid var(--border-color);
-            background: var(--gray-100);
-            color: var(--gray-800);
+            border: 1px solid rgba(var(--primary-rgb), 0.42);
+            background: rgba(var(--primary-rgb), 0.1);
+            color: var(--primary);
             padding: 4px 10px;
             font-size: 11px;
             font-weight: 700;
             white-space: nowrap;
         }
         .inbox-session-highlight-status.connected {
-            border-color: var(--border-color);
-            background: var(--gray-100);
-            color: var(--gray-800);
+            border-color: rgba(var(--primary-rgb), 0.5);
+            background: rgba(var(--primary-rgb), 0.1);
+            color: var(--primary);
         }
         .inbox-session-highlight-status.disconnected {
-            border-color: var(--border-color);
-            background: var(--gray-100);
-            color: var(--gray-800);
+            border-color: rgba(var(--primary-rgb), 0.3);
+            background: rgba(15, 23, 42, 0.24);
+            color: var(--gray-700);
         }
         .inbox-session-highlight-status.all {
-            border-color: var(--border-color);
-            background: var(--gray-100);
-            color: var(--gray-800);
+            border-color: rgba(var(--primary-rgb), 0.42);
+            background: rgba(var(--primary-rgb), 0.1);
+            color: var(--primary);
         }
         .conversations-tabs {
             display: flex;
