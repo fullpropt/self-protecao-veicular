@@ -6,6 +6,7 @@
 const { Flow, Lead, Conversation, Message } = require('../database/models');
 const { run, queryOne, generateUUID } = require('../database/connection');
 const EventEmitter = require('events');
+const Fuse = require('fuse.js');
 const { classifyKeywordFlowIntent, classifyIntentRoute } = require('./intentClassifierService');
 const INTENT_STOPWORDS = new Set([
     'a', 'o', 'as', 'os', 'de', 'da', 'do', 'das', 'dos',
@@ -17,6 +18,9 @@ const INTENT_STOPWORDS = new Set([
     'tenho', 'tinha', 'tiver', 'isso', 'isto', 'aquele', 'aquela',
     'esse', 'essa'
 ]);
+const DEFAULT_INTENT_FUZZY_THRESHOLD = 0.34;
+const DEFAULT_INTENT_FUZZY_MIN_SCORE = 0.58;
+const DEFAULT_INTENT_FUZZY_MIN_TOKEN_COVERAGE = 0.45;
 
 function isStrictFlowIntentRoutingEnabled() {
     const value = String(process.env.FLOW_INTENT_CLASSIFIER_STRICT || '').trim().toLowerCase();
@@ -29,6 +33,12 @@ function isFlowIntentClassifierConfigured() {
         return false;
     }
     return Boolean(String(process.env.GEMINI_API_KEY || '').trim());
+}
+
+function readIntentNumberEnv(name, fallback, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY) {
+    const parsed = Number(process.env[name]);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(min, Math.min(max, parsed));
 }
 
 function normalizeIntentText(value = '') {
@@ -165,6 +175,131 @@ function scoreIntentPhraseMatch(normalizedMessage = '', messageTokens = [], norm
         score: coverage + specificityBoost,
         strongMatches
     };
+}
+
+function scoreIntentTokenCoverage(messageTokens = [], phraseTokens = []) {
+    if (!Array.isArray(messageTokens) || messageTokens.length === 0) return 0;
+    if (!Array.isArray(phraseTokens) || phraseTokens.length === 0) return 0;
+
+    const consumedMessageTokens = new Set();
+    let matched = 0;
+
+    for (const phraseToken of phraseTokens) {
+        const foundIndex = messageTokens.findIndex((messageToken, index) => {
+            if (consumedMessageTokens.has(index)) return false;
+            return isIntentTokenSimilar(messageToken, phraseToken);
+        });
+
+        if (foundIndex >= 0) {
+            consumedMessageTokens.add(foundIndex);
+            matched += 1;
+        }
+    }
+
+    return matched / phraseTokens.length;
+}
+
+function buildIntentFuzzyCandidates(routes = []) {
+    const candidates = [];
+    for (const route of routes) {
+        const routeId = String(route?.id || '').trim();
+        if (!routeId) continue;
+
+        const uniquePhrases = new Set(
+            (Array.isArray(route?.normalizedPhrases) ? route.normalizedPhrases : [])
+                .map((phrase) => String(phrase || '').trim())
+                .filter(Boolean)
+        );
+
+        const normalizedLabel = normalizeIntentText(route?.label || '');
+        if (normalizedLabel) uniquePhrases.add(normalizedLabel);
+
+        for (const phrase of uniquePhrases) {
+            const phraseTokens = tokenizeIntentText(phrase);
+            if (phraseTokens.length === 0) continue;
+            candidates.push({
+                routeId,
+                phrase,
+                phraseTokens,
+                phraseCompact: phrase.replace(/\s+/g, '')
+            });
+        }
+    }
+    return candidates;
+}
+
+function findBestIntentRouteByFuzzy(normalizedMessage = '', messageTokens = [], routes = []) {
+    if (!normalizedMessage) return null;
+    if (!Array.isArray(routes) || routes.length === 0) return null;
+
+    const candidates = buildIntentFuzzyCandidates(routes);
+    if (candidates.length === 0) return null;
+
+    const fuzzyThreshold = readIntentNumberEnv('FLOW_INTENT_FUZZY_THRESHOLD', DEFAULT_INTENT_FUZZY_THRESHOLD, 0.1, 0.8);
+    const minCombinedScore = readIntentNumberEnv('FLOW_INTENT_FUZZY_MIN_SCORE', DEFAULT_INTENT_FUZZY_MIN_SCORE, 0.35, 0.95);
+    const minTokenCoverage = readIntentNumberEnv('FLOW_INTENT_FUZZY_MIN_TOKEN_COVERAGE', DEFAULT_INTENT_FUZZY_MIN_TOKEN_COVERAGE, 0.2, 1);
+
+    const fuse = new Fuse(candidates, {
+        includeScore: true,
+        threshold: fuzzyThreshold,
+        ignoreLocation: true,
+        shouldSort: true,
+        minMatchCharLength: 3,
+        keys: [
+            { name: 'phrase', weight: 0.9 },
+            { name: 'phraseCompact', weight: 0.1 }
+        ]
+    });
+
+    const results = fuse.search(normalizedMessage, {
+        limit: Math.min(15, candidates.length)
+    });
+
+    let best = null;
+    for (const result of results) {
+        const item = result?.item;
+        if (!item?.routeId) continue;
+
+        const rawFuseScore = Number(result?.score);
+        const normalizedFuseScore = Number.isFinite(rawFuseScore)
+            ? Math.max(0, Math.min(1, rawFuseScore))
+            : 1;
+        const fuzzyConfidence = 1 - normalizedFuseScore;
+        const tokenCoverage = scoreIntentTokenCoverage(messageTokens, item.phraseTokens);
+        const combinedScore = (fuzzyConfidence * 0.72) + (tokenCoverage * 0.28);
+
+        if (tokenCoverage < minTokenCoverage && fuzzyConfidence < 0.9) {
+            continue;
+        }
+        if (combinedScore < minCombinedScore) {
+            continue;
+        }
+
+        const isBetter = (
+            !best
+            || combinedScore > best.combinedScore
+            || (
+                combinedScore === best.combinedScore
+                && tokenCoverage > best.tokenCoverage
+            )
+            || (
+                combinedScore === best.combinedScore
+                && tokenCoverage === best.tokenCoverage
+                && fuzzyConfidence > best.fuzzyConfidence
+            )
+        );
+
+        if (isBetter) {
+            best = {
+                routeId: item.routeId,
+                combinedScore,
+                tokenCoverage,
+                fuzzyConfidence
+            };
+        }
+    }
+
+    return best;
 }
 
 class FlowService extends EventEmitter {
@@ -573,7 +708,12 @@ class FlowService extends EventEmitter {
             }
         }
 
-        return best?.id || null;
+        if (best?.id) {
+            return best.id;
+        }
+
+        const fuzzyMatch = findBestIntentRouteByFuzzy(normalizedMessage, messageTokens, routes);
+        return fuzzyMatch?.routeId || null;
     }
 
     async executeTriggerNode(execution, node) {
