@@ -8,7 +8,6 @@ type WhatsappGlobals = {
   requestPairingCode?: () => void;
   disconnect?: () => void;
   changeSession?: (sessionId: string) => void;
-  selectSessionFromList?: (sessionId: string) => void;
   createSessionPrompt?: () => void;
   toggleSidebar?: () => void;
   logout?: () => void;
@@ -123,41 +122,6 @@ export default function Whatsapp() {
             color: white;
         }
 
-        .whatsapp-react .status-badge {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 24px;
-            border-radius: 50px;
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .whatsapp-react .status-badge.connected {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-        }
-
-        .whatsapp-react .status-badge.disconnected {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--danger);
-        }
-
-        .whatsapp-react .status-badge .dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        .whatsapp-react .status-badge.connected .dot {
-            background: var(--success);
-        }
-
-        .whatsapp-react .status-badge.disconnected .dot {
-            background: var(--danger);
-        }
-
         .whatsapp-react .whatsapp-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -244,82 +208,6 @@ export default function Whatsapp() {
             padding: 10px 14px;
             font-size: 13px;
         }
-        .whatsapp-react .session-accounts-panel {
-            margin-bottom: 22px;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            background: var(--lighter);
-            padding: 14px;
-        }
-        .whatsapp-react .session-accounts-panel h3 {
-            font-size: 14px;
-            color: var(--dark);
-            margin: 0 0 10px;
-            font-weight: 700;
-        }
-        .whatsapp-react .whatsapp-accounts-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 10px;
-        }
-        .whatsapp-react .whatsapp-account-item {
-            border: 1px solid #cbd5e1;
-            border-radius: 10px;
-            background: #ffffff;
-            color: var(--dark);
-            padding: 10px 12px;
-            text-align: left;
-            cursor: pointer;
-            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-        }
-        .whatsapp-react .whatsapp-account-item:hover {
-            border-color: rgba(23, 140, 73, 0.5);
-            box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
-            transform: translateY(-1px);
-        }
-        .whatsapp-react .whatsapp-account-item.active {
-            border-color: rgba(23, 140, 73, 0.75);
-            box-shadow: 0 0 0 2px rgba(23, 140, 73, 0.18);
-        }
-        .whatsapp-react .whatsapp-account-item .top-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 4px;
-        }
-        .whatsapp-react .whatsapp-account-item .top-row strong {
-            font-size: 13px;
-            font-weight: 700;
-        }
-        .whatsapp-react .whatsapp-account-item .status {
-            font-size: 11px;
-            font-weight: 700;
-            border-radius: 999px;
-            padding: 2px 8px;
-        }
-        .whatsapp-react .whatsapp-account-item .status.connected {
-            color: #166534;
-            background: rgba(16, 185, 129, 0.18);
-        }
-        .whatsapp-react .whatsapp-account-item .status.disconnected {
-            color: #7f1d1d;
-            background: rgba(239, 68, 68, 0.14);
-        }
-        .whatsapp-react .whatsapp-account-item .bottom-row {
-            font-size: 12px;
-            color: var(--gray);
-            line-height: 1.4;
-            word-break: break-word;
-        }
-        .whatsapp-react .whatsapp-account-item.empty {
-            border-style: dashed;
-            color: var(--gray);
-            text-align: center;
-            cursor: default;
-            background: #ffffff;
-        }
-
         .whatsapp-react .card-body {
             padding: 28px;
         }
@@ -839,10 +727,6 @@ export default function Whatsapp() {
                       </div>
                   </div>
                   
-                  <div className="status-badge disconnected" id="status-badge">
-                      <span className="dot"></span>
-                      <span id="status-text">Desconectado</span>
-                  </div>
               </div>
               
               <div className="whatsapp-grid">
@@ -871,12 +755,6 @@ export default function Whatsapp() {
                       </div>
                       
                       <div className="card-body">
-                          <div className="session-accounts-panel">
-                              <h3>Contas Disponíveis</h3>
-                              <div className="whatsapp-accounts-list" id="whatsapp-accounts-list">
-                                  <div className="whatsapp-account-item empty">Carregando contas...</div>
-                              </div>
-                          </div>
                           <div id="disconnected-state">
                               <div className="qr-container">
                                   <div className="qr-wrapper">

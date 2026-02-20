@@ -33,10 +33,19 @@ type ContactField = {
     source?: string;
 };
 
+type WhatsAppSessionRecord = {
+    session_id: string;
+    name?: string;
+    phone?: string;
+    status?: string;
+    connected?: boolean;
+};
+
 let templatesCache: TemplateItem[] = [];
 let settingsTagsCache: SettingsTag[] = [];
 let contactFieldsCache: ContactField[] = [];
 let customContactFieldsCache: ContactField[] = [];
+let whatsappSessionsCache: WhatsAppSessionRecord[] = [];
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true, required: true, placeholder: 'Nome completo' },
@@ -81,7 +90,7 @@ function initConfiguracoes() {
     loadContactFields();
     loadTemplates();
     loadSettingsTags();
-    checkWhatsAppStatus();
+    refreshWhatsAppAccounts();
     updateNewTemplateForm();
     const typeSelect = document.getElementById('newTemplateType') as HTMLSelectElement | null;
     if (typeSelect) {
@@ -107,6 +116,46 @@ function showPanel(panelId: string) {
     target?.closest('.settings-nav-item')?.classList.add('active');
     document.querySelectorAll('.settings-panel').forEach(panel => panel.classList.remove('active'));
     document.getElementById(`panel-${panelId}`).classList.add('active');
+    if (panelId === 'conexao') {
+        refreshWhatsAppAccounts();
+    }
+}
+
+function sanitizeSessionId(value: unknown, fallback = '') {
+    const normalized = String(value || '').trim();
+    return normalized || fallback;
+}
+
+function parseConnectedStatus(session: WhatsAppSessionRecord) {
+    if (typeof session.connected === 'boolean') return session.connected;
+    return String(session.status || '').toLowerCase() === 'connected';
+}
+
+function getSessionStatusLabel(session: WhatsAppSessionRecord) {
+    return parseConnectedStatus(session) ? 'Conectada' : 'Desconectada';
+}
+
+function getSessionDisplayName(session: WhatsAppSessionRecord) {
+    const customName = String(session.name || '').trim();
+    if (customName) return customName;
+    const phone = String(session.phone || '').trim();
+    if (phone) return phone;
+    return sanitizeSessionId(session.session_id);
+}
+
+function decodeSessionToken(sessionToken: string) {
+    try {
+        return decodeURIComponent(String(sessionToken || ''));
+    } catch {
+        return String(sessionToken || '');
+    }
+}
+
+function escapeAttributeSelector(value: string) {
+    if (typeof (window as Window & { CSS?: { escape?: (input: string) => string } }).CSS?.escape === 'function') {
+        return (window as Window & { CSS: { escape: (input: string) => string } }).CSS.escape(value);
+    }
+    return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 function applyCompanySettings(company: { name?: string; cnpj?: string; phone?: string; email?: string }) {
@@ -911,30 +960,114 @@ async function saveNewTemplate() {
     }
 }
 
-async function checkWhatsAppStatus() {
+function renderWhatsAppAccountsManager() {
+    const container = document.getElementById('connectionAccountsList') as HTMLElement | null;
+    if (!container) return;
+
+    if (!whatsappSessionsCache.length) {
+        container.innerHTML = `
+            <div class="connection-account-item">
+                <p style="margin: 0; color: var(--gray-600);">
+                    Nenhuma conta encontrada. Acesse <a href="#/whatsapp">WhatsApp</a> para adicionar uma conta.
+                </p>
+            </div>
+        `;
+        return;
+    }
+
+    const sortedSessions = [...whatsappSessionsCache].sort((a, b) => {
+        const byConnected = Number(parseConnectedStatus(b)) - Number(parseConnectedStatus(a));
+        if (byConnected !== 0) return byConnected;
+        return sanitizeSessionId(a.session_id).localeCompare(sanitizeSessionId(b.session_id));
+    });
+
+    container.innerHTML = sortedSessions.map((session) => {
+        const sessionId = sanitizeSessionId(session.session_id);
+        const token = encodeURIComponent(sessionId);
+        const status = getSessionStatusLabel(session);
+        const statusClass = parseConnectedStatus(session) ? 'connected' : 'disconnected';
+        const displayName = getSessionDisplayName(session);
+        const phone = String(session.phone || '').trim();
+        const subtitle = phone ? `${sessionId} - ${phone}` : sessionId;
+
+        return `
+            <div class="connection-account-item">
+                <div class="connection-account-head">
+                    <div>
+                        <strong>${escapeHtml(displayName)}</strong>
+                        <div class="connection-account-session">${escapeHtml(subtitle)}</div>
+                    </div>
+                    <span class="connection-status-pill ${statusClass}">${status}</span>
+                </div>
+                <div class="connection-account-body">
+                    <div class="form-group">
+                        <label class="form-label">Nome da conta</label>
+                        <input
+                            type="text"
+                            class="form-input connection-session-name-input"
+                            data-session-id="${escapeHtml(sessionId)}"
+                            value="${escapeHtml(String(session.name || ''))}"
+                            placeholder="Ex: Comercial SP"
+                        />
+                    </div>
+                    <button class="btn btn-outline" onclick="saveWhatsAppSessionName('${token}')">Salvar nome</button>
+                    <button class="btn btn-outline-danger" onclick="removeWhatsAppSession('${token}')">Remover</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function refreshWhatsAppAccounts() {
+    const container = document.getElementById('connectionAccountsList') as HTMLElement | null;
+    if (container) {
+        container.innerHTML = '<p style="color: var(--gray-500); margin: 0;">Carregando contas...</p>';
+    }
+
     try {
-        const response = await api.get('/api/whatsapp/status');
-        const txt = document.getElementById('whatsappStatusText');
-        if (txt) txt.textContent = response.connected ? 'Conectado' : 'Desconectado';
-        const success = document.getElementById('connectionSuccess');
-        const disc = document.getElementById('connectionDisconnected');
-        const phoneEl = document.getElementById('connectedPhone');
-        if (success && disc) {
-            if (response.connected) {
-                success.style.display = 'block';
-                disc.style.display = 'none';
-                if (phoneEl) phoneEl.textContent = response.phone || '+55...';
-            } else {
-                success.style.display = 'none';
-                disc.style.display = 'block';
-            }
-        }
+        const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
+        whatsappSessionsCache = Array.isArray(response?.sessions) ? response.sessions : [];
     } catch (error) {
-        const txt = document.getElementById('whatsappStatusText');
-        if (txt) txt.textContent = 'Desconectado';
-        const success = document.getElementById('connectionSuccess');
-        const disc = document.getElementById('connectionDisconnected');
-        if (success && disc) { success.style.display = 'none'; disc.style.display = 'block'; }
+        whatsappSessionsCache = [];
+    }
+
+    renderWhatsAppAccountsManager();
+}
+
+async function saveWhatsAppSessionName(sessionToken: string) {
+    const sessionId = sanitizeSessionId(decodeSessionToken(sessionToken));
+    if (!sessionId) return;
+
+    const selectorSessionId = escapeAttributeSelector(sessionId);
+    const input = document.querySelector<HTMLInputElement>(`.connection-session-name-input[data-session-id="${selectorSessionId}"]`);
+    const name = String(input?.value || '').trim();
+
+    try {
+        await api.put(`/api/whatsapp/sessions/${encodeURIComponent(sessionId)}`, { name });
+        showToast('success', 'Sucesso', 'Nome da conta atualizado.');
+        await refreshWhatsAppAccounts();
+    } catch (error) {
+        showToast('error', 'Erro', 'Nao foi possivel atualizar o nome da conta.');
+    }
+}
+
+async function removeWhatsAppSession(sessionToken: string) {
+    const sessionId = sanitizeSessionId(decodeSessionToken(sessionToken));
+    if (!sessionId) return;
+
+    const confirmed = confirm(`Remover a conta ${sessionId}? Essa acao desconecta e exclui a sessao.`);
+    if (!confirmed) return;
+
+    try {
+        await api.delete(`/api/whatsapp/sessions/${encodeURIComponent(sessionId)}`);
+        const activeSessionId = sanitizeSessionId(localStorage.getItem('zapvender_active_whatsapp_session'));
+        if (activeSessionId === sessionId) {
+            localStorage.removeItem('zapvender_active_whatsapp_session');
+        }
+        showToast('success', 'Sucesso', 'Conta removida.');
+        await refreshWhatsAppAccounts();
+    } catch (error) {
+        showToast('error', 'Erro', 'Nao foi possivel remover a conta.');
     }
 }
 
@@ -953,8 +1086,7 @@ async function connectWhatsApp() {
 }
 
 async function disconnectWhatsApp() {
-    if (!confirm('Deseja realmente desconectar o WhatsApp?')) return;
-    try { await api.post('/api/whatsapp/disconnect'); checkWhatsAppStatus(); showToast('success', 'Sucesso', 'WhatsApp desconectado!'); } catch (error) { showToast('error', 'Erro', 'Não foi possível desconectar'); }
+    showToast('info', 'Info', 'Gerencie as contas pela lista de contas WhatsApp.');
 }
 
 function saveWhatsAppSettings() {
@@ -1030,6 +1162,9 @@ const windowAny = window as Window & {
     updateNewTemplateForm?: () => void;
     connectWhatsApp?: () => Promise<void>;
     disconnectWhatsApp?: () => Promise<void>;
+    refreshWhatsAppAccounts?: () => Promise<void>;
+    saveWhatsAppSessionName?: (sessionToken: string) => Promise<void>;
+    removeWhatsAppSession?: (sessionToken: string) => Promise<void>;
     saveWhatsAppSettings?: () => void;
     saveBusinessHoursSettings?: () => Promise<void>;
     saveNotificationSettings?: () => void;
@@ -1059,6 +1194,9 @@ windowAny.replaceTemplateAudio = replaceTemplateAudio;
 windowAny.updateNewTemplateForm = updateNewTemplateForm;
 windowAny.connectWhatsApp = connectWhatsApp;
 windowAny.disconnectWhatsApp = disconnectWhatsApp;
+windowAny.refreshWhatsAppAccounts = refreshWhatsAppAccounts;
+windowAny.saveWhatsAppSessionName = saveWhatsAppSessionName;
+windowAny.removeWhatsAppSession = removeWhatsAppSession;
 windowAny.saveWhatsAppSettings = saveWhatsAppSettings;
 windowAny.saveBusinessHoursSettings = saveBusinessHoursSettings;
 windowAny.saveNotificationSettings = saveNotificationSettings;

@@ -4954,6 +4954,7 @@ app.put('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) => {
         }
 
         const updated = await WhatsAppSession.upsertDispatchConfig(sessionId, {
+            name: req.body?.name,
             campaign_enabled: req.body?.campaign_enabled,
             daily_limit: req.body?.daily_limit,
             hourly_limit: req.body?.hourly_limit,
@@ -4963,6 +4964,23 @@ app.put('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) => {
         res.json({ success: true, session: updated });
     } catch (error) {
         res.status(400).json({ error: error.message });
+    }
+});
+
+app.delete('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) => {
+    try {
+        const sessionId = sanitizeSessionId(req.params.sessionId);
+        if (!sessionId) {
+            return res.status(400).json({ error: 'sessionId invalido' });
+        }
+
+        await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
+        await WhatsAppSession.deleteBySessionId(sessionId);
+
+        io.emit('whatsapp-status', { sessionId, status: 'disconnected' });
+        res.json({ success: true, session_id: sessionId });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 

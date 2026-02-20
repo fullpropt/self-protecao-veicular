@@ -177,73 +177,33 @@ function getSuggestedNewSessionId() {
     return `${base}_${Date.now()}`;
 }
 
-function renderSessionCards() {
-    const list = document.getElementById('whatsapp-accounts-list') as HTMLElement | null;
-    if (!list) return;
-
-    if (!availableSessions.length) {
-        list.innerHTML = `
-            <div class="whatsapp-account-item empty">
-                Nenhuma conta cadastrada ainda.
-            </div>
-        `;
-        return;
-    }
-
-    const activeSessionId = getCurrentSessionId();
-    list.innerHTML = availableSessions
-        .map((session) => {
-            const sessionId = sanitizeSessionId(session.session_id);
-            const statusLabel = getSessionStatusLabel(session);
-            const displayName = getSessionDisplayName(session);
-            const connectedClass = isConnectedSession(session) ? 'connected' : 'disconnected';
-            const activeClass = sessionId === activeSessionId ? 'active' : '';
-            const phone = String(session.phone || '').trim();
-            const detail = phone && phone !== displayName ? ` - ${phone}` : '';
-
-            return `
-                <button
-                    type="button"
-                    class="whatsapp-account-item ${connectedClass} ${activeClass}"
-                    onclick="selectSessionFromList('${escapeHtml(sessionId)}')"
-                >
-                    <div class="top-row">
-                        <strong>${escapeHtml(displayName)}</strong>
-                        <span class="status ${connectedClass}">${statusLabel}</span>
-                    </div>
-                    <div class="bottom-row">${escapeHtml(sessionId)}${escapeHtml(detail)}</div>
-                </button>
-            `;
-        })
-        .join('');
-}
-
 function renderSessionOptions() {
     const select = getSessionSelectElement();
     if (!select) return;
 
     const sessions = Array.isArray(availableSessions) ? [...availableSessions] : [];
-    const ensured = new Set<string>();
-    const pushIfNeeded = (sessionId: string, status = 'disconnected') => {
-        const normalizedSessionId = sanitizeSessionId(sessionId);
-        if (!normalizedSessionId || ensured.has(normalizedSessionId)) return;
-        ensured.add(normalizedSessionId);
-        sessions.push({
-            session_id: normalizedSessionId,
-            status,
-            connected: status === 'connected'
-        });
-    };
+    const uniqueSessions: WhatsappSessionItem[] = [];
+    const seenSessionIds = new Set<string>();
 
-    pushIfNeeded(getDefaultSessionId());
-    pushIfNeeded(getCurrentSessionId());
-
-    const uniqueSessions = sessions.filter((session) => {
+    for (const session of sessions) {
         const normalizedSessionId = sanitizeSessionId(session.session_id);
-        if (!normalizedSessionId || ensured.has(`seen:${normalizedSessionId}`)) return false;
-        ensured.add(`seen:${normalizedSessionId}`);
-        return true;
-    });
+        if (!normalizedSessionId || seenSessionIds.has(normalizedSessionId)) continue;
+        seenSessionIds.add(normalizedSessionId);
+        uniqueSessions.push({
+            ...session,
+            session_id: normalizedSessionId
+        });
+    }
+
+    const defaultSessionId = getDefaultSessionId();
+    if (!seenSessionIds.has(defaultSessionId)) {
+        seenSessionIds.add(defaultSessionId);
+        uniqueSessions.push({
+            session_id: defaultSessionId,
+            status: 'disconnected',
+            connected: false
+        });
+    }
 
     uniqueSessions.sort((a, b) => {
         const byConnected = Number(isConnectedSession(b)) - Number(isConnectedSession(a));
@@ -264,15 +224,16 @@ function renderSessionOptions() {
         return `<option value="${escapeHtml(sessionId)}">${escapeHtml(label)}</option>`;
     }).join('');
 
-    const currentId = getCurrentSessionId();
+    let currentId = getCurrentSessionId();
     const hasCurrent = uniqueSessions.some((session) => sanitizeSessionId(session.session_id) === currentId);
     if (!hasCurrent && uniqueSessions.length) {
-        currentSessionId = sanitizeSessionId(uniqueSessions[0].session_id, getDefaultSessionId());
-        persistCurrentSessionId(currentSessionId);
+        currentId = sanitizeSessionId(uniqueSessions[0].session_id, getDefaultSessionId());
+        currentSessionId = currentId;
+        persistCurrentSessionId(currentId);
+        syncGlobalAppSessionId(currentId);
     }
 
-    select.value = getCurrentSessionId();
-    renderSessionCards();
+    select.value = currentId;
 }
 
 async function loadSessionOptions(preferredSessionId?: string) {
@@ -285,9 +246,20 @@ async function loadSessionOptions(preferredSessionId?: string) {
         availableSessions = [];
     }
 
+    const availableSessionIds = new Set(
+        (availableSessions || [])
+            .map((session) => sanitizeSessionId(session?.session_id))
+            .filter(Boolean)
+    );
+
     const storedSessionId = getStoredSessionId();
     const candidates = [fallbackSessionId, storedSessionId, getCurrentSessionId(), getDefaultSessionId(), CONFIG.DEFAULT_SESSION_ID];
-    let nextSessionId = candidates.find((candidate) => Boolean(sanitizeSessionId(candidate)));
+    let nextSessionId = candidates.find((candidate) => {
+        const normalizedCandidate = sanitizeSessionId(candidate);
+        if (!normalizedCandidate) return false;
+        if (!availableSessionIds.size) return true;
+        return availableSessionIds.has(normalizedCandidate);
+    });
 
     if (!nextSessionId) {
         nextSessionId = sanitizeSessionId(availableSessions[0]?.session_id, getDefaultSessionId());
@@ -752,11 +724,8 @@ function handleDisconnected() {
 
 // Atualizar status
 function updateStatus(status: 'connected' | 'disconnected' | 'connecting' | 'qr', text: string) {
-    const badge = document.getElementById('status-badge') as HTMLElement | null;
-    const textEl = document.getElementById('status-text') as HTMLElement | null;
-    
-    if (badge) badge.className = 'status-badge ' + status;
-    if (textEl) textEl.textContent = text;
+    document.body.setAttribute('data-whatsapp-connection-status', status);
+    document.body.setAttribute('data-whatsapp-connection-label', text);
 }
 
 // Atualizar botão de conexão
@@ -884,10 +853,6 @@ function toggleSidebar() {
     document.querySelector('.sidebar-overlay')?.classList.toggle('active');
 }
 
-function selectSessionFromList(sessionId: string) {
-    changeSession(sessionId);
-}
-
 // Logout
 function logout() {
     localStorage.removeItem('isLoggedIn');
@@ -903,7 +868,6 @@ const windowAny = window as Window & {
     requestPairingCode?: () => void;
     disconnect?: () => void;
     changeSession?: (sessionId: string) => void;
-    selectSessionFromList?: (sessionId: string) => void;
     createSessionPrompt?: () => void;
     toggleSidebar?: () => void;
     logout?: () => void;
@@ -913,7 +877,6 @@ windowAny.startConnection = startConnection;
 windowAny.requestPairingCode = requestPairingCode;
 windowAny.disconnect = disconnect;
 windowAny.changeSession = changeSession;
-windowAny.selectSessionFromList = selectSessionFromList;
 windowAny.createSessionPrompt = createSessionPrompt;
 windowAny.toggleSidebar = toggleSidebar;
 windowAny.logout = logout;

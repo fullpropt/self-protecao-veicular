@@ -1063,6 +1063,9 @@ const WhatsAppSession = {
         }
 
         const existing = await this.findBySessionId(normalizedSessionId);
+        const resolvedName = Object.prototype.hasOwnProperty.call(data, 'name')
+            ? (data.name ? String(data.name).trim().slice(0, 120) : null)
+            : (existing?.name || null);
         const campaignEnabled = Object.prototype.hasOwnProperty.call(data, 'campaign_enabled')
             ? normalizeBooleanFlag(data.campaign_enabled, existing?.campaign_enabled ?? 1)
             : (existing?.campaign_enabled ?? 1);
@@ -1078,10 +1081,11 @@ const WhatsAppSession = {
 
         await run(`
             INSERT INTO whatsapp_sessions (
-                session_id, status, campaign_enabled, daily_limit, hourly_limit, cooldown_until, updated_at
+                session_id, name, status, campaign_enabled, daily_limit, hourly_limit, cooldown_until, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT (session_id) DO UPDATE SET
+                name = EXCLUDED.name,
                 campaign_enabled = EXCLUDED.campaign_enabled,
                 daily_limit = EXCLUDED.daily_limit,
                 hourly_limit = EXCLUDED.hourly_limit,
@@ -1089,6 +1093,7 @@ const WhatsAppSession = {
                 updated_at = CURRENT_TIMESTAMP
         `, [
             normalizedSessionId,
+            resolvedName,
             existing?.status || 'disconnected',
             campaignEnabled,
             dailyLimit,
@@ -1097,6 +1102,17 @@ const WhatsAppSession = {
         ]);
 
         return this.findBySessionId(normalizedSessionId);
+    },
+
+    async deleteBySessionId(sessionId) {
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (!normalizedSessionId) {
+            throw new Error('session_id e obrigatorio');
+        }
+
+        await run('DELETE FROM whatsapp_sessions WHERE session_id = ?', [normalizedSessionId]);
+        await run('DELETE FROM campaign_sender_accounts WHERE session_id = ?', [normalizedSessionId]);
+        return { session_id: normalizedSessionId };
     }
 };
 

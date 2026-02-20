@@ -16,6 +16,9 @@ type ConfiguracoesGlobals = {
   updateNewTemplateForm?: () => void;
   connectWhatsApp?: () => void;
   disconnectWhatsApp?: () => void;
+  refreshWhatsAppAccounts?: () => Promise<void>;
+  saveWhatsAppSessionName?: (sessionId: string) => Promise<void>;
+  removeWhatsAppSession?: (sessionId: string) => Promise<void>;
   saveWhatsAppSettings?: () => void;
   saveBusinessHoursSettings?: () => void;
   saveNotificationSettings?: () => void;
@@ -152,6 +155,67 @@ export default function Configuracoes() {
         .connection-status-card h4 { margin: 0 0 12px; font-size: 20px; }
         .connection-status-card p { margin: 0 0 12px; color: var(--gray-800); line-height: 1.5; }
         .connection-info { font-size: 13px; color: var(--gray-700); background: var(--gray-50); padding: 15px; border-radius: 8px; margin: 15px 0 !important; border: 1px solid var(--border-color); }
+        .connection-accounts-list {
+            display: grid;
+            gap: 12px;
+        }
+        .connection-account-item {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 14px;
+            background: var(--gray-50);
+        }
+        .connection-account-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .connection-account-session {
+            font-size: 12px;
+            color: var(--gray-700);
+            word-break: break-word;
+        }
+        .connection-status-pill {
+            border-radius: 999px;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+        .connection-status-pill.connected {
+            color: #166534;
+            background: rgba(16, 185, 129, 0.16);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        .connection-status-pill.disconnected {
+            color: #7f1d1d;
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+        .connection-account-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            gap: 10px;
+            align-items: end;
+        }
+        .connection-account-body .form-group {
+            margin-bottom: 0;
+        }
+        .connection-account-body .btn {
+            width: auto;
+            white-space: nowrap;
+        }
+        @media (max-width: 768px) {
+            .connection-account-body {
+                grid-template-columns: 1fr;
+            }
+            .connection-account-body .btn {
+                width: 100%;
+            }
+        }
       `}</style>
       <button className="mobile-menu-toggle" type="button" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
           <div className="sidebar-overlay"></div>
@@ -227,17 +291,16 @@ export default function Configuracoes() {
                       <div className="settings-panel active" id="panel-conexao">
                           <h3 className="settings-section-title">Conexão</h3>
                           <div className="connection-status-card" id="connectionStatusCard">
-                              <div className="connection-success" id="connectionSuccess" style={{ display: 'none' }}>
-                                  <div className="connection-icon success">?</div>
-                                  <h4>Automação está ligada</h4>
-                                  <p>O número de WhatsApp <strong id="connectedPhone">+55...</strong> está conectado à Companhia.</p>
-                                  <p className="connection-info">Seu WhatsApp foi conectado com sucesso. Automação continuará funcionando mesmo com o celular desligado. Porém, se você não acessar o aplicativo do WhatsApp nos próximos 14 dias, seu telefone será desconectado automaticamente pelo WhatsApp por motivos de segurança.</p>
-                                  <button className="btn btn-danger" onClick={() => globals.disconnectWhatsApp?.()}>Desconectar</button>
+                              <h4 style={{ marginTop: 0 }}>Contas WhatsApp</h4>
+                              <p className="connection-info">
+                                  Gerencie os nomes de exibição e remova contas que não deseja mais usar.
+                              </p>
+                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                                  <button className="btn btn-outline" onClick={() => globals.refreshWhatsAppAccounts?.()}>Atualizar lista</button>
+                                  <Link to="/whatsapp" className="btn btn-primary">Ir para WhatsApp</Link>
                               </div>
-                              <div className="connection-disconnected" id="connectionDisconnected">
-                                  <div className="connection-icon disconnected">!</div>
-                                  <h4>WhatsApp desconectado</h4>
-                                  <p>Conecte seu WhatsApp em <Link to="/whatsapp">WhatsApp ? Conectar</Link> para ativar a automação.</p>
+                              <div className="connection-accounts-list" id="connectionAccountsList">
+                                  <p style={{ color: 'var(--gray-500)', margin: 0 }}>Carregando contas...</p>
                               </div>
                           </div>
                       </div>
@@ -696,3 +759,4 @@ export default function Configuracoes() {
     </div>
   );
 }
+
