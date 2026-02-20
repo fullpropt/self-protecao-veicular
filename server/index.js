@@ -2989,6 +2989,57 @@ function normalizeAutomationContext(context = {}) {
     };
 }
 
+function parseAutomationSessionScope(value) {
+    if (value === undefined || value === null || value === '') return [];
+
+    let parsed = value;
+    if (typeof parsed === 'string') {
+        const trimmed = parsed.trim();
+        if (!trimmed) return [];
+        try {
+            parsed = JSON.parse(trimmed);
+        } catch (_) {
+            parsed = trimmed.split(',').map((item) => String(item || '').trim()).filter(Boolean);
+        }
+    }
+
+    if (!Array.isArray(parsed)) return [];
+
+    const seen = new Set();
+    const normalized = [];
+    for (const item of parsed) {
+        const sessionId = sanitizeSessionId(item);
+        if (!sessionId || seen.has(sessionId)) continue;
+        seen.add(sessionId);
+        normalized.push(sessionId);
+    }
+    return normalized;
+}
+
+function normalizeAutomationSessionScopeInput(value) {
+    if (value === undefined) return undefined;
+    const sessionIds = parseAutomationSessionScope(value);
+    if (!sessionIds.length) return null;
+    return JSON.stringify(sessionIds);
+}
+
+function enrichAutomationForResponse(automation) {
+    if (!automation) return automation;
+    return {
+        ...automation,
+        session_ids: parseAutomationSessionScope(automation.session_scope)
+    };
+}
+
+function shouldAutomationRunForSession(automation, sessionId) {
+    const scopedSessionIds = parseAutomationSessionScope(automation?.session_scope);
+    if (!scopedSessionIds.length) return true;
+
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return false;
+    return scopedSessionIds.includes(normalizedSessionId);
+}
+
 async function resolveAutomationConversation(lead, baseConversation = null, sessionId = DEFAULT_AUTOMATION_SESSION_ID) {
     if (baseConversation && Number(baseConversation.lead_id) === Number(lead?.id)) {
         return baseConversation;
@@ -3027,6 +3078,7 @@ function shouldTriggerAutomation(automation, context, normalizedText) {
     if (!isSupportedAutomationTriggerType(triggerType)) return false;
 
     const normalizedContext = normalizeAutomationContext(context);
+    if (!shouldAutomationRunForSession(automation, normalizedContext.sessionId)) return false;
     const eventType = normalizedContext.event;
 
     if (triggerType === 'keyword') {
@@ -3128,6 +3180,7 @@ async function armInactivityAutomation(automation, context) {
                 text: ''
             });
 
+            if (!shouldAutomationRunForSession(activeAutomation, executionContext.sessionId)) return;
             runAutomationWithDelay(activeAutomation, executionContext);
         } catch (error) {
             console.error(`Erro ao disparar automacao de inatividade ${automation.id}:`, error.message);
@@ -3177,15 +3230,21 @@ async function processScheduledAutomationsTick() {
         for (const automation of dueAutomations) {
             for (const lead of leads) {
                 if (!lead?.id || !lead?.phone) continue;
+                const leadConversation = await Conversation.findByLeadId(lead.id);
+                const sessionId = sanitizeSessionId(
+                    leadConversation?.session_id,
+                    DEFAULT_AUTOMATION_SESSION_ID
+                );
 
                 const executionContext = normalizeAutomationContext({
                     event: AUTOMATION_EVENT_TYPES.SCHEDULE,
                     lead,
-                    conversation: null,
-                    sessionId: DEFAULT_AUTOMATION_SESSION_ID,
+                    conversation: leadConversation || null,
+                    sessionId,
                     text: ''
                 });
 
+                if (!shouldAutomationRunForSession(automation, executionContext.sessionId)) continue;
                 runAutomationWithDelay(automation, executionContext);
             }
         }
@@ -3333,6 +3392,7 @@ async function scheduleAutomations(context) {
     if (normalizedContext.event === AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED && normalizedContext?.lead?.id) {
         for (const automation of automations) {
             if (String(automation?.trigger_type || '').trim().toLowerCase() !== 'inactivity') continue;
+            if (!shouldAutomationRunForSession(automation, normalizedContext.sessionId)) continue;
             armInactivityAutomation(automation, normalizedContext).catch((error) => {
                 console.error(`Erro ao armar automacao de inatividade ${automation.id}:`, error.message);
             });
@@ -7090,7 +7150,7 @@ app.get('/api/automations', optionalAuth, async (req, res) => {
 
 
 
-    res.json({ success: true, automations });
+    res.json({ success: true, automations: automations.map(enrichAutomationForResponse) });
 
 });
 
@@ -7106,7 +7166,7 @@ app.get('/api/automations/:id', optionalAuth, async (req, res) => {
 
     }
 
-    res.json({ success: true, automation });
+    res.json({ success: true, automation: enrichAutomationForResponse(automation) });
 
 });
 
@@ -7124,6 +7184,13 @@ app.post('/api/automations', authenticate, async (req, res) => {
 
         };
 
+        if (Object.prototype.hasOwnProperty.call(payload, 'session_ids') || Object.prototype.hasOwnProperty.call(payload, 'session_scope')) {
+            payload.session_scope = normalizeAutomationSessionScopeInput(
+                Object.prototype.hasOwnProperty.call(payload, 'session_ids') ? payload.session_ids : payload.session_scope
+            );
+            delete payload.session_ids;
+        }
+
         const triggerType = String(payload.trigger_type || '').trim().toLowerCase();
         if (!isSupportedAutomationTriggerType(triggerType)) {
             return res.status(400).json({
@@ -7136,7 +7203,7 @@ app.post('/api/automations', authenticate, async (req, res) => {
 
         const automation = await Automation.findById(result.id);
 
-        res.json({ success: true, automation });
+        res.json({ success: true, automation: enrichAutomationForResponse(automation) });
 
     } catch (error) {
 
@@ -7163,6 +7230,13 @@ app.put('/api/automations/:id', authenticate, async (req, res) => {
         ...req.body
     };
 
+    if (Object.prototype.hasOwnProperty.call(payload, 'session_ids') || Object.prototype.hasOwnProperty.call(payload, 'session_scope')) {
+        payload.session_scope = normalizeAutomationSessionScopeInput(
+            Object.prototype.hasOwnProperty.call(payload, 'session_ids') ? payload.session_ids : payload.session_scope
+        );
+        delete payload.session_ids;
+    }
+
     if (Object.prototype.hasOwnProperty.call(payload, 'trigger_type')) {
         const triggerType = String(payload.trigger_type || '').trim().toLowerCase();
         if (!isSupportedAutomationTriggerType(triggerType)) {
@@ -7177,7 +7251,7 @@ app.put('/api/automations/:id', authenticate, async (req, res) => {
 
     const updatedAutomation = await Automation.findById(req.params.id);
 
-    res.json({ success: true, automation: updatedAutomation });
+    res.json({ success: true, automation: enrichAutomationForResponse(updatedAutomation) });
 
 });
 

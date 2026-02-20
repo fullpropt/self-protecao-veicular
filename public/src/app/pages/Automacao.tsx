@@ -11,6 +11,7 @@ type AutomacaoGlobals = {
   saveAutomation?: () => void;
   updateActionOptions?: () => void;
   updateTriggerOptions?: () => void;
+  toggleAutomationAllSessions?: () => void;
   logout?: () => void;
 };
 
@@ -158,6 +159,29 @@ export default function Automacao() {
         }
         input:checked + .toggle-slider:before {
             transform: translateX(24px);
+        }
+        .automation-session-scope {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+            background: var(--gray-50);
+        }
+        .automation-session-scope-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+            max-height: 180px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+        .automation-session-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--surface);
+            padding: 8px 10px;
         }
       `}</style>
       <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
@@ -325,6 +349,25 @@ export default function Automacao() {
                                   <option value="3600">1 hora</option>
                                   <option value="86400">24 horas</option>
                               </select>
+                          </div>
+
+                          <div className="form-group">
+                              <label className="form-label">Contas aplicáveis</label>
+                              <div className="automation-session-scope">
+                                  <label className="checkbox-wrapper" style={{ marginBottom: 0 }}>
+                                      <input
+                                          type="checkbox"
+                                          id="automationAllSessions"
+                                          defaultChecked
+                                          onChange={() => globals.toggleAutomationAllSessions?.()}
+                                      />
+                                      <span className="checkbox-custom"></span>
+                                      Aplicar em todas as contas (padrão)
+                                  </label>
+                                  <div className="automation-session-scope-list" id="automationSessionScopeList">
+                                      <p style={{ color: 'var(--gray-500)', fontSize: '12px', margin: 0 }}>Carregando contas...</p>
+                                  </div>
+                              </div>
                           </div>
                       </form>
                   </div>

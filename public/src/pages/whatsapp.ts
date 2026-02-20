@@ -32,6 +32,7 @@ const CONFIG = {
 let socket: null | { on: (event: string, handler: (data?: any) => void) => void; emit: (event: string, payload?: any) => void } = null;
 let socketBound = false;
 let currentSessionId = CONFIG.DEFAULT_SESSION_ID;
+let preferredDefaultSessionId = CONFIG.DEFAULT_SESSION_ID;
 let availableSessions: WhatsappSessionItem[] = [];
 let isConnected = false;
 let isConnecting = false;
@@ -71,8 +72,48 @@ function sanitizeSessionId(value: string | null | undefined, fallback = '') {
     return normalized || fallback;
 }
 
+function escapeHtml(value: string) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function getDefaultSessionId() {
+    return sanitizeSessionId(preferredDefaultSessionId, CONFIG.DEFAULT_SESSION_ID);
+}
+
+function normalizeSessionToken(value: string) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function buildCompanyDefaultSessionId(companyName: unknown) {
+    const normalized = normalizeSessionToken(String(companyName || ''));
+    if (!normalized) return CONFIG.DEFAULT_SESSION_ID;
+    if (normalized.endsWith('_session')) return normalized;
+    return `${normalized}_session`;
+}
+
+async function resolvePreferredDefaultSessionId() {
+    try {
+        if (!api?.get) throw new Error('API indisponivel');
+        const response = await api.get('/api/settings');
+        preferredDefaultSessionId = buildCompanyDefaultSessionId(response?.settings?.company_name);
+    } catch (_) {
+        preferredDefaultSessionId = CONFIG.DEFAULT_SESSION_ID;
+    }
+}
+
 function getStoredSessionId() {
-    return sanitizeSessionId(localStorage.getItem('zapvender_active_whatsapp_session'), CONFIG.DEFAULT_SESSION_ID);
+    return sanitizeSessionId(localStorage.getItem('zapvender_active_whatsapp_session'), getDefaultSessionId());
 }
 
 function persistCurrentSessionId(sessionId: string) {
@@ -80,17 +121,101 @@ function persistCurrentSessionId(sessionId: string) {
 }
 
 function getCurrentSessionId() {
-    return sanitizeSessionId(currentSessionId, CONFIG.DEFAULT_SESSION_ID);
+    return sanitizeSessionId(currentSessionId, getDefaultSessionId());
 }
 
 function getSessionSelectElement() {
     return document.getElementById('whatsapp-session-select') as HTMLSelectElement | null;
 }
 
+function syncGlobalAppSessionId(sessionId: string) {
+    const app = (window as Window & { APP?: { sessionId?: string } }).APP;
+    if (app) {
+        app.sessionId = sessionId;
+    }
+}
+
 function isPayloadForCurrentSession(payload: any) {
     const payloadSessionId = sanitizeSessionId(payload?.sessionId);
     if (!payloadSessionId) return true;
     return payloadSessionId === getCurrentSessionId();
+}
+
+function isConnectedSession(session: WhatsappSessionItem) {
+    return Boolean(session.connected) || String(session.status || '').toLowerCase() === 'connected';
+}
+
+function getSessionStatusLabel(session: WhatsappSessionItem) {
+    return isConnectedSession(session) ? 'Conectada' : 'Desconectada';
+}
+
+function getSessionDisplayName(session: WhatsappSessionItem) {
+    const sessionId = sanitizeSessionId(session.session_id);
+    const name = String(session.name || '').trim();
+    if (name) return name;
+    const phone = String(session.phone || '').trim();
+    if (phone) return phone;
+    return sessionId;
+}
+
+function getSuggestedNewSessionId() {
+    const used = new Set(
+        (availableSessions || [])
+            .map((item) => sanitizeSessionId(item.session_id))
+            .filter(Boolean)
+    );
+
+    const base = getDefaultSessionId();
+    if (!used.has(base)) return base;
+
+    let counter = 2;
+    while (counter < 100) {
+        const candidate = `${base}_${counter}`;
+        if (!used.has(candidate)) return candidate;
+        counter += 1;
+    }
+    return `${base}_${Date.now()}`;
+}
+
+function renderSessionCards() {
+    const list = document.getElementById('whatsapp-accounts-list') as HTMLElement | null;
+    if (!list) return;
+
+    if (!availableSessions.length) {
+        list.innerHTML = `
+            <div class="whatsapp-account-item empty">
+                Nenhuma conta cadastrada ainda.
+            </div>
+        `;
+        return;
+    }
+
+    const activeSessionId = getCurrentSessionId();
+    list.innerHTML = availableSessions
+        .map((session) => {
+            const sessionId = sanitizeSessionId(session.session_id);
+            const statusLabel = getSessionStatusLabel(session);
+            const displayName = getSessionDisplayName(session);
+            const connectedClass = isConnectedSession(session) ? 'connected' : 'disconnected';
+            const activeClass = sessionId === activeSessionId ? 'active' : '';
+            const phone = String(session.phone || '').trim();
+            const detail = phone && phone !== displayName ? ` - ${phone}` : '';
+
+            return `
+                <button
+                    type="button"
+                    class="whatsapp-account-item ${connectedClass} ${activeClass}"
+                    onclick="selectSessionFromList('${escapeHtml(sessionId)}')"
+                >
+                    <div class="top-row">
+                        <strong>${escapeHtml(displayName)}</strong>
+                        <span class="status ${connectedClass}">${statusLabel}</span>
+                    </div>
+                    <div class="bottom-row">${escapeHtml(sessionId)}${escapeHtml(detail)}</div>
+                </button>
+            `;
+        })
+        .join('');
 }
 
 function renderSessionOptions() {
@@ -110,7 +235,7 @@ function renderSessionOptions() {
         });
     };
 
-    pushIfNeeded(CONFIG.DEFAULT_SESSION_ID);
+    pushIfNeeded(getDefaultSessionId());
     pushIfNeeded(getCurrentSessionId());
 
     const uniqueSessions = sessions.filter((session) => {
@@ -120,15 +245,34 @@ function renderSessionOptions() {
         return true;
     });
 
-    uniqueSessions.sort((a, b) => String(a.session_id).localeCompare(String(b.session_id)));
+    uniqueSessions.sort((a, b) => {
+        const byConnected = Number(isConnectedSession(b)) - Number(isConnectedSession(a));
+        if (byConnected !== 0) return byConnected;
+        const aLabel = getSessionDisplayName(a);
+        const bLabel = getSessionDisplayName(b);
+        return aLabel.localeCompare(bLabel);
+    });
     availableSessions = uniqueSessions;
 
     select.innerHTML = uniqueSessions.map((session) => {
-        const status = session.connected ? 'Conectada' : (String(session.status || 'disconnected') === 'connected' ? 'Conectada' : 'Desconectada');
-        const labelBase = session.name || session.phone || session.session_id;
-        return `<option value="${String(session.session_id)}">${labelBase} (${status})</option>`;
+        const status = getSessionStatusLabel(session);
+        const labelBase = getSessionDisplayName(session);
+        const sessionId = sanitizeSessionId(session.session_id);
+        const label = labelBase === sessionId
+            ? `${labelBase} - ${status}`
+            : `${labelBase} - ${sessionId} - ${status}`;
+        return `<option value="${escapeHtml(sessionId)}">${escapeHtml(label)}</option>`;
     }).join('');
+
+    const currentId = getCurrentSessionId();
+    const hasCurrent = uniqueSessions.some((session) => sanitizeSessionId(session.session_id) === currentId);
+    if (!hasCurrent && uniqueSessions.length) {
+        currentSessionId = sanitizeSessionId(uniqueSessions[0].session_id, getDefaultSessionId());
+        persistCurrentSessionId(currentSessionId);
+    }
+
     select.value = getCurrentSessionId();
+    renderSessionCards();
 }
 
 async function loadSessionOptions(preferredSessionId?: string) {
@@ -141,8 +285,17 @@ async function loadSessionOptions(preferredSessionId?: string) {
         availableSessions = [];
     }
 
-    currentSessionId = fallbackSessionId;
+    const storedSessionId = getStoredSessionId();
+    const candidates = [fallbackSessionId, storedSessionId, getCurrentSessionId(), getDefaultSessionId(), CONFIG.DEFAULT_SESSION_ID];
+    let nextSessionId = candidates.find((candidate) => Boolean(sanitizeSessionId(candidate)));
+
+    if (!nextSessionId) {
+        nextSessionId = sanitizeSessionId(availableSessions[0]?.session_id, getDefaultSessionId());
+    }
+
+    currentSessionId = sanitizeSessionId(nextSessionId, getDefaultSessionId());
     persistCurrentSessionId(currentSessionId);
+    syncGlobalAppSessionId(currentSessionId);
     renderSessionOptions();
 }
 
@@ -167,16 +320,21 @@ function resetConnectionUi() {
 }
 
 function changeSession(sessionId: string) {
-    const normalizedSessionId = sanitizeSessionId(sessionId, CONFIG.DEFAULT_SESSION_ID);
+    const normalizedSessionId = sanitizeSessionId(sessionId, getDefaultSessionId());
     currentSessionId = normalizedSessionId;
     persistCurrentSessionId(normalizedSessionId);
+    syncGlobalAppSessionId(normalizedSessionId);
     renderSessionOptions();
     resetConnectionUi();
     socket?.emit('check-session', { sessionId: normalizedSessionId });
 }
 
 async function createSessionPrompt() {
-    const rawInput = window.prompt('Informe o identificador da nova conta WhatsApp (ex: whatsapp_vendas_2):');
+    const suggestedSessionId = getSuggestedNewSessionId();
+    const rawInput = window.prompt(
+        'Informe o identificador da nova conta WhatsApp (ex: vendas_sp_session):',
+        suggestedSessionId
+    );
     if (rawInput === null) return;
 
     const normalized = sanitizeSessionId(rawInput)
@@ -205,13 +363,17 @@ async function createSessionPrompt() {
 
 // Inicializa??o
 function initWhatsapp() {
-    if (checkAuth()) {
+    if (!checkAuth()) return;
+
+    void (async () => {
+        await resolvePreferredDefaultSessionId();
         currentSessionId = getStoredSessionId();
+        syncGlobalAppSessionId(currentSessionId);
         renderSessionOptions();
         initSocket();
         bindPairingCodeCopy();
-        void loadSessionOptions(currentSessionId);
-    }
+        await loadSessionOptions(currentSessionId);
+    })();
 }
 
 onReady(initWhatsapp);
@@ -722,6 +884,10 @@ function toggleSidebar() {
     document.querySelector('.sidebar-overlay')?.classList.toggle('active');
 }
 
+function selectSessionFromList(sessionId: string) {
+    changeSession(sessionId);
+}
+
 // Logout
 function logout() {
     localStorage.removeItem('isLoggedIn');
@@ -737,6 +903,7 @@ const windowAny = window as Window & {
     requestPairingCode?: () => void;
     disconnect?: () => void;
     changeSession?: (sessionId: string) => void;
+    selectSessionFromList?: (sessionId: string) => void;
     createSessionPrompt?: () => void;
     toggleSidebar?: () => void;
     logout?: () => void;
@@ -746,6 +913,7 @@ windowAny.startConnection = startConnection;
 windowAny.requestPairingCode = requestPairingCode;
 windowAny.disconnect = disconnect;
 windowAny.changeSession = changeSession;
+windowAny.selectSessionFromList = selectSessionFromList;
 windowAny.createSessionPrompt = createSessionPrompt;
 windowAny.toggleSidebar = toggleSidebar;
 windowAny.logout = logout;

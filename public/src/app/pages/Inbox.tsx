@@ -6,6 +6,7 @@ type InboxGlobals = {
   initInbox?: () => void;
   filterConversations?: (filter: string) => void;
   searchConversations?: () => void;
+  changeInboxSessionFilter?: (sessionId: string) => void;
   registerCurrentUser?: () => void;
   toggleContactInfo?: (forceOpen?: boolean) => void;
   logout?: () => void;
@@ -78,6 +79,25 @@ export default function Inbox() {
             margin: 0 0 15px;
             font-size: 20px;
             color: var(--dark);
+        }
+        .inbox-session-filter {
+            margin-bottom: 12px;
+        }
+        .inbox-session-filter .form-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 6px;
+        }
+        .inbox-session-filter .form-select {
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: var(--surface);
+            color: var(--dark);
+            font-size: 13px;
+            padding: 9px 10px;
         }
         .conversations-tabs {
             display: flex;
@@ -645,6 +665,17 @@ export default function Inbox() {
           <div className="conversations-panel" id="conversationsPanel">
             <div className="conversations-header">
               <h2><span className="icon icon-inbox icon-sm"></span> Inbox</h2>
+              <div className="inbox-session-filter">
+                <label className="form-label" htmlFor="inboxSessionFilter">Conta WhatsApp</label>
+                <select
+                  id="inboxSessionFilter"
+                  className="form-select"
+                  defaultValue=""
+                  onChange={(event) => globals.changeInboxSessionFilter?.((event.target as HTMLSelectElement).value)}
+                >
+                  <option value="">Todas as contas</option>
+                </select>
+              </div>
               <div className="conversations-tabs">
                 <button id="filterAllBtn" className="active" onClick={() => globals.filterConversations?.('all')}>Todos</button>
                 <button id="filterUnreadBtn" onClick={() => globals.filterConversations?.('unread')}>Não lidos</button>

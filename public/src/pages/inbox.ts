@@ -12,6 +12,7 @@ type LeadStatus = 1 | 2 | 3 | 4;
 type Conversation = {
     id: number;
     leadId: number;
+    sessionId?: string;
     name: string;
     phone: string;
     lastMessage?: string;
@@ -63,6 +64,14 @@ type ContactField = {
     source?: string;
 };
 
+type WhatsappSessionItem = {
+    session_id: string;
+    status?: string;
+    connected?: boolean;
+    name?: string;
+    phone?: string;
+};
+
 let conversations: Conversation[] = [];
 let currentConversation: Conversation | null = null;
 let messages: ChatMessage[] = [];
@@ -75,6 +84,10 @@ let quickReplyDismissBound = false;
 let currentLeadDetails: LeadDetails | null = null;
 let contactFieldsCache: ContactField[] = [];
 let isContactInfoOpen = false;
+let inboxSessionFilter = '';
+let inboxAvailableSessions: WhatsappSessionItem[] = [];
+
+const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', is_default: true, source: 'name' },
@@ -120,6 +133,99 @@ function normalizeContactFieldKey(value: string) {
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '')
         .slice(0, 40);
+}
+
+function sanitizeSessionId(value: unknown, fallback = '') {
+    const normalized = String(value || '').trim();
+    return normalized || fallback;
+}
+
+function getStoredInboxSessionFilter() {
+    return sanitizeSessionId(localStorage.getItem(INBOX_SESSION_FILTER_STORAGE_KEY));
+}
+
+function persistInboxSessionFilter(sessionId: string) {
+    const normalized = sanitizeSessionId(sessionId);
+    if (!normalized) {
+        localStorage.removeItem(INBOX_SESSION_FILTER_STORAGE_KEY);
+        return;
+    }
+    localStorage.setItem(INBOX_SESSION_FILTER_STORAGE_KEY, normalized);
+}
+
+function getSessionStatusLabel(session: WhatsappSessionItem) {
+    const connected = Boolean(session.connected) || String(session.status || '').toLowerCase() === 'connected';
+    return connected ? 'Conectada' : 'Desconectada';
+}
+
+function getSessionDisplayName(session: WhatsappSessionItem) {
+    const sessionId = sanitizeSessionId(session.session_id);
+    const name = String(session.name || '').trim();
+    if (name) return name;
+    const phone = String(session.phone || '').trim();
+    if (phone) return phone;
+    return sessionId;
+}
+
+function renderInboxSessionFilterOptions() {
+    const select = document.getElementById('inboxSessionFilter') as HTMLSelectElement | null;
+    if (!select) return;
+
+    const options = [
+        `<option value="">Todas as contas</option>`,
+        ...inboxAvailableSessions.map((session) => {
+            const sessionId = sanitizeSessionId(session.session_id);
+            const displayName = getSessionDisplayName(session);
+            const status = getSessionStatusLabel(session);
+            const label = displayName === sessionId
+                ? `${displayName} - ${status}`
+                : `${displayName} - ${sessionId} - ${status}`;
+            return `<option value="${escapeHtml(sessionId)}">${escapeHtml(label)}</option>`;
+        })
+    ];
+
+    select.innerHTML = options.join('');
+    select.value = inboxSessionFilter;
+}
+
+async function loadInboxSessionFilters() {
+    const storedFilter = getStoredInboxSessionFilter();
+    inboxSessionFilter = sanitizeSessionId(storedFilter);
+
+    try {
+        const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
+        inboxAvailableSessions = Array.isArray(response?.sessions) ? response.sessions : [];
+    } catch (_) {
+        inboxAvailableSessions = [];
+    }
+
+    const sessionIds = new Set(
+        inboxAvailableSessions.map((item) => sanitizeSessionId(item.session_id)).filter(Boolean)
+    );
+    if (inboxSessionFilter && !sessionIds.has(inboxSessionFilter)) {
+        inboxSessionFilter = '';
+        persistInboxSessionFilter('');
+    }
+
+    renderInboxSessionFilterOptions();
+}
+
+function changeInboxSessionFilter(sessionId: string) {
+    inboxSessionFilter = sanitizeSessionId(sessionId);
+    persistInboxSessionFilter(inboxSessionFilter);
+    currentConversation = null;
+    currentLeadDetails = null;
+    renderContactInfoPanel();
+    setMobileConversationMode(false);
+    loadConversations();
+}
+
+function resolveConversationSessionId(conversation: Conversation | null | undefined) {
+    const fromConversation = sanitizeSessionId(conversation?.sessionId);
+    if (fromConversation) return fromConversation;
+    const appSession = sanitizeSessionId((window as any).APP?.sessionId);
+    if (appSession) return appSession;
+    return 'self_whatsapp_session';
 }
 
 function parseLeadCustomFields(value: unknown) {
@@ -203,7 +309,9 @@ function getContatosUrl(id: string | number) {
 function initInbox() {
     bindQuickReplyDismiss();
     loadContactFields();
-    loadConversations();
+    void loadInboxSessionFilters().finally(() => {
+        loadConversations();
+    });
     loadQuickReplies();
     initSocket();
     renderContactInfoPanel();
@@ -468,11 +576,15 @@ function initSocket() {
 
 async function loadConversations() {
     try {
-        const response: ConversationsResponse = await api.get('/api/conversations');
+        const query = inboxSessionFilter
+            ? `?session_id=${encodeURIComponent(inboxSessionFilter)}`
+            : '';
+        const response: ConversationsResponse = await api.get(`/api/conversations${query}`);
         const items = response.conversations || [];
         conversations = items.map((c) => ({
             id: c.id,
             leadId: c.lead_id || c.leadId || c.id,
+            sessionId: sanitizeSessionId(c.session_id || c.sessionId),
             name: c.name || c.lead_name || c.phone,
             phone: c.phone,
             lastMessage: c.lastMessage || c.last_message || 'Clique para iniciar conversa',
@@ -480,6 +592,28 @@ async function loadConversations() {
             unread: c.unread || c.unread_count || 0,
             status: c.status
         }));
+
+        if (currentConversation) {
+            const refreshedConversation = conversations.find((conversation) => conversation.id === currentConversation?.id) || null;
+            if (!refreshedConversation) {
+                currentConversation = null;
+                currentLeadDetails = null;
+                const chatPanel = document.getElementById('chatPanel') as HTMLElement | null;
+                if (chatPanel) {
+                    chatPanel.innerHTML = `
+                        <div class="chat-empty">
+                            <div class="chat-empty-icon icon icon-empty icon-lg"></div>
+                            <h3>Nenhum chat selecionado</h3>
+                            <p>Selecione uma conversa da lista ao lado para começar a conversar</p>
+                        </div>
+                    `;
+                }
+                renderContactInfoPanel();
+                setMobileConversationMode(false);
+            } else {
+                currentConversation = refreshedConversation;
+            }
+        }
 
         if (currentFilter === 'unread') {
             renderFilteredConversations(conversations.filter((conversation) => (conversation.unread || 0) > 0));
@@ -594,8 +728,9 @@ async function selectConversation(id: number) {
 
     // Persistir no backend que a conversa foi lida
     try {
+        const conversationSessionId = resolveConversationSessionId(currentConversation);
         socket?.emit('mark-read', {
-            sessionId: APP.sessionId,
+            sessionId: conversationSessionId,
             conversationId: id
         });
         await api.post(`/api/conversations/${id}/read`, {});
@@ -785,8 +920,9 @@ async function sendQuickReplyAudio(quickReply: TemplateItem) {
     scrollToBottom();
 
     try {
+        const sessionId = resolveConversationSessionId(currentConversation);
         await api.post('/api/send', {
-            sessionId: APP.sessionId,
+            sessionId,
             to: currentConversation.phone,
             message: mediaUrl,
             type: 'audio',
@@ -932,8 +1068,9 @@ async function sendMessage() {
     if (input) input.value = '';
 
     try {
+        const sessionId = resolveConversationSessionId(currentConversation);
         await api.post('/api/send', {
-            sessionId: APP.sessionId,
+            sessionId,
             to: currentConversation.phone,
             message: content,
             type: 'text'
@@ -1031,6 +1168,7 @@ const windowAny = window as Window & {
     initInbox?: () => void;
     filterConversations?: (filter: 'all' | 'unread') => void;
     searchConversations?: () => void;
+    changeInboxSessionFilter?: (sessionId: string) => void;
     selectConversation?: (id: number) => Promise<void>;
     toggleQuickReplyPicker?: () => void;
     closeQuickReplyPicker?: () => void;
@@ -1047,6 +1185,7 @@ const windowAny = window as Window & {
 windowAny.initInbox = initInbox;
 windowAny.filterConversations = filterConversations;
 windowAny.searchConversations = searchConversations;
+windowAny.changeInboxSessionFilter = changeInboxSessionFilter;
 windowAny.registerCurrentUser = registerCurrentUser;
 windowAny.logout = logout;
 windowAny.selectConversation = selectConversation;

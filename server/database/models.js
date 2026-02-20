@@ -1110,8 +1110,8 @@ const Automation = {
         const isActive = typeof data.is_active === 'boolean' ? (data.is_active ? 1 : 0) : (data.is_active ?? 1);
 
         const result = await run(`
-            INSERT INTO automations (uuid, name, description, trigger_type, trigger_value, action_type, action_value, delay, is_active, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO automations (uuid, name, description, trigger_type, trigger_value, action_type, action_value, delay, session_scope, is_active, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             data.name,
@@ -1121,6 +1121,7 @@ const Automation = {
             data.action_type,
             data.action_value,
             data.delay || 0,
+            data.session_scope || null,
             isActive,
             data.created_by
         ]);
@@ -1177,7 +1178,7 @@ const Automation = {
 
         const allowedFields = [
             'name', 'description', 'trigger_type', 'trigger_value',
-            'action_type', 'action_value', 'delay', 'is_active', 'executions', 'last_execution'
+            'action_type', 'action_value', 'delay', 'session_scope', 'is_active', 'executions', 'last_execution'
         ];
 
         for (const [key, value] of Object.entries(data)) {

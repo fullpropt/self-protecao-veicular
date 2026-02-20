@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS automations (
     action_type TEXT NOT NULL CHECK(action_type IN ('send_message', 'change_status', 'add_tag', 'start_flow', 'notify')),
     action_value TEXT,
     delay INTEGER DEFAULT 0,
+    session_scope TEXT,
     is_active INTEGER DEFAULT 1,
     executions INTEGER DEFAULT 0,
     last_execution TIMESTAMPTZ,
@@ -310,6 +311,7 @@ ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS delay_max INTEGER;
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS tag_filter TEXT;
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS distribution_strategy TEXT DEFAULT 'single';
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS distribution_config TEXT;
+ALTER TABLE automations ADD COLUMN IF NOT EXISTS session_scope TEXT;
 ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS campaign_enabled INTEGER DEFAULT 1;
 ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS daily_limit INTEGER DEFAULT 0;
 ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS hourly_limit INTEGER DEFAULT 0;

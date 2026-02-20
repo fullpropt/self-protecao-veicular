@@ -12,6 +12,8 @@ type Automation = {
     action_type: ActionType;
     action_value?: string;
     delay?: number;
+    session_scope?: string | null;
+    session_ids?: string[];
     is_active: boolean;
     executions?: number;
     last_execution?: string | null;
@@ -19,7 +21,17 @@ type Automation = {
 
 type AutomationsResponse = { automations?: Automation[] };
 
+type WhatsappSessionItem = {
+    session_id: string;
+    status?: string;
+    connected?: boolean;
+    name?: string;
+    phone?: string;
+};
+
 let automations: Automation[] = [];
+let automationSessions: WhatsappSessionItem[] = [];
+let pendingAutomationSessionScope: string[] | null = null;
 const RUNTIME_SUPPORTED_TRIGGER_TYPES: TriggerType[] = [
     'new_lead',
     'status_change',
@@ -31,6 +43,65 @@ const RUNTIME_SUPPORTED_TRIGGER_TYPES: TriggerType[] = [
 
 function isRuntimeSupportedTriggerType(type: string): type is TriggerType {
     return RUNTIME_SUPPORTED_TRIGGER_TYPES.includes(type as TriggerType);
+}
+
+function escapeAutomationText(value: unknown) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function sanitizeSessionId(value: unknown) {
+    return String(value || '').trim();
+}
+
+function parseAutomationSessionIds(value: unknown) {
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => sanitizeSessionId(item))
+            .filter(Boolean);
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        try {
+            const parsed = JSON.parse(trimmed);
+            return parseAutomationSessionIds(parsed);
+        } catch (_) {
+            return trimmed
+                .split(',')
+                .map((item) => sanitizeSessionId(item))
+                .filter(Boolean);
+        }
+    }
+
+    return [];
+}
+
+function getAutomationSessionIds(automation: Automation | undefined) {
+    if (!automation) return [];
+    const fromApi = parseAutomationSessionIds(automation.session_ids);
+    if (fromApi.length) return Array.from(new Set(fromApi));
+    const fromScope = parseAutomationSessionIds(automation.session_scope);
+    return Array.from(new Set(fromScope));
+}
+
+function getSessionStatusLabel(session: WhatsappSessionItem) {
+    const connected = Boolean(session.connected) || String(session.status || '').toLowerCase() === 'connected';
+    return connected ? 'Conectada' : 'Desconectada';
+}
+
+function getSessionDisplayName(session: WhatsappSessionItem) {
+    const sessionId = sanitizeSessionId(session.session_id);
+    const name = String(session.name || '').trim();
+    if (name) return name;
+    const phone = String(session.phone || '').trim();
+    if (phone) return phone;
+    return sessionId;
 }
 
 function onReady(callback: () => void) {
@@ -59,6 +130,7 @@ function resetAutomationForm() {
     if (idInput) idInput.value = '';
     updateTriggerOptions();
     updateActionOptions();
+    setAutomationSessionScopeSelection([]);
     setAutomationModalTitle('new');
 }
 
@@ -182,7 +254,97 @@ function applyActionValue(type: ActionType, value?: string | null) {
     }
 }
 
+function setAutomationSessionScopeSelection(sessionIds: string[]) {
+    pendingAutomationSessionScope = Array.from(new Set(
+        (sessionIds || [])
+            .map((item) => sanitizeSessionId(item))
+            .filter(Boolean)
+    ));
+    renderAutomationSessionScopeOptions();
+}
+
+function updateAutomationSessionScopeInputs() {
+    const allCheckbox = document.getElementById('automationAllSessions') as HTMLInputElement | null;
+    const isAll = !!allCheckbox?.checked;
+    document.querySelectorAll<HTMLInputElement>('.automation-session-checkbox').forEach((input) => {
+        input.disabled = isAll;
+    });
+}
+
+function toggleAutomationAllSessions() {
+    updateAutomationSessionScopeInputs();
+}
+
+function getSelectedAutomationSessionIds() {
+    const allCheckbox = document.getElementById('automationAllSessions') as HTMLInputElement | null;
+    if (allCheckbox?.checked) return [];
+
+    return Array.from(document.querySelectorAll<HTMLInputElement>('.automation-session-checkbox:checked'))
+        .map((input) => sanitizeSessionId(input.value))
+        .filter(Boolean);
+}
+
+function renderAutomationSessionScopeOptions() {
+    const allCheckbox = document.getElementById('automationAllSessions') as HTMLInputElement | null;
+    const container = document.getElementById('automationSessionScopeList') as HTMLElement | null;
+    if (!container) return;
+
+    const selectedSet = new Set(pendingAutomationSessionScope || []);
+    const hasSpecificSelection = selectedSet.size > 0;
+    if (allCheckbox) {
+        allCheckbox.checked = !hasSpecificSelection;
+    }
+
+    if (!automationSessions.length) {
+        container.innerHTML = '<p style="color: var(--gray-500); font-size: 12px; margin: 0;">Nenhuma conta WhatsApp cadastrada.</p>';
+        if (allCheckbox) allCheckbox.checked = true;
+        updateAutomationSessionScopeInputs();
+        return;
+    }
+
+    container.innerHTML = automationSessions.map((session) => {
+        const sessionId = sanitizeSessionId(session.session_id);
+        const checked = selectedSet.has(sessionId);
+        const status = getSessionStatusLabel(session);
+        const displayName = getSessionDisplayName(session);
+        const subtitle = displayName === sessionId ? sessionId : `${displayName} - ${sessionId}`;
+        const safeSessionId = escapeAutomationText(sessionId);
+        return `
+            <label class="checkbox-wrapper automation-session-option">
+                <input
+                    type="checkbox"
+                    class="automation-session-checkbox"
+                    value="${safeSessionId}"
+                    ${checked ? 'checked' : ''}
+                >
+                <span class="checkbox-custom"></span>
+                <span>
+                    <strong>${escapeAutomationText(subtitle)}</strong>
+                    <small style="display:block; color: var(--gray-500); margin-top: 2px;">${escapeAutomationText(status)}</small>
+                </span>
+            </label>
+        `;
+    }).join('');
+
+    updateAutomationSessionScopeInputs();
+}
+
+async function loadAutomationSessions() {
+    try {
+        const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
+        automationSessions = Array.isArray(response?.sessions) ? response.sessions : [];
+    } catch (_) {
+        automationSessions = [];
+    }
+    renderAutomationSessionScopeOptions();
+    if (automations.length) {
+        renderAutomations();
+    }
+}
+
 function initAutomacao() {
+    pendingAutomationSessionScope = [];
+    void loadAutomationSessions();
     loadAutomations();
     updateTriggerOptions();
     updateActionOptions();
@@ -294,7 +456,8 @@ function renderAutomations() {
                 </label>
             </div>
             <div class="automation-body">
-                <p style="color: var(--gray-600); margin-bottom: 15px; font-size: 13px;">${a.description || 'Sem descrição'}</p>
+                <p style="color: var(--gray-600); margin-bottom: 10px; font-size: 13px;">${a.description || 'Sem descrição'}</p>
+                <p style="color: var(--gray-500); margin-bottom: 15px; font-size: 12px;"><strong>Contas:</strong> ${getAutomationSessionScopeSummary(a)}</p>
                 
                 <div class="automation-trigger">
                     <div class="automation-trigger-icon trigger"><span class="icon icon-bolt icon-sm"></span></div>
@@ -349,6 +512,17 @@ function getActionLabel(type: ActionType | string) {
         'notify': 'Notificar equipe'
     };
     return labels[type] || type;
+}
+
+function getAutomationSessionScopeSummary(automation: Automation) {
+    const sessionIds = getAutomationSessionIds(automation);
+    if (!sessionIds.length) return 'Todas as contas';
+
+    const labels = sessionIds.map((sessionId) => {
+        const found = automationSessions.find((session) => sanitizeSessionId(session.session_id) === sessionId);
+        return found ? getSessionDisplayName(found) : sessionId;
+    });
+    return labels.join(' | ');
 }
 
 function updateTriggerOptions() {
@@ -510,8 +684,9 @@ async function saveAutomation() {
     const triggerValue = getTriggerValue(triggerType);
     const actionValue = getActionValue(actionType);
     const existing = automationId ? automations.find(a => a.id === automationId) : null;
+    const selectedSessionIds = getSelectedAutomationSessionIds();
 
-    const data: Omit<Automation, 'id' | 'executions' | 'last_execution'> = {
+    const data: Record<string, unknown> = {
         name,
         description,
         trigger_type: triggerType,
@@ -519,6 +694,7 @@ async function saveAutomation() {
         action_type: actionType,
         action_value: actionValue,
         delay,
+        session_ids: selectedSessionIds,
         is_active: existing ? existing.is_active : true
     };
 
@@ -587,6 +763,8 @@ function editAutomation(id: number) {
     const delaySelect = document.getElementById('actionDelay') as HTMLSelectElement | null;
     if (delaySelect) delaySelect.value = String(automation.delay || 0);
 
+    setAutomationSessionScopeSelection(getAutomationSessionIds(automation));
+
     setAutomationModalTitle('edit');
 
     const win = window as Window & { openModal?: (id: string) => void };
@@ -614,6 +792,7 @@ const windowAny = window as Window & {
     openAutomationModal?: () => void;
     updateTriggerOptions?: () => void;
     updateActionOptions?: () => void;
+    toggleAutomationAllSessions?: () => void;
     toggleAutomation?: (id: number, active: boolean) => Promise<void>;
     saveAutomation?: () => Promise<void>;
     editAutomation?: (id: number) => void;
@@ -624,6 +803,7 @@ windowAny.loadAutomations = loadAutomations;
 windowAny.openAutomationModal = openAutomationModal;
 windowAny.updateTriggerOptions = updateTriggerOptions;
 windowAny.updateActionOptions = updateActionOptions;
+windowAny.toggleAutomationAllSessions = toggleAutomationAllSessions;
 windowAny.toggleAutomation = toggleAutomation;
 windowAny.saveAutomation = saveAutomation;
 windowAny.editAutomation = editAutomation;

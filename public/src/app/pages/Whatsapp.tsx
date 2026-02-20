@@ -8,6 +8,7 @@ type WhatsappGlobals = {
   requestPairingCode?: () => void;
   disconnect?: () => void;
   changeSession?: (sessionId: string) => void;
+  selectSessionFromList?: (sessionId: string) => void;
   createSessionPrompt?: () => void;
   toggleSidebar?: () => void;
   logout?: () => void;
@@ -228,11 +229,95 @@ export default function Whatsapp() {
         .whatsapp-react .session-controls .form-select {
             flex: 1;
             min-width: 200px;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #0f172a;
+            font-weight: 600;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        }
+        .whatsapp-react .session-controls .form-select option {
+            color: #0f172a;
+            background: #ffffff;
         }
         .whatsapp-react .session-controls .btn {
             width: auto;
             padding: 10px 14px;
             font-size: 13px;
+        }
+        .whatsapp-react .session-accounts-panel {
+            margin-bottom: 22px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: var(--lighter);
+            padding: 14px;
+        }
+        .whatsapp-react .session-accounts-panel h3 {
+            font-size: 14px;
+            color: var(--dark);
+            margin: 0 0 10px;
+            font-weight: 700;
+        }
+        .whatsapp-react .whatsapp-accounts-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+        }
+        .whatsapp-react .whatsapp-account-item {
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            background: #ffffff;
+            color: var(--dark);
+            padding: 10px 12px;
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        }
+        .whatsapp-react .whatsapp-account-item:hover {
+            border-color: rgba(23, 140, 73, 0.5);
+            box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+            transform: translateY(-1px);
+        }
+        .whatsapp-react .whatsapp-account-item.active {
+            border-color: rgba(23, 140, 73, 0.75);
+            box-shadow: 0 0 0 2px rgba(23, 140, 73, 0.18);
+        }
+        .whatsapp-react .whatsapp-account-item .top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+        .whatsapp-react .whatsapp-account-item .top-row strong {
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .whatsapp-react .whatsapp-account-item .status {
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 999px;
+            padding: 2px 8px;
+        }
+        .whatsapp-react .whatsapp-account-item .status.connected {
+            color: #166534;
+            background: rgba(16, 185, 129, 0.18);
+        }
+        .whatsapp-react .whatsapp-account-item .status.disconnected {
+            color: #7f1d1d;
+            background: rgba(239, 68, 68, 0.14);
+        }
+        .whatsapp-react .whatsapp-account-item .bottom-row {
+            font-size: 12px;
+            color: var(--gray);
+            line-height: 1.4;
+            word-break: break-word;
+        }
+        .whatsapp-react .whatsapp-account-item.empty {
+            border-style: dashed;
+            color: var(--gray);
+            text-align: center;
+            cursor: default;
+            background: #ffffff;
         }
 
         .whatsapp-react .card-body {
@@ -771,10 +856,13 @@ export default function Whatsapp() {
                               <select
                                   id="whatsapp-session-select"
                                   className="form-select"
-                                  defaultValue="self_whatsapp_session"
-                                  onChange={(event) => globals.changeSession?.((event.target as HTMLSelectElement).value)}
+                                  defaultValue=""
+                                  onChange={(event) => {
+                                    const value = (event.target as HTMLSelectElement).value;
+                                    if (value) globals.changeSession?.(value);
+                                  }}
                               >
-                                  <option value="self_whatsapp_session">self_whatsapp_session</option>
+                                  <option value="">Carregando contas...</option>
                               </select>
                               <button type="button" className="btn btn-outline" onClick={() => globals.createSessionPrompt?.()}>
                                   + Nova Conta
@@ -783,6 +871,12 @@ export default function Whatsapp() {
                       </div>
                       
                       <div className="card-body">
+                          <div className="session-accounts-panel">
+                              <h3>Contas Disponíveis</h3>
+                              <div className="whatsapp-accounts-list" id="whatsapp-accounts-list">
+                                  <div className="whatsapp-account-item empty">Carregando contas...</div>
+                              </div>
+                          </div>
                           <div id="disconnected-state">
                               <div className="qr-container">
                                   <div className="qr-wrapper">
