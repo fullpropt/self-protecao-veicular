@@ -97,6 +97,21 @@ export default function FlowBuilder() {
             margin-top: 6px;
         }
 
+        .flow-builder-react .header-title .flow-name-indicator {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(159, 176, 200, 0.32);
+            color: #c5d3e8;
+            background: rgba(15, 23, 42, 0.35);
+            font-size: 12px;
+            max-width: min(520px, 100%);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         .flow-builder-react .header-actions {
             display: flex;
             gap: 10px;
@@ -1149,6 +1164,7 @@ export default function FlowBuilder() {
                   <div className="header-title">
                       <h1><span className="icon icon-flows icon-sm"></span> Construtor de Fluxos</h1>
                       <p>Crie automações visuais para suas conversas</p>
+                      <span className="flow-name-indicator" id="currentFlowNameDisplay">Fluxo atual: Novo fluxo (não salvo)</span>
                   </div>
                   <div className="header-actions">
                       <button className="toolbar-btn secondary" onClick={() => globals.openFlowsModal?.()}>

@@ -361,6 +361,23 @@ function renderFlowStatusControls() {
     }
 }
 
+function renderCurrentFlowName() {
+    const flowNameDisplay = document.getElementById('currentFlowNameDisplay') as HTMLElement | null;
+    if (!flowNameDisplay) return;
+
+    const name = String(currentFlowName || '').trim();
+    if (name) {
+        flowNameDisplay.textContent = `Fluxo atual: ${name}`;
+        flowNameDisplay.title = name;
+        return;
+    }
+
+    flowNameDisplay.textContent = currentFlowId
+        ? 'Fluxo atual: Sem nome'
+        : 'Fluxo atual: Novo fluxo (não salvo)';
+    flowNameDisplay.title = '';
+}
+
 function updateFlowStatusFromSelect() {
     const statusSelect = document.getElementById('flowStatus') as HTMLSelectElement | null;
     if (!statusSelect) return;
@@ -406,6 +423,7 @@ function initFlowBuilder() {
     if (currentFlowId === null) {
         setCurrentFlowActive(true);
     }
+    renderCurrentFlowName();
     renderFlowVariableTags();
     loadFlowVariableFields();
     setupDragAndDrop();
@@ -470,18 +488,6 @@ function setupCanvasEvents() {
 
     if (canvas.dataset.flowCanvasEventsBound !== '1') {
         canvas.dataset.flowCanvasEventsBound = '1';
-    
-        canvas.addEventListener('click', (e) => {
-            const target = e.target as HTMLElement | null;
-            if (
-                target === canvas ||
-                target?.id === 'canvasContainer' ||
-                target?.id === 'connectionsSvg' ||
-                target?.classList.contains('connections-svg')
-            ) {
-                deselectNode();
-            }
-        });
 
         canvas.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
@@ -1450,6 +1456,7 @@ function resetEditorState() {
     if (connectionsSvg) connectionsSvg.innerHTML = '';
 
     renderFlowStatusControls();
+    renderCurrentFlowName();
     applyZoom();
 }
 
@@ -1562,6 +1569,7 @@ async function saveFlow() {
             currentFlowName = String(result.flow?.name || name).trim();
             persistLastOpenFlowId(currentFlowId);
             setCurrentFlowActive(result.flow?.is_active);
+            renderCurrentFlowName();
             alert('Fluxo salvo com sucesso!');
         } else {
             alert('Erro ao salvar: ' + result.error);
@@ -1679,6 +1687,7 @@ async function renameFlow(id: number, currentName = '', event?: Event) {
 
         if (Number(currentFlowId) === Number(id)) {
             currentFlowName = nextName;
+            renderCurrentFlowName();
         }
 
         await loadFlows();
@@ -1759,6 +1768,7 @@ async function duplicateFlow(id: number, event?: Event) {
         currentFlowId = null;
         currentFlowName = `${flow.name || 'Fluxo'} (copia)`;
         setCurrentFlowActive(flow?.is_active);
+        renderCurrentFlowName();
 
         nodes.forEach(node => renderNode(node));
         setTimeout(() => renderConnections(), 100);
@@ -1830,6 +1840,7 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
             edges = result.flow.edges || [];
             normalizeLoadedFlowData();
             setCurrentFlowActive(result.flow?.is_active);
+            renderCurrentFlowName();
             
             // Renderizar nós
             nodes.forEach(node => renderNode(node));
