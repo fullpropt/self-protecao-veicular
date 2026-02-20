@@ -739,8 +739,9 @@ async function selectConversation(id: number) {
     }
 
     // Carregar mensagens e dados completos do contato
+    const conversationSessionId = resolveConversationSessionId(currentConversation);
     await Promise.all([
-        loadMessages(currentConversation.leadId),
+        loadMessages(currentConversation.leadId, currentConversation.id, conversationSessionId),
         loadCurrentLeadDetails(currentConversation.leadId)
     ]);
 
@@ -753,9 +754,20 @@ async function selectConversation(id: number) {
     }
 }
 
-async function loadMessages(leadId: number) {
+async function loadMessages(leadId: number, conversationId?: number, sessionId?: string) {
     try {
-        const response: MessagesResponse = await api.get(`/api/messages/${leadId}`);
+        const params = new URLSearchParams();
+        const normalizedConversationId = Number(conversationId);
+        if (Number.isFinite(normalizedConversationId) && normalizedConversationId > 0) {
+            params.set('conversation_id', String(normalizedConversationId));
+        }
+        const normalizedSessionId = sanitizeSessionId(sessionId);
+        if (normalizedSessionId) {
+            params.set('session_id', normalizedSessionId);
+        }
+
+        const query = params.toString() ? `?${params.toString()}` : '';
+        const response: MessagesResponse = await api.get(`/api/messages/${leadId}${query}`);
         messages = (response.messages || []).map(m => ({
             ...m,
             direction: normalizeDirection(m),

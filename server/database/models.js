@@ -490,12 +490,20 @@ const Conversation = {
         return await queryOne('SELECT * FROM conversations WHERE id = ?', [id]);
     },
     
-    async findByLeadId(leadId) {
+    async findByLeadId(leadId, sessionId = null) {
+        const normalizedSessionId = String(sessionId || '').trim();
+        if (normalizedSessionId) {
+            return await queryOne(
+                'SELECT * FROM conversations WHERE lead_id = ? AND session_id = ? ORDER BY updated_at DESC LIMIT 1',
+                [leadId, normalizedSessionId]
+            );
+        }
         return await queryOne('SELECT * FROM conversations WHERE lead_id = ? ORDER BY updated_at DESC LIMIT 1', [leadId]);
     },
     
     async findOrCreate(data) {
-        let conversation = await this.findByLeadId(data.lead_id);
+        const normalizedSessionId = String(data.session_id || '').trim();
+        let conversation = await this.findByLeadId(data.lead_id, normalizedSessionId || null);
         
         if (conversation) {
             return { conversation, created: false };
