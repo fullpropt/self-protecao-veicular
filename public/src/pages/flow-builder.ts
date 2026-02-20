@@ -358,14 +358,6 @@ function renderFlowStatusControls() {
     if (statusSelect) {
         statusSelect.value = currentFlowIsActive ? '1' : '0';
     }
-
-    const toggleBtn = document.getElementById('flowStatusToggleBtn') as HTMLButtonElement | null;
-    if (toggleBtn) {
-        toggleBtn.textContent = currentFlowIsActive ? 'Desativar' : 'Ativar';
-        toggleBtn.classList.toggle('status-active', currentFlowIsActive);
-        toggleBtn.classList.toggle('status-inactive', !currentFlowIsActive);
-        toggleBtn.title = currentFlowIsActive ? 'Clique para desativar o fluxo' : 'Clique para ativar o fluxo';
-    }
 }
 
 function updateFlowStatusFromSelect() {
@@ -1611,21 +1603,21 @@ function renderFlowsList(flows: FlowSummary[]) {
 
     container.innerHTML = flows.map(flow => {
         const isActive = toBoolean(flow.is_active, true);
+        const isCurrent = Number(flow.id) === Number(currentFlowId);
         return `
-        <div class="flow-list-item" onclick="loadFlow(${flow.id})">
+        <div class="flow-list-item ${isCurrent ? 'is-current' : ''}" onclick="loadFlow(${flow.id})">
             <div class="icon icon-flows"></div>
             <div class="info">
                 <div class="name">${flow.name}</div>
-                <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | ${flow.nodes?.length || 0} blocos</div>
+                <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
             </div>
             <div class="flow-list-actions">
-                <button class="flow-list-toggle ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Desativar fluxo' : 'Ativar fluxo'}" onclick="toggleFlowActivation(${flow.id}, event)">
+                <button class="flow-list-btn flow-list-toggle ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Desativar fluxo' : 'Ativar fluxo'}" onclick="toggleFlowActivation(${flow.id}, event)">
                     ${isActive ? 'Desativar' : 'Ativar'}
                 </button>
-                <button class="flow-list-duplicate" title="Duplicar fluxo" onclick="duplicateFlow(${flow.id}, event)">Duplicar</button>
-                <button class="flow-list-delete" title="Descartar fluxo" onclick="discardFlow(${flow.id}, event)">Descartar</button>
+                <button class="flow-list-btn flow-list-duplicate" title="Duplicar fluxo" onclick="duplicateFlow(${flow.id}, event)">Duplicar</button>
+                <button class="flow-list-btn flow-list-delete" title="Descartar fluxo" onclick="discardFlow(${flow.id}, event)">Descartar</button>
             </div>
-            <span class="status ${isActive ? 'active' : 'inactive'}">${isActive ? 'Ativo' : 'Inativo'}</span>
         </div>
     `;
     }).join('');
@@ -1814,6 +1806,7 @@ function createNewFlow() {
 
 // Modal
 function openFlowsModal() {
+    renderFlowStatusControls();
     loadFlows();
     document.getElementById('flowsModal')?.classList.add('active');
 }
