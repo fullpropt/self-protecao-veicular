@@ -366,12 +366,16 @@ class FlowService extends EventEmitter {
 
         const messageText = String(execution?.triggerMessageText || execution?.variables?.trigger_message || '').trim();
         if (!messageText) return null;
+        const strictIntentRouting = isStrictFlowIntentRoutingEnabled() && isFlowIntentClassifierConfigured();
 
         const semanticDecision = await classifyIntentRoute(messageText, routes);
         if (semanticDecision?.status === 'selected' && semanticDecision.routeId) {
             return String(semanticDecision.routeId);
         }
         if (semanticDecision?.status === 'no_match') {
+            return null;
+        }
+        if (strictIntentRouting) {
             return null;
         }
 
