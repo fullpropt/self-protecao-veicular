@@ -256,6 +256,7 @@ export default function FlowBuilder() {
             height: 100%;
             transform-origin: 0 0;
             z-index: 2;
+            pointer-events: none;
         }
         
         .flow-node {
@@ -267,6 +268,11 @@ export default function FlowBuilder() {
             box-shadow: 0 4px 12px rgba(0,0,0,0.08);
             cursor: move;
             user-select: none;
+            pointer-events: auto;
+        }
+
+        .flow-node * {
+            pointer-events: auto;
         }
         
         .flow-node.selected {
@@ -401,20 +407,27 @@ export default function FlowBuilder() {
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: 3;
+            z-index: 1;
         }
         
         .connection-line {
             fill: none;
             stroke: var(--gray);
             stroke-width: 2;
-            pointer-events: stroke;
-            cursor: pointer;
+            pointer-events: none;
         }
         
-        .connection-line:hover {
+        .connection-line.is-hover {
             stroke: var(--danger);
             stroke-width: 3;
+        }
+
+        .connection-hit {
+            fill: none;
+            stroke: transparent;
+            stroke-width: 14;
+            pointer-events: stroke;
+            cursor: pointer;
         }
 
         .connection-line.connection-line-preview {

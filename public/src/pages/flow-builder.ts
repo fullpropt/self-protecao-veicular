@@ -181,6 +181,17 @@ function escapeHtml(value: string) {
         .replace(/'/g, '&#39;');
 }
 
+function clientToFlowCoords(clientX: number, clientY: number) {
+    const flowCanvas = document.getElementById('flowCanvas') as HTMLElement | null;
+    if (!flowCanvas) return { x: 0, y: 0 };
+
+    const rect = flowCanvas.getBoundingClientRect();
+    return {
+        x: (clientX - rect.left - pan.x) / zoom,
+        y: (clientY - rect.top - pan.y) / zoom
+    };
+}
+
 function getSessionToken() {
     return sessionStorage.getItem('selfDashboardToken');
 }
@@ -217,8 +228,9 @@ onReady(initFlowBuilder);
 // Configurar drag and drop dos nos
 function setupDragAndDrop() {
     const nodeItems = document.querySelectorAll('.node-item');
-    const canvas = document.getElementById('canvasContainer') as HTMLElement | null;
-    if (!canvas) return;
+    const flowCanvas = document.getElementById('flowCanvas') as HTMLElement | null;
+    const canvasContainer = document.getElementById('canvasContainer') as HTMLElement | null;
+    if (!flowCanvas) return;
     
     nodeItems.forEach(item => {
         item.addEventListener('dragstart', (e) => {
@@ -226,21 +238,31 @@ function setupDragAndDrop() {
             e.dataTransfer?.setData('nodeSubtype', item.dataset.subtype || '');
         });
     });
-    
-    canvas.addEventListener('dragover', (e) => {
+
+    const handleDragOver = (e: DragEvent) => {
         e.preventDefault();
-    });
-    
-    canvas.addEventListener('drop', (e) => {
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    };
+
+    const handleDrop = (e: DragEvent) => {
         e.preventDefault();
+        e.stopPropagation();
         const type = e.dataTransfer?.getData('nodeType') || '';
         const subtype = e.dataTransfer?.getData('nodeSubtype') || '';
-        
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / zoom;
-        const y = (e.clientY - rect.top) / zoom;
-        
+        if (!type) return;
+
+        const position = clientToFlowCoords(e.clientX, e.clientY);
+        const x = position.x;
+        const y = position.y;
+
         addNode(type as NodeType, subtype, x, y);
+    };
+
+    const dropTargets = [flowCanvas, canvasContainer].filter(Boolean) as HTMLElement[];
+    dropTargets.forEach((target) => {
+        target.addEventListener('dragenter', handleDragOver);
+        target.addEventListener('dragover', handleDragOver);
+        target.addEventListener('drop', handleDrop);
     });
 }
 
@@ -251,7 +273,12 @@ function setupCanvasEvents() {
     
     canvas.addEventListener('click', (e) => {
         const target = e.target as HTMLElement | null;
-        if (target === canvas || target?.id === 'canvasContainer') {
+        if (
+            target === canvas ||
+            target?.id === 'canvasContainer' ||
+            target?.id === 'connectionsSvg' ||
+            target?.classList.contains('connections-svg')
+        ) {
             deselectNode();
         }
     });
@@ -262,6 +289,8 @@ function setupCanvasEvents() {
         const isCanvasBackground =
             target === canvas ||
             target?.id === 'canvasContainer' ||
+            target?.id === 'connectionsSvg' ||
+            target?.classList.contains('connections-svg') ||
             target?.classList.contains('empty-canvas');
 
         if (!isCanvasBackground) return;
@@ -392,10 +421,10 @@ function renderNode(node: FlowNode) {
         
         isDragging = true;
         dragNode = node;
-        const rect = nodeEl.getBoundingClientRect();
+        const point = clientToFlowCoords(e.clientX, e.clientY);
         dragOffset = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
+            x: point.x - node.position.x,
+            y: point.y - node.position.y
         };
         selectNode(node.id);
     });
@@ -432,12 +461,9 @@ function handleDocumentMouseMove(e: MouseEvent) {
     }
 
     if (isDragging && dragNode) {
-        const canvas = document.getElementById('canvasContainer') as HTMLElement | null;
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-
-        dragNode.position.x = (e.clientX - rect.left - dragOffset.x) / zoom;
-        dragNode.position.y = (e.clientY - rect.top - dragOffset.y) / zoom;
+        const point = clientToFlowCoords(e.clientX, e.clientY);
+        dragNode.position.x = point.x - dragOffset.x;
+        dragNode.position.y = point.y - dragOffset.y;
 
         const nodeEl = document.getElementById(dragNode.id) as HTMLElement | null;
         if (nodeEl) {
@@ -953,24 +979,38 @@ function renderConnections() {
 
         const sourcePoint = getPortCenter(sourcePort, svg);
         const targetPoint = getPortCenter(targetPort, svg);
+        const pathData = buildConnectionPath(sourcePoint.x, sourcePoint.y, targetPoint.x, targetPoint.y);
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', buildConnectionPath(sourcePoint.x, sourcePoint.y, targetPoint.x, targetPoint.y));
+        path.setAttribute('d', pathData);
         path.setAttribute('class', 'connection-line');
-        path.setAttribute('data-source', edge.source);
-        path.setAttribute('data-target', edge.target);
+
+        const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        hitPath.setAttribute('d', pathData);
+        hitPath.setAttribute('class', 'connection-hit');
+        hitPath.setAttribute('data-source', edge.source);
+        hitPath.setAttribute('data-target', edge.target);
 
         const removeConnection = () => {
             edges = edges.filter((item) => !isSameEdge(item, edge));
             renderConnections();
         };
 
-        path.addEventListener('click', (event) => {
+        hitPath.addEventListener('mouseenter', () => {
+            path.classList.add('is-hover');
+        });
+
+        hitPath.addEventListener('mouseleave', () => {
+            path.classList.remove('is-hover');
+        });
+
+        hitPath.addEventListener('click', (event) => {
             event.stopPropagation();
             removeConnection();
         });
 
         svg.appendChild(path);
+        svg.appendChild(hitPath);
     });
 
     if (isConnecting && connectionPreviewPath && connectionStartPort) {
