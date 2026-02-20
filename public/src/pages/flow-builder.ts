@@ -1836,7 +1836,7 @@ function renderFlowsList(flows: FlowSummary[]) {
         const encodedName = encodeURIComponent(flowName);
         const inputValue = escapeHtml(renamingFlowDraft);
         return `
-        <div class="flow-list-item ${isCurrent ? 'is-current' : ''}" onclick="loadFlow(${flow.id})">
+        <div class="flow-list-item ${isCurrent ? 'is-current' : ''} ${isRenaming ? 'is-renaming' : ''}" onclick="loadFlow(${flow.id})">
             <div class="icon icon-flows"></div>
             <div class="info">
                 ${isRenaming

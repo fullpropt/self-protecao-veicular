@@ -983,6 +983,7 @@ export default function FlowBuilder() {
             padding: 20px;
             max-height: 60vh;
             overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .modal-footer {
@@ -994,9 +995,11 @@ export default function FlowBuilder() {
         }
         
         .flow-list-item {
-            display: flex;
+            display: grid;
+            grid-template-columns: 42px minmax(0, 1fr) auto;
             align-items: center;
-            gap: 15px;
+            column-gap: 15px;
+            row-gap: 10px;
             padding: 15px;
             border: 1px solid rgba(148, 163, 184, 0.26);
             border-radius: 12px;
@@ -1004,6 +1007,9 @@ export default function FlowBuilder() {
             cursor: pointer;
             transition: all 0.2s;
             background: rgba(15, 23, 42, 0.4);
+            min-width: 0;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         .flow-list-item:hover {
@@ -1019,6 +1025,16 @@ export default function FlowBuilder() {
                 rgba(var(--primary-rgb), 0.14) 0%,
                 rgba(15, 23, 42, 0.34) 100%
             );
+        }
+
+        .flow-list-item.is-renaming {
+            grid-template-columns: 42px minmax(0, 1fr);
+            align-items: start;
+        }
+
+        .flow-list-item.is-renaming .flow-list-actions {
+            grid-column: 2;
+            justify-self: end;
         }
         
         .flow-list-item .icon {
@@ -1036,6 +1052,8 @@ export default function FlowBuilder() {
         
         .flow-list-item .info {
             flex: 1;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .flow-list-item .name-row {
@@ -1043,17 +1061,23 @@ export default function FlowBuilder() {
             align-items: center;
             gap: 6px;
             min-width: 0;
+            width: 100%;
+            overflow: hidden;
         }
 
         .flow-list-item .name-row.name-row-editing {
             width: 100%;
             gap: 8px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
         }
         
         .flow-list-item .name {
             font-weight: 600;
             color: #e7edf7;
             margin-bottom: 4px;
+            flex: 1 1 auto;
             min-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -1062,7 +1086,9 @@ export default function FlowBuilder() {
 
         .flow-inline-name-input {
             flex: 1;
-            min-width: 160px;
+            min-width: 0;
+            width: 100%;
+            max-width: 100%;
             height: 30px;
             border: 1px solid rgba(100, 116, 139, 0.38);
             border-radius: 8px;
@@ -1083,6 +1109,7 @@ export default function FlowBuilder() {
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            flex-shrink: 0;
         }
 
         .flow-inline-icon {
@@ -1128,13 +1155,21 @@ export default function FlowBuilder() {
         .flow-list-item .meta {
             font-size: 12px;
             color: #9fb0c8;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .flow-list-actions {
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-left: 10px;
+            margin-left: 0;
+            justify-self: end;
+            flex-shrink: 0;
+            min-width: 0;
+            max-width: 100%;
         }
 
         .flow-list-btn {
@@ -1257,11 +1292,17 @@ export default function FlowBuilder() {
                 padding: 3px 8px;
             }
             .flow-list-item {
-                flex-wrap: wrap;
+                grid-template-columns: 42px minmax(0, 1fr);
                 gap: 10px;
             }
             .flow-list-actions {
-                margin-left: 0;
+                grid-column: 1 / -1;
+                width: 100%;
+                justify-content: flex-end;
+                justify-self: stretch;
+            }
+            .flow-list-item.is-renaming .flow-list-actions {
+                grid-column: 1 / -1;
             }
             .flow-container {
                 grid-template-columns: 1fr;
