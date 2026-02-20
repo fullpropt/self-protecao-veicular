@@ -8,7 +8,7 @@ type Campaign = {
     name: string;
     description?: string;
     type: CampaignType;
-    distribution_strategy?: 'single' | 'round_robin' | 'weighted_round_robin';
+    distribution_strategy?: 'single' | 'round_robin' | 'weighted_round_robin' | 'random';
     distribution_config?: Record<string, unknown> | null;
     sender_accounts?: CampaignSenderAccount[];
     status: CampaignStatus;
@@ -252,6 +252,7 @@ function getDistributionStrategyLabel(strategy?: string) {
     const normalized = String(strategy || 'single').toLowerCase();
     if (normalized === 'round_robin') return 'Round-robin';
     if (normalized === 'weighted_round_robin') return 'Round-robin por peso';
+    if (normalized === 'random') return 'Aleatório';
     return 'Conta única';
 }
 
@@ -751,8 +752,10 @@ function renderCampaigns() {
 
 async function saveCampaign(statusOverride?: CampaignStatus) {
     const campaignId = getCampaignId();
-    const statusFromSelect = ((document.getElementById('campaignStatus') as HTMLSelectElement | null)?.value || '') as CampaignStatus;
-    const status = campaignId ? (statusFromSelect || statusOverride || 'draft') : (statusOverride || statusFromSelect || 'draft');
+    const existingStatus = campaignId
+        ? (campaigns.find((campaign) => campaign.id === campaignId)?.status || 'draft')
+        : 'draft';
+    const status = statusOverride || existingStatus || 'draft';
     const minSeconds = parseInt((document.getElementById('campaignDelayMin') as HTMLInputElement | null)?.value || String(DEFAULT_DELAY_MIN_SECONDS), 10);
     const maxSeconds = parseInt((document.getElementById('campaignDelayMax') as HTMLInputElement | null)?.value || String(DEFAULT_DELAY_MAX_SECONDS), 10);
 
@@ -904,7 +907,6 @@ function editCampaign(id: number) {
         document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null,
         String(campaign.distribution_strategy || 'single')
     );
-    setSelectValue(document.getElementById('campaignStatus') as HTMLSelectElement | null, campaign.status || 'draft');
     setSelectValue(document.getElementById('campaignSegment') as HTMLSelectElement | null, campaign.segment || 'all');
     const tagFilterInput = document.getElementById('campaignTagFilter') as HTMLSelectElement | null;
     if (tagFilterInput) setSelectValue(tagFilterInput, campaign.tag_filter || '');

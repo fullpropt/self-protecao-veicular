@@ -360,14 +360,7 @@ export default function Campanhas() {
                                       <option value="single">Conta única</option>
                                       <option value="round_robin">Round-robin</option>
                                       <option value="weighted_round_robin">Round-robin por peso</option>
-                                  </select>
-                              </div>
-                              <div className="form-group">
-                                  <label className="form-label">Status</label>
-                                  <select className="form-select" id="campaignStatus">
-                                      <option value="draft">Rascunho</option>
-                                      <option value="active">Ativa</option>
-                                      <option value="paused">Pausada</option>
+                                      <option value="random">Aleatório</option>
                                   </select>
                               </div>
                           </div>

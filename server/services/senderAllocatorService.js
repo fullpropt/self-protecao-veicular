@@ -1,6 +1,6 @@
 /**
  * Alocador de conta de envio WhatsApp para campanhas/transmissoes.
- * Estratégias suportadas: single, round_robin, weighted_round_robin.
+ * Estratégias suportadas: single, round_robin, weighted_round_robin, random.
  */
 
 const { query } = require('../database/connection');
@@ -47,6 +47,9 @@ class SenderAllocatorService {
             normalized === 'weighted_rr'
         ) {
             return 'weighted_round_robin';
+        }
+        if (normalized === 'random' || normalized === 'aleatorio' || normalized === 'aleatório') {
+            return 'random';
         }
         return fallback;
     }
@@ -279,6 +282,20 @@ class SenderAllocatorService {
         return -1;
     }
 
+    pickRandomAvailableStateIndex(states) {
+        const availableIndexes = [];
+        for (let index = 0; index < states.length; index++) {
+            const state = states[index];
+            if (!state) continue;
+            if (state.remaining <= 0) continue;
+            availableIndexes.push(index);
+        }
+
+        if (!availableIndexes.length) return -1;
+        const randomPos = Math.floor(Math.random() * availableIndexes.length);
+        return availableIndexes[randomPos];
+    }
+
     async resolvePool(options = {}) {
         const campaignId = Number(options.campaignId);
         let senderAccounts = this.normalizeSenderAccounts(options.senderAccounts || []);
@@ -475,6 +492,17 @@ class SenderAllocatorService {
                     throw new Error('Limite diário da conta de envio foi atingido durante a alocação');
                 }
                 assignLead(leadId, state);
+            }
+            return { strategyUsed, assignmentsByLead, assignmentMetaByLead, summary };
+        }
+
+        if (strategyUsed === 'random') {
+            for (const leadId of uniqueLeadIds) {
+                const selectedIndex = this.pickRandomAvailableStateIndex(states);
+                if (selectedIndex < 0) {
+                    throw new Error('Capacidade diária de envio esgotada para as contas selecionadas');
+                }
+                assignLead(leadId, states[selectedIndex]);
             }
             return { strategyUsed, assignmentsByLead, assignmentMetaByLead, summary };
         }
