@@ -331,8 +331,8 @@ export default function FlowBuilder() {
         .flow-node-header .duplicate-btn,
         .flow-node-header .collapse-btn,
         .flow-node-header .delete-btn {
-            background: none;
-            border: none;
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(100, 116, 139, 0.32);
             color: var(--gray);
             cursor: pointer;
             padding: 4px 6px;
@@ -340,17 +340,19 @@ export default function FlowBuilder() {
             transition: all 0.2s;
             font-weight: 700;
             line-height: 1;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
         }
 
         .flow-node-header .collapse-btn {
             opacity: 0.75;
             min-width: 24px;
+            font-size: 13px;
         }
 
         .flow-node-header .duplicate-btn {
             opacity: 0.75;
-            min-width: 30px;
-            font-size: 11px;
+            min-width: 52px;
+            font-size: 10px;
             font-weight: 600;
         }
 
@@ -364,10 +366,12 @@ export default function FlowBuilder() {
         
         .flow-node-header .delete-btn {
             opacity: 0;
+            min-width: 24px;
         }
 
         .flow-node-header .duplicate-btn:hover {
             background: rgba(16, 185, 129, 0.14);
+            border-color: rgba(16, 185, 129, 0.4);
             color: var(--success);
         }
 
@@ -377,11 +381,13 @@ export default function FlowBuilder() {
 
         .flow-node-header .collapse-btn:hover {
             background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.38);
             color: var(--info);
         }
         
         .flow-node-header .delete-btn:hover {
             background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.36);
             color: var(--danger);
         }
         

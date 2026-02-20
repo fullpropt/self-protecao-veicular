@@ -503,9 +503,9 @@ function renderNode(node: FlowNode) {
                 <span class="node-kind">${escapeHtml(getNodeTypeLabel(node))}</span>
                 <span class="title">${escapeHtml(String(node.data.label || '').trim() || getNodeTypeLabel(node))}</span>
             </div>
-            <button class="duplicate-btn" title="Duplicar bloco" onclick="duplicateNode('${node.id}', event)">Dup</button>
+            <button class="duplicate-btn" title="Duplicar bloco" onclick="duplicateNode('${node.id}', event)">Copiar</button>
             <button class="collapse-btn" title="${isCollapsed ? 'Expandir bloco' : 'Recolher bloco'}" onclick="toggleNodeCollapsed('${node.id}', event)">
-                ${isCollapsed ? '+' : '-'}
+                ${isCollapsed ? '▸' : '▾'}
             </button>
             <button class="delete-btn" onclick="deleteNode('${node.id}')">&times;</button>
         </div>
