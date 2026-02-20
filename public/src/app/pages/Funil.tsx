@@ -48,39 +48,79 @@ export default function Funil() {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 40px 20px;
-            background: var(--surface);
+            width: min(100%, 760px);
+            margin: 0 auto 24px;
+            padding: 20px 16px 16px;
+            background: linear-gradient(
+                180deg,
+                rgba(var(--primary-rgb), 0.08) 0%,
+                rgba(15, 23, 42, 0.14) 100%
+            );
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-md);
-            margin-bottom: 30px;
+            gap: 8px;
         }
         .funnel-stage-visual {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
-            margin: 5px 0;
-            color: white;
+            width: 100%;
+            min-height: 64px;
+            padding: 10px 14px;
+            margin: 0;
+            color: var(--dark);
             font-weight: 600;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
             position: relative;
+            border: 1px solid rgba(var(--primary-rgb), 0.22);
+            background: rgba(15, 23, 42, 0.18);
         }
-        .funnel-stage-visual:hover { transform: scale(1.02); }
-        .funnel-stage-visual:nth-child(1) { width: 100%; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 10px 10px 0 0; }
-        .funnel-stage-visual:nth-child(2) { width: 85%; background: linear-gradient(135deg, #f093fb, #f5576c); }
-        .funnel-stage-visual:nth-child(3) { width: 70%; background: linear-gradient(135deg, #4facfe, #00f2fe); }
-        .funnel-stage-visual:nth-child(4) { width: 55%; background: linear-gradient(135deg, #43e97b, #38f9d7); border-radius: 0 0 10px 10px; }
+        .funnel-stage-visual:hover {
+            transform: translateY(-1px);
+            border-color: rgba(var(--primary-rgb), 0.45);
+            background: rgba(var(--primary-rgb), 0.08);
+        }
+        .funnel-stage-visual:nth-child(1) {
+            width: 100%;
+            border-radius: 10px 10px 4px 4px;
+            background: rgba(var(--primary-rgb), 0.16);
+        }
+        .funnel-stage-visual:nth-child(2) {
+            width: 92%;
+            background: rgba(var(--primary-rgb), 0.12);
+        }
+        .funnel-stage-visual:nth-child(3) {
+            width: 84%;
+            background: rgba(var(--primary-rgb), 0.09);
+        }
+        .funnel-stage-visual:nth-child(4) {
+            width: 76%;
+            border-radius: 4px 4px 10px 10px;
+            background: rgba(var(--primary-rgb), 0.06);
+        }
         .funnel-stage-info {
             display: flex;
             flex-direction: column;
             align-items: center;
         }
-        .funnel-stage-count { font-size: 28px; font-weight: 800; }
-        .funnel-stage-name { font-size: 14px; opacity: 0.9; }
-        .funnel-stage-percent { font-size: 12px; opacity: 0.8; margin-top: 5px; }
+        .funnel-stage-count {
+            font-size: 22px;
+            font-weight: 800;
+            line-height: 1;
+        }
+        .funnel-stage-name {
+            font-size: 13px;
+            color: var(--gray-800);
+            margin-top: 4px;
+        }
+        .funnel-stage-percent {
+            font-size: 11px;
+            color: var(--gray-600);
+            margin-top: 2px;
+        }
         .kanban-container {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -93,9 +133,25 @@ export default function Funil() {
         }
         @media (max-width: 768px) {
             .kanban-container { grid-template-columns: 1fr; }
+            .funnel-visual {
+                width: 100%;
+                padding: 14px 10px 12px;
+            }
+            .funnel-stage-visual {
+                min-height: 56px;
+                padding: 8px 10px;
+            }
+            .funnel-stage-visual:nth-child(1) { width: 100%; }
+            .funnel-stage-visual:nth-child(2) { width: 95%; }
+            .funnel-stage-visual:nth-child(3) { width: 90%; }
+            .funnel-stage-visual:nth-child(4) { width: 85%; }
+            .funnel-stage-count { font-size: 18px; }
+            .funnel-stage-name { font-size: 12px; }
+            .funnel-stage-percent { font-size: 10px; }
         }
         .kanban-column {
-            background: var(--gray-100);
+            background: var(--surface);
+            border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             min-height: 400px;
         }
@@ -105,11 +161,12 @@ export default function Funil() {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: rgba(var(--primary-rgb), 0.06);
         }
-        .kanban-header.stage-1 { border-color: #667eea; }
-        .kanban-header.stage-2 { border-color: #f5576c; }
-        .kanban-header.stage-3 { border-color: #4facfe; }
-        .kanban-header.stage-4 { border-color: #43e97b; }
+        .kanban-header.stage-1 { border-color: rgba(var(--primary-rgb), 0.9); }
+        .kanban-header.stage-2 { border-color: rgba(var(--primary-rgb), 0.72); }
+        .kanban-header.stage-3 { border-color: rgba(var(--primary-rgb), 0.56); }
+        .kanban-header.stage-4 { border-color: rgba(var(--primary-rgb), 0.38); }
         .kanban-title { font-weight: 700; font-size: 14px; }
         .kanban-count {
             background: var(--gray-200);
@@ -163,9 +220,10 @@ export default function Funil() {
             margin-bottom: 10px;
         }
         .stage-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 5px;
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
         }
         .stage-item-info { flex: 1; }
       `}</style>
@@ -305,28 +363,28 @@ export default function Funil() {
                       
                       <div id="stagesConfig">
                           <div className="stage-item">
-                              <div className="stage-color" style={{ background: '#667eea' }}></div>
+                              <div className="stage-color" style={{ background: 'rgba(var(--primary-rgb), 0.95)' }}></div>
                               <div className="stage-item-info">
                                   <input type="text" className="form-input" value="Novo" id="stage1Name" />
                                   <input type="text" className="form-input mt-2" value="Lead recém cadastrado" id="stage1Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
-                              <div className="stage-color" style={{ background: '#f5576c' }}></div>
+                              <div className="stage-color" style={{ background: 'rgba(var(--primary-rgb), 0.75)' }}></div>
                               <div className="stage-item-info">
                                   <input type="text" className="form-input" value="Em Andamento" id="stage2Name" />
                                   <input type="text" className="form-input mt-2" value="Em negociação" id="stage2Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
-                              <div className="stage-color" style={{ background: '#4facfe' }}></div>
+                              <div className="stage-color" style={{ background: 'rgba(var(--primary-rgb), 0.55)' }}></div>
                               <div className="stage-item-info">
                                   <input type="text" className="form-input" value="Concluído" id="stage3Name" />
                                   <input type="text" className="form-input mt-2" value="Venda realizada" id="stage3Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
-                              <div className="stage-color" style={{ background: '#43e97b' }}></div>
+                              <div className="stage-color" style={{ background: 'rgba(var(--primary-rgb), 0.35)' }}></div>
                               <div className="stage-item-info">
                                   <input type="text" className="form-input" value="Perdido" id="stage4Name" />
                                   <input type="text" className="form-input mt-2" value="Não converteu" id="stage4Desc" placeholder="Descrição" />
