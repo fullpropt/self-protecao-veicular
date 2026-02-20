@@ -231,6 +231,15 @@ class FlowService extends EventEmitter {
                     break;
                     
                 case 'message':
+                    // Aguardar delay opcional do bloco de mensagem (0 = imediato)
+                    const messageDelaySecondsRaw = Number(node?.data?.delaySeconds);
+                    const messageDelaySeconds = Number.isFinite(messageDelaySecondsRaw)
+                        ? Math.max(0, messageDelaySecondsRaw)
+                        : 0;
+                    if (messageDelaySeconds > 0) {
+                        await this.delay(messageDelaySeconds * 1000);
+                    }
+
                     // Enviar mensagem
                     const content = this.replaceVariables(node.data.content, execution.variables);
                     
@@ -244,8 +253,7 @@ class FlowService extends EventEmitter {
                         });
                     }
                     
-                    // Aguardar um pouco e ir para próximo
-                    await this.delay(1500);
+                    // Ir para o proximo no
                     await this.goToNextNode(execution, node);
                     break;
                     
@@ -593,6 +601,7 @@ class FlowService extends EventEmitter {
 
 module.exports = new FlowService();
 module.exports.FlowService = FlowService;
+
 
 
 

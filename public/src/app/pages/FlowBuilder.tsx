@@ -301,27 +301,83 @@ export default function FlowBuilder() {
         .flow-node-header .icon {
             font-size: 18px;
         }
-        
-        .flow-node-header .title {
+
+        .flow-node-header .title-group {
             flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .flow-node-header .node-kind {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--gray);
+            line-height: 1.1;
+        }
+
+        .flow-node-header .title {
             font-weight: 600;
             font-size: 13px;
             color: var(--dark);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
         }
-        
+
+        .flow-node-header .duplicate-btn,
+        .flow-node-header .collapse-btn,
         .flow-node-header .delete-btn {
             background: none;
             border: none;
             color: var(--gray);
             cursor: pointer;
-            padding: 4px;
+            padding: 4px 6px;
             border-radius: 4px;
-            opacity: 0;
             transition: all 0.2s;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .flow-node-header .collapse-btn {
+            opacity: 0.75;
+            min-width: 24px;
+        }
+
+        .flow-node-header .duplicate-btn {
+            opacity: 0.75;
+            min-width: 30px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .flow-node:hover .collapse-btn {
+            opacity: 1;
+        }
+
+        .flow-node:hover .duplicate-btn {
+            opacity: 1;
         }
         
+        .flow-node-header .delete-btn {
+            opacity: 0;
+        }
+
+        .flow-node-header .duplicate-btn:hover {
+            background: rgba(16, 185, 129, 0.14);
+            color: var(--success);
+        }
+
         .flow-node:hover .delete-btn {
             opacity: 1;
+        }
+
+        .flow-node-header .collapse-btn:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--info);
         }
         
         .flow-node-header .delete-btn:hover {
@@ -345,6 +401,20 @@ export default function FlowBuilder() {
             gap: 8px;
             padding: 8px 14px;
             border-top: 1px solid var(--border);
+        }
+
+        .flow-node.is-collapsed .flow-node-body {
+            display: none;
+        }
+
+        .flow-node.is-collapsed .flow-node-ports {
+            padding-top: 6px;
+            padding-bottom: 6px;
+            gap: 4px;
+        }
+
+        .flow-node.is-collapsed .node-output-label {
+            display: none;
         }
 
         .node-output-ports {
@@ -1099,11 +1169,10 @@ export default function FlowBuilder() {
                       
                       <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
                           <h4 style={{ fontSize: '13px', color: 'var(--gray)', marginBottom: '10px' }}>Variáveis Disponíveis</h4>
-                          <div className="variables-list">
+                          <div className="variables-list" id="flowVariablesList">
                               <span className="variable-tag" onClick={() => globals.insertVariable?.('nome')}>{'{{nome}}'}</span>
                               <span className="variable-tag" onClick={() => globals.insertVariable?.('telefone')}>{'{{telefone}}'}</span>
-                              <span className="variable-tag" onClick={() => globals.insertVariable?.('veiculo')}>{'{{veiculo}}'}</span>
-                              <span className="variable-tag" onClick={() => globals.insertVariable?.('placa')}>{'{{placa}}'}</span>
+                              <span className="variable-tag" onClick={() => globals.insertVariable?.('email')}>{'{{email}}'}</span>
                           </div>
                       </div>
                   </div>

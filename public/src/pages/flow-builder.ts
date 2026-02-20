@@ -4,9 +4,11 @@
 type NodeType = 'trigger' | 'intent' | 'message' | 'wait' | 'condition' | 'delay' | 'transfer' | 'tag' | 'status' | 'webhook' | 'end';
 type NodeData = {
     label: string;
+    collapsed?: boolean;
     keyword?: string;
     intentRoutes?: Array<{ id: string; label: string; phrases: string }>;
     content?: string;
+    delaySeconds?: number;
     timeout?: number;
     conditions?: Array<{ value: string; next?: string }>;
     seconds?: number;
@@ -40,6 +42,15 @@ type FlowSummary = {
     is_active?: boolean;
 };
 
+type ContactField = {
+    key: string;
+    label: string;
+    placeholder?: string;
+    is_default?: boolean;
+    required?: boolean;
+    source?: string;
+};
+
 let nodes: FlowNode[] = [];
 let edges: Edge[] = [];
 let selectedNode: FlowNode | null = null;
@@ -58,8 +69,14 @@ let connectionStartPort: HTMLElement | null = null;
 let connectionPreviewPath: SVGPathElement | null = null;
 let lastPointer = { x: 0, y: 0 };
 let hasInitialized = false;
+let contactFieldsCache: ContactField[] = [];
 
 const DEFAULT_HANDLE = 'default';
+const DEFAULT_CONTACT_FIELDS: ContactField[] = [
+    { key: 'nome', label: 'Nome', source: 'name', is_default: true, required: true, placeholder: 'Nome completo' },
+    { key: 'telefone', label: 'Telefone', source: 'phone', is_default: true, required: true, placeholder: 'Somente números com DDD' },
+    { key: 'email', label: 'Email', source: 'email', is_default: true, required: false, placeholder: 'email@exemplo.com' }
+];
 
 function isIntentTrigger(node?: FlowNode | null) {
     if (!node) return false;
@@ -181,6 +198,97 @@ function escapeHtml(value: string) {
         .replace(/'/g, '&#39;');
 }
 
+function normalizeContactFieldKey(value: string) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40);
+}
+
+function normalizeContactFieldLabel(value: string) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+function sanitizeContactFields(fields: ContactField[]) {
+    const dedupe = new Set<string>();
+    const result: ContactField[] = [];
+
+    for (const field of fields || []) {
+        const key = normalizeContactFieldKey(field?.key || '');
+        const label = normalizeContactFieldLabel(field?.label || field?.key || '');
+        if (!key || !label || key === '__system') continue;
+        if (dedupe.has(key)) continue;
+        dedupe.add(key);
+        result.push({
+            key,
+            label,
+            placeholder: String(field?.placeholder || '').trim(),
+            is_default: Boolean(field?.is_default),
+            required: Boolean(field?.required),
+            source: String(field?.source || '')
+        });
+    }
+
+    return result;
+}
+
+function getAvailableContactFields() {
+    return contactFieldsCache.length ? contactFieldsCache : DEFAULT_CONTACT_FIELDS;
+}
+
+function renderFlowVariableTags() {
+    const container = document.getElementById('flowVariablesList') as HTMLElement | null;
+    if (!container) return;
+
+    const fields = getAvailableContactFields();
+    container.innerHTML = fields
+        .map((field) => `
+            <span class="variable-tag" title="${escapeHtml(field.label)}" onclick="insertVariable('${escapeHtml(field.key)}')">{{${escapeHtml(field.key)}}}</span>
+        `)
+        .join('');
+}
+
+async function loadFlowVariableFields() {
+    try {
+        const response = await fetch('/api/contact-fields', {
+            headers: buildAuthHeaders(false)
+        });
+        const result = await response.json();
+        const fields = sanitizeContactFields(Array.isArray(result?.fields) ? result.fields : []);
+        contactFieldsCache = fields.length ? fields : [...DEFAULT_CONTACT_FIELDS];
+    } catch (error) {
+        contactFieldsCache = [...DEFAULT_CONTACT_FIELDS];
+    }
+
+    renderFlowVariableTags();
+}
+
+function getNodeTypeLabel(node: FlowNode) {
+    if (node.type === 'trigger') {
+        if (isIntentTrigger(node)) return 'Intenção';
+        return 'Novo Contato';
+    }
+
+    const labels: Record<NodeType, string> = {
+        trigger: 'Gatilho',
+        intent: 'Intenção',
+        message: 'Enviar Mensagem',
+        wait: 'Aguardar Resposta',
+        condition: 'Condição',
+        delay: 'Delay',
+        transfer: 'Transferir',
+        tag: 'Adicionar Tag',
+        status: 'Alterar Status',
+        webhook: 'Webhook',
+        end: 'Finalizar'
+    };
+
+    return labels[node.type] || 'Bloco';
+}
+
 function clientToFlowCoords(clientX: number, clientY: number) {
     const flowCanvas = document.getElementById('flowCanvas') as HTMLElement | null;
     if (!flowCanvas) return { x: 0, y: 0 };
@@ -217,6 +325,8 @@ function initFlowBuilder() {
     if (hasInitialized) return;
     hasInitialized = true;
 
+    renderFlowVariableTags();
+    loadFlowVariableFields();
     setupDragAndDrop();
     setupCanvasEvents();
     applyZoom();
@@ -329,17 +439,17 @@ function addNode(type: NodeType, subtype: string, x: number, y: number) {
 // Dados padrao do no
 function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
     const defaults = {
-        trigger: { label: subtype === 'keyword' || subtype === 'intent' ? 'Intenção' : 'Novo Contato', keyword: '', intentRoutes: [] },
-        intent: { label: 'Intenção', keyword: '', intentRoutes: [] },
-        message: { label: 'Mensagem', content: 'Olá! Como posso ajudar?' },
-        wait: { label: 'Aguardar Resposta', timeout: 300 },
-        condition: { label: 'Condição', conditions: [] },
-        delay: { label: 'Delay', seconds: 5 },
-        transfer: { label: 'Transferir', message: 'Transferindo para um atendente...' },
-        tag: { label: 'Adicionar Tag', tag: '' },
-        status: { label: 'Alterar Status', status: 2 },
-        webhook: { label: 'Webhook', url: '' },
-        end: { label: 'Fim' }
+        trigger: { label: subtype === 'keyword' || subtype === 'intent' ? 'Intenção' : 'Novo Contato', collapsed: false, keyword: '', intentRoutes: [] },
+        intent: { label: 'Intenção', collapsed: false, keyword: '', intentRoutes: [] },
+        message: { label: 'Mensagem', collapsed: false, content: 'Olá! Como posso ajudar?', delaySeconds: 0 },
+        wait: { label: 'Aguardar Resposta', collapsed: false, timeout: 300 },
+        condition: { label: 'Condição', collapsed: false, conditions: [] },
+        delay: { label: 'Delay', collapsed: false, seconds: 5 },
+        transfer: { label: 'Transferir', collapsed: false, message: 'Transferindo para um atendente...' },
+        tag: { label: 'Adicionar Tag', collapsed: false, tag: '' },
+        status: { label: 'Alterar Status', collapsed: false, status: 2 },
+        webhook: { label: 'Webhook', collapsed: false, url: '' },
+        end: { label: 'Fim', collapsed: false }
     };
     return defaults[type] || { label: type };
 }
@@ -366,7 +476,8 @@ function renderNode(node: FlowNode) {
     if (!container) return;
     
     const nodeEl = document.createElement('div');
-    nodeEl.className = 'flow-node';
+    const isCollapsed = Boolean(node.data?.collapsed);
+    nodeEl.className = `flow-node${isCollapsed ? ' is-collapsed' : ''}`;
     nodeEl.id = node.id;
     nodeEl.style.left = node.position.x + 'px';
     nodeEl.style.top = node.position.y + 'px';
@@ -388,11 +499,18 @@ function renderNode(node: FlowNode) {
     nodeEl.innerHTML = `
         <div class="flow-node-header ${node.type}">
             <span class="icon ${icons[node.type] || 'icon-empty'}"></span>
-            <span class="title">${node.data.label}</span>
+            <div class="title-group">
+                <span class="node-kind">${escapeHtml(getNodeTypeLabel(node))}</span>
+                <span class="title">${escapeHtml(String(node.data.label || '').trim() || getNodeTypeLabel(node))}</span>
+            </div>
+            <button class="duplicate-btn" title="Duplicar bloco" onclick="duplicateNode('${node.id}', event)">Dup</button>
+            <button class="collapse-btn" title="${isCollapsed ? 'Expandir bloco' : 'Recolher bloco'}" onclick="toggleNodeCollapsed('${node.id}', event)">
+                ${isCollapsed ? '+' : '-'}
+            </button>
             <button class="delete-btn" onclick="deleteNode('${node.id}')">&times;</button>
         </div>
         <div class="flow-node-body">
-            ${getNodePreview(node)}
+            ${escapeHtml(getNodePreview(node))}
         </div>
         <div class="flow-node-ports">
             ${node.type !== 'trigger' ? '<div class="port input" data-port="input" data-handle="default"></div>' : '<div></div>'}
@@ -417,7 +535,11 @@ function renderNode(node: FlowNode) {
             );
             return;
         }
-        if (target?.classList.contains('delete-btn')) return;
+        if (
+            target?.classList.contains('delete-btn')
+            || target?.classList.contains('collapse-btn')
+            || target?.classList.contains('duplicate-btn')
+        ) return;
         
         isDragging = true;
         dragNode = node;
@@ -572,6 +694,34 @@ function deleteNode(id: string) {
     }
 }
 
+function duplicateNode(id: string, event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    const sourceNode = nodes.find((node) => node.id === id);
+    if (!sourceNode) return;
+
+    const duplicate: FlowNode = {
+        id: `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        type: sourceNode.type,
+        subtype: sourceNode.subtype,
+        position: {
+            x: sourceNode.position.x + 36,
+            y: sourceNode.position.y + 36
+        },
+        data: JSON.parse(JSON.stringify(sourceNode.data || {}))
+    };
+
+    if (typeof duplicate.data?.collapsed !== 'boolean') {
+        duplicate.data.collapsed = false;
+    }
+
+    nodes.push(duplicate);
+    renderNode(duplicate);
+    renderConnections();
+    selectNode(duplicate.id);
+}
+
 // Renderizar propriedades
 function renderProperties() {
     if (!selectedNode) return;
@@ -613,11 +763,19 @@ function renderProperties() {
             break;
             
         case 'message':
+            const messageDelaySeconds = Number.isFinite(Number(selectedNode.data.delaySeconds))
+                ? Math.max(0, Number(selectedNode.data.delaySeconds))
+                : 0;
             html += `
                 <div class="property-group">
                     <label>Conteúdo da Mensagem</label>
                     <textarea id="messageContent" onchange="updateNodeProperty('content', this.value)">${selectedNode.data.content || ''}</textarea>
-                    <div class="hint">Use {{nome}}, {{telefone}}, etc. para personalizar</div>
+                    <div class="hint">Use as variáveis de Campos Dinâmicos para personalizar</div>
+                </div>
+                <div class="property-group">
+                    <label>Delay antes de enviar (segundos)</label>
+                    <input type="number" min="0" step="1" value="${messageDelaySeconds}" onchange="updateNodeProperty('delaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
+                    <div class="hint">Use 0 para envio imediato</div>
                 </div>
             `;
             break;
@@ -737,6 +895,105 @@ function rerenderNode(nodeId: string) {
 
     cleanupInvalidEdgesForNode(nodeId);
     renderConnections();
+}
+
+function getNodeSize(nodeId: string) {
+    const nodeEl = document.getElementById(nodeId) as HTMLElement | null;
+    return {
+        width: nodeEl?.offsetWidth || 220,
+        height: nodeEl?.offsetHeight || 120
+    };
+}
+
+function applyNodePosition(node: FlowNode) {
+    const nodeEl = document.getElementById(node.id) as HTMLElement | null;
+    if (!nodeEl) return;
+    nodeEl.style.left = `${node.position.x}px`;
+    nodeEl.style.top = `${node.position.y}px`;
+}
+
+function resolveNodeCollisions() {
+    const minGap = 24;
+    const maxIterations = 16;
+
+    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+        let moved = false;
+        const ordered = [...nodes].sort((a, b) => a.position.y - b.position.y);
+
+        for (let i = 0; i < ordered.length; i += 1) {
+            const upper = ordered[i];
+            const upperSize = getNodeSize(upper.id);
+
+            for (let j = i + 1; j < ordered.length; j += 1) {
+                const lower = ordered[j];
+                const lowerSize = getNodeSize(lower.id);
+
+                const overlapX = !(
+                    upper.position.x + upperSize.width + minGap <= lower.position.x
+                    || lower.position.x + lowerSize.width + minGap <= upper.position.x
+                );
+                if (!overlapX) continue;
+
+                const requiredY = upper.position.y + upperSize.height + minGap;
+                if (lower.position.y >= requiredY) continue;
+
+                lower.position.y = requiredY;
+                applyNodePosition(lower);
+                moved = true;
+            }
+        }
+
+        if (!moved) break;
+    }
+}
+
+function adjustNodesForResize(anchorId: string, deltaHeight: number) {
+    if (!deltaHeight) return;
+
+    const anchor = nodes.find((node) => node.id === anchorId);
+    if (!anchor) return;
+
+    const anchorSize = getNodeSize(anchorId);
+    const anchorCenterX = anchor.position.x + anchorSize.width / 2;
+    const horizontalSlack = 140;
+
+    nodes.forEach((node) => {
+        if (node.id === anchorId) return;
+        if (node.position.y <= anchor.position.y) return;
+
+        const nodeSize = getNodeSize(node.id);
+        const nodeCenterX = node.position.x + nodeSize.width / 2;
+        const isNearHorizontally = Math.abs(anchorCenterX - nodeCenterX) <= ((anchorSize.width + nodeSize.width) / 2 + horizontalSlack);
+        if (!isNearHorizontally) return;
+
+        node.position.y = Math.max(0, node.position.y + deltaHeight);
+        applyNodePosition(node);
+    });
+
+    resolveNodeCollisions();
+    renderConnections();
+}
+
+function toggleNodeCollapsed(id: string, event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    const node = nodes.find((item) => item.id === id);
+    if (!node) return;
+
+    const previousHeight = getNodeSize(id).height;
+    node.data.collapsed = !Boolean(node.data?.collapsed);
+    rerenderNode(id);
+    const currentHeight = getNodeSize(id).height;
+    const deltaHeight = currentHeight - previousHeight;
+
+    if (deltaHeight) {
+        adjustNodesForResize(id, deltaHeight);
+    }
+
+    if (selectedNode?.id === id) {
+        renderProperties();
+    }
 }
 
 function cleanupInvalidEdgesForNode(nodeId: string) {
@@ -1112,6 +1369,17 @@ function buildTriggerPayload(trigger?: FlowNode) {
 
 function normalizeLoadedFlowData() {
     nodes = nodes.map((node) => {
+        if (typeof node.data?.collapsed !== 'boolean') {
+            node.data.collapsed = false;
+        }
+        if (!String(node.data?.label || '').trim()) {
+            node.data.label = getNodeTypeLabel(node);
+        }
+        if (node.type === 'message') {
+            const rawDelay = Number(node.data?.delaySeconds);
+            node.data.delaySeconds = Number.isFinite(rawDelay) ? Math.max(0, rawDelay) : 0;
+        }
+
         if (isIntentTrigger(node)) {
             if (node.type === 'trigger') {
                 node.subtype = 'keyword';
@@ -1385,6 +1653,8 @@ const windowAny = window as Window & {
     addIntentRoute?: () => void;
     updateIntentRoute?: (index: number, key: 'label' | 'phrases', value: string) => void;
     removeIntentRoute?: (index: number) => void;
+    toggleNodeCollapsed?: (id: string, event?: Event) => void;
+    duplicateNode?: (id: string, event?: Event) => void;
     addCondition?: () => void;
     removeCondition?: (index: number) => void;
     updateCondition?: (index: number, key: 'value' | 'next', value: string) => void;
@@ -1407,6 +1677,8 @@ windowAny.updateNodeProperty = updateNodeProperty;
 windowAny.addIntentRoute = addIntentRoute;
 windowAny.updateIntentRoute = updateIntentRoute;
 windowAny.removeIntentRoute = removeIntentRoute;
+windowAny.toggleNodeCollapsed = toggleNodeCollapsed;
+windowAny.duplicateNode = duplicateNode;
 windowAny.addCondition = addCondition;
 windowAny.removeCondition = removeCondition;
 windowAny.updateCondition = updateCondition;
