@@ -13,6 +13,7 @@ type Conversation = {
     id: number;
     leadId: number;
     sessionId?: string;
+    sessionLabel?: string;
     name: string;
     phone: string;
     lastMessage?: string;
@@ -165,6 +166,23 @@ function getSessionDisplayName(session: WhatsappSessionItem) {
     const phone = String(session.phone || '').trim();
     if (phone) return phone;
     return sessionId;
+}
+
+function findInboxSessionById(sessionId: string) {
+    const normalized = sanitizeSessionId(sessionId);
+    if (!normalized) return null;
+    return inboxAvailableSessions.find((session) => sanitizeSessionId(session.session_id) === normalized) || null;
+}
+
+function resolveConversationSessionLabel(sessionId: string) {
+    const normalized = sanitizeSessionId(sessionId);
+    if (!normalized) return '';
+
+    const knownSession = findInboxSessionById(normalized);
+    if (!knownSession) return normalized;
+
+    const displayName = getSessionDisplayName(knownSession);
+    return displayName || normalized;
 }
 
 function renderInboxSessionFilterOptions() {
@@ -584,9 +602,10 @@ async function loadConversations() {
         const response: ConversationsResponse = await api.get(`/api/conversations${query}`);
         const items = response.conversations || [];
         conversations = items.map((c) => ({
+            sessionId: sanitizeSessionId(c.session_id || c.sessionId),
             id: c.id,
             leadId: c.lead_id || c.leadId || c.id,
-            sessionId: sanitizeSessionId(c.session_id || c.sessionId),
+            sessionLabel: resolveConversationSessionLabel(sanitizeSessionId(c.session_id || c.sessionId)),
             name: c.name || c.lead_name || c.phone,
             phone: c.phone,
             lastMessage: c.lastMessage || c.last_message || 'Clique para iniciar conversa',
@@ -650,7 +669,10 @@ function renderConversations() {
                 ${getInitials(c.name)}
             </div>
             <div class="conversation-info">
-                <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
+                <div class="conversation-name-row">
+                    <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
+                    ${c.sessionLabel ? `<span class="conversation-session-chip" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
+                </div>
                 <div class="conversation-preview">${escapeHtml(c.lastMessage || 'Sem mensagens')}</div>
             </div>
             <div class="conversation-meta">
@@ -687,7 +709,10 @@ function renderFilteredConversations(filtered: Conversation[]) {
         <div class="conversation-item ${c.unread > 0 ? 'unread' : ''}" onclick="selectConversation(${c.id})">
             <div class="conversation-avatar" style="background: ${getAvatarColor(c.name)}">${getInitials(c.name)}</div>
             <div class="conversation-info">
-                <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
+                <div class="conversation-name-row">
+                    <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
+                    ${c.sessionLabel ? `<span class="conversation-session-chip" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
+                </div>
                 <div class="conversation-preview">${escapeHtml(c.lastMessage || '')}</div>
             </div>
             <div class="conversation-meta">
@@ -743,7 +768,7 @@ async function selectConversation(id: number) {
     // Carregar mensagens e dados completos do contato
     const conversationSessionId = resolveConversationSessionId(currentConversation);
     await Promise.all([
-        loadMessages(currentConversation.leadId, currentConversation.id, conversationSessionId),
+        loadMessages(currentConversation.leadId, currentConversation.id, conversationSessionId, currentConversation.phone),
         loadCurrentLeadDetails(currentConversation.leadId)
     ]);
 
@@ -756,7 +781,7 @@ async function selectConversation(id: number) {
     }
 }
 
-async function loadMessages(leadId: number, conversationId?: number, sessionId?: string) {
+async function loadMessages(leadId: number, conversationId?: number, sessionId?: string, contactJid?: string) {
     try {
         const params = new URLSearchParams();
         const normalizedConversationId = Number(conversationId);
@@ -766,6 +791,10 @@ async function loadMessages(leadId: number, conversationId?: number, sessionId?:
         const normalizedSessionId = sanitizeSessionId(sessionId);
         if (normalizedSessionId) {
             params.set('session_id', normalizedSessionId);
+        }
+        const normalizedContactJid = sanitizeSessionId(contactJid);
+        if (normalizedContactJid) {
+            params.set('contact_jid', normalizedContactJid);
         }
 
         const query = params.toString() ? `?${params.toString()}` : '';

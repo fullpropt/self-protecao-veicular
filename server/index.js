@@ -983,6 +983,38 @@ function detectMediaTypeFromMessageContent(content) {
     if (content.locationMessage || content.liveLocationMessage) return 'location';
     return 'text';
 }
+
+function parseMessageTimestampMs(value) {
+    if (value === undefined || value === null) return 0;
+
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value)) return 0;
+        return value > 1e12 ? value : value * 1000;
+    }
+
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return 0;
+        return parsed > 1e12 ? parsed : parsed * 1000;
+    }
+
+    if (typeof value === 'object') {
+        if (typeof value.toNumber === 'function') {
+            const parsed = Number(value.toNumber());
+            if (Number.isFinite(parsed)) return parsed > 1e12 ? parsed : parsed * 1000;
+        }
+        if (typeof value.toString === 'function') {
+            const parsed = Number(value.toString());
+            if (Number.isFinite(parsed)) return parsed > 1e12 ? parsed : parsed * 1000;
+        }
+        if (typeof value.low === 'number') {
+            if (!Number.isFinite(value.low)) return 0;
+            return value.low > 1e12 ? Number(value.low) : Number(value.low) * 1000;
+        }
+    }
+
+    return 0;
+}
 function normalizeJid(jid) {
 
     if (!jid) return null;
@@ -2139,6 +2171,8 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
         sessions.set(sessionId, {
 
             socket: sock,
+
+            store,
 
             clientSocket,
 
@@ -3779,6 +3813,133 @@ async function triggerChatSync(sessionId, sock, store, attempt = 1) {
 
 }
 
+function resolveConversationJidForBackfill({ lead = null, contactJid = '' } = {}) {
+    const normalizedContactJid = normalizeJid(contactJid);
+    const contactPhoneDigits = normalizePhoneDigits(contactJid);
+    const normalizedLeadPhone = normalizePhoneDigits(lead?.phone);
+    const candidates = [
+        normalizedContactJid,
+        contactPhoneDigits ? `${contactPhoneDigits}@s.whatsapp.net` : null,
+        lead?.jid,
+        normalizedLeadPhone ? `${normalizedLeadPhone}@s.whatsapp.net` : null
+    ];
+
+    for (const candidate of candidates) {
+        const normalized = normalizeJid(candidate);
+        if (normalized && isUserJid(normalized)) {
+            return normalized;
+        }
+    }
+
+    return '';
+}
+
+async function backfillConversationMessagesFromStore(options = {}) {
+    const sessionId = sanitizeSessionId(options.sessionId || options.conversation?.session_id);
+    const conversation = options.conversation || null;
+    const lead = options.lead || null;
+    const contactJid = sanitizeSessionId(options.contactJid);
+    const limit = Math.max(1, Number(options.limit) || 40);
+
+    if (!sessionId || !conversation?.id) return 0;
+
+    const session = sessions.get(sessionId);
+    const store = session?.store;
+    if (!store || typeof store.loadMessages !== 'function') {
+        return 0;
+    }
+
+    const targetJid = resolveConversationJidForBackfill({ lead, contactJid });
+    if (!targetJid) return 0;
+
+    let storeMessages = [];
+    try {
+        const loaded = await store.loadMessages(targetJid, limit, undefined);
+        storeMessages = Array.isArray(loaded) ? loaded : [];
+    } catch (error) {
+        console.warn(`[${sessionId}] Falha ao carregar mensagens do store para backfill (${targetJid}):`, error.message);
+        return 0;
+    }
+
+    if (!storeMessages.length) return 0;
+
+    const orderedMessages = [...storeMessages].sort((a, b) => {
+        const aTs = parseMessageTimestampMs(a?.messageTimestamp);
+        const bTs = parseMessageTimestampMs(b?.messageTimestamp);
+        return aTs - bTs;
+    });
+
+    let inserted = 0;
+    let latestSavedMessageId = null;
+    let latestSentAt = '';
+    let unreadFromLead = 0;
+
+    for (const waMsg of orderedMessages) {
+        if (!waMsg?.message || isGroupMessage(waMsg)) continue;
+
+        const messageId = normalizeText(waMsg?.key?.id || '');
+        if (!messageId) continue;
+
+        const existingMessage = await Message.findByMessageId(messageId);
+        if (existingMessage) continue;
+
+        const content = unwrapMessageContent(waMsg.message);
+        let text = extractTextFromMessageContent(content);
+        const mediaType = detectMediaTypeFromMessageContent(content);
+
+        if (!text && mediaType !== 'text') {
+            text = previewForMedia(mediaType);
+        }
+
+        text = normalizeText(text);
+        if (!text) continue;
+
+        const isFromMe = Boolean(waMsg?.key?.fromMe);
+        const messageTimestampMs = parseMessageTimestampMs(waMsg?.messageTimestamp);
+        const sentAtIso = messageTimestampMs > 0 ? new Date(messageTimestampMs).toISOString() : new Date().toISOString();
+        const normalizedStatus = isFromMe ? 'sent' : 'delivered';
+
+        const savedMessage = await Message.create({
+            message_id: messageId,
+            conversation_id: conversation.id,
+            lead_id: lead?.id || conversation.lead_id,
+            sender_type: isFromMe ? 'agent' : 'lead',
+            content: text,
+            content_encrypted: encryptMessage(text),
+            media_type: mediaType,
+            status: normalizedStatus,
+            is_from_me: isFromMe,
+            sent_at: sentAtIso,
+            metadata: { source: 'store_backfill' }
+        });
+
+        inserted += 1;
+        latestSavedMessageId = savedMessage?.id || latestSavedMessageId;
+        latestSentAt = sentAtIso || latestSentAt;
+        if (!isFromMe) unreadFromLead += 1;
+    }
+
+    if (!inserted) return 0;
+
+    await Conversation.touch(conversation.id, latestSavedMessageId, latestSentAt || null);
+
+    if (lead?.id && latestSentAt) {
+        await Lead.update(lead.id, { last_message_at: latestSentAt });
+        await Campaign.refreshMetricsByLead(lead.id);
+    }
+
+    if (unreadFromLead > 0) {
+        const currentUnread = Math.max(0, Number(conversation.unread_count || 0));
+        const nextUnread = Math.max(currentUnread, unreadFromLead);
+        if (nextUnread !== currentUnread) {
+            await Conversation.update(conversation.id, { unread_count: nextUnread });
+        }
+    }
+
+    console.log(`[${sessionId}] Backfill local recuperou ${inserted} mensagem(ns) para conversa ${conversation.id}`);
+    return inserted;
+}
+
 
 
 let cachedBusinessHoursSettings = null;
@@ -4753,16 +4914,24 @@ io.on('connection', (socket) => {
         const normalizedSessionId = sanitizeSessionId(sessionId);
         const normalizedConversationId = Number(conversationId);
         const hasConversationId = Number.isFinite(normalizedConversationId) && normalizedConversationId > 0;
+        let resolvedConversation = null;
+        let resolvedLead = null;
 
         if (hasConversationId) {
+            resolvedConversation = await Conversation.findById(normalizedConversationId);
+            if (resolvedConversation) {
+                resolvedLead = await Lead.findById(resolvedConversation.lead_id);
+            }
             messages = await Message.listByConversation(normalizedConversationId, { limit: 100 });
         }
 
         if (!hasConversationId && leadId) {
             const normalizedLeadId = Number(leadId);
             if (Number.isFinite(normalizedLeadId) && normalizedLeadId > 0 && normalizedSessionId) {
+                resolvedLead = await Lead.findById(normalizedLeadId);
                 const conversation = await Conversation.findByLeadId(normalizedLeadId, normalizedSessionId);
                 if (conversation) {
+                    resolvedConversation = conversation;
                     messages = await Message.listByConversation(conversation.id, { limit: 100 });
                 }
             }
@@ -4772,15 +4941,33 @@ io.on('connection', (socket) => {
         } else if (contactJid) {
             const lead = await Lead.findByJid(contactJid);
             if (lead) {
+                resolvedLead = lead;
                 if (normalizedSessionId) {
                     const conversation = await Conversation.findByLeadId(lead.id, normalizedSessionId);
                     if (conversation) {
+                        resolvedConversation = conversation;
                         messages = await Message.listByConversation(conversation.id, { limit: 100 });
                     }
                 }
                 if (messages.length === 0 && !normalizedSessionId) {
                     messages = await Message.listByLead(lead.id, { limit: 100 });
                 }
+            }
+        }
+
+        const backfillSessionId = sanitizeSessionId(
+            normalizedSessionId || resolvedConversation?.session_id
+        );
+        if (messages.length === 0 && resolvedConversation && backfillSessionId) {
+            const inserted = await backfillConversationMessagesFromStore({
+                sessionId: backfillSessionId,
+                conversation: resolvedConversation,
+                lead: resolvedLead,
+                contactJid,
+                limit: 50
+            });
+            if (inserted > 0) {
+                messages = await Message.listByConversation(resolvedConversation.id, { limit: 100 });
             }
         }
 
@@ -6050,7 +6237,8 @@ app.get('/api/conversations', optionalAuth, async (req, res) => {
         const lastMessageText =
             (decrypted || '').trim() ||
             (lastMessage ? previewForMedia(lastMessage.media_type) : '') ||
-            metadataLastMessage;
+            metadataLastMessage ||
+            (Number(c?.unread_count || 0) > 0 ? '[mensagem recebida]' : '');
 
         const lastMessageAt =
             lastMessage?.sent_at ||
@@ -6234,20 +6422,46 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     const conversationId = Number(req.query.conversation_id || req.query.conversationId);
     const hasConversationId = Number.isFinite(conversationId) && conversationId > 0;
     const sessionId = sanitizeSessionId(req.query.session_id || req.query.sessionId);
+    const contactJid = sanitizeSessionId(req.query.contact_jid || req.query.contactJid);
 
     let messages = [];
+    let resolvedConversation = null;
+    let resolvedLead = null;
 
     if (hasConversationId) {
+        resolvedConversation = await Conversation.findById(conversationId);
+        if (resolvedConversation) {
+            resolvedLead = await Lead.findById(resolvedConversation.lead_id);
+        }
         messages = await Message.listByConversation(conversationId, { limit });
     } else if (Number.isFinite(leadId) && leadId > 0 && sessionId) {
+        resolvedLead = await Lead.findById(leadId);
         const conversation = await Conversation.findByLeadId(leadId, sessionId);
         if (conversation) {
+            resolvedConversation = conversation;
             messages = await Message.listByConversation(conversation.id, { limit });
         } else {
             messages = [];
         }
     } else if (Number.isFinite(leadId) && leadId > 0) {
+        resolvedLead = await Lead.findById(leadId);
         messages = await Message.listByLead(leadId, { limit });
+    }
+
+    const backfillSessionId = sanitizeSessionId(
+        sessionId || resolvedConversation?.session_id
+    );
+    if (messages.length === 0 && resolvedConversation && backfillSessionId) {
+        const inserted = await backfillConversationMessagesFromStore({
+            sessionId: backfillSessionId,
+            conversation: resolvedConversation,
+            lead: resolvedLead,
+            contactJid,
+            limit: Math.max(limit, 50)
+        });
+        if (inserted > 0) {
+            messages = await Message.listByConversation(resolvedConversation.id, { limit });
+        }
     }
 
     const decrypted = messages.map(m => {

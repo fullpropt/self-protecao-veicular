@@ -149,10 +149,31 @@ export default function Inbox() {
             flex-shrink: 0;
         }
         .conversation-info { flex: 1; min-width: 0; }
+        .conversation-name-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
         .conversation-name {
             font-weight: 600;
             font-size: 14px;
             margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .conversation-session-chip {
+            flex-shrink: 0;
+            max-width: 120px;
+            padding: 1px 7px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 1.4;
+            color: var(--gray-700);
+            background: rgba(var(--primary-rgb), 0.15);
+            border: 1px solid rgba(var(--primary-rgb), 0.35);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
