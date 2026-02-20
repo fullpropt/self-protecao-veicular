@@ -226,6 +226,7 @@ export default function FlowBuilder() {
             align-items: center;
             justify-content: center;
             font-size: 18px;
+            color: #334155;
         }
         
         .node-item .icon.trigger { background: rgba(16, 185, 129, 0.15); }
@@ -317,6 +318,8 @@ export default function FlowBuilder() {
         
         .flow-node-header .icon {
             font-size: 18px;
+            color: #334155;
+            opacity: 0.95;
         }
 
         .flow-node-header .title-group {
@@ -348,42 +351,35 @@ export default function FlowBuilder() {
         .flow-node-header .duplicate-btn,
         .flow-node-header .collapse-btn,
         .flow-node-header .delete-btn {
-            background: rgba(255, 255, 255, 0.82);
-            border: 1px solid rgba(100, 116, 139, 0.32);
-            color: var(--gray);
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid rgba(51, 65, 85, 0.34);
+            color: #334155;
             cursor: pointer;
             padding: 4px 6px;
-            border-radius: 4px;
+            border-radius: 5px;
             transition: all 0.2s;
             font-weight: 700;
             line-height: 1;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
         }
 
         .flow-node-header .collapse-btn {
-            opacity: 0.75;
             min-width: 24px;
             font-size: 13px;
         }
 
         .flow-node-header .duplicate-btn {
-            opacity: 0.75;
             min-width: 52px;
             font-size: 10px;
-            font-weight: 600;
-        }
-
-        .flow-node:hover .collapse-btn {
-            opacity: 1;
-        }
-
-        .flow-node:hover .duplicate-btn {
-            opacity: 1;
+            font-weight: 700;
         }
         
         .flow-node-header .delete-btn {
-            opacity: 0;
+            opacity: 0.72;
             min-width: 24px;
+            border-color: rgba(239, 68, 68, 0.38);
+            background: rgba(254, 242, 242, 0.96);
+            color: #b91c1c;
         }
 
         .flow-node-header .duplicate-btn:hover {
@@ -889,11 +885,22 @@ export default function FlowBuilder() {
         }
         
         .modal-close {
-            background: none;
-            border: none;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            border: 1px solid rgba(100, 116, 139, 0.32);
+            background: #f8fafc;
             font-size: 24px;
-            color: var(--gray);
+            line-height: 1;
+            color: #334155;
             cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            background: #eff6ff;
+            color: #1d4ed8;
         }
         
         .modal-body {
@@ -936,12 +943,14 @@ export default function FlowBuilder() {
         .flow-list-item .icon {
             width: 45px;
             height: 45px;
-            background: rgba(148, 163, 184, 0.16);
+            background: rgba(148, 163, 184, 0.2);
+            border: 1px solid rgba(100, 116, 139, 0.28);
             border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 20px;
+            color: #334155;
         }
         
         .flow-list-item .info {
@@ -963,9 +972,9 @@ export default function FlowBuilder() {
         .flow-inline-icon {
             width: 24px;
             height: 24px;
-            border: 1px solid transparent;
-            background: transparent;
-            color: #64748b;
+            border: 1px solid rgba(100, 116, 139, 0.32);
+            background: white;
+            color: #334155;
             border-radius: 6px;
             display: inline-flex;
             align-items: center;
@@ -974,10 +983,15 @@ export default function FlowBuilder() {
             transition: all 0.2s;
         }
 
+        .flow-inline-icon .icon {
+            width: 14px;
+            height: 14px;
+        }
+
         .flow-inline-icon:hover {
-            border-color: var(--border);
-            background: white;
-            color: #334155;
+            border-color: rgba(59, 130, 246, 0.4);
+            background: #eff6ff;
+            color: #1d4ed8;
         }
         
         .flow-list-item .meta {
@@ -993,9 +1007,9 @@ export default function FlowBuilder() {
         }
 
         .flow-list-btn {
-            border: 1px solid var(--border);
-            background: white;
-            color: #334155;
+            border: 1px solid rgba(100, 116, 139, 0.35);
+            background: #f8fafc;
+            color: #1f2937;
             border-radius: 8px;
             font-size: 12px;
             font-weight: 600;
@@ -1013,6 +1027,11 @@ export default function FlowBuilder() {
             justify-content: center;
         }
 
+        .flow-list-icon-btn .icon {
+            width: 16px;
+            height: 16px;
+        }
+
         .flow-list-btn:hover {
             border-color: rgba(var(--primary-rgb), 0.35);
             background: #f9fbff;
@@ -1020,7 +1039,9 @@ export default function FlowBuilder() {
         }
 
         .flow-list-delete {
-            color: #475569;
+            color: #b91c1c;
+            border-color: rgba(239, 68, 68, 0.4);
+            background: rgba(254, 242, 242, 0.85);
         }
 
         .flow-list-delete:hover {
@@ -1030,7 +1051,15 @@ export default function FlowBuilder() {
         }
 
         .flow-list-duplicate {
-            color: #475569;
+            color: #1e3a8a;
+            border-color: rgba(59, 130, 246, 0.35);
+            background: rgba(239, 246, 255, 0.85);
+        }
+
+        .flow-list-duplicate:hover {
+            border-color: rgba(59, 130, 246, 0.5);
+            background: rgba(219, 234, 254, 0.8);
+            color: #1d4ed8;
         }
 
         .flow-list-toggle {

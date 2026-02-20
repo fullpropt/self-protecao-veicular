@@ -777,22 +777,44 @@ body {
 }
 
 .contacts-table-filters {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
-    overflow-x: auto;
-    max-width: 100%;
+    justify-content: flex-end;
+    row-gap: 8px;
+    max-width: min(100%, 900px);
 }
 
 .contacts-search-box {
-    min-width: 220px;
+    min-width: 190px;
     max-width: 260px;
-    flex: 1 1 240px;
+    flex: 1 1 220px;
 }
 
 .contacts-filter-select {
-    min-width: 170px;
-    width: auto;
-    flex: 0 0 auto;
+    min-width: 150px;
+    max-width: 190px;
+    width: 170px;
+    flex: 0 1 170px;
+}
+
+.contacts-table-filters .search-box input,
+.contacts-table-filters .form-select {
+    height: 40px;
+}
+
+.contacts-table-filters .search-box input {
+    padding: 8px 12px 8px 38px;
+}
+
+.contacts-table-filters .search-box .search-icon {
+    left: 12px;
+    width: 14px;
+    height: 14px;
+}
+
+.contacts-table-filters .form-select {
+    padding: 8px 34px 8px 12px;
+    width: 170px;
 }
 
 .table-wrapper {
@@ -1588,19 +1610,22 @@ body.sidebar-open .mobile-menu-toggle {
     }
 
     .contacts-table-filters {
-        overflow-x: visible;
         flex-wrap: wrap;
+        max-width: 100%;
     }
 
-    .contacts-search-box {
+    .contacts-table-filters .contacts-search-box {
         min-width: 100%;
         max-width: 100%;
         flex: 1 1 100%;
     }
 
-    .contacts-filter-select {
+    .contacts-table-filters .contacts-filter-select,
+    .contacts-table-filters .form-select {
         width: 100%;
+        max-width: 100%;
         min-width: 100%;
+        flex: 1 1 100%;
     }
     
     .search-box {
