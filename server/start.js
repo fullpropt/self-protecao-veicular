@@ -44,6 +44,8 @@ if (volumeBase) {
     process.env.SESSIONS_DIR = process.env.SESSIONS_DIR || path.join(volumeBase, 'sessions');
     process.env.UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(volumeBase, 'uploads');
     console.log(`[Bootstrap] Volume persistente: ${volumeBase}`);
+} else if (process.env.NODE_ENV === 'production') {
+    console.warn('[Bootstrap] Volume persistente nao detectado. Configure UPLOAD_DIR/SESSIONS_DIR em volume para manter arquivos entre reinicios.');
 }
 
 // Criar diretórios necessários

@@ -16,6 +16,7 @@ type Conversation = {
     sessionLabel?: string;
     name: string;
     phone: string;
+    avatarUrl?: string;
     lastMessage?: string;
     lastMessageAt?: string;
     unread?: number;
@@ -52,6 +53,8 @@ type LeadDetails = {
     name?: string;
     phone?: string;
     email?: string;
+    avatar_url?: string;
+    avatarUrl?: string;
     status?: LeadStatus | number | string;
     source?: string;
     tags?: string[] | string | null;
@@ -305,6 +308,64 @@ function parseLeadCustomFields(value: unknown) {
     }
 }
 
+function sanitizeAvatarUrl(value: unknown) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('/uploads/')) return raw;
+    return '';
+}
+
+function resolveConversationAvatarUrl(conversation: Conversation | null | undefined) {
+    return sanitizeAvatarUrl(conversation?.avatarUrl);
+}
+
+function resolveLeadAvatarUrl(lead: LeadDetails | null, conversation: Conversation | null) {
+    const direct = sanitizeAvatarUrl(lead?.avatar_url || lead?.avatarUrl);
+    if (direct) return direct;
+
+    const customFields = parseLeadCustomFields(lead?.custom_fields);
+    const fromCustomFields = sanitizeAvatarUrl(customFields?.avatar_url || customFields?.avatarUrl);
+    if (fromCustomFields) return fromCustomFields;
+
+    return resolveConversationAvatarUrl(conversation);
+}
+
+function renderAvatarMarkup({
+    name,
+    avatarUrl,
+    className,
+    style = ''
+}: {
+    name: string;
+    avatarUrl?: string | null;
+    className: string;
+    style?: string;
+}) {
+    const safeName = String(name || 'Contato').trim() || 'Contato';
+    const safeAvatar = sanitizeAvatarUrl(avatarUrl);
+    const styleParts = [`background: ${getAvatarColor(safeName)}`];
+    if (style.trim()) {
+        styleParts.push(style.trim().replace(/;+$/, ''));
+    }
+    const styleAttr = styleParts.join('; ');
+
+    if (safeAvatar) {
+        const fullAvatarUrl = escapeHtml(getMediaUrl(safeAvatar));
+        return `
+            <div class="${className} has-image" style="${styleAttr}">
+                <img class="${className}-image" src="${fullAvatarUrl}" alt="${escapeHtml(safeName)}" loading="lazy" />
+            </div>
+        `;
+    }
+
+    return `
+        <div class="${className}" style="${styleAttr}">
+            ${getInitials(safeName)}
+        </div>
+    `;
+}
+
 function parseLeadTags(value: unknown) {
     if (!value) return [];
 
@@ -521,13 +582,16 @@ function renderContactInfoPanel() {
 
     const createdAt = lead.created_at ? formatDate(lead.created_at, 'datetime') : '';
     const headerName = escapeHtml(String(lead.name || currentConversation.name || 'Contato').trim() || 'Contato');
+    const contactAvatarMarkup = renderAvatarMarkup({
+        name: lead.name || currentConversation.name || 'Contato',
+        avatarUrl: resolveLeadAvatarUrl(lead, currentConversation),
+        className: 'contact-card-avatar'
+    });
 
     container.innerHTML = `
         <div class="contact-card">
             <div class="contact-card-header">
-                <div class="contact-card-avatar" style="background:${getAvatarColor(lead.name || currentConversation.name || '')}">
-                    ${getInitials(lead.name || currentConversation.name || 'Contato')}
-                </div>
+                ${contactAvatarMarkup}
                 <div>
                     <div class="contact-card-title">${headerName}</div>
                     <div class="contact-card-subtitle">${escapeHtml(formatPhone(lead.phone || currentConversation.phone || ''))}</div>
@@ -687,6 +751,7 @@ async function loadConversations() {
             sessionLabel: resolveConversationSessionLabel(sanitizeSessionId(c.session_id || c.sessionId)),
             name: c.name || c.lead_name || c.phone,
             phone: c.phone,
+            avatarUrl: sanitizeAvatarUrl(c.avatar_url || c.avatarUrl),
             lastMessage: c.lastMessage || c.last_message || 'Clique para iniciar conversa',
             lastMessageAt: c.lastMessageAt || c.last_message_at || c.updated_at || c.created_at,
             unread: c.unread || c.unread_count || 0,
@@ -744,9 +809,11 @@ function renderConversations() {
     list.innerHTML = conversations.map(c => `
         <div class="conversation-item ${c.unread > 0 ? 'unread' : ''} ${currentConversation?.id === c.id ? 'active' : ''}" 
              onclick="selectConversation(${c.id})">
-            <div class="conversation-avatar" style="background: ${getAvatarColor(c.name)}">
-                ${getInitials(c.name)}
-            </div>
+            ${renderAvatarMarkup({
+                name: c.name,
+                avatarUrl: resolveConversationAvatarUrl(c),
+                className: 'conversation-avatar'
+            })}
             <div class="conversation-info">
                 <div class="conversation-name-row">
                     <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
@@ -786,7 +853,11 @@ function renderFilteredConversations(filtered: Conversation[]) {
     // Usar mesma lógica de renderConversations
     list.innerHTML = filtered.map(c => `
         <div class="conversation-item ${c.unread > 0 ? 'unread' : ''}" onclick="selectConversation(${c.id})">
-            <div class="conversation-avatar" style="background: ${getAvatarColor(c.name)}">${getInitials(c.name)}</div>
+            ${renderAvatarMarkup({
+                name: c.name,
+                avatarUrl: resolveConversationAvatarUrl(c),
+                className: 'conversation-avatar'
+            })}
             <div class="conversation-info">
                 <div class="conversation-name-row">
                     <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
@@ -1332,9 +1403,12 @@ function renderChat() {
             <button class="btn btn-sm btn-outline btn-icon chat-back-btn" onclick="backToList()" id="backBtn" title="Voltar para lista">
                 <span class="icon icon-arrow-left icon-sm"></span>
             </button>
-            <div class="conversation-avatar" style="background: ${getAvatarColor(currentConversation.name)}; width: 40px; height: 40px; font-size: 14px;">
-                ${getInitials(currentConversation.name)}
-            </div>
+            ${renderAvatarMarkup({
+                name: currentConversation.name,
+                avatarUrl: resolveLeadAvatarUrl(currentLeadDetails, currentConversation),
+                className: 'conversation-avatar',
+                style: 'width: 40px; height: 40px; font-size: 14px;'
+            })}
             <div class="chat-header-info">
                 <div class="chat-header-name">${escapeHtml(currentConversation.name || 'Sem nome')}</div>
                 <div class="chat-header-status">${formatPhone(currentConversation.phone)}</div>

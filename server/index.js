@@ -139,6 +139,9 @@ const WHATSAPP_BROWSER_NAME_MAX_LENGTH = 40;
 const BUSINESS_HOURS_CACHE_TTL_MS = 30000;
 const OUTSIDE_HOURS_AUTO_REPLY_COOLDOWN_MS = 30 * 60 * 1000;
 const DEFAULT_BUSINESS_HOURS_AUTO_REPLY = 'Ol\u00E1! Nosso atendimento est\u00E1 fora do hor\u00E1rio de funcionamento no momento. Retornaremos assim que estivermos online.';
+const LEAD_AVATAR_SYNC_TTL_MS = parseInt(process.env.LEAD_AVATAR_SYNC_TTL_MS || '', 10) || (6 * 60 * 60 * 1000);
+const LEAD_AVATAR_SYNC_TIMEOUT_MS = parseInt(process.env.LEAD_AVATAR_SYNC_TIMEOUT_MS || '', 10) || 2500;
+const LEAD_AVATAR_CUSTOM_FIELD_KEY = 'avatar_url';
 
 function buildWhatsAppBrowserName(companyName) {
     const cleanedCompany = String(companyName || '').replace(/\s+/g, ' ').trim();
@@ -870,6 +873,81 @@ function lockLeadNameAsManual(customFields) {
 function isLeadNameManuallyLocked(lead) {
     const customFields = parseLeadCustomFields(lead?.custom_fields);
     return customFields?.__system?.manual_name_locked === true;
+}
+
+function normalizeLeadAvatarUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('https://') || raw.startsWith('http://')) return raw;
+    if (raw.startsWith('/uploads/')) return raw;
+    return '';
+}
+
+function shouldSyncLeadAvatar(customFields) {
+    const system = customFields?.__system && typeof customFields.__system === 'object' && !Array.isArray(customFields.__system)
+        ? customFields.__system
+        : {};
+    const lastSyncRaw = String(system.avatar_last_sync_at || '').trim();
+    if (!lastSyncRaw) return true;
+
+    const lastSyncAt = Date.parse(lastSyncRaw);
+    if (!Number.isFinite(lastSyncAt)) return true;
+
+    return (Date.now() - lastSyncAt) >= LEAD_AVATAR_SYNC_TTL_MS;
+}
+
+async function syncLeadAvatarFromWhatsApp({ sessionId, lead, jid }) {
+    if (!lead?.id) return null;
+
+    const targetJid = normalizeUserJidCandidate(jid || lead.jid) || normalizeJid(jid || lead.jid);
+    if (!targetJid || !isUserJid(targetJid)) return null;
+
+    const session = sessions.get(sessionId);
+    if (!session?.isConnected || typeof session?.socket?.profilePictureUrl !== 'function') {
+        return null;
+    }
+
+    const currentCustomFields = parseLeadCustomFields(lead.custom_fields);
+    if (!shouldSyncLeadAvatar(currentCustomFields)) {
+        return normalizeLeadAvatarUrl(
+            currentCustomFields?.[LEAD_AVATAR_CUSTOM_FIELD_KEY] || currentCustomFields?.avatarUrl
+        ) || null;
+    }
+
+    const previousAvatar = normalizeLeadAvatarUrl(
+        currentCustomFields?.[LEAD_AVATAR_CUSTOM_FIELD_KEY] || currentCustomFields?.avatarUrl
+    );
+
+    const nowIso = new Date().toISOString();
+    let resolvedAvatar = '';
+
+    try {
+        const timeoutMs = Math.max(1000, LEAD_AVATAR_SYNC_TIMEOUT_MS);
+        resolvedAvatar = await Promise.race([
+            Promise.resolve(session.socket.profilePictureUrl(targetJid, 'image'))
+                .then((url) => normalizeLeadAvatarUrl(url))
+                .catch(() => ''),
+            new Promise((resolve) => setTimeout(() => resolve(''), timeoutMs))
+        ]);
+    } catch (_) {
+        resolvedAvatar = '';
+    }
+
+    const nextCustomFields = mergeLeadCustomFields(currentCustomFields, {
+        __system: {
+            avatar_last_sync_at: nowIso,
+            avatar_jid: targetJid
+        }
+    });
+
+    if (resolvedAvatar) {
+        nextCustomFields[LEAD_AVATAR_CUSTOM_FIELD_KEY] = resolvedAvatar;
+    }
+
+    await Lead.update(lead.id, { custom_fields: nextCustomFields });
+    lead.custom_fields = nextCustomFields;
+
+    return resolvedAvatar || previousAvatar || null;
 }
 
 function parseLeadTagsForMerge(rawTags) {
@@ -4574,6 +4652,16 @@ async function processIncomingMessage(sessionId, msg) {
         }
     }
 
+    if (!isSelfChat && lead?.id) {
+        syncLeadAvatarFromWhatsApp({
+            sessionId,
+            lead,
+            jid: from
+        }).catch((error) => {
+            console.warn(`[${sessionId}] Falha ao sincronizar avatar do lead ${lead.id}:`, error.message);
+        });
+    }
+
     
 
     // Buscar ou criar conversa
@@ -7010,6 +7098,11 @@ app.get('/api/conversations', optionalAuth, async (req, res) => {
             c?.created_at ||
             null;
 
+        const leadCustomFields = parseLeadCustomFields(c?.lead_custom_fields);
+        const avatarUrl = normalizeLeadAvatarUrl(
+            leadCustomFields?.[LEAD_AVATAR_CUSTOM_FIELD_KEY] || leadCustomFields?.avatarUrl
+        );
+
         let name = normalizeText(c.lead_name);
         const sessionPhone = getSessionPhone(c.session_id);
         const phoneDigits = normalizePhoneDigits(c.phone);
@@ -7025,7 +7118,8 @@ app.get('/api/conversations', optionalAuth, async (req, res) => {
             lastMessage: normalizeText(lastMessageText),
             lastMessageAt,
             name,
-            phone: c.phone
+            phone: c.phone,
+            avatar_url: avatarUrl || null
         };
     }))).filter((conv) => {
         if (!conv.lastMessageAt && !conv.lastMessage && Number(conv?.unread || 0) <= 0) {

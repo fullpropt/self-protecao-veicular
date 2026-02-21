@@ -210,6 +210,18 @@ export default function Inbox() {
             font-size: 16px;
             flex-shrink: 0;
         }
+        .conversation-avatar.has-image {
+            overflow: hidden;
+            color: transparent;
+            font-size: 0;
+            padding: 0;
+        }
+        .conversation-avatar-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
         .conversation-info { flex: 1; min-width: 0; }
         .conversation-name-row {
             display: flex;
@@ -614,6 +626,18 @@ export default function Inbox() {
             justify-content: center;
             color: #ffffff;
             font-weight: 700;
+        }
+        .contact-card-avatar.has-image {
+            overflow: hidden;
+            color: transparent;
+            font-size: 0;
+            padding: 0;
+        }
+        .contact-card-avatar-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
         }
         .contact-card-title { font-size: 16px; font-weight: 700; color: var(--dark); }
         .contact-card-subtitle { font-size: 12px; color: var(--gray-600); margin-top: 2px; }

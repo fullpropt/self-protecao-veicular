@@ -615,7 +615,7 @@ const Conversation = {
     
     async list(options = {}) {
         let sql = `
-            SELECT c.*, l.name as lead_name, l.phone, l.vehicle, u.name as agent_name
+            SELECT c.*, l.name as lead_name, l.phone, l.vehicle, l.custom_fields as lead_custom_fields, u.name as agent_name
             FROM conversations c
             LEFT JOIN leads l ON c.lead_id = l.id
             LEFT JOIN users u ON c.assigned_to = u.id
