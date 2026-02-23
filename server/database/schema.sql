@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT DEFAULT 'agent' CHECK(role IN ('admin', 'supervisor', 'agent')),
     avatar_url TEXT,
     is_active INTEGER DEFAULT 1,
+    owner_user_id INTEGER REFERENCES users(id),
     last_login_at TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
     updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)

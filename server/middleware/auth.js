@@ -51,7 +51,8 @@ function generateToken(user) {
         id: user.id,
         uuid: user.uuid,
         email: user.email,
-        role: user.role
+        role: user.role,
+        owner_user_id: user.owner_user_id
     };
     
     return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
@@ -129,7 +130,8 @@ async function authenticate(req, res, next) {
             uuid: user.uuid,
             email: user.email,
             name: user.name,
-            role: user.role
+            role: user.role,
+            owner_user_id: user.owner_user_id
         };
         
         next();
@@ -183,7 +185,8 @@ async function optionalAuth(req, res, next) {
                         uuid: user.uuid,
                         email: user.email,
                         name: user.name,
-                        role: user.role
+                        role: user.role,
+                        owner_user_id: user.owner_user_id
                     };
                 }
             }

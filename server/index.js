@@ -176,8 +176,7 @@ function getRequesterRole(req) {
 }
 
 function isScopedAgent(req) {
-    const role = getRequesterRole(req);
-    return (role === 'agent' || role === 'user') && getRequesterUserId(req) > 0;
+    return getRequesterRole(req) === 'agent' && getRequesterUserId(req) > 0;
 }
 
 function getScopedUserId(req) {
@@ -234,14 +233,23 @@ function getSocketRequesterUserId(socket) {
     return Number.isInteger(userId) && userId > 0 ? userId : 0;
 }
 
-function getSocketRequesterRole(socket) {
-    return String(socket?.user?.role || '').trim().toLowerCase();
-}
+async function resolveSocketOwnerUserId(socket) {
+    const requesterId = getSocketRequesterUserId(socket);
+    if (!requesterId) return null;
 
-function getScopedSocketUserId(socket) {
-    const role = getSocketRequesterRole(socket);
-    const userId = getSocketRequesterUserId(socket);
-    return (role === 'agent' || role === 'user') && userId > 0 ? userId : null;
+    const currentUser = await User.findById(requesterId);
+    let ownerUserId = Number(currentUser?.owner_user_id || socket?.user?.owner_user_id || 0);
+    if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) {
+        ownerUserId = requesterId;
+        await User.update(requesterId, { owner_user_id: ownerUserId });
+    }
+    if (socket.user) {
+        socket.user.owner_user_id = ownerUserId;
+    }
+    if (currentUser && Number(currentUser.owner_user_id || 0) !== ownerUserId) {
+        await User.update(requesterId, { owner_user_id: ownerUserId });
+    }
+    return ownerUserId;
 }
 
 
@@ -595,16 +603,38 @@ const typingStatus = new Map();
 const jidAliasMap = new Map();
 const sessionInitLocks = new Set();
 const pendingCiphertextRecoveries = new Map();
+const pendingLidResolutionRecoveries = new Map();
 const recoveredFlowMessageIds = new Map();
+const reconnectInFlight = new Set();
 const FLOW_RECOVERY_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_DELAY_MS || '', 10) || 2500;
 const FLOW_RECOVERY_WINDOW_MS = parseInt(process.env.FLOW_RECOVERY_WINDOW_MS || '', 10) || (5 * 60 * 1000);
 const FLOW_RECOVERY_TRACKER_LIMIT = 4000;
 const FLOW_RECOVERY_MAX_ATTEMPTS = parseInt(process.env.FLOW_RECOVERY_MAX_ATTEMPTS || '', 10) || 7;
 const FLOW_RECOVERY_MAX_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_MAX_DELAY_MS || '', 10) || 30000;
+const LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS = parseInt(process.env.LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS || '', 10) || 4;
+const LID_RESOLUTION_RECOVERY_BASE_DELAY_MS = parseInt(process.env.LID_RESOLUTION_RECOVERY_BASE_DELAY_MS || '', 10) || 1200;
+const LID_RESOLUTION_RECOVERY_MAX_DELAY_MS = parseInt(process.env.LID_RESOLUTION_RECOVERY_MAX_DELAY_MS || '', 10) || 9000;
 const BAILEYS_CIPHERTEXT_STUB_TYPE = 1;
 
 senderAllocatorService.setRuntimeSessionsGetter(() => sessions);
 senderAllocatorService.setDefaultSessionId(DEFAULT_WHATSAPP_SESSION_ID);
+
+function stopSessionHealthMonitor(session) {
+    if (!session) return;
+    if (session.healthMonitor && typeof session.healthMonitor.stop === 'function') {
+        try {
+            session.healthMonitor.stop();
+        } catch (error) {
+            // ignore monitor shutdown errors
+        }
+    }
+    session.healthMonitor = null;
+}
+
+function isActiveSessionSocket(sessionId, sock) {
+    const session = sessions.get(sessionId);
+    return Boolean(session && session.socket === sock);
+}
 
 
 
@@ -2500,7 +2530,24 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
     const sessionPath = path.join(SESSIONS_DIR, sessionId);
 
-    
+    const previousSession = sessions.get(sessionId);
+    if (previousSession?.socket) {
+        stopSessionHealthMonitor(previousSession);
+        try {
+            if (typeof previousSession.socket.ev?.removeAllListeners === 'function') {
+                previousSession.socket.ev.removeAllListeners();
+            }
+        } catch (error) {
+            // ignore stale listener cleanup failures
+        }
+        try {
+            if (typeof previousSession.socket.end === 'function') {
+                await previousSession.socket.end(new Error('session_replaced'));
+            }
+        } catch (error) {
+            // ignore stale socket shutdown failures
+        }
+    }
 
     if (qrTimeouts.has(sessionId)) {
 
@@ -2669,6 +2716,10 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
             const { connection, lastDisconnect, qr } = update;
 
             const session = sessions.get(sessionId);
+            if (!session || session.socket !== sock) {
+                return;
+            }
+            const activeClientSocket = session.clientSocket || clientSocket;
 
             
 
@@ -2692,7 +2743,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     
 
-                    clientSocket.emit('qr', { qr: qrDataUrl, sessionId, expiresIn: 30 });
+                    activeClientSocket.emit('qr', { qr: qrDataUrl, sessionId, expiresIn: 30 });
 
                     io.emit('whatsapp-qr', { qr: qrDataUrl, sessionId });
 
@@ -2719,7 +2770,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                         if (currentSession && !currentSession.isConnected) {
 
-                            clientSocket.emit('qr-expired', { sessionId });
+                            activeClientSocket.emit('qr-expired', { sessionId });
 
                         }
 
@@ -2735,7 +2786,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     console.error(`[${sessionId}] ? Erro ao gerar QR:`, qrError.message);
 
-                    clientSocket.emit('error', { message: 'Erro ao gerar QR Code' });
+                    activeClientSocket.emit('error', { message: 'Erro ao gerar QR Code' });
 
                 }
 
@@ -2758,6 +2809,8 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
 
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                session.isConnected = false;
+                stopSessionHealthMonitor(session);
 
                 
 
@@ -2793,77 +2846,61 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 
 
-                if (shouldReconnect) {
+                if (reconnectInFlight.has(sessionId)) {
+                    console.log(`[${sessionId}] Reconexao ja em andamento, ignorando evento de fechamento duplicado.`);
+                    return;
+                }
 
-                    const currentAttempt = reconnectAttempts.get(sessionId) || 0;
+                reconnectInFlight.add(sessionId);
+                try {
+                    if (shouldReconnect) {
 
-                    
+                        const currentAttempt = reconnectAttempts.get(sessionId) || 0;
 
-                    if (currentAttempt < MAX_RECONNECT_ATTEMPTS) {
+                        if (currentAttempt < MAX_RECONNECT_ATTEMPTS) {
 
-                        reconnectAttempts.set(sessionId, currentAttempt + 1);
-
-                        
-
-                        if (session) {
+                            reconnectAttempts.set(sessionId, currentAttempt + 1);
 
                             session.reconnecting = true;
-
-                            session.isConnected = false;
-
                             if (!session.pairingMode) {
                                 session.pairingCode = null;
                                 session.pairingPhone = null;
                                 session.pairingRequestedAt = null;
                             }
 
+                            activeClientSocket.emit('reconnecting', { sessionId, attempt: currentAttempt + 1 });
+                            io.emit('whatsapp-status', { sessionId, status: 'reconnecting' });
+
+                            await delay(RECONNECT_DELAY);
+
+                            const reconnectOptions = session?.pairingMode
+                                ? { ...options, requestPairingCode: false }
+                                : options;
+                            await createSession(sessionId, activeClientSocket, currentAttempt + 1, reconnectOptions);
+
+                        } else {
+
+                            sessions.delete(sessionId);
+                            reconnectAttempts.delete(sessionId);
+                            activeClientSocket.emit('reconnect-failed', { sessionId });
+
                         }
-
-                        
-
-                        clientSocket.emit('reconnecting', { sessionId, attempt: currentAttempt + 1 });
-
-                        io.emit('whatsapp-status', { sessionId, status: 'reconnecting' });
-
-                        
-
-                        await delay(RECONNECT_DELAY);
-
-                        const reconnectOptions = session?.pairingMode
-                            ? { ...options, requestPairingCode: false }
-                            : options;
-                        await createSession(sessionId, clientSocket, currentAttempt + 1, reconnectOptions);
 
                     } else {
 
                         sessions.delete(sessionId);
-
                         reconnectAttempts.delete(sessionId);
+                        activeClientSocket.emit('disconnected', { sessionId, reason: 'logged_out' });
+                        persistWhatsappSession(sessionId, 'disconnected', {
+                            ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                        });
 
-                        clientSocket.emit('reconnect-failed', { sessionId });
-
+                        if (fs.existsSync(sessionPath)) {
+                            fs.rmSync(sessionPath, { recursive: true, force: true });
+                        }
                     }
-
-                } else {
-
-                    sessions.delete(sessionId);
-
-                    reconnectAttempts.delete(sessionId);
-
-                    clientSocket.emit('disconnected', { sessionId, reason: 'logged_out' });
-
-                    persistWhatsappSession(sessionId, 'disconnected', {
-                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
-                    });
-
-                    
-
-                    if (fs.existsSync(sessionPath)) {
-
-                        fs.rmSync(sessionPath, { recursive: true, force: true });
-
-                    }
-
+                } finally {
+                    reconnectInFlight.delete(sessionId);
                 }
 
             }
@@ -2872,7 +2909,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
             if (connection === 'connecting') {
 
-                clientSocket.emit('connecting', { sessionId });
+                activeClientSocket.emit('connecting', { sessionId });
 
                 io.emit('whatsapp-status', { sessionId, status: 'connecting' });
 
@@ -2924,7 +2961,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     
 
-                    clientSocket.emit('connected', { sessionId, user: session.user });
+                    activeClientSocket.emit('connected', { sessionId, user: session.user });
 
                     io.emit('whatsapp-status', { sessionId, status: 'connected', user: session.user });
 
@@ -2957,8 +2994,8 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     // Criar monitor de saúde da conexão
 
+                    stopSessionHealthMonitor(session);
                     const healthMonitor = connectionFixer.createHealthMonitor(sock, sessionId);
-
                     session.healthMonitor = healthMonitor;
 
                 }
@@ -2976,6 +3013,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
         // Receber mensagens
 
         sock.ev.on('messages.upsert', async ({ messages, type }) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             if (type === 'notify' || type === 'append') {
 
@@ -3009,6 +3049,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
         // Status de mensagens
 
         sock.ev.on('messages.update', async (updates) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             for (const update of updates) {
                 const patchedMessage = update?.update?.message;
@@ -3091,6 +3134,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
 
         sock.ev.on('contacts.set', async (payload) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             const contacts = payload?.contacts || [];
             const sessionPhone = getSessionPhone(sessionId);
@@ -3106,6 +3152,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
 
         sock.ev.on('contacts.upsert', async (contacts) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             const list = Array.isArray(contacts) ? contacts : [contacts];
             const sessionPhone = getSessionPhone(sessionId);
@@ -3119,6 +3168,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
         });
 
         sock.ev.on('chats.phoneNumberShare', async (payload) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
             try {
                 const mappedUserJid = registerJidAlias(
                     payload?.lid,
@@ -3151,6 +3203,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
         // Sincronizar lista de chats/contatos
 
         sock.ev.on('chats.set', async (payload) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             try {
 
@@ -3167,6 +3222,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
 
         sock.ev.on('chats.upsert', async (payload) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             try {
 
@@ -3183,6 +3241,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
 
         sock.ev.on('chats.update', async (payload) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             try {
 
@@ -3201,6 +3262,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
         // Presença (digitando)
 
         sock.ev.on('presence.update', (presence) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             const jid = presence.id;
 
@@ -3229,10 +3293,15 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
         
 
         sock.ev.on('error', (error) => {
+            if (!isActiveSessionSocket(sessionId, sock)) {
+                return;
+            }
 
             console.error(`[${sessionId}] ? Erro:`, error.message);
 
-            clientSocket.emit('error', { message: error.message });
+            const activeSession = sessions.get(sessionId);
+            const activeClientSocket = activeSession?.clientSocket || clientSocket;
+            activeClientSocket.emit('error', { message: error.message });
 
         });
 
@@ -3857,11 +3926,37 @@ async function processScheduledAutomationsTick() {
             WHERE COALESCE(is_blocked, 0) = 0
             ORDER BY updated_at DESC
         `);
+        const leadConversations = await query(`
+            SELECT c.*
+            FROM conversations c
+            INNER JOIN leads l ON l.id = c.lead_id
+            WHERE COALESCE(l.is_blocked, 0) = 0
+            ORDER BY c.lead_id ASC, COALESCE(c.updated_at, c.created_at) DESC, c.id DESC
+        `);
+        const conversationsByLeadId = new Map();
+        for (const conversation of leadConversations) {
+            const leadId = Number(conversation?.lead_id || 0);
+            if (!Number.isFinite(leadId) || leadId <= 0) continue;
+            if (!conversationsByLeadId.has(leadId)) {
+                conversationsByLeadId.set(leadId, []);
+            }
+            conversationsByLeadId.get(leadId).push(conversation);
+        }
 
         for (const automation of dueAutomations) {
+            const scopedSessionIds = parseAutomationSessionScope(automation?.session_scope);
+            const scopedSessionIdSet = scopedSessionIds.length ? new Set(scopedSessionIds) : null;
+
             for (const lead of leads) {
                 if (!lead?.id || !lead?.phone) continue;
-                const leadConversation = await Conversation.findByLeadId(lead.id);
+                const candidateConversations = conversationsByLeadId.get(Number(lead.id)) || [];
+                const leadConversation = scopedSessionIdSet
+                    ? (candidateConversations.find((conversation) => (
+                        scopedSessionIdSet.has(sanitizeSessionId(conversation?.session_id))
+                    )) || null)
+                    : (candidateConversations[0] || null);
+                if (scopedSessionIdSet && !leadConversation) continue;
+
                 const sessionId = sanitizeSessionId(
                     leadConversation?.session_id,
                     DEFAULT_AUTOMATION_SESSION_ID
@@ -4584,6 +4679,88 @@ function getCiphertextRecoveryDelayMs(attempt = 1) {
     return Math.min(Math.max(200, Math.trunc(delay)), FLOW_RECOVERY_MAX_DELAY_MS);
 }
 
+function getLidResolutionRecoveryDelayMs(attempt = 1) {
+    const normalizedAttempt = Math.max(1, Number(attempt) || 1);
+    const delay = LID_RESOLUTION_RECOVERY_BASE_DELAY_MS * Math.pow(2, normalizedAttempt - 1);
+    return Math.min(Math.max(250, Math.trunc(delay)), LID_RESOLUTION_RECOVERY_MAX_DELAY_MS);
+}
+
+function scheduleLidResolutionRecovery(sessionId, rawMessage = {}, attempt = 1) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const messageId = String(rawMessage?.key?.id || '').trim();
+    const remoteLid = normalizeLidJid(rawMessage?.key?.remoteJid);
+
+    if (!normalizedSessionId || !messageId || !remoteLid) {
+        return;
+    }
+
+    const recoveryKey = `${normalizedSessionId}:${messageId}`;
+    const currentEntry = pendingLidResolutionRecoveries.get(recoveryKey);
+    if (currentEntry && Number(currentEntry?.attempt || 0) >= Number(attempt || 0)) {
+        return;
+    }
+    if (currentEntry?.timer) {
+        clearTimeout(currentEntry.timer);
+    }
+
+    const safeAttempt = Math.max(1, Number(attempt) || 1);
+    const delayMs = getLidResolutionRecoveryDelayMs(safeAttempt);
+    const timer = setTimeout(async () => {
+        try {
+            const recovered = await runLidResolutionRecovery(normalizedSessionId, rawMessage, safeAttempt);
+            if (recovered) {
+                pendingLidResolutionRecoveries.delete(recoveryKey);
+                return;
+            }
+
+            if (safeAttempt < LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS) {
+                scheduleLidResolutionRecovery(normalizedSessionId, rawMessage, safeAttempt + 1);
+                return;
+            }
+
+            pendingLidResolutionRecoveries.delete(recoveryKey);
+            console.warn(`[${normalizedSessionId}] Falha ao resolver JID @lid apos ${safeAttempt} tentativa(s) (${messageId})`);
+        } catch (error) {
+            console.warn(`[${normalizedSessionId}] Erro na recuperacao de JID @lid (${messageId}):`, error.message);
+            pendingLidResolutionRecoveries.delete(recoveryKey);
+        }
+    }, delayMs);
+
+    pendingLidResolutionRecoveries.set(recoveryKey, {
+        timer,
+        attempt: safeAttempt,
+        messageId,
+        remoteLid
+    });
+    console.log(`[${normalizedSessionId}] Agendada resolucao de JID @lid (${messageId}) tentativa ${safeAttempt}/${LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS} em ${delayMs}ms`);
+}
+
+async function runLidResolutionRecovery(sessionId, rawMessage = {}, attempt = 1) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const messageId = String(rawMessage?.key?.id || '').trim();
+    const remoteLid = normalizeLidJid(rawMessage?.key?.remoteJid);
+    if (!normalizedSessionId || !messageId || !remoteLid) return false;
+
+    const existing = await Message.findByMessageId(messageId);
+    if (existing) return true;
+
+    const runtimeSession = sessions.get(normalizedSessionId);
+    if (runtimeSession?.socket) {
+        await triggerChatSync(normalizedSessionId, runtimeSession.socket, runtimeSession.store, 0);
+    }
+
+    const sessionPhone = getSessionPhone(normalizedSessionId);
+    registerMessageJidAliases(rawMessage, sessionPhone);
+    const resolvedJid = resolveMessageJid(rawMessage, sessionPhone);
+    if (!resolvedJid || !isUserJid(resolvedJid)) {
+        return false;
+    }
+
+    console.log(`[${normalizedSessionId}] JID @lid resolvido na tentativa ${attempt}: ${remoteLid} -> ${resolvedJid}`);
+    await processIncomingMessage(normalizedSessionId, rawMessage);
+    return true;
+}
+
 function scheduleCiphertextRecovery(sessionId, rawMessage = {}, attempt = 1) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
     const messageId = String(rawMessage?.key?.id || '').trim();
@@ -4858,11 +5035,35 @@ async function processIncomingMessage(sessionId, msg) {
 
     const fromRaw = msg.key.remoteJid;
     const fromRawNormalized = normalizeUserJidCandidate(fromRaw) || fromRaw;
-    const isFromMe = msg.key.fromMe;
     const sessionDigits = normalizePhoneDigits(sessionPhone);
 
     let from = resolveMessageJid(msg, sessionPhone);
     const contentForRouting = unwrapMessageContent(msg.message);
+    let isFromMe = Boolean(msg?.key?.fromMe);
+
+    // Alguns eventos podem chegar com fromMe=false mesmo sendo envio proprio
+    // (sincronizacao entre dispositivos). Usa pistas de sender/participant para corrigir.
+    if (!isFromMe && sessionDigits) {
+        const selfHintCandidates = [
+            msg?.key?.senderPn,
+            msg?.key?.participantPn,
+            msg?.key?.participant,
+            msg?.participant,
+            msg?.message?.extendedTextMessage?.contextInfo?.participant,
+            contentForRouting?.extendedTextMessage?.contextInfo?.participant
+        ].filter(Boolean);
+
+        const hintedSelf = selfHintCandidates
+            .map((candidate) => normalizeUserJidCandidate(candidate) || normalizeJid(candidate))
+            .find((candidate) => {
+                const candidateDigits = normalizePhoneDigits(extractNumber(candidate));
+                return Boolean(candidateDigits) && isSelfPhone(candidateDigits, sessionDigits);
+            });
+
+        if (hintedSelf) {
+            isFromMe = true;
+        }
+    }
 
     const fromRawDigits = normalizePhoneDigits(extractNumber(fromRawNormalized));
     const isFromRawUser = isUserJid(fromRawNormalized);
@@ -4910,6 +5111,16 @@ async function processIncomingMessage(sessionId, msg) {
     }
 
     if (!from || !isUserJid(from)) {
+        const unresolvedLid = normalizeLidJid(fromRaw);
+        if (!isFromMe && unresolvedLid) {
+            scheduleLidResolutionRecovery(sessionId, msg, 1);
+            console.warn(
+                `[${sessionId}] Mensagem aguardando resolucao de JID @lid: `
+                + `remoteJid=${fromRaw || 'n/a'} senderPn=${msg?.key?.senderPn || 'n/a'} participantPn=${msg?.key?.participantPn || 'n/a'}`
+            );
+            return;
+        }
+
         console.warn(
             `[${sessionId}] Ignorando mensagem sem JID de usuario resolvido: `
             + `remoteJid=${fromRaw || 'n/a'} senderPn=${msg?.key?.senderPn || 'n/a'} participantPn=${msg?.key?.participantPn || 'n/a'}`
@@ -5595,12 +5806,30 @@ function sessionExists(sessionId) {
         }
     });
 
-    flowService.init(async (options) => {
+    flowService.init(async (options = {}) => {
         const resolvedSessionId = resolveSessionIdOrDefault(options?.sessionId || options?.session_id);
-        return await sendMessageToWhatsApp({
-            ...options,
-            sessionId: resolvedSessionId
-        });
+        const destination = String(options?.to || extractNumber(options?.jid || '') || '').trim();
+        if (!destination) {
+            throw new Error('Destino invalido para envio no fluxo');
+        }
+
+        const mediaType = String(options?.mediaType || options?.media_type || 'text').trim().toLowerCase() || 'text';
+        const content = String(options?.content || '');
+
+        return await sendMessage(
+            resolvedSessionId,
+            destination,
+            content,
+            mediaType,
+            {
+                url: options?.mediaUrl || options?.url || null,
+                mimetype: options?.mimetype,
+                fileName: options?.fileName,
+                ptt: options?.ptt,
+                duration: options?.duration,
+                conversationId: options?.conversationId || options?.conversation_id || null
+            }
+        );
     });
 
     await rehydrateSessions(io);
@@ -5633,11 +5862,12 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const scopedUserId = getScopedSocketUserId(socket);
-        if (scopedUserId) {
-            const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId);
-            const storedOwnerUserId = Number(storedSession?.created_by || 0);
-            if (!(storedOwnerUserId > 0 && storedOwnerUserId === scopedUserId)) {
+        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        if (ownerScopeUserId) {
+            const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!storedSession) {
                 socket.emit('session-status', { status: 'disconnected', sessionId: normalizedSessionId });
                 return;
             }
@@ -5659,7 +5889,7 @@ io.on('connection', (socket) => {
         if (sessionExists(normalizedSessionId)) {
             socket.emit('session-status', { status: 'reconnecting', sessionId: normalizedSessionId });
             await createSession(normalizedSessionId, socket, 0, {
-                ownerUserId: scopedUserId || undefined
+                ownerUserId: ownerScopeUserId || undefined
             });
             return;
         }
@@ -5679,14 +5909,19 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const scopedUserId = getScopedSocketUserId(socket);
+        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
         const storedSession = await WhatsAppSession.findBySessionId(sessionId);
-        const storedOwnerUserId = Number(storedSession?.created_by || 0);
-        if (scopedUserId && storedOwnerUserId > 0 && storedOwnerUserId !== scopedUserId) {
-            socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
-            return;
+        if (ownerScopeUserId && storedSession) {
+            const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!ownedSession) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                return;
+            }
         }
-        const resolvedOwnerUserId = scopedUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
+        const storedOwnerUserId = Number(storedSession?.created_by || 0);
+        const resolvedOwnerUserId = ownerScopeUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
 
         const existingSession = sessions.get(sessionId);
 
@@ -5735,14 +5970,19 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const scopedUserId = getScopedSocketUserId(socket);
+        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
         const storedSession = await WhatsAppSession.findBySessionId(sessionId);
-        const storedOwnerUserId = Number(storedSession?.created_by || 0);
-        if (scopedUserId && storedOwnerUserId > 0 && storedOwnerUserId !== scopedUserId) {
-            socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
-            return;
+        if (ownerScopeUserId && storedSession) {
+            const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!ownedSession) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                return;
+            }
         }
-        const resolvedOwnerUserId = scopedUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
+        const storedOwnerUserId = Number(storedSession?.created_by || 0);
+        const resolvedOwnerUserId = ownerScopeUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
 
         const existingSession = sessions.get(sessionId);
         if (existingSession) {
@@ -5804,45 +6044,42 @@ io.on('connection', (socket) => {
     socket.on('get-messages', async ({ sessionId, contactJid, leadId, conversationId }) => {
         let messages = [];
         const normalizedSessionId = sanitizeSessionId(sessionId);
+        const normalizedContactJid = normalizeJid(contactJid);
         const normalizedConversationId = Number(conversationId);
         const hasConversationId = Number.isFinite(normalizedConversationId) && normalizedConversationId > 0;
         let resolvedConversation = null;
         let resolvedLead = null;
 
         if (hasConversationId) {
-            resolvedConversation = await Conversation.findById(normalizedConversationId);
+            const conversation = await Conversation.findById(normalizedConversationId);
+            const conversationSessionId = sanitizeSessionId(conversation?.session_id);
+            if (conversation && (!normalizedSessionId || conversationSessionId === normalizedSessionId)) {
+                resolvedConversation = conversation;
+            }
             if (resolvedConversation) {
                 resolvedLead = await Lead.findById(resolvedConversation.lead_id);
+                messages = await Message.listByConversation(resolvedConversation.id, { limit: 100 });
             }
-            messages = await Message.listByConversation(normalizedConversationId, { limit: 100 });
         }
 
-        if (!hasConversationId && leadId) {
+        if (!resolvedConversation && leadId) {
             const normalizedLeadId = Number(leadId);
-            if (Number.isFinite(normalizedLeadId) && normalizedLeadId > 0 && normalizedSessionId) {
+            if (Number.isFinite(normalizedLeadId) && normalizedLeadId > 0) {
                 resolvedLead = await Lead.findById(normalizedLeadId);
-                const conversation = await Conversation.findByLeadId(normalizedLeadId, normalizedSessionId);
+                const conversation = await Conversation.findByLeadId(normalizedLeadId, normalizedSessionId || null);
                 if (conversation) {
                     resolvedConversation = conversation;
                     messages = await Message.listByConversation(conversation.id, { limit: 100 });
                 }
             }
-            if (messages.length === 0 && !normalizedSessionId) {
-                messages = await Message.listByLead(leadId, { limit: 100 });
-            }
-        } else if (contactJid) {
-            const lead = await Lead.findByJid(contactJid);
+        } else if (!resolvedConversation && normalizedContactJid) {
+            const lead = await Lead.findByJid(normalizedContactJid);
             if (lead) {
                 resolvedLead = lead;
-                if (normalizedSessionId) {
-                    const conversation = await Conversation.findByLeadId(lead.id, normalizedSessionId);
-                    if (conversation) {
-                        resolvedConversation = conversation;
-                        messages = await Message.listByConversation(conversation.id, { limit: 100 });
-                    }
-                }
-                if (messages.length === 0 && !normalizedSessionId) {
-                    messages = await Message.listByLead(lead.id, { limit: 100 });
+                const conversation = await Conversation.findByLeadId(lead.id, normalizedSessionId || null);
+                if (conversation) {
+                    resolvedConversation = conversation;
+                    messages = await Message.listByConversation(conversation.id, { limit: 100 });
                 }
             }
         }
@@ -5883,18 +6120,31 @@ io.on('connection', (socket) => {
             };
         });
 
-        socket.emit('messages-list', { sessionId, contactJid, leadId, conversationId, messages });
+        socket.emit('messages-list', {
+            sessionId: normalizedSessionId || sessionId,
+            contactJid: normalizedContactJid || contactJid,
+            leadId,
+            conversationId,
+            messages
+        });
     });
 
     
 
     socket.on('get-contacts', async ({ sessionId }) => {
-        const leads = await Lead.list({ limit: 200 });
-        const sessionPhone = getSessionPhone(sessionId);
-        const sessionDisplayName = normalizeText(getSessionDisplayName(sessionId) || 'Usuário');
+        const normalizedSessionId = sanitizeSessionId(sessionId);
+        const leads = await Lead.list({
+            limit: 200,
+            session_id: normalizedSessionId || undefined
+        });
+        const sessionPhone = getSessionPhone(normalizedSessionId);
+        const sessionDisplayName = normalizeText(getSessionDisplayName(normalizedSessionId) || 'Usuário');
 
         const contacts = (await Promise.all(leads.map(async (lead) => {
-            const lastMsg = await Message.getLastByLead(lead.id);
+            const conversation = await Conversation.findByLeadId(lead.id, normalizedSessionId || null);
+            if (!conversation?.id) return null;
+
+            const lastMsg = await Message.getLastMessage(conversation.id);
             if (!lastMsg) return null;
 
                 const preview = normalizeText(lastMsg.content
@@ -5924,7 +6174,7 @@ io.on('connection', (socket) => {
             .filter(Boolean)
             .sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
 
-        socket.emit('contacts-list', { sessionId, contacts });
+        socket.emit('contacts-list', { sessionId: normalizedSessionId || sessionId, contacts });
     });
 
     
@@ -5942,18 +6192,20 @@ io.on('connection', (socket) => {
     
 
     socket.on('mark-read', async ({ sessionId, contactJid, conversationId }) => {
+        const normalizedSessionId = sanitizeSessionId(sessionId);
+        const normalizedContactJid = normalizeJid(contactJid);
 
         if (conversationId) {
 
             await Conversation.markAsRead(conversationId);
 
-        } else if (contactJid) {
+        } else if (normalizedContactJid && normalizedSessionId) {
 
-            const lead = await Lead.findByJid(contactJid);
+            const lead = await Lead.findByJid(normalizedContactJid);
 
             if (lead) {
 
-                const conv = await Conversation.findByLeadId(lead.id, sessionId || null);
+                const conv = await Conversation.findByLeadId(lead.id, normalizedSessionId);
 
                 if (conv) await Conversation.markAsRead(conv.id);
 
@@ -6017,11 +6269,12 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const scopedUserId = getScopedSocketUserId(socket);
-        if (scopedUserId) {
-            const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId);
-            const storedOwnerUserId = Number(storedSession?.created_by || 0);
-            if (!(storedOwnerUserId > 0 && storedOwnerUserId === scopedUserId)) {
+        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        if (ownerScopeUserId) {
+            const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!storedSession) {
                 socket.emit('error', { message: 'Sem permissao para remover esta conta', code: 'SESSION_FORBIDDEN' });
                 return;
             }
@@ -6042,9 +6295,12 @@ io.on('connection', (socket) => {
         
 
         if (session) {
+            stopSessionHealthMonitor(session);
 
             try {
-
+                if (typeof session.socket?.ev?.removeAllListeners === 'function') {
+                    session.socket.ev.removeAllListeners();
+                }
                 await session.socket.logout();
 
             } catch (e) {}
@@ -6052,8 +6308,8 @@ io.on('connection', (socket) => {
             
 
             sessions.delete(normalizedSessionId);
-
             reconnectAttempts.delete(normalizedSessionId);
+            reconnectInFlight.delete(normalizedSessionId);
 
             
 
@@ -6122,10 +6378,10 @@ app.get('/api/whatsapp/status', optionalAuth, (req, res) => {
 app.get('/api/whatsapp/sessions', authenticate, async (req, res) => {
     try {
         const includeDisabled = String(req.query?.includeDisabled ?? 'true').toLowerCase() !== 'false';
-        const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
         const sessionsList = await senderAllocatorService.listDispatchSessions({
             includeDisabled,
-            ownerUserId: scopedUserId || undefined
+            ownerUserId: ownerScopeUserId || undefined
         });
         res.json({ success: true, sessions: sessionsList });
     } catch (error) {
@@ -6140,12 +6396,16 @@ app.put('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) => {
             return res.status(400).json({ error: 'sessionId invalido' });
         }
 
-        const scopedUserId = getScopedUserId(req);
-        if (scopedUserId) {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (ownerScopeUserId) {
             const existingSession = await WhatsAppSession.findBySessionId(sessionId);
-            const ownerUserId = Number(existingSession?.created_by || 0);
-            if (ownerUserId > 0 && ownerUserId !== scopedUserId) {
-                return res.status(403).json({ error: 'Sem permissao para editar esta conta' });
+            if (existingSession) {
+                const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
+                    owner_user_id: ownerScopeUserId
+                });
+                if (!ownedSession) {
+                    return res.status(403).json({ error: 'Sem permissao para editar esta conta' });
+                }
             }
         }
 
@@ -6156,7 +6416,8 @@ app.put('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) => {
             dispatch_weight: req.body?.dispatch_weight,
             hourly_limit: req.body?.hourly_limit,
             cooldown_until: req.body?.cooldown_until,
-            created_by: scopedUserId || undefined
+            owner_user_id: ownerScopeUserId || undefined,
+            created_by: ownerScopeUserId || undefined
         });
 
         res.json({ success: true, session: updated });
@@ -6172,18 +6433,20 @@ app.delete('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) =
             return res.status(400).json({ error: 'sessionId invalido' });
         }
 
-        const scopedUserId = getScopedUserId(req);
-        if (scopedUserId) {
-            const existingSession = await WhatsAppSession.findBySessionId(sessionId);
-            const ownerUserId = Number(existingSession?.created_by || 0);
-            if (!(ownerUserId > 0 && ownerUserId === scopedUserId)) {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (ownerScopeUserId) {
+            const existingSession = await WhatsAppSession.findBySessionId(sessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!existingSession) {
                 return res.status(404).json({ error: 'Conta nao encontrada' });
             }
         }
 
         await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
         await WhatsAppSession.deleteBySessionId(sessionId, {
-            created_by: scopedUserId || undefined
+            owner_user_id: ownerScopeUserId || undefined,
+            created_by: ownerScopeUserId || undefined
         });
 
         io.emit('whatsapp-status', { sessionId, status: 'disconnected' });
@@ -6200,11 +6463,12 @@ app.post('/api/whatsapp/disconnect', authenticate, async (req, res) => {
     try {
 
         const sessionId = resolveSessionIdOrDefault(req.body?.sessionId || req.query?.sessionId);
-        const scopedUserId = getScopedUserId(req);
-        if (scopedUserId) {
-            const existingSession = await WhatsAppSession.findBySessionId(sessionId);
-            const ownerUserId = Number(existingSession?.created_by || 0);
-            if (!(ownerUserId > 0 && ownerUserId === scopedUserId)) {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (ownerScopeUserId) {
+            const existingSession = await WhatsAppSession.findBySessionId(sessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!existingSession) {
                 return res.status(404).json({ error: 'Conta nao encontrada' });
             }
         }
@@ -6357,7 +6621,18 @@ app.post('/api/auth/login', async (req, res) => {
             const refreshed = await User.findByIdWithPassword(user.id);
             if (refreshed) {
                 user = refreshed;
+            }
+        }
+
+        const ownerUserId = Number(user?.owner_user_id || 0);
+        const hasOwnerAssigned = Number.isInteger(ownerUserId) && ownerUserId > 0;
+        if (!hasOwnerAssigned) {
+            await User.update(user.id, { owner_user_id: user.id, role: 'admin', is_active: 1 });
+            const refreshed = await User.findByIdWithPassword(user.id);
+            if (refreshed) {
+                user = refreshed;
             } else {
+                user.owner_user_id = user.id;
                 user.role = 'admin';
             }
         }
@@ -6392,7 +6667,8 @@ app.post('/api/auth/login', async (req, res) => {
 
                 email: user.email,
 
-                role: user.role
+                role: user.role,
+                owner_user_id: user.owner_user_id
 
             }
 
@@ -6450,7 +6726,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 
-        await User.create({
+        const created = await User.create({
 
             name: String(name || '').trim(),
 
@@ -6458,13 +6734,17 @@ app.post('/api/auth/register', async (req, res) => {
 
             password_hash: hashPassword(String(password)),
 
-            role: 'agent'
+            role: 'admin'
 
         });
 
 
 
-        const user = await User.findByEmail(normalizedEmail);
+        if (Number(created?.id) > 0) {
+            await User.update(Number(created.id), { owner_user_id: Number(created.id) });
+        }
+
+        const user = await User.findById(Number(created?.id || 0));
 
         if (!user) {
 
@@ -6498,7 +6778,8 @@ app.post('/api/auth/register', async (req, res) => {
 
                 email: user.email,
 
-                role: user.role
+                role: user.role,
+                owner_user_id: user.owner_user_id
 
             }
 
@@ -6578,6 +6859,48 @@ function normalizeUserRoleInput(value) {
     return ALLOWED_USER_ROLES.has(normalized) ? normalized : 'agent';
 }
 
+function isUserAdminRole(value) {
+    return String(value || '').trim().toLowerCase() === 'admin';
+}
+
+function isUserActive(user) {
+    return Number(user?.is_active) > 0;
+}
+
+function normalizeOwnerUserId(value) {
+    const ownerUserId = Number(value || 0);
+    return Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : 0;
+}
+
+function isSameUserOwner(user, ownerUserId) {
+    return normalizeOwnerUserId(user?.owner_user_id) === normalizeOwnerUserId(ownerUserId);
+}
+
+async function resolveRequesterOwnerUserId(req) {
+    const requesterId = Number(req.user?.id || 0);
+    let ownerUserId = normalizeOwnerUserId(req.user?.owner_user_id);
+
+    if (!ownerUserId && requesterId > 0) {
+        const currentUser = await User.findById(requesterId);
+        ownerUserId = normalizeOwnerUserId(currentUser?.owner_user_id);
+        if (!ownerUserId) {
+            ownerUserId = requesterId;
+            await User.update(requesterId, { owner_user_id: ownerUserId });
+        }
+        if (req.user) {
+            req.user.owner_user_id = ownerUserId;
+        }
+    }
+
+    return ownerUserId;
+}
+
+async function countActiveAdminsByOwner(ownerUserId) {
+    const ownerId = normalizeOwnerUserId(ownerUserId);
+    if (!ownerId) return 0;
+    const users = await User.listByOwner(ownerId, { includeInactive: false });
+    return (users || []).filter((item) => isUserAdminRole(item.role)).length;
+}
 function normalizeUserActiveInput(value, fallback = 1) {
     if (typeof value === 'boolean') return value ? 1 : 0;
     if (typeof value === 'number') return value > 0 ? 1 : 0;
@@ -6598,6 +6921,7 @@ function sanitizeUserPayload(user) {
         email: user.email,
         role: user.role,
         is_active: Number(user.is_active) > 0 ? 1 : 0,
+        owner_user_id: normalizeOwnerUserId(user.owner_user_id) || null,
         last_login_at: user.last_login_at,
         created_at: user.created_at
     };
@@ -6607,14 +6931,17 @@ app.get('/api/users', authenticate, async (req, res) => {
     try {
         const requesterRole = String(req.user?.role || '').toLowerCase();
         const requesterId = Number(req.user?.id || 0);
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
         const isAdmin = requesterRole === 'admin';
 
         let users = [];
         if (isAdmin) {
-            users = await User.listAll();
+            users = requesterOwnerUserId
+                ? await User.listByOwner(requesterOwnerUserId, { includeInactive: false })
+                : [];
         } else {
             const me = await User.findById(requesterId);
-            users = me ? [me] : [];
+            users = me && isUserActive(me) ? [me] : [];
         }
 
         res.json({
@@ -6631,6 +6958,11 @@ app.post('/api/users', authenticate, async (req, res) => {
         const requesterRole = String(req.user?.role || '').toLowerCase();
         if (requesterRole !== 'admin') {
             return res.status(403).json({ success: false, error: 'Sem permissão para criar usuários' });
+        }
+
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
+        if (!requesterOwnerUserId) {
+            return res.status(400).json({ success: false, error: 'Conta administradora invalida' });
         }
 
         const { hashPassword } = require('./middleware/auth');
@@ -6656,7 +6988,8 @@ app.post('/api/users', authenticate, async (req, res) => {
             name,
             email,
             password_hash: hashPassword(password),
-            role
+            role,
+            owner_user_id: requesterOwnerUserId
         });
 
         const user = await User.findById(created.id);
@@ -6675,6 +7008,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
 
         const requesterRole = String(req.user?.role || '').toLowerCase();
         const requesterId = Number(req.user?.id || 0);
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
         const isAdmin = requesterRole === 'admin';
         const isSelf = requesterId === targetId;
 
@@ -6687,6 +7021,11 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
         }
 
+        if (isAdmin && !isSameUserOwner(current, requesterOwnerUserId)) {
+            return res.status(403).json({ success: false, error: 'Sem permissao para editar este usuario' });
+        }
+
+        const currentIsActiveAdmin = isUserActive(current) && isUserAdminRole(current.role);
         const payload = {};
 
         if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
@@ -6722,6 +7061,18 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
             }
         }
 
+        const nextRole = Object.prototype.hasOwnProperty.call(payload, 'role') ? payload.role : current.role;
+        const nextIsActive = Object.prototype.hasOwnProperty.call(payload, 'is_active')
+            ? (Number(payload.is_active) > 0 ? 1 : 0)
+            : (isUserActive(current) ? 1 : 0);
+        const willStopBeingActiveAdmin = currentIsActiveAdmin && (!isUserAdminRole(nextRole) || Number(nextIsActive) === 0);
+
+        if (willStopBeingActiveAdmin) {
+            const activeAdminCount = await countActiveAdminsByOwner(requesterOwnerUserId);
+            if (activeAdminCount <= 1) {
+                return res.status(400).json({ success: false, error: 'E necessario manter pelo menos um administrador ativo' });
+            }
+        }
         await User.update(targetId, payload);
         const updated = await User.findById(targetId);
         res.json({ success: true, user: sanitizeUserPayload(updated) });
@@ -6730,6 +7081,47 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
     }
 });
 
+app.delete('/api/users/:id', authenticate, async (req, res) => {
+    try {
+        const requesterRole = String(req.user?.role || '').toLowerCase();
+        const requesterId = Number(req.user?.id || 0);
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
+        if (requesterRole !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Sem permissao para remover usuarios' });
+        }
+
+        const targetId = parseInt(req.params.id, 10);
+        if (!Number.isInteger(targetId) || targetId <= 0) {
+            return res.status(400).json({ success: false, error: 'Usuario invalido' });
+        }
+
+        if (targetId === requesterId) {
+            return res.status(400).json({ success: false, error: 'Nao e possivel remover o proprio usuario' });
+        }
+
+        const current = await User.findById(targetId);
+        if (!current) {
+            return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
+        }
+        if (!isSameUserOwner(current, requesterOwnerUserId)) {
+            return res.status(403).json({ success: false, error: 'Sem permissao para remover este usuario' });
+        }
+
+        const isTargetActiveAdmin = isUserActive(current) && isUserAdminRole(current.role);
+        if (isTargetActiveAdmin) {
+            const activeAdminCount = await countActiveAdminsByOwner(requesterOwnerUserId);
+            if (activeAdminCount <= 1) {
+                return res.status(400).json({ success: false, error: 'E necessario manter pelo menos um administrador ativo' });
+            }
+        }
+
+        await User.update(targetId, { is_active: 0 });
+        const updated = await User.findById(targetId);
+        res.json({ success: true, user: sanitizeUserPayload(updated) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Erro ao remover usuario' });
+    }
+});
 app.post('/api/auth/change-password', authenticate, async (req, res) => {
     try {
         const userId = Number(req.user?.id || 0);
@@ -6882,7 +7274,8 @@ async function getContactFieldConfig(ownerUserId = null) {
 
 app.get('/api/contact-fields', authenticate, async (req, res) => {
     try {
-        const payload = await getContactFieldConfig(getScopedUserId(req));
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const payload = await getContactFieldConfig(ownerScopeUserId);
         res.json({ success: true, ...payload });
     } catch (error) {
         console.error('Falha ao carregar campos de contato:', error);
@@ -6892,12 +7285,12 @@ app.get('/api/contact-fields', authenticate, async (req, res) => {
 
 app.put('/api/contact-fields', authenticate, async (req, res) => {
     try {
-        const scopedUserId = getScopedUserId(req);
-        const settingsKey = buildScopedSettingsKey('contact_data_fields', scopedUserId);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const settingsKey = buildScopedSettingsKey('contact_data_fields', ownerScopeUserId);
         const incoming = Array.isArray(req.body?.fields) ? req.body.fields : [];
         const customFields = sanitizeStoredContactFields(incoming);
         await Settings.set(settingsKey, customFields, 'json');
-        const payload = await getContactFieldConfig(scopedUserId);
+        const payload = await getContactFieldConfig(ownerScopeUserId);
         res.json({ success: true, ...payload });
     } catch (error) {
         console.error('Falha ao salvar campos de contato:', error);
@@ -6997,6 +7390,7 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
             .trim()
             .toLowerCase();
         const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
         if (!DASHBOARD_PERIOD_METRICS.has(metric)) {
             return res.status(400).json({ success: false, error: 'Métrica inválida' });
@@ -7028,7 +7422,13 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
         let rows = [];
         if (metric === 'novos_contatos') {
             const params = [startAt, endExclusiveAt];
-            const ownerFilter = scopedUserId ? ' AND assigned_to = ?' : '';
+            const ownerFilter = ownerScopeUserId
+                ? ' AND EXISTS (SELECT 1 FROM users u WHERE u.id = assigned_to AND (u.owner_user_id = ? OR u.id = ?))'
+                : '';
+            if (ownerScopeUserId) {
+                params.push(ownerScopeUserId, ownerScopeUserId);
+            }
+            const assignedFilter = scopedUserId ? ' AND assigned_to = ?' : '';
             if (scopedUserId) {
                 params.push(scopedUserId);
             }
@@ -7038,7 +7438,7 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
                     TO_CHAR((created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day,
                     COUNT(*)::int AS total
                 FROM leads
-                WHERE created_at >= ? AND created_at < ?${ownerFilter}
+                WHERE created_at >= ? AND created_at < ?${ownerFilter}${assignedFilter}
                 GROUP BY (created_at AT TIME ZONE 'UTC')::date
                 ORDER BY (created_at AT TIME ZONE 'UTC')::date ASC
                 `,
@@ -7046,7 +7446,13 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
             );
         } else if (metric === 'mensagens') {
             const params = [startAt, endExclusiveAt];
-            const ownerFilter = scopedUserId ? ' AND l.assigned_to = ?' : '';
+            const ownerFilter = ownerScopeUserId
+                ? ' AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.assigned_to AND (u.owner_user_id = ? OR u.id = ?))'
+                : '';
+            if (ownerScopeUserId) {
+                params.push(ownerScopeUserId, ownerScopeUserId);
+            }
+            const assignedFilter = scopedUserId ? ' AND l.assigned_to = ?' : '';
             if (scopedUserId) {
                 params.push(scopedUserId);
             }
@@ -7057,7 +7463,7 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
                     COUNT(*)::int AS total
                 FROM messages m
                 LEFT JOIN leads l ON l.id = m.lead_id
-                WHERE COALESCE(m.sent_at, m.created_at) >= ? AND COALESCE(m.sent_at, m.created_at) < ?${ownerFilter}
+                WHERE COALESCE(m.sent_at, m.created_at) >= ? AND COALESCE(m.sent_at, m.created_at) < ?${ownerFilter}${assignedFilter}
                 GROUP BY (COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date
                 ORDER BY (COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date ASC
                 `,
@@ -7065,7 +7471,13 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
             );
         } else {
             const params = [startAt, endExclusiveAt];
-            const ownerFilter = scopedUserId ? ' AND l.assigned_to = ?' : '';
+            const ownerFilter = ownerScopeUserId
+                ? ' AND EXISTS (SELECT 1 FROM users u WHERE u.id = l.assigned_to AND (u.owner_user_id = ? OR u.id = ?))'
+                : '';
+            if (ownerScopeUserId) {
+                params.push(ownerScopeUserId, ownerScopeUserId);
+            }
+            const assignedFilter = scopedUserId ? ' AND l.assigned_to = ?' : '';
             if (scopedUserId) {
                 params.push(scopedUserId);
             }
@@ -7077,7 +7489,7 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
                 FROM messages m
                 LEFT JOIN leads l ON l.id = m.lead_id
                 WHERE COALESCE(m.sent_at, m.created_at) >= ? AND COALESCE(m.sent_at, m.created_at) < ?
-                  AND m.is_from_me = 0${ownerFilter}
+                  AND m.is_from_me = 0${ownerFilter}${assignedFilter}
                 GROUP BY (COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date
                 ORDER BY (COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date ASC
                 `,
@@ -7297,6 +7709,7 @@ app.get('/api/leads', optionalAuth, async (req, res) => {
     const { status, search, limit, offset, assigned_to } = req.query;
     const sessionId = sanitizeSessionId(req.query.session_id || req.query.sessionId);
     const scopedUserId = getScopedUserId(req);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
     const requestedAssignedTo = assigned_to ? parseInt(assigned_to, 10) : undefined;
     const resolvedAssignedTo = scopedUserId || requestedAssignedTo;
 
@@ -7307,6 +7720,8 @@ app.get('/api/leads', optionalAuth, async (req, res) => {
         search,
 
         assigned_to: resolvedAssignedTo,
+
+        owner_user_id: ownerScopeUserId || undefined,
 
         session_id: sessionId || undefined,
 
@@ -7319,6 +7734,7 @@ app.get('/api/leads', optionalAuth, async (req, res) => {
     const total = await Lead.count({
         status: status ? parseInt(status) : undefined,
         assigned_to: resolvedAssignedTo,
+        owner_user_id: ownerScopeUserId || undefined,
         session_id: sessionId || undefined
     });
 
@@ -7434,10 +7850,13 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
             newStatus
         });
 
-        const statusConversation = await Conversation.findByLeadId(updatedLead.id);
+        const statusSessionId = sanitizeSessionId(
+            req.body?.session_id || req.body?.sessionId || req.query?.session_id || req.query?.sessionId
+        );
+        const statusConversation = await Conversation.findByLeadId(updatedLead.id, statusSessionId || null);
         await scheduleAutomations({
             event: AUTOMATION_EVENT_TYPES.STATUS_CHANGE,
-            sessionId: statusConversation?.session_id || DEFAULT_AUTOMATION_SESSION_ID,
+            sessionId: statusConversation?.session_id || statusSessionId || DEFAULT_AUTOMATION_SESSION_ID,
             lead: updatedLead,
             conversation: statusConversation || null,
             oldStatus,
@@ -7501,14 +7920,8 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
 
 app.get('/api/tags', optionalAuth, async (req, res) => {
     try {
-        const scopedUserId = getScopedUserId(req);
-        await Tag.syncFromLeads({
-            assigned_to: scopedUserId || undefined,
-            created_by: scopedUserId || undefined
-        });
-        const tags = await Tag.list({
-            created_by: scopedUserId || undefined
-        });
+        await Tag.syncFromLeads();
+        const tags = await Tag.list();
         res.json({ success: true, tags });
     } catch (error) {
         console.error('Falha ao listar tags:', error);
@@ -7518,7 +7931,6 @@ app.get('/api/tags', optionalAuth, async (req, res) => {
 
 app.post('/api/tags', authenticate, async (req, res) => {
     try {
-        const scopedUserId = getScopedUserId(req);
         const name = normalizeTagNameInput(req.body?.name);
         const color = normalizeTagColorInput(req.body?.color);
         const description = normalizeTagDescriptionInput(req.body?.description);
@@ -7527,19 +7939,12 @@ app.post('/api/tags', authenticate, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Nome da tag é obrigatório' });
         }
 
-        const existing = await Tag.findByName(name, {
-            created_by: scopedUserId || undefined
-        });
+        const existing = await Tag.findByName(name);
         if (existing) {
             return res.status(409).json({ success: false, error: 'Já existe uma tag com este nome' });
         }
 
-        const tag = await Tag.create({
-            name,
-            color,
-            description,
-            created_by: scopedUserId || undefined
-        });
+        const tag = await Tag.create({ name, color, description });
         res.status(201).json({ success: true, tag });
     } catch (error) {
         console.error('Falha ao criar tag:', error);
@@ -7549,15 +7954,12 @@ app.post('/api/tags', authenticate, async (req, res) => {
 
 app.put('/api/tags/:id', authenticate, async (req, res) => {
     try {
-        const scopedUserId = getScopedUserId(req);
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
             return res.status(400).json({ success: false, error: 'ID de tag inválido' });
         }
 
-        const currentTag = await Tag.findById(tagId, {
-            created_by: scopedUserId || undefined
-        });
+        const currentTag = await Tag.findById(tagId);
         if (!currentTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
@@ -7569,9 +7971,7 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Nome da tag é obrigatório' });
             }
 
-            const duplicate = await Tag.findByName(nextName, {
-                created_by: scopedUserId || undefined
-            });
+            const duplicate = await Tag.findByName(nextName);
             if (duplicate && Number(duplicate.id) !== tagId) {
                 return res.status(409).json({ success: false, error: 'Já existe uma tag com este nome' });
             }
@@ -7584,9 +7984,7 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
             payload.description = normalizeTagDescriptionInput(req.body.description);
         }
 
-        const updatedTag = await Tag.update(tagId, payload, {
-            created_by: scopedUserId || undefined
-        });
+        const updatedTag = await Tag.update(tagId, payload);
         if (!updatedTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
@@ -7595,20 +7993,11 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
             payload.name &&
             normalizeTagNameInput(currentTag.name).toLowerCase() !== normalizeTagNameInput(updatedTag.name).toLowerCase()
         ) {
-            await Tag.renameInLeads(currentTag.name, updatedTag.name, {
-                assigned_to: scopedUserId || undefined
-            });
-            if (scopedUserId) {
-                await run(
-                    'UPDATE campaigns SET tag_filter = ? WHERE created_by = ? AND LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-                    [updatedTag.name, scopedUserId, currentTag.name]
-                );
-            } else {
-                await run(
-                    'UPDATE campaigns SET tag_filter = ? WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-                    [updatedTag.name, currentTag.name]
-                );
-            }
+            await Tag.renameInLeads(currentTag.name, updatedTag.name);
+            await run(
+                'UPDATE campaigns SET tag_filter = ? WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
+                [updatedTag.name, currentTag.name]
+            );
         }
 
         res.json({ success: true, tag: updatedTag });
@@ -7620,36 +8009,22 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
 
 app.delete('/api/tags/:id', authenticate, async (req, res) => {
     try {
-        const scopedUserId = getScopedUserId(req);
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
             return res.status(400).json({ success: false, error: 'ID de tag inválido' });
         }
 
-        const currentTag = await Tag.findById(tagId, {
-            created_by: scopedUserId || undefined
-        });
+        const currentTag = await Tag.findById(tagId);
         if (!currentTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
 
-        await Tag.delete(tagId, {
-            created_by: scopedUserId || undefined
-        });
-        await Tag.removeFromLeads(currentTag.name, {
-            assigned_to: scopedUserId || undefined
-        });
-        if (scopedUserId) {
-            await run(
-                'UPDATE campaigns SET tag_filter = NULL WHERE created_by = ? AND LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-                [scopedUserId, currentTag.name]
-            );
-        } else {
-            await run(
-                'UPDATE campaigns SET tag_filter = NULL WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-                [currentTag.name]
-            );
-        }
+        await Tag.delete(tagId);
+        await Tag.removeFromLeads(currentTag.name);
+        await run(
+            'UPDATE campaigns SET tag_filter = NULL WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
+            [currentTag.name]
+        );
 
         res.json({ success: true });
     } catch (error) {
@@ -7932,30 +8307,31 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     const conversationId = Number(req.query.conversation_id || req.query.conversationId);
     const hasConversationId = Number.isFinite(conversationId) && conversationId > 0;
     const sessionId = sanitizeSessionId(req.query.session_id || req.query.sessionId);
-    const contactJid = sanitizeSessionId(req.query.contact_jid || req.query.contactJid);
+    const contactJid = normalizeJid(req.query.contact_jid || req.query.contactJid);
 
     let messages = [];
     let resolvedConversation = null;
     let resolvedLead = null;
 
     if (hasConversationId) {
-        resolvedConversation = await Conversation.findById(conversationId);
+        const conversation = await Conversation.findById(conversationId);
+        const conversationSessionId = sanitizeSessionId(conversation?.session_id);
+        if (conversation && (!sessionId || conversationSessionId === sessionId)) {
+            resolvedConversation = conversation;
+        }
         if (resolvedConversation) {
             resolvedLead = await Lead.findById(resolvedConversation.lead_id);
+            messages = await Message.listByConversation(resolvedConversation.id, { limit });
         }
-        messages = await Message.listByConversation(conversationId, { limit });
-    } else if (Number.isFinite(leadId) && leadId > 0 && sessionId) {
+    } else if (Number.isFinite(leadId) && leadId > 0) {
         resolvedLead = await Lead.findById(leadId);
-        const conversation = await Conversation.findByLeadId(leadId, sessionId);
+        const conversation = await Conversation.findByLeadId(leadId, sessionId || null);
         if (conversation) {
             resolvedConversation = conversation;
             messages = await Message.listByConversation(conversation.id, { limit });
         } else {
             messages = [];
         }
-    } else if (Number.isFinite(leadId) && leadId > 0) {
-        resolvedLead = await Lead.findById(leadId);
-        messages = await Message.listByLead(leadId, { limit });
     }
 
     if (resolvedLead && !canAccessAssignedRecord(req, resolvedLead.assigned_to)) {
@@ -9439,8 +9815,8 @@ app.post('/api/webhook/incoming', async (req, res) => {
 
 app.get('/api/settings', authenticate, async (req, res) => {
 
-    const scopedUserId = getScopedUserId(req);
-    const settings = normalizeSettingsForResponse(await Settings.getAll(), scopedUserId);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const settings = normalizeSettingsForResponse(await Settings.getAll(), ownerScopeUserId);
 
     res.json({ success: true, settings });
 
@@ -9450,7 +9826,7 @@ app.get('/api/settings', authenticate, async (req, res) => {
 
 app.put('/api/settings', authenticate, async (req, res) => {
 
-    const scopedUserId = getScopedUserId(req);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
     const incomingSettings = req.body && typeof req.body === 'object' ? req.body : {};
     const changedKeys = Object.keys(incomingSettings);
 
@@ -9462,7 +9838,7 @@ app.put('/api/settings', authenticate, async (req, res) => {
 
                      typeof value === 'object' ? 'json' : 'string';
 
-        await Settings.set(buildScopedSettingsKey(key, scopedUserId), value, type);
+        await Settings.set(buildScopedSettingsKey(key, ownerScopeUserId), value, type);
 
     }
 
@@ -9474,7 +9850,7 @@ app.put('/api/settings', authenticate, async (req, res) => {
         Object.prototype.hasOwnProperty.call(incomingSettings, 'bulk_message_delay') ||
         Object.prototype.hasOwnProperty.call(incomingSettings, 'max_messages_per_minute');
 
-    if (hasQueueSettings && !scopedUserId) {
+    if (hasQueueSettings && !ownerScopeUserId) {
 
         await queueService.updateSettings({
 
@@ -9487,7 +9863,7 @@ app.put('/api/settings', authenticate, async (req, res) => {
     }
 
     const touchedBusinessHours = changedKeys.some((key) => String(key || '').startsWith('business_hours_'));
-    if (touchedBusinessHours && !scopedUserId) {
+    if (touchedBusinessHours && !ownerScopeUserId) {
         invalidateBusinessHoursSettingsCache();
         if (typeof queueService.invalidateBusinessHoursCache === 'function') {
             queueService.invalidateBusinessHoursCache();
@@ -9498,7 +9874,7 @@ app.put('/api/settings', authenticate, async (req, res) => {
 
     res.json({
         success: true,
-        settings: normalizeSettingsForResponse(await Settings.getAll(), scopedUserId)
+        settings: normalizeSettingsForResponse(await Settings.getAll(), ownerScopeUserId)
     });
 
 });

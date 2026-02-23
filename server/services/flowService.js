@@ -34,6 +34,9 @@ const INTENT_DIRECTION_GROUPS = [
 const INTENT_DIRECTION_CONFLICT_PAIRS = [
     ['buy', 'sell']
 ];
+const INTENT_TOKEN_CANONICAL_PREFIXES = [
+    { canonical: 'hora', prefixes: ['hora', 'horari'] }
+];
 
 function isStrictFlowIntentRoutingEnabled() {
     const value = String(process.env.FLOW_INTENT_CLASSIFIER_STRICT || '').trim().toLowerCase();
@@ -120,7 +123,26 @@ function normalizeIntentToken(token = '') {
         }
     }
 
+    for (const rule of INTENT_TOKEN_CANONICAL_PREFIXES) {
+        if (!rule?.canonical || !Array.isArray(rule?.prefixes)) continue;
+        const hasPrefixMatch = rule.prefixes.some((prefix) => normalized.startsWith(String(prefix || '').trim()));
+        if (hasPrefixMatch) {
+            return String(rule.canonical).trim() || normalized;
+        }
+    }
+
     return normalized;
+}
+
+function sanitizeOutgoingFlowText(value = '') {
+    if (value === null || value === undefined) return '';
+
+    return String(value)
+        .normalize('NFC')
+        .replace(/\r\n/g, '\n')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim();
 }
 
 function tokenMatchesIntentRoot(token = '', root = '') {
@@ -975,17 +997,25 @@ class FlowService extends EventEmitter {
                     }
 
                     // Enviar mensagem
-                    const content = this.replaceVariables(node.data.content, execution.variables);
+                    const rawContent = this.replaceVariables(node?.data?.content, execution.variables);
+                    const content = sanitizeOutgoingFlowText(rawContent);
+                    const mediaType = String(node?.data?.mediaType || 'text').trim().toLowerCase() || 'text';
                     
-                    if (this.sendFunction) {
+                    if (this.sendFunction && (mediaType !== 'text' || content)) {
                         await this.sendFunction({
                             to: execution.lead.phone,
                             jid: execution.lead.jid,
                             sessionId: execution.conversation?.session_id || null,
+                            conversationId: execution.conversation?.id || null,
                             content,
-                            mediaType: node.data.mediaType || 'text',
-                            mediaUrl: node.data.mediaUrl
+                            mediaType,
+                            mediaUrl: node?.data?.mediaUrl
                         });
+                    } else if (mediaType === 'text' && !content) {
+                        console.warn(
+                            `[flow-intent] Mensagem de fluxo vazia ignorada `
+                            + `(fluxo ${execution?.flow?.id || 'n/a'}, no ${node?.id || 'n/a'}).`
+                        );
                     }
                     
                     // Ir para o proximo no
@@ -1020,6 +1050,7 @@ class FlowService extends EventEmitter {
                             to: execution.lead.phone,
                             jid: execution.lead.jid,
                             sessionId: execution.conversation?.session_id || null,
+                            conversationId: execution.conversation?.id || null,
                             content: transferMsg
                         });
                     }
@@ -1164,15 +1195,18 @@ class FlowService extends EventEmitter {
         const messageText = String(responseText ?? execution?.triggerMessageText ?? execution?.variables?.trigger_message ?? '').trim();
         if (!messageText) return null;
         const strictIntentRouting = isStrictFlowIntentRoutingEnabled() && isFlowIntentClassifierConfigured();
+        const nodeType = String(node?.type || '').trim().toLowerCase();
 
         const semanticDecision = await classifyIntentRoute(messageText, routes);
         if (semanticDecision?.status === 'selected' && semanticDecision.routeId) {
             return String(semanticDecision.routeId);
         }
         if (semanticDecision?.status === 'no_match') {
-            return null;
+            if (strictIntentRouting && nodeType === 'trigger') {
+                return null;
+            }
         }
-        if (strictIntentRouting && String(node?.type || '').toLowerCase() === 'trigger') {
+        if (strictIntentRouting && nodeType === 'trigger') {
             return null;
         }
 

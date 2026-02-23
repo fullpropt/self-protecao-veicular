@@ -485,6 +485,21 @@ const Lead = {
             sql += ' AND assigned_to = ?';
             params.push(options.assigned_to);
         }
+
+        if (options.owner_user_id) {
+            const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+            if (ownerUserId) {
+                sql += `
+                    AND EXISTS (
+                        SELECT 1
+                        FROM users owner_scope
+                        WHERE owner_scope.id = leads.assigned_to
+                          AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                    )
+                `;
+                params.push(ownerUserId, ownerUserId);
+            }
+        }
         
         if (options.search) {
             sql += ' AND (name LIKE ? OR phone LIKE ?)';
@@ -523,6 +538,21 @@ const Lead = {
         if (options.assigned_to) {
             sql += ' AND assigned_to = ?';
             params.push(options.assigned_to);
+        }
+
+        if (options.owner_user_id) {
+            const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+            if (ownerUserId) {
+                sql += `
+                    AND EXISTS (
+                        SELECT 1
+                        FROM users owner_scope
+                        WHERE owner_scope.id = leads.assigned_to
+                          AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                    )
+                `;
+                params.push(ownerUserId, ownerUserId);
+            }
         }
 
         if (options.session_id) {
@@ -1094,10 +1124,24 @@ const WhatsAppSession = {
     async list(options = {}) {
         const includeDisabled = options.includeDisabled !== false;
         const createdBy = parsePositiveInteger(options.created_by);
+        const ownerUserId = parsePositiveInteger(options.owner_user_id);
         const filters = [];
         const params = [];
 
-        if (createdBy) {
+        if (ownerUserId) {
+            filters.push(`
+                (
+                    whatsapp_sessions.created_by = ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM users u
+                        WHERE u.id = whatsapp_sessions.created_by
+                          AND (u.owner_user_id = ? OR u.id = ?)
+                    )
+                )
+            `);
+            params.push(ownerUserId, ownerUserId, ownerUserId);
+        } else if (createdBy) {
             filters.push('created_by = ?');
             params.push(createdBy);
         }
@@ -1140,10 +1184,24 @@ const WhatsAppSession = {
     async findBySessionId(sessionId, options = {}) {
         const normalizedSessionId = String(sessionId || '').trim();
         if (!normalizedSessionId) return null;
+        const ownerUserId = parsePositiveInteger(options.owner_user_id);
         const createdBy = parsePositiveInteger(options.created_by);
         const params = [normalizedSessionId];
         let ownerFilter = '';
-        if (createdBy) {
+        if (ownerUserId) {
+            ownerFilter = `
+                AND (
+                    whatsapp_sessions.created_by = ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM users u
+                        WHERE u.id = whatsapp_sessions.created_by
+                          AND (u.owner_user_id = ? OR u.id = ?)
+                    )
+                )
+            `;
+            params.push(ownerUserId, ownerUserId, ownerUserId);
+        } else if (createdBy) {
             ownerFilter = ' AND created_by = ?';
             params.push(createdBy);
         }
@@ -1190,11 +1248,19 @@ const WhatsAppSession = {
 
         const existing = await this.findBySessionId(normalizedSessionId);
         const existingCreatedBy = parsePositiveInteger(existing?.created_by);
+        const requestedOwnerUserId = parsePositiveInteger(data.owner_user_id);
         const requestedCreatedBy = parsePositiveInteger(data.created_by);
-        if (existingCreatedBy && requestedCreatedBy && existingCreatedBy !== requestedCreatedBy) {
+        if (requestedOwnerUserId && existing) {
+            const ownedExisting = await this.findBySessionId(normalizedSessionId, {
+                owner_user_id: requestedOwnerUserId
+            });
+            if (!ownedExisting) {
+                throw new Error('Sem permissao para atualizar esta sessao');
+            }
+        } else if (existingCreatedBy && requestedCreatedBy && existingCreatedBy !== requestedCreatedBy) {
             throw new Error('Sem permissao para atualizar esta sessao');
         }
-        const resolvedCreatedBy = existingCreatedBy || requestedCreatedBy || null;
+        const resolvedCreatedBy = requestedOwnerUserId || requestedCreatedBy || existingCreatedBy || null;
         const resolvedName = Object.prototype.hasOwnProperty.call(data, 'name')
             ? (data.name ? String(data.name).trim().slice(0, 120) : null)
             : (existing?.name || null);
@@ -1226,7 +1292,7 @@ const WhatsAppSession = {
                 dispatch_weight = EXCLUDED.dispatch_weight,
                 hourly_limit = EXCLUDED.hourly_limit,
                 cooldown_until = EXCLUDED.cooldown_until,
-                created_by = COALESCE(whatsapp_sessions.created_by, EXCLUDED.created_by),
+                created_by = COALESCE(EXCLUDED.created_by, whatsapp_sessions.created_by),
                 updated_at = CURRENT_TIMESTAMP
         `, [
             normalizedSessionId,
@@ -1249,11 +1315,20 @@ const WhatsAppSession = {
             throw new Error('session_id e obrigatorio');
         }
 
+        const requesterOwnerUserId = parsePositiveInteger(options.owner_user_id);
         const requesterCreatedBy = parsePositiveInteger(options.created_by);
-        if (requesterCreatedBy) {
-            const existing = await this.findBySessionId(normalizedSessionId);
-            const owner = parsePositiveInteger(existing?.created_by);
-            if (!existing || owner !== requesterCreatedBy) {
+        if (requesterOwnerUserId) {
+            const existing = await this.findBySessionId(normalizedSessionId, {
+                owner_user_id: requesterOwnerUserId
+            });
+            if (!existing) {
+                throw new Error('Sem permissao para remover esta sessao');
+            }
+        } else if (requesterCreatedBy) {
+            const existing = await this.findBySessionId(normalizedSessionId, {
+                created_by: requesterCreatedBy
+            });
+            if (!existing) {
                 throw new Error('Sem permissao para remover esta sessao');
             }
         }
@@ -1892,61 +1967,23 @@ const MessageQueue = {
 
 const DEFAULT_TAG_COLOR = '#5a2a6b';
 
-function normalizeTagOwnerId(value) {
-    return parsePositiveInteger(value, null);
-}
-
-function buildTagOwnerFilter(options = {}, params = []) {
-    const createdBy = normalizeTagOwnerId(options.created_by);
-    const includeAll = options.include_all === true;
-
-    if (createdBy) {
-        params.push(createdBy);
-        return ' AND created_by = ?';
-    }
-
-    if (includeAll) {
-        return '';
-    }
-
-    return ' AND created_by IS NULL';
-}
-
 const Tag = {
-    async list(options = {}) {
-        const params = [];
-        const ownerFilter = buildTagOwnerFilter(options, params);
+    async list() {
         return await query(`
-            SELECT id, name, color, description, created_by, created_at
+            SELECT id, name, color, description, created_at
             FROM tags
-            WHERE 1=1
-            ${ownerFilter}
             ORDER BY LOWER(name) ASC, id ASC
-        `, params);
+        `);
     },
 
-    async findById(id, options = {}) {
-        const params = [id];
-        const ownerFilter = buildTagOwnerFilter(options, params);
-        return await queryOne(`
-            SELECT id, name, color, description, created_by, created_at
-            FROM tags
-            WHERE id = ?
-            ${ownerFilter}
-        `, params);
+    async findById(id) {
+        return await queryOne('SELECT id, name, color, description, created_at FROM tags WHERE id = ?', [id]);
     },
 
-    async findByName(name, options = {}) {
-        const params = [name];
-        const ownerFilter = buildTagOwnerFilter(options, params);
+    async findByName(name) {
         return await queryOne(
-            `
-            SELECT id, name, color, description, created_by, created_at
-            FROM tags
-            WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
-            ${ownerFilter}
-            `,
-            params
+            'SELECT id, name, color, description, created_at FROM tags WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))',
+            [name]
         );
     },
 
@@ -1954,20 +1991,16 @@ const Tag = {
         const tagName = normalizeTagValue(data.name);
         const tagColor = normalizeTagValue(data.color) || DEFAULT_TAG_COLOR;
         const tagDescription = normalizeTagValue(data.description);
-        const ownerUserId = normalizeTagOwnerId(data.created_by);
 
         const result = await run(`
-            INSERT INTO tags (name, color, description, created_by)
-            VALUES (?, ?, ?, ?)
-        `, [tagName, tagColor, tagDescription || null, ownerUserId]);
+            INSERT INTO tags (name, color, description)
+            VALUES (?, ?, ?)
+        `, [tagName, tagColor, tagDescription || null]);
 
-        return await this.findById(result.lastInsertRowid, {
-            created_by: ownerUserId || undefined,
-            include_all: !ownerUserId
-        });
+        return await this.findById(result.lastInsertRowid);
     },
 
-    async update(id, data, options = {}) {
+    async update(id, data) {
         const fields = [];
         const values = [];
 
@@ -1985,40 +2018,23 @@ const Tag = {
             values.push(description || null);
         }
 
-        if (fields.length === 0) return await this.findById(id, options);
+        if (fields.length === 0) return await this.findById(id);
 
-        const ownerParams = [];
-        const ownerFilter = buildTagOwnerFilter(options, ownerParams);
+        values.push(id);
+        await run(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?`, values);
 
-        values.push(id, ...ownerParams);
-        await run(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?${ownerFilter}`, values);
-
-        return await this.findById(id, options);
+        return await this.findById(id);
     },
 
-    async delete(id, options = {}) {
-        const params = [id];
-        const ownerFilter = buildTagOwnerFilter(options, params);
-        return await run(`DELETE FROM tags WHERE id = ?${ownerFilter}`, params);
+    async delete(id) {
+        return await run('DELETE FROM tags WHERE id = ?', [id]);
     },
 
-    async syncFromLeads(options = {}) {
-        const assignedTo = parsePositiveInteger(options.assigned_to, null);
-        const ownerUserId = normalizeTagOwnerId(options.created_by);
-        const params = [];
-        let sql = "SELECT tags FROM leads WHERE tags IS NOT NULL AND tags <> ''";
-        if (assignedTo) {
-            sql += ' AND assigned_to = ?';
-            params.push(assignedTo);
-        }
-
-        const rows = await query(sql, params);
+    async syncFromLeads() {
+        const rows = await query("SELECT tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
         if (!rows || rows.length === 0) return;
 
-        const existingTags = await this.list({
-            created_by: ownerUserId || undefined,
-            include_all: !ownerUserId
-        });
+        const existingTags = await this.list();
         const existingKeys = new Set(existingTags.map((tag) => normalizeTagKey(tag.name)));
         const discoveredTags = new Set();
 
@@ -2033,29 +2049,21 @@ const Tag = {
             if (existingKeys.has(key)) continue;
 
             await run(
-                `INSERT INTO tags (name, color, description, created_by)
-                 VALUES (?, ?, ?, ?)
-                 ON CONFLICT DO NOTHING`,
-                [tagName, DEFAULT_TAG_COLOR, null, ownerUserId]
+                `INSERT INTO tags (name, color, description)
+                 VALUES (?, ?, ?)
+                 ON CONFLICT(name) DO NOTHING`,
+                [tagName, DEFAULT_TAG_COLOR, null]
             );
             existingKeys.add(key);
         }
     },
 
-    async renameInLeads(previousName, nextName, options = {}) {
+    async renameInLeads(previousName, nextName) {
         const previousKey = normalizeTagKey(previousName);
         const sanitizedNext = normalizeTagValue(nextName);
         if (!previousKey || !sanitizedNext) return 0;
 
-        const assignedTo = parsePositiveInteger(options.assigned_to, null);
-        const params = [];
-        let sql = "SELECT id, tags FROM leads WHERE tags IS NOT NULL AND tags <> ''";
-        if (assignedTo) {
-            sql += ' AND assigned_to = ?';
-            params.push(assignedTo);
-        }
-
-        const leads = await query(sql, params);
+        const leads = await query("SELECT id, tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
         let updatedLeads = 0;
 
         for (const lead of leads) {
@@ -2089,19 +2097,11 @@ const Tag = {
         return updatedLeads;
     },
 
-    async removeFromLeads(tagName, options = {}) {
+    async removeFromLeads(tagName) {
         const normalized = normalizeTagKey(tagName);
         if (!normalized) return 0;
 
-        const assignedTo = parsePositiveInteger(options.assigned_to, null);
-        const params = [];
-        let sql = "SELECT id, tags FROM leads WHERE tags IS NOT NULL AND tags <> ''";
-        if (assignedTo) {
-            sql += ' AND assigned_to = ?';
-            params.push(assignedTo);
-        }
-
-        const leads = await query(sql, params);
+        const leads = await query("SELECT id, tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
         let updatedLeads = 0;
 
         for (const lead of leads) {
@@ -2262,24 +2262,27 @@ const User = {
     async create(data) {
         const uuid = generateUUID();
         const safeName = deriveUserName(data.name, data.email);
+        const ownerUserId = Number(data.owner_user_id);
+        const normalizedOwnerUserId = Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : null;
         
         const result = await run(`
-            INSERT INTO users (uuid, name, email, password_hash, role, avatar_url)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO users (uuid, name, email, password_hash, role, avatar_url, owner_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             safeName,
             data.email,
             data.password_hash,
             data.role || 'agent',
-            data.avatar_url
+            data.avatar_url,
+            normalizedOwnerUserId
         ]);
         
         return { id: result.lastInsertRowid, uuid };
     },
     
     async findById(id) {
-        return await queryOne('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users WHERE id = ?', [id]);
+        return await queryOne('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users WHERE id = ?', [id]);
     },
 
     async findByIdWithPassword(id) {
@@ -2295,11 +2298,26 @@ const User = {
     },
     
     async list() {
-        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users WHERE is_active = 1 ORDER BY name ASC');
+        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users WHERE is_active = 1 ORDER BY name ASC');
     },
 
     async listAll() {
-        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users ORDER BY name ASC');
+        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users ORDER BY name ASC');
+    },
+
+    async listByOwner(ownerUserId, options = {}) {
+        const ownerId = Number(ownerUserId);
+        if (!Number.isInteger(ownerId) || ownerId <= 0) return [];
+
+        const includeInactive = options?.includeInactive === true;
+        const whereActive = includeInactive ? '' : ' AND is_active = 1';
+        return await query(
+            `SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at
+             FROM users
+             WHERE owner_user_id = ?${whereActive}
+             ORDER BY name ASC`,
+            [ownerId]
+        );
     },
 
     async update(id, data) {
@@ -2325,6 +2343,13 @@ const User = {
         if (Object.prototype.hasOwnProperty.call(data, 'is_active')) {
             updates.push('is_active = ?');
             params.push(Number(data.is_active) > 0 ? 1 : 0);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(data, 'owner_user_id')) {
+            const ownerUserId = Number(data.owner_user_id);
+            const normalizedOwnerUserId = Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : null;
+            updates.push('owner_user_id = ?');
+            params.push(normalizedOwnerUserId);
         }
 
         if (!updates.length) {
