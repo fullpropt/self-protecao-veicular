@@ -302,6 +302,16 @@ function normalizeBooleanFlag(value, fallback = 1) {
     return fallback;
 }
 
+async function executeLeadCleanupQuery(client, statement, leadId) {
+    try {
+        await client.query(statement, [leadId]);
+    } catch (error) {
+        // Em ambientes com migração parcial, algumas tabelas podem não existir.
+        if (error && error.code === '42P01') return;
+        throw error;
+    }
+}
+
 // ============================================
 // LEADS
 // ============================================
@@ -440,11 +450,22 @@ const Lead = {
     
     async delete(id) {
         return await transaction(async (client) => {
-            await client.query('DELETE FROM message_queue WHERE lead_id = $1', [id]);
-            await client.query('DELETE FROM flow_executions WHERE lead_id = $1', [id]);
-            await client.query('DELETE FROM messages WHERE lead_id = $1', [id]);
+            const leadId = Number(id);
+            const cleanupStatements = [
+                'DELETE FROM message_queue WHERE lead_id = $1',
+                'DELETE FROM flow_executions WHERE lead_id = $1',
+                'DELETE FROM messages WHERE lead_id = $1',
+                'DELETE FROM lead_tags WHERE lead_id = $1',
+                'DELETE FROM automation_lead_runs WHERE lead_id = $1',
+                'UPDATE custom_event_logs SET lead_id = NULL WHERE lead_id = $1',
+                'DELETE FROM conversations WHERE lead_id = $1'
+            ];
 
-            const result = await client.query('DELETE FROM leads WHERE id = $1', [id]);
+            for (const statement of cleanupStatements) {
+                await executeLeadCleanupQuery(client, statement, leadId);
+            }
+
+            const result = await client.query('DELETE FROM leads WHERE id = $1', [leadId]);
             return {
                 lastInsertRowid: null,
                 changes: result.rowCount
