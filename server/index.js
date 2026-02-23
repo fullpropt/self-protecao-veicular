@@ -517,12 +517,16 @@ const typingStatus = new Map();
 const jidAliasMap = new Map();
 const sessionInitLocks = new Set();
 const pendingCiphertextRecoveries = new Map();
+const pendingLidResolutionRecoveries = new Map();
 const recoveredFlowMessageIds = new Map();
 const FLOW_RECOVERY_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_DELAY_MS || '', 10) || 2500;
 const FLOW_RECOVERY_WINDOW_MS = parseInt(process.env.FLOW_RECOVERY_WINDOW_MS || '', 10) || (5 * 60 * 1000);
 const FLOW_RECOVERY_TRACKER_LIMIT = 4000;
 const FLOW_RECOVERY_MAX_ATTEMPTS = parseInt(process.env.FLOW_RECOVERY_MAX_ATTEMPTS || '', 10) || 7;
 const FLOW_RECOVERY_MAX_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_MAX_DELAY_MS || '', 10) || 30000;
+const LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS = parseInt(process.env.LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS || '', 10) || 4;
+const LID_RESOLUTION_RECOVERY_BASE_DELAY_MS = parseInt(process.env.LID_RESOLUTION_RECOVERY_BASE_DELAY_MS || '', 10) || 1200;
+const LID_RESOLUTION_RECOVERY_MAX_DELAY_MS = parseInt(process.env.LID_RESOLUTION_RECOVERY_MAX_DELAY_MS || '', 10) || 9000;
 const BAILEYS_CIPHERTEXT_STUB_TYPE = 1;
 
 senderAllocatorService.setRuntimeSessionsGetter(() => sessions);
@@ -4482,6 +4486,88 @@ function getCiphertextRecoveryDelayMs(attempt = 1) {
     return Math.min(Math.max(200, Math.trunc(delay)), FLOW_RECOVERY_MAX_DELAY_MS);
 }
 
+function getLidResolutionRecoveryDelayMs(attempt = 1) {
+    const normalizedAttempt = Math.max(1, Number(attempt) || 1);
+    const delay = LID_RESOLUTION_RECOVERY_BASE_DELAY_MS * Math.pow(2, normalizedAttempt - 1);
+    return Math.min(Math.max(250, Math.trunc(delay)), LID_RESOLUTION_RECOVERY_MAX_DELAY_MS);
+}
+
+function scheduleLidResolutionRecovery(sessionId, rawMessage = {}, attempt = 1) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const messageId = String(rawMessage?.key?.id || '').trim();
+    const remoteLid = normalizeLidJid(rawMessage?.key?.remoteJid);
+
+    if (!normalizedSessionId || !messageId || !remoteLid) {
+        return;
+    }
+
+    const recoveryKey = `${normalizedSessionId}:${messageId}`;
+    const currentEntry = pendingLidResolutionRecoveries.get(recoveryKey);
+    if (currentEntry && Number(currentEntry?.attempt || 0) >= Number(attempt || 0)) {
+        return;
+    }
+    if (currentEntry?.timer) {
+        clearTimeout(currentEntry.timer);
+    }
+
+    const safeAttempt = Math.max(1, Number(attempt) || 1);
+    const delayMs = getLidResolutionRecoveryDelayMs(safeAttempt);
+    const timer = setTimeout(async () => {
+        try {
+            const recovered = await runLidResolutionRecovery(normalizedSessionId, rawMessage, safeAttempt);
+            if (recovered) {
+                pendingLidResolutionRecoveries.delete(recoveryKey);
+                return;
+            }
+
+            if (safeAttempt < LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS) {
+                scheduleLidResolutionRecovery(normalizedSessionId, rawMessage, safeAttempt + 1);
+                return;
+            }
+
+            pendingLidResolutionRecoveries.delete(recoveryKey);
+            console.warn(`[${normalizedSessionId}] Falha ao resolver JID @lid apos ${safeAttempt} tentativa(s) (${messageId})`);
+        } catch (error) {
+            console.warn(`[${normalizedSessionId}] Erro na recuperacao de JID @lid (${messageId}):`, error.message);
+            pendingLidResolutionRecoveries.delete(recoveryKey);
+        }
+    }, delayMs);
+
+    pendingLidResolutionRecoveries.set(recoveryKey, {
+        timer,
+        attempt: safeAttempt,
+        messageId,
+        remoteLid
+    });
+    console.log(`[${normalizedSessionId}] Agendada resolucao de JID @lid (${messageId}) tentativa ${safeAttempt}/${LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS} em ${delayMs}ms`);
+}
+
+async function runLidResolutionRecovery(sessionId, rawMessage = {}, attempt = 1) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const messageId = String(rawMessage?.key?.id || '').trim();
+    const remoteLid = normalizeLidJid(rawMessage?.key?.remoteJid);
+    if (!normalizedSessionId || !messageId || !remoteLid) return false;
+
+    const existing = await Message.findByMessageId(messageId);
+    if (existing) return true;
+
+    const runtimeSession = sessions.get(normalizedSessionId);
+    if (runtimeSession?.socket) {
+        await triggerChatSync(normalizedSessionId, runtimeSession.socket, runtimeSession.store, 0);
+    }
+
+    const sessionPhone = getSessionPhone(normalizedSessionId);
+    registerMessageJidAliases(rawMessage, sessionPhone);
+    const resolvedJid = resolveMessageJid(rawMessage, sessionPhone);
+    if (!resolvedJid || !isUserJid(resolvedJid)) {
+        return false;
+    }
+
+    console.log(`[${normalizedSessionId}] JID @lid resolvido na tentativa ${attempt}: ${remoteLid} -> ${resolvedJid}`);
+    await processIncomingMessage(normalizedSessionId, rawMessage);
+    return true;
+}
+
 function scheduleCiphertextRecovery(sessionId, rawMessage = {}, attempt = 1) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
     const messageId = String(rawMessage?.key?.id || '').trim();
@@ -4832,6 +4918,16 @@ async function processIncomingMessage(sessionId, msg) {
     }
 
     if (!from || !isUserJid(from)) {
+        const unresolvedLid = normalizeLidJid(fromRaw);
+        if (!isFromMe && unresolvedLid) {
+            scheduleLidResolutionRecovery(sessionId, msg, 1);
+            console.warn(
+                `[${sessionId}] Mensagem aguardando resolucao de JID @lid: `
+                + `remoteJid=${fromRaw || 'n/a'} senderPn=${msg?.key?.senderPn || 'n/a'} participantPn=${msg?.key?.participantPn || 'n/a'}`
+            );
+            return;
+        }
+
         console.warn(
             `[${sessionId}] Ignorando mensagem sem JID de usuario resolvido: `
             + `remoteJid=${fromRaw || 'n/a'} senderPn=${msg?.key?.senderPn || 'n/a'} participantPn=${msg?.key?.participantPn || 'n/a'}`
