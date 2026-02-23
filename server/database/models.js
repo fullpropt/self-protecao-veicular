@@ -778,6 +778,21 @@ const Conversation = {
             sql += ' AND c.assigned_to = ?';
             params.push(options.assigned_to);
         }
+
+        if (options.owner_user_id) {
+            const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+            if (ownerUserId) {
+                sql += `
+                    AND EXISTS (
+                        SELECT 1
+                        FROM users owner_scope
+                        WHERE owner_scope.id = COALESCE(c.assigned_to, l.assigned_to)
+                          AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                    )
+                `;
+                params.push(ownerUserId, ownerUserId);
+            }
+        }
         
         if (options.session_id) {
             sql += ' AND c.session_id = ?';
@@ -789,6 +804,11 @@ const Conversation = {
         if (options.limit) {
             sql += ' LIMIT ?';
             params.push(options.limit);
+        }
+
+        if (options.offset) {
+            sql += ' OFFSET ?';
+            params.push(options.offset);
         }
         
         return await query(sql, params);

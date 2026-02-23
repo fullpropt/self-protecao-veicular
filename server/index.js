@@ -193,6 +193,23 @@ function canAccessCreatedRecord(req, createdBy) {
     return Number(createdBy) === getRequesterUserId(req);
 }
 
+async function canAccessAssignedRecordInOwnerScope(req, assignedTo, ownerScopeUserId = null) {
+    if (!canAccessAssignedRecord(req, assignedTo)) return false;
+
+    const effectiveOwnerUserId = normalizeOwnerUserId(ownerScopeUserId) || await resolveRequesterOwnerUserId(req);
+    if (!effectiveOwnerUserId) return true;
+
+    const assignedUserId = Number(assignedTo || 0);
+    if (!Number.isInteger(assignedUserId) || assignedUserId <= 0) return false;
+    if (assignedUserId === effectiveOwnerUserId) return true;
+
+    const assignedUser = await User.findById(assignedUserId);
+    if (!assignedUser) return false;
+
+    const assignedOwnerUserId = normalizeOwnerUserId(assignedUser.owner_user_id);
+    return assignedOwnerUserId === effectiveOwnerUserId || Number(assignedUser.id || 0) === effectiveOwnerUserId;
+}
+
 function getScopedSettingsPrefix(userId) {
     const normalizedUserId = Number(userId);
     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
@@ -8513,14 +8530,16 @@ app.delete('/api/tags/:id', authenticate, async (req, res) => {
 
 
 
-app.get('/api/conversations', optionalAuth, async (req, res) => {
+app.get('/api/conversations', authenticate, async (req, res) => {
     const { status, assigned_to, session_id, limit, offset } = req.query;
     const scopedUserId = getScopedUserId(req);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
     const requestedAssignedTo = assigned_to ? parseInt(assigned_to) : undefined;
     const resolvedAssignedTo = scopedUserId || requestedAssignedTo;
     const conversations = await Conversation.list({
         status,
         assigned_to: resolvedAssignedTo,
+        owner_user_id: ownerScopeUserId || undefined,
         session_id,
         limit: limit ? parseInt(limit) : 100,
         offset: offset ? parseInt(offset) : 0
@@ -8643,6 +8662,7 @@ app.get('/api/conversations', optionalAuth, async (req, res) => {
 app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
 
     const conversationId = parseInt(req.params.id, 10);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
     if (!conversationId) {
 
@@ -8652,7 +8672,10 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
 
     try {
         const conversation = await Conversation.findById(conversationId);
-        if (!conversation || !canAccessAssignedRecord(req, conversation.assigned_to)) {
+        const hasAccess = conversation
+            ? await canAccessAssignedRecordInOwnerScope(req, conversation.assigned_to, ownerScopeUserId)
+            : false;
+        if (!conversation || !hasAccess) {
             return res.status(404).json({ error: 'Conversa nao encontrada' });
         }
 
@@ -8716,6 +8739,7 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
 
     const { leadId, phone, content, type, options, sessionId } = req.body;
     const scopedUserId = getScopedUserId(req);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
 
 
@@ -8724,7 +8748,10 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
     if (!to && leadId) {
 
         const lead = await Lead.findById(leadId);
-        if (!lead || !canAccessAssignedRecord(req, lead.assigned_to)) {
+        const hasAccess = lead
+            ? await canAccessAssignedRecordInOwnerScope(req, lead.assigned_to, ownerScopeUserId)
+            : false;
+        if (!lead || !hasAccess) {
             return res.status(404).json({ error: 'Lead nao encontrado' });
         }
 
@@ -8778,6 +8805,7 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     const hasConversationId = Number.isFinite(conversationId) && conversationId > 0;
     const sessionId = sanitizeSessionId(req.query.session_id || req.query.sessionId);
     const contactJid = normalizeJid(req.query.contact_jid || req.query.contactJid);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
     let messages = [];
     let resolvedConversation = null;
@@ -8804,10 +8832,10 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
         }
     }
 
-    if (resolvedLead && !canAccessAssignedRecord(req, resolvedLead.assigned_to)) {
+    if (resolvedLead && !(await canAccessAssignedRecordInOwnerScope(req, resolvedLead.assigned_to, ownerScopeUserId))) {
         return res.status(404).json({ success: false, error: 'Lead nao encontrado' });
     }
-    if (!resolvedLead && resolvedConversation && !canAccessAssignedRecord(req, resolvedConversation.assigned_to)) {
+    if (!resolvedLead && resolvedConversation && !(await canAccessAssignedRecordInOwnerScope(req, resolvedConversation.assigned_to, ownerScopeUserId))) {
         return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
     }
 
