@@ -45,6 +45,7 @@ type BulkLeadsImportResponse = {
     total?: number;
     imported?: number;
     updated?: number;
+    insertConflicts?: number;
     skipped?: number;
     failed?: number;
     errors?: Array<{ index?: number; phone?: string; error?: string }>;
@@ -1101,6 +1102,7 @@ async function importContacts() {
     try {
         let imported = 0;
         let updated = 0;
+        let insertConflicts = 0;
         let skipped = 0;
         let failed = 0;
 
@@ -1113,6 +1115,7 @@ async function importContacts() {
                 const response: BulkLeadsImportResponse = await api.post('/api/leads/bulk', { leads: chunk });
                 imported += Number(response?.imported || 0);
                 updated += Number(response?.updated || 0);
+                insertConflicts += Number(response?.insertConflicts || 0);
                 skipped += Number(response?.skipped || 0);
                 failed += Number(response?.failed || 0);
             } catch (error) {
@@ -1132,6 +1135,7 @@ async function importContacts() {
 
         const summary = [`${imported} importados`];
         if (updated > 0) summary.push(`${updated} atualizados`);
+        if (insertConflicts > 0) summary.push(`${insertConflicts} conflitos de insercao`);
         if (skipped > 0) summary.push(`${skipped} ignorados`);
         if (failed > 0) summary.push(`${failed} com erro`);
         showToast(failed > 0 ? 'warning' : 'success', 'Sucesso', `Importação concluída: ${summary.join(', ')}`);

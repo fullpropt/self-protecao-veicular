@@ -7849,6 +7849,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
 
         let imported = 0;
         let updated = 0;
+        let insertConflicts = 0;
         let skipped = 0;
         let failed = 0;
         const errors = [];
@@ -8077,9 +8078,10 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                 );
 
                 imported += insertedPhones.size;
-                const insertConflicts = Math.max(insertPayload.length - insertedPhones.size, 0);
-                if (insertConflicts > 0) {
-                    skipped += insertConflicts;
+                const chunkInsertConflicts = Math.max(insertPayload.length - insertedPhones.size, 0);
+                if (chunkInsertConflicts > 0) {
+                    insertConflicts += chunkInsertConflicts;
+                    skipped += chunkInsertConflicts;
                 }
 
                 for (const [phone, count] of pendingInsertUpdateEventsByPhone.entries()) {
@@ -8121,6 +8123,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
             total: leads.length,
             imported,
             updated,
+            insertConflicts,
             skipped,
             failed,
             errors
