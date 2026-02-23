@@ -7952,6 +7952,80 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
     }
 });
 
+app.post('/api/leads/bulk-delete', authenticate, async (req, res) => {
+    try {
+        const rawLeadIds = Array.isArray(req.body?.leadIds) ? req.body.leadIds : [];
+        const leadIds = Array.from(
+            new Set(
+                rawLeadIds
+                    .map((value) => parseInt(value, 10))
+                    .filter((value) => Number.isInteger(value) && value > 0)
+            )
+        );
+
+        if (leadIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Lista de IDs inválida'
+            });
+        }
+
+        const MAX_BULK_DELETE_LEADS = 2000;
+        if (leadIds.length > MAX_BULK_DELETE_LEADS) {
+            return res.status(400).json({
+                success: false,
+                error: `Quantidade maxima por lote: ${MAX_BULK_DELETE_LEADS}`
+            });
+        }
+
+        let deleted = 0;
+        let skipped = 0;
+        let failed = 0;
+        const errors = [];
+
+        for (const leadId of leadIds) {
+            try {
+                const lead = await Lead.findById(leadId);
+                if (!lead) {
+                    skipped += 1;
+                    continue;
+                }
+
+                if (!canAccessAssignedRecord(req, lead.assigned_to)) {
+                    skipped += 1;
+                    continue;
+                }
+
+                await Lead.delete(leadId);
+                deleted += 1;
+            } catch (error) {
+                failed += 1;
+                if (errors.length < 25) {
+                    errors.push({
+                        id: leadId,
+                        error: String(error?.message || 'Erro ao excluir lead')
+                    });
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            total: leadIds.length,
+            deleted,
+            skipped,
+            failed,
+            errors
+        });
+    } catch (error) {
+        console.error('Falha ao excluir leads em lote:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao excluir leads em lote'
+        });
+    }
+});
+
 
 
 app.put('/api/leads/:id', authenticate, async (req, res) => {

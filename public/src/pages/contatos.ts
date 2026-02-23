@@ -49,6 +49,14 @@ type BulkLeadsImportResponse = {
     failed?: number;
     errors?: Array<{ index?: number; phone?: string; error?: string }>;
 };
+type BulkLeadsDeleteResponse = {
+    success?: boolean;
+    total?: number;
+    deleted?: number;
+    skipped?: number;
+    failed?: number;
+    errors?: Array<{ id?: number; error?: string }>;
+};
 
 let allContacts: Contact[] = [];
 let filteredContacts: Contact[] = [];
@@ -65,6 +73,7 @@ const CONTACTS_SESSION_FILTER_STORAGE_KEY = 'zapvender_contacts_session_filter';
 const CONTACTS_FETCH_BATCH_SIZE = 500;
 const CONTACTS_FETCH_MAX_PAGES = 200;
 const CONTACTS_IMPORT_BATCH_SIZE = 200;
+const CONTACTS_BULK_DELETE_BATCH_SIZE = 1000;
 const BASE_CONTACTS_TABLE_COLUMNS = 7;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
@@ -961,16 +970,54 @@ async function sendBulkMessage() {
 }
 
 async function bulkDelete() {
-    if (!confirm(`Excluir ${selectedContacts.length} contatos?`)) return;
-    
+    const uniqueLeadIds = Array.from(
+        new Set(
+            selectedContacts
+                .map((value) => parseInt(String(value), 10))
+                .filter((value) => Number.isInteger(value) && value > 0)
+        )
+    );
+
+    if (uniqueLeadIds.length === 0) {
+        showToast('warning', 'Atencao', 'Nenhum contato selecionado');
+        return;
+    }
+
+    if (!confirm(`Excluir ${formatNumber(uniqueLeadIds.length)} contatos?`)) return;
+
     try {
-        showLoading('Excluindo...');
-        for (const id of selectedContacts) {
-            await api.delete(`/api/leads/${id}`);
+        let deleted = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (let offset = 0; offset < uniqueLeadIds.length; offset += CONTACTS_BULK_DELETE_BATCH_SIZE) {
+            const chunk = uniqueLeadIds.slice(offset, offset + CONTACTS_BULK_DELETE_BATCH_SIZE);
+            const processed = Math.min(offset + chunk.length, uniqueLeadIds.length);
+            showLoading(`Excluindo ${processed}/${uniqueLeadIds.length} contatos...`);
+
+            try {
+                const response: BulkLeadsDeleteResponse = await api.post('/api/leads/bulk-delete', { leadIds: chunk });
+                deleted += Number(response?.deleted || 0);
+                skipped += Number(response?.skipped || 0);
+                failed += Number(response?.failed || 0);
+            } catch (error) {
+                failed += chunk.length;
+            }
         }
+
         clearSelection();
         await loadContacts();
-        showToast('success', 'Sucesso', 'Contatos excluídos!');
+
+        const summary = [`${deleted} removidos`];
+        if (skipped > 0) summary.push(`${skipped} ignorados`);
+        if (failed > 0) summary.push(`${failed} com erro`);
+
+        if (deleted === 0 && skipped === 0 && failed > 0) {
+            showToast('error', 'Erro', `Falha na exclusao (${failed} com erro)`);
+            return;
+        }
+
+        showToast(failed > 0 ? 'warning' : 'success', 'Sucesso', `Exclusao concluida: ${summary.join(', ')}`);
     } catch (error) {
         hideLoading();
         showToast('error', 'Erro', error instanceof Error ? error.message : 'Erro ao excluir');
