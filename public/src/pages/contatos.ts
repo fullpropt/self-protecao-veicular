@@ -149,6 +149,28 @@ function sanitizeSessionId(value: unknown, fallback = '') {
     return normalized || fallback;
 }
 
+function normalizeContactPhoneForWhatsapp(value: unknown) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+
+    while (digits.startsWith('55') && digits.length > 11) {
+        digits = digits.slice(2);
+    }
+
+    return digits;
+}
+
+function buildWhatsappLinkFromPhone(value: unknown) {
+    const phone = normalizeContactPhoneForWhatsapp(value);
+    if (!phone) return '';
+    return `https://wa.me/55${phone}`;
+}
+
+function formatContactPhoneForDisplay(value: unknown) {
+    const phone = normalizeContactPhoneForWhatsapp(value);
+    return phone ? formatPhone(phone) : '';
+}
+
 function parseLeadTags(value: unknown) {
     if (!value) return [];
 
@@ -697,7 +719,12 @@ function renderContacts() {
                         </div>
                     </div>
                 </td>
-                <td><a href="https://wa.me/55${c.phone}" target="_blank" style="color: var(--whatsapp);">${formatPhone(c.phone)}</a></td>
+                <td>${(() => {
+                    const whatsappLink = buildWhatsappLinkFromPhone(c.phone);
+                    const phoneLabel = formatContactPhoneForDisplay(c.phone) || '-';
+                    if (!whatsappLink) return '-';
+                    return `<a href="${whatsappLink}" target="_blank" style="color: var(--whatsapp);">${phoneLabel}</a>`;
+                })()}</td>
                 ${(() => {
                     const parsedCustomFields = parseLeadCustomFields(c.custom_fields);
                     return dynamicColumns
@@ -914,14 +941,18 @@ async function deleteContact(id: number) {
 function quickMessage(id: number) {
     const contact = allContacts.find(c => c.id === id);
     if (contact) {
-        window.open(`https://wa.me/55${contact.phone}`, '_blank');
+        const whatsappLink = buildWhatsappLinkFromPhone(contact.phone);
+        if (whatsappLink) {
+            window.open(whatsappLink, '_blank');
+        }
     }
 }
 
 function openWhatsApp() {
-    const phone = (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
-    if (phone) {
-        window.open(`https://wa.me/55${phone}`, '_blank');
+    const rawPhone = (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value || '';
+    const whatsappLink = buildWhatsappLinkFromPhone(rawPhone);
+    if (whatsappLink) {
+        window.open(whatsappLink, '_blank');
     }
 }
 
