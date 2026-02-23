@@ -9,6 +9,24 @@ function normalizeDigits(value) {
     return String(value || '').replace(/\D/g, '');
 }
 
+function normalizeLeadPhoneForStorage(value) {
+    let digits = normalizeDigits(value);
+    if (!digits) return '';
+
+    while (digits.startsWith('55') && digits.length > 13) {
+        digits = digits.slice(2);
+    }
+
+    return digits;
+}
+
+function buildLeadJidFromPhone(phone) {
+    const digits = normalizeLeadPhoneForStorage(phone);
+    if (!digits) return '';
+    const waNumber = digits.startsWith('55') ? digits : `55${digits}`;
+    return `${waNumber}@s.whatsapp.net`;
+}
+
 function sanitizeLeadName(name) {
     const value = String(name || '').trim();
     if (!value) return '';
@@ -319,11 +337,15 @@ async function executeLeadCleanupQuery(client, statement, leadId) {
 const Lead = {
     async create(data) {
         const uuid = generateUUID();
-        const jid = data.jid || `55${data.phone.replace(/\D/g, '')}@s.whatsapp.net`;
+        const normalizedPhone = normalizeLeadPhoneForStorage(data.phone);
+        if (!normalizedPhone) {
+            throw new Error('Telefone invalido');
+        }
+        const jid = String(data.jid || buildLeadJidFromPhone(normalizedPhone)).trim() || buildLeadJidFromPhone(normalizedPhone);
         const source = String(data.source || 'manual');
         const normalizedSource = source.toLowerCase();
         const sanitizedName = sanitizeLeadName(data.name);
-        const incomingName = sanitizedName || data.phone;
+        const incomingName = sanitizedName || normalizedPhone;
         const initialCustomFields = parseLeadCustomFields(data.custom_fields);
         const customFields = normalizedSource !== 'whatsapp' && sanitizedName
             ? lockLeadNameAsManual(initialCustomFields)
@@ -334,8 +356,8 @@ const Lead = {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
-            data.phone?.replace(/\D/g, ''),
-            data.phone_formatted || data.phone,
+            normalizedPhone,
+            data.phone_formatted || normalizedPhone,
             jid,
             incomingName,
             data.email,

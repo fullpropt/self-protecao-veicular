@@ -1093,6 +1093,25 @@ function parseLeadTagsForMerge(rawTags) {
         .filter(Boolean);
 }
 
+function normalizeImportedLeadPhone(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+
+    // Remove DDI repetido (ex.: 5555...)
+    while (digits.startsWith('55') && digits.length > 13) {
+        digits = digits.slice(2);
+    }
+
+    return digits;
+}
+
+function buildLeadJidFromPhone(phone) {
+    const digits = normalizeImportedLeadPhone(phone);
+    if (!digits) return '';
+    const waNumber = digits.startsWith('55') ? digits : `55${digits}`;
+    return `${waNumber}@s.whatsapp.net`;
+}
+
 function sanitizeLeadNameForInsert(value) {
     const text = normalizeText(String(value || '').trim());
     if (!text) return '';
@@ -7887,7 +7906,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                 continue;
             }
 
-            const phone = String(input.phone || '').replace(/\D/g, '');
+            const phone = normalizeImportedLeadPhone(input.phone);
             if (!phone) {
                 skipped += 1;
                 continue;
@@ -7910,7 +7929,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                 phone,
                 uuid: generateUUID(),
                 phone_formatted: String(payload.phone_formatted || payload.phone || phone).trim() || phone,
-                jid: String(payload.jid || `55${phone}@s.whatsapp.net`).trim() || `55${phone}@s.whatsapp.net`,
+                jid: String(payload.jid || buildLeadJidFromPhone(phone)).trim() || buildLeadJidFromPhone(phone),
                 name: resolvedName,
                 email: String(payload.email || '').trim(),
                 vehicle: String(payload.vehicle || '').trim(),
