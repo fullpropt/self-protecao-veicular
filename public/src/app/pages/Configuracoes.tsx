@@ -30,6 +30,7 @@ type ConfiguracoesGlobals = {
   deleteSettingsTag?: (id: number) => Promise<void>;
   loadUsers?: () => Promise<void>;
   addUser?: () => Promise<void>;
+  deleteAccount?: () => Promise<void>;
   openEditUserModal?: (id: number) => void;
   updateUser?: () => Promise<void>;
   changePassword?: () => Promise<void>;
@@ -653,6 +654,7 @@ export default function Configuracoes() {
                                   </table>
                               </div>
                               <button id="addUserButton" className="btn btn-primary mt-4" onClick={() => globals.openModal?.('addUserModal')}><span className="icon icon-add icon-sm"></span> Adicionar Usuário</button>
+                              <button id="deleteAccountButton" className="btn btn-outline-danger mt-4 ml-2" onClick={() => globals.deleteAccount?.()}><span className="icon icon-delete icon-sm"></span> Excluir conta</button>
                           </div>
       
                           <div className="settings-section">

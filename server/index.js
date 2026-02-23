@@ -6615,6 +6615,45 @@ app.delete('/api/users/:id', authenticate, async (req, res) => {
     }
 });
 
+app.post('/api/account/delete', authenticate, async (req, res) => {
+    try {
+        const requesterRole = String(req.user?.role || '').toLowerCase();
+        const requesterId = Number(req.user?.id || 0);
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
+
+        if (requesterRole !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Sem permissao para excluir conta' });
+        }
+        if (!requesterId || !requesterOwnerUserId || requesterId !== requesterOwnerUserId) {
+            return res.status(403).json({ success: false, error: 'Apenas o admin principal pode excluir a conta' });
+        }
+
+        const currentPassword = String(req.body?.currentPassword || '');
+        if (!currentPassword) {
+            return res.status(400).json({ success: false, error: 'Senha atual e obrigatoria' });
+        }
+
+        const { verifyPassword } = require('./middleware/auth');
+        const currentUser = await User.findByIdWithPassword(requesterId);
+        if (!currentUser) {
+            return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
+        }
+        if (!verifyPassword(currentPassword, currentUser.password_hash)) {
+            return res.status(400).json({ success: false, error: 'Senha atual invalida' });
+        }
+
+        // Exclusao de conta em modo seguro: desativa todos os usuarios da conta
+        await run(
+            'UPDATE users SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE owner_user_id = ? OR id = ?',
+            [requesterOwnerUserId, requesterOwnerUserId]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Erro ao excluir conta' });
+    }
+});
+
 app.post('/api/auth/change-password', authenticate, async (req, res) => {
     try {
         const userId = Number(req.user?.id || 0);

@@ -1296,13 +1296,24 @@ function getCurrentUserIdFromToken() {
     return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function getCurrentOwnerUserIdFromToken() {
+    const value = Number(getCurrentUserTokenPayload()?.owner_user_id || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 function isCurrentUserAdmin() {
     return getCurrentUserRoleFromToken() === 'admin';
+}
+
+function isCurrentUserOwnerAdmin() {
+    return isCurrentUserAdmin() && getCurrentUserIdFromToken() === getCurrentOwnerUserIdFromToken();
 }
 
 function updateUsersPanelPermissions() {
     const addUserButton = document.getElementById('addUserButton') as HTMLButtonElement | null;
     if (addUserButton) addUserButton.style.display = isCurrentUserAdmin() ? '' : 'none';
+    const deleteAccountButton = document.getElementById('deleteAccountButton') as HTMLButtonElement | null;
+    if (deleteAccountButton) deleteAccountButton.style.display = isCurrentUserOwnerAdmin() ? '' : 'none';
 }
 
 function renderUsersTable() {
@@ -1511,6 +1522,39 @@ async function deleteUser(id: number) {
     }
 }
 
+async function deleteAccount() {
+    if (!isCurrentUserOwnerAdmin()) {
+        showToast('warning', 'Aviso', 'Apenas o admin principal pode excluir a conta');
+        return;
+    }
+
+    const typed = prompt('Digite EXCLUIR para confirmar a exclusao da conta:');
+    if (typed !== 'EXCLUIR') return;
+
+    const currentPassword = prompt('Digite sua senha atual para continuar:') || '';
+    if (!currentPassword) {
+        showToast('error', 'Erro', 'Senha atual obrigatoria');
+        return;
+    }
+
+    try {
+        await api.post('/api/account/delete', { currentPassword });
+        showToast('success', 'Sucesso', 'Conta excluida');
+
+        sessionStorage.removeItem('selfDashboardToken');
+        sessionStorage.removeItem('selfDashboardUser');
+        sessionStorage.removeItem('selfDashboardUserId');
+        sessionStorage.removeItem('selfDashboardUserEmail');
+
+        setTimeout(() => {
+            window.location.href = '#/login';
+            window.location.reload();
+        }, 400);
+    } catch (error: any) {
+        showToast('error', 'Erro', error?.message || 'Nao foi possivel excluir a conta');
+    }
+}
+
 async function changePassword() {
     const current = (document.getElementById('currentPassword') as HTMLInputElement | null)?.value || '';
     const newPass = (document.getElementById('newPassword') as HTMLInputElement | null)?.value || '';
@@ -1579,6 +1623,7 @@ const windowAny = window as Window & {
     loadUsers?: () => Promise<void>;
     addUser?: () => Promise<void>;
     deleteUser?: (id: number) => Promise<void>;
+    deleteAccount?: () => Promise<void>;
     openEditUserModal?: (id: number) => void;
     updateUser?: () => Promise<void>;
     changePassword?: () => Promise<void>;
@@ -1615,6 +1660,7 @@ windowAny.deleteSettingsTag = deleteSettingsTag;
 windowAny.loadUsers = loadUsers;
 windowAny.addUser = addUser;
 windowAny.deleteUser = deleteUser;
+windowAny.deleteAccount = deleteAccount;
 windowAny.openEditUserModal = openEditUserModal;
 windowAny.updateUser = updateUser;
 windowAny.changePassword = changePassword;
