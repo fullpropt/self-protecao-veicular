@@ -6557,7 +6557,18 @@ app.post('/api/auth/login', async (req, res) => {
             const refreshed = await User.findByIdWithPassword(user.id);
             if (refreshed) {
                 user = refreshed;
+            }
+        }
+
+        const ownerUserId = Number(user?.owner_user_id || 0);
+        const hasOwnerAssigned = Number.isInteger(ownerUserId) && ownerUserId > 0;
+        if (!hasOwnerAssigned) {
+            await User.update(user.id, { owner_user_id: user.id, role: 'admin', is_active: 1 });
+            const refreshed = await User.findByIdWithPassword(user.id);
+            if (refreshed) {
+                user = refreshed;
             } else {
+                user.owner_user_id = user.id;
                 user.role = 'admin';
             }
         }
@@ -6592,7 +6603,8 @@ app.post('/api/auth/login', async (req, res) => {
 
                 email: user.email,
 
-                role: user.role
+                role: user.role,
+                owner_user_id: user.owner_user_id
 
             }
 
@@ -6650,7 +6662,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 
-        await User.create({
+        const created = await User.create({
 
             name: String(name || '').trim(),
 
@@ -6658,13 +6670,17 @@ app.post('/api/auth/register', async (req, res) => {
 
             password_hash: hashPassword(String(password)),
 
-            role: 'agent'
+            role: 'admin'
 
         });
 
 
 
-        const user = await User.findByEmail(normalizedEmail);
+        if (Number(created?.id) > 0) {
+            await User.update(Number(created.id), { owner_user_id: Number(created.id) });
+        }
+
+        const user = await User.findById(Number(created?.id || 0));
 
         if (!user) {
 
@@ -6698,7 +6714,8 @@ app.post('/api/auth/register', async (req, res) => {
 
                 email: user.email,
 
-                role: user.role
+                role: user.role,
+                owner_user_id: user.owner_user_id
 
             }
 
@@ -6778,6 +6795,48 @@ function normalizeUserRoleInput(value) {
     return ALLOWED_USER_ROLES.has(normalized) ? normalized : 'agent';
 }
 
+function isUserAdminRole(value) {
+    return String(value || '').trim().toLowerCase() === 'admin';
+}
+
+function isUserActive(user) {
+    return Number(user?.is_active) > 0;
+}
+
+function normalizeOwnerUserId(value) {
+    const ownerUserId = Number(value || 0);
+    return Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : 0;
+}
+
+function isSameUserOwner(user, ownerUserId) {
+    return normalizeOwnerUserId(user?.owner_user_id) === normalizeOwnerUserId(ownerUserId);
+}
+
+async function resolveRequesterOwnerUserId(req) {
+    const requesterId = Number(req.user?.id || 0);
+    let ownerUserId = normalizeOwnerUserId(req.user?.owner_user_id);
+
+    if (!ownerUserId && requesterId > 0) {
+        const currentUser = await User.findById(requesterId);
+        ownerUserId = normalizeOwnerUserId(currentUser?.owner_user_id);
+        if (!ownerUserId) {
+            ownerUserId = requesterId;
+            await User.update(requesterId, { owner_user_id: ownerUserId });
+        }
+        if (req.user) {
+            req.user.owner_user_id = ownerUserId;
+        }
+    }
+
+    return ownerUserId;
+}
+
+async function countActiveAdminsByOwner(ownerUserId) {
+    const ownerId = normalizeOwnerUserId(ownerUserId);
+    if (!ownerId) return 0;
+    const users = await User.listByOwner(ownerId, { includeInactive: false });
+    return (users || []).filter((item) => isUserAdminRole(item.role)).length;
+}
 function normalizeUserActiveInput(value, fallback = 1) {
     if (typeof value === 'boolean') return value ? 1 : 0;
     if (typeof value === 'number') return value > 0 ? 1 : 0;
@@ -6798,6 +6857,7 @@ function sanitizeUserPayload(user) {
         email: user.email,
         role: user.role,
         is_active: Number(user.is_active) > 0 ? 1 : 0,
+        owner_user_id: normalizeOwnerUserId(user.owner_user_id) || null,
         last_login_at: user.last_login_at,
         created_at: user.created_at
     };
@@ -6807,14 +6867,17 @@ app.get('/api/users', authenticate, async (req, res) => {
     try {
         const requesterRole = String(req.user?.role || '').toLowerCase();
         const requesterId = Number(req.user?.id || 0);
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
         const isAdmin = requesterRole === 'admin';
 
         let users = [];
         if (isAdmin) {
-            users = await User.listAll();
+            users = requesterOwnerUserId
+                ? await User.listByOwner(requesterOwnerUserId, { includeInactive: false })
+                : [];
         } else {
             const me = await User.findById(requesterId);
-            users = me ? [me] : [];
+            users = me && isUserActive(me) ? [me] : [];
         }
 
         res.json({
@@ -6831,6 +6894,11 @@ app.post('/api/users', authenticate, async (req, res) => {
         const requesterRole = String(req.user?.role || '').toLowerCase();
         if (requesterRole !== 'admin') {
             return res.status(403).json({ success: false, error: 'Sem permissão para criar usuários' });
+        }
+
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
+        if (!requesterOwnerUserId) {
+            return res.status(400).json({ success: false, error: 'Conta administradora invalida' });
         }
 
         const { hashPassword } = require('./middleware/auth');
@@ -6856,7 +6924,8 @@ app.post('/api/users', authenticate, async (req, res) => {
             name,
             email,
             password_hash: hashPassword(password),
-            role
+            role,
+            owner_user_id: requesterOwnerUserId
         });
 
         const user = await User.findById(created.id);
@@ -6875,6 +6944,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
 
         const requesterRole = String(req.user?.role || '').toLowerCase();
         const requesterId = Number(req.user?.id || 0);
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
         const isAdmin = requesterRole === 'admin';
         const isSelf = requesterId === targetId;
 
@@ -6887,6 +6957,11 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
         }
 
+        if (isAdmin && !isSameUserOwner(current, requesterOwnerUserId)) {
+            return res.status(403).json({ success: false, error: 'Sem permissao para editar este usuario' });
+        }
+
+        const currentIsActiveAdmin = isUserActive(current) && isUserAdminRole(current.role);
         const payload = {};
 
         if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
@@ -6922,6 +6997,18 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
             }
         }
 
+        const nextRole = Object.prototype.hasOwnProperty.call(payload, 'role') ? payload.role : current.role;
+        const nextIsActive = Object.prototype.hasOwnProperty.call(payload, 'is_active')
+            ? (Number(payload.is_active) > 0 ? 1 : 0)
+            : (isUserActive(current) ? 1 : 0);
+        const willStopBeingActiveAdmin = currentIsActiveAdmin && (!isUserAdminRole(nextRole) || Number(nextIsActive) === 0);
+
+        if (willStopBeingActiveAdmin) {
+            const activeAdminCount = await countActiveAdminsByOwner(requesterOwnerUserId);
+            if (activeAdminCount <= 1) {
+                return res.status(400).json({ success: false, error: 'E necessario manter pelo menos um administrador ativo' });
+            }
+        }
         await User.update(targetId, payload);
         const updated = await User.findById(targetId);
         res.json({ success: true, user: sanitizeUserPayload(updated) });
@@ -6930,6 +7017,47 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
     }
 });
 
+app.delete('/api/users/:id', authenticate, async (req, res) => {
+    try {
+        const requesterRole = String(req.user?.role || '').toLowerCase();
+        const requesterId = Number(req.user?.id || 0);
+        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
+        if (requesterRole !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Sem permissao para remover usuarios' });
+        }
+
+        const targetId = parseInt(req.params.id, 10);
+        if (!Number.isInteger(targetId) || targetId <= 0) {
+            return res.status(400).json({ success: false, error: 'Usuario invalido' });
+        }
+
+        if (targetId === requesterId) {
+            return res.status(400).json({ success: false, error: 'Nao e possivel remover o proprio usuario' });
+        }
+
+        const current = await User.findById(targetId);
+        if (!current) {
+            return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
+        }
+        if (!isSameUserOwner(current, requesterOwnerUserId)) {
+            return res.status(403).json({ success: false, error: 'Sem permissao para remover este usuario' });
+        }
+
+        const isTargetActiveAdmin = isUserActive(current) && isUserAdminRole(current.role);
+        if (isTargetActiveAdmin) {
+            const activeAdminCount = await countActiveAdminsByOwner(requesterOwnerUserId);
+            if (activeAdminCount <= 1) {
+                return res.status(400).json({ success: false, error: 'E necessario manter pelo menos um administrador ativo' });
+            }
+        }
+
+        await User.update(targetId, { is_active: 0 });
+        const updated = await User.findById(targetId);
+        res.json({ success: true, user: sanitizeUserPayload(updated) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Erro ao remover usuario' });
+    }
+});
 app.post('/api/auth/change-password', authenticate, async (req, res) => {
     try {
         const userId = Number(req.user?.id || 0);

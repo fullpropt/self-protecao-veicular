@@ -2187,24 +2187,27 @@ const User = {
     async create(data) {
         const uuid = generateUUID();
         const safeName = deriveUserName(data.name, data.email);
+        const ownerUserId = Number(data.owner_user_id);
+        const normalizedOwnerUserId = Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : null;
         
         const result = await run(`
-            INSERT INTO users (uuid, name, email, password_hash, role, avatar_url)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO users (uuid, name, email, password_hash, role, avatar_url, owner_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             safeName,
             data.email,
             data.password_hash,
             data.role || 'agent',
-            data.avatar_url
+            data.avatar_url,
+            normalizedOwnerUserId
         ]);
         
         return { id: result.lastInsertRowid, uuid };
     },
     
     async findById(id) {
-        return await queryOne('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users WHERE id = ?', [id]);
+        return await queryOne('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users WHERE id = ?', [id]);
     },
 
     async findByIdWithPassword(id) {
@@ -2220,11 +2223,26 @@ const User = {
     },
     
     async list() {
-        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users WHERE is_active = 1 ORDER BY name ASC');
+        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users WHERE is_active = 1 ORDER BY name ASC');
     },
 
     async listAll() {
-        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, last_login_at, created_at FROM users ORDER BY name ASC');
+        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users ORDER BY name ASC');
+    },
+
+    async listByOwner(ownerUserId, options = {}) {
+        const ownerId = Number(ownerUserId);
+        if (!Number.isInteger(ownerId) || ownerId <= 0) return [];
+
+        const includeInactive = options?.includeInactive === true;
+        const whereActive = includeInactive ? '' : ' AND is_active = 1';
+        return await query(
+            `SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at
+             FROM users
+             WHERE owner_user_id = ?${whereActive}
+             ORDER BY name ASC`,
+            [ownerId]
+        );
     },
 
     async update(id, data) {
@@ -2250,6 +2268,13 @@ const User = {
         if (Object.prototype.hasOwnProperty.call(data, 'is_active')) {
             updates.push('is_active = ?');
             params.push(Number(data.is_active) > 0 ? 1 : 0);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(data, 'owner_user_id')) {
+            const ownerUserId = Number(data.owner_user_id);
+            const normalizedOwnerUserId = Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : null;
+            updates.push('owner_user_id = ?');
+            params.push(normalizedOwnerUserId);
         }
 
         if (!updates.length) {
