@@ -4,7 +4,8 @@ type Settings = {
     company?: { name?: string; cnpj?: string; phone?: string; email?: string };
     funnel?: Array<{ name?: string; color?: string; description?: string }>;
     whatsapp?: { interval?: string; messagesPerHour?: string; workStart?: string; workEnd?: string };
-    businessHours?: { enabled?: boolean; start?: string; end?: string };
+    businessHours?: { enabled?: boolean; start?: string; end?: string; autoReplyMessage?: string };
+    notifications?: { notifyNewLead?: boolean; notifyNewMessage?: boolean; notifySound?: boolean };
 };
 
 type TemplateItem = {
@@ -72,6 +73,12 @@ const DEFAULT_BUSINESS_HOURS_SETTINGS = {
     enabled: false,
     start: '08:00',
     end: '18:00'
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS = {
+    notifyNewLead: true,
+    notifyNewMessage: true,
+    notifySound: true
 };
 
 function onReady(callback: () => void) {
@@ -262,10 +269,39 @@ function readBusinessHoursSettingsFromForm() {
     };
 }
 
+function applyNotificationSettings(values: Partial<{ notifyNewLead: boolean; notifyNewMessage: boolean; notifySound: boolean }>) {
+    const notifyNewLeadInput = document.getElementById('notifyNewLead') as HTMLInputElement | null;
+    const notifyNewMessageInput = document.getElementById('notifyNewMessage') as HTMLInputElement | null;
+    const notifySoundInput = document.getElementById('notifySound') as HTMLInputElement | null;
+
+    const normalized = {
+        notifyNewLead: parseBooleanSetting(values?.notifyNewLead, DEFAULT_NOTIFICATION_SETTINGS.notifyNewLead),
+        notifyNewMessage: parseBooleanSetting(values?.notifyNewMessage, DEFAULT_NOTIFICATION_SETTINGS.notifyNewMessage),
+        notifySound: parseBooleanSetting(values?.notifySound, DEFAULT_NOTIFICATION_SETTINGS.notifySound)
+    };
+
+    if (notifyNewLeadInput) notifyNewLeadInput.checked = normalized.notifyNewLead;
+    if (notifyNewMessageInput) notifyNewMessageInput.checked = normalized.notifyNewMessage;
+    if (notifySoundInput) notifySoundInput.checked = normalized.notifySound;
+}
+
+function readNotificationSettingsFromForm() {
+    const notifyNewLeadInput = document.getElementById('notifyNewLead') as HTMLInputElement | null;
+    const notifyNewMessageInput = document.getElementById('notifyNewMessage') as HTMLInputElement | null;
+    const notifySoundInput = document.getElementById('notifySound') as HTMLInputElement | null;
+
+    return {
+        notifyNewLead: notifyNewLeadInput ? Boolean(notifyNewLeadInput.checked) : DEFAULT_NOTIFICATION_SETTINGS.notifyNewLead,
+        notifyNewMessage: notifyNewMessageInput ? Boolean(notifyNewMessageInput.checked) : DEFAULT_NOTIFICATION_SETTINGS.notifyNewMessage,
+        notifySound: notifySoundInput ? Boolean(notifySoundInput.checked) : DEFAULT_NOTIFICATION_SETTINGS.notifySound
+    };
+}
+
 async function loadSettings() {
     const localSettings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
     applyCompanySettings(localSettings.company || {});
     applyBusinessHoursSettings(localSettings.businessHours || DEFAULT_BUSINESS_HOURS_SETTINGS);
+    applyNotificationSettings(localSettings.notifications || DEFAULT_NOTIFICATION_SETTINGS);
 
     try {
         const response = await api.get('/api/settings');
@@ -285,16 +321,23 @@ async function loadSettings() {
             start: normalizeBusinessHoursTime(serverSettings.business_hours_start, localSettings.businessHours?.start || DEFAULT_BUSINESS_HOURS_SETTINGS.start),
             end: normalizeBusinessHoursTime(serverSettings.business_hours_end, localSettings.businessHours?.end || DEFAULT_BUSINESS_HOURS_SETTINGS.end)
         };
+        const notifications = {
+            notifyNewLead: parseBooleanSetting(serverSettings.notify_new_lead, localSettings.notifications?.notifyNewLead ?? DEFAULT_NOTIFICATION_SETTINGS.notifyNewLead),
+            notifyNewMessage: parseBooleanSetting(serverSettings.notify_new_message, localSettings.notifications?.notifyNewMessage ?? DEFAULT_NOTIFICATION_SETTINGS.notifyNewMessage),
+            notifySound: parseBooleanSetting(serverSettings.notify_sound, localSettings.notifications?.notifySound ?? DEFAULT_NOTIFICATION_SETTINGS.notifySound)
+        };
 
         if (hasCompanySettings) {
             applyCompanySettings(company);
         }
         applyBusinessHoursSettings(businessHours);
+        applyNotificationSettings(notifications);
 
         localStorage.setItem('selfSettings', JSON.stringify({
             ...localSettings,
             company: hasCompanySettings ? company : (localSettings.company || {}),
-            businessHours
+            businessHours,
+            notifications
         }));
     } catch (error) {
         // Mantem fallback local sem interromper a pagina
@@ -1184,7 +1227,24 @@ function saveWhatsAppSettings() {
     showToast('success', 'Sucesso', 'Configurações salvas!');
 }
 
-function saveNotificationSettings() { showToast('success', 'Sucesso', 'Notificações salvas!'); }
+async function saveNotificationSettings() {
+    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const notifications = readNotificationSettingsFromForm();
+
+    settings.notifications = notifications;
+    localStorage.setItem('selfSettings', JSON.stringify(settings));
+
+    try {
+        await api.put('/api/settings', {
+            notify_new_lead: notifications.notifyNewLead,
+            notify_new_message: notifications.notifyNewMessage,
+            notify_sound: notifications.notifySound
+        });
+        showToast('success', 'Sucesso', 'Notificacoes salvas!');
+    } catch (error) {
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nao foi possivel sincronizar no servidor');
+    }
+}
 
 function normalizeUserRole(value: unknown) {
     const normalized = String(value || '').trim().toLowerCase();
@@ -1453,7 +1513,7 @@ const windowAny = window as Window & {
     removeWhatsAppSession?: (sessionToken: string) => Promise<void>;
     saveWhatsAppSettings?: () => void;
     saveBusinessHoursSettings?: () => Promise<void>;
-    saveNotificationSettings?: () => void;
+    saveNotificationSettings?: () => Promise<void>;
     createContactField?: () => Promise<void>;
     updateContactField?: (key: string) => Promise<void>;
     deleteContactField?: (key: string) => Promise<void>;

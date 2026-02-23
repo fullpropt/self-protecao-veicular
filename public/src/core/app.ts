@@ -111,6 +111,13 @@ function resolveInitialSessionId() {
     return stored || DEFAULT_SESSION_ID;
 }
 
+function isPayloadForCurrentSession(payload: any) {
+    const payloadSessionId = sanitizeSessionId(payload?.sessionId);
+    if (!payloadSessionId) return true;
+    const activeSessionId = sanitizeSessionId(APP.sessionId, DEFAULT_SESSION_ID);
+    return payloadSessionId === activeSessionId;
+}
+
 const APP: AppState = {
     version: '4.1.1',
     socketUrl: window.location.hostname === 'localhost' 
@@ -265,19 +272,23 @@ function initSocket() {
     });
     
     APP.socket.on('whatsapp-status', (data) => {
+        if (!isPayloadForCurrentSession(data)) return;
         updateWhatsAppStatus(data?.status as WhatsAppStatus);
     });
     
     APP.socket.on('connected', (data) => {
+        if (!isPayloadForCurrentSession(data)) return;
         updateWhatsAppStatus('connected');
         showToast('success', 'WhatsApp Conectado', 'Conexão estabelecida com sucesso!');
     });
     
-    APP.socket.on('disconnected', () => {
+    APP.socket.on('disconnected', (data) => {
+        if (!isPayloadForCurrentSession(data)) return;
         updateWhatsAppStatus('disconnected');
     });
     
     APP.socket.on('qr', (data) => {
+        if (!isPayloadForCurrentSession(data)) return;
         updateWhatsAppStatus('qr');
         const handlers = window as Window & WindowHandlers;
         handlers.handleQRCode?.(data?.qr);
@@ -769,7 +780,7 @@ async function loadInitialData() {
 
         // Sincronizar status do WhatsApp para a UI atual
         try {
-            const waStatus = await api.get('/api/whatsapp/status');
+            const waStatus = await api.get(`/api/whatsapp/status?sessionId=${encodeURIComponent(APP.sessionId)}`);
             if (typeof waStatus?.connected === 'boolean') {
                 updateWhatsAppStatus(waStatus.connected ? 'connected' : 'disconnected');
             }

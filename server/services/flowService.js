@@ -64,6 +64,21 @@ function normalizeIntentText(value = '') {
         .trim();
 }
 
+function normalizeIntentRouteHandle(value = '') {
+    const normalized = String(value || '').trim();
+    if (!normalized) return 'default';
+
+    const canonical = normalized
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+
+    return canonical || normalized.toLowerCase();
+}
+
 function parseIntentPhrases(value = '') {
     return String(value || '')
         .split(/[,;\n|]+/)
@@ -665,6 +680,101 @@ class FlowService extends EventEmitter {
     resolveStartNodeId(flow) {
         return resolveFlowStartNodeId(flow);
     }
+
+    getExecutionConversationKey(conversationId) {
+        const asNumber = Number(conversationId);
+        if (Number.isFinite(asNumber) && asNumber > 0) {
+            return String(Math.trunc(asNumber));
+        }
+
+        const fallback = String(conversationId || '').trim();
+        return fallback || null;
+    }
+
+    setActiveExecution(conversationId, execution) {
+        const key = this.getExecutionConversationKey(conversationId);
+        if (!key) return;
+        this.activeExecutions.set(key, execution);
+    }
+
+    removeActiveExecution(conversationId) {
+        const key = this.getExecutionConversationKey(conversationId);
+        if (!key) return;
+        this.activeExecutions.delete(key);
+    }
+
+    async restoreExecutionFromStorage(conversation, lead = null) {
+        const conversationId = conversation?.id;
+        if (!conversationId) return null;
+
+        const activeRow = await queryOne(`
+            SELECT id, uuid, flow_id, conversation_id, lead_id, current_node, variables, started_at
+            FROM flow_executions
+            WHERE conversation_id = ? AND status = 'running'
+            ORDER BY id DESC
+            LIMIT 1
+        `, [conversationId]);
+        if (!activeRow) return null;
+
+        const flow = await Flow.findById(activeRow.flow_id);
+        if (!flow) {
+            await run(`
+                UPDATE flow_executions
+                SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Fluxo associado nao encontrado para continuar execucao.', activeRow.id]);
+            return null;
+        }
+
+        let parsedVariables = {};
+        try {
+            const maybeObject = JSON.parse(activeRow.variables || '{}');
+            if (maybeObject && typeof maybeObject === 'object') {
+                parsedVariables = maybeObject;
+            }
+        } catch (_) {
+            parsedVariables = {};
+        }
+
+        let resolvedLead = lead;
+        if (!resolvedLead && activeRow.lead_id) {
+            resolvedLead = await Lead.findById(activeRow.lead_id);
+        }
+        if (!resolvedLead) {
+            return null;
+        }
+
+        const execution = {
+            id: activeRow.id,
+            uuid: activeRow.uuid,
+            flow,
+            lead: resolvedLead,
+            conversation,
+            currentNode: String(activeRow.current_node || '').trim(),
+            variables: parsedVariables,
+            triggerMessageText: String(parsedVariables?.trigger_message || '').trim(),
+            startedAt: activeRow.started_at ? new Date(activeRow.started_at) : new Date()
+        };
+
+        if (!execution.currentNode) {
+            await this.endFlow(execution, 'failed', 'Execucao sem no atual para continuar.');
+            return null;
+        }
+
+        this.setActiveExecution(conversationId, execution);
+        return execution;
+    }
+
+    async resolveActiveExecution(conversation, lead = null) {
+        const cached = this.getActiveExecution(conversation?.id);
+        if (cached) {
+            if (lead) cached.lead = lead;
+            if (conversation) cached.conversation = conversation;
+            return cached;
+        }
+
+        return this.restoreExecutionFromStorage(conversation, lead);
+    }
     
     /**
      * Processar mensagem recebida e verificar triggers
@@ -676,7 +786,7 @@ class FlowService extends EventEmitter {
         }
         
         // Verificar se já há um fluxo em execução
-        const activeExecution = this.getActiveExecution(conversation?.id);
+        const activeExecution = await this.resolveActiveExecution(conversation, lead);
         if (activeExecution) {
             return await this.continueFlow(activeExecution, message);
         }
@@ -780,7 +890,7 @@ class FlowService extends EventEmitter {
         
         // Armazenar execução ativa
         if (conversation?.id) {
-            this.activeExecutions.set(conversation.id, execution);
+            this.setActiveExecution(conversation.id, execution);
         }
         
         this.emit('flow:started', { 
@@ -1062,7 +1172,7 @@ class FlowService extends EventEmitter {
         if (semanticDecision?.status === 'no_match') {
             return null;
         }
-        if (strictIntentRouting) {
+        if (strictIntentRouting && String(node?.type || '').toLowerCase() === 'trigger') {
             return null;
         }
 
@@ -1151,18 +1261,67 @@ class FlowService extends EventEmitter {
 
         const subtype = String(currentNode?.subtype || '').trim().toLowerCase();
         const isIntentNode = currentNode?.type === 'intent' || (currentNode?.type === 'trigger' && (subtype === 'keyword' || subtype === 'intent'));
-        const normalizeHandle = (value) => {
+        const rawHandle = (value) => {
             const normalized = String(value || '').trim();
             return normalized || 'default';
+        };
+        const canonicalHandle = (value) => {
+            const raw = rawHandle(value);
+            if (raw === 'default') return raw;
+            return normalizeIntentRouteHandle(raw);
         };
 
         let edge = null;
         if (isIntentNode && preferredSourceHandle) {
-            edge = outgoingEdges.find((item) => normalizeHandle(item.sourceHandle) === normalizeHandle(preferredSourceHandle));
+            const preferredRaw = rawHandle(preferredSourceHandle);
+            const preferredCanonical = canonicalHandle(preferredSourceHandle);
+            const acceptedHandles = new Set([
+                preferredRaw,
+                preferredCanonical
+            ]);
+
+            const matchingRoute = this.resolveTriggerIntentRoutes(currentNode).find((route) => {
+                const routeIdRaw = rawHandle(route?.id);
+                const routeIdCanonical = canonicalHandle(route?.id);
+                const routeLabelRaw = rawHandle(route?.label);
+                const routeLabelCanonical = canonicalHandle(route?.label);
+                return (
+                    routeIdRaw === preferredRaw
+                    || routeIdCanonical === preferredCanonical
+                    || routeLabelRaw === preferredRaw
+                    || routeLabelCanonical === preferredCanonical
+                );
+            });
+
+            if (matchingRoute) {
+                const aliases = [
+                    matchingRoute.id,
+                    matchingRoute.label,
+                    ...parseIntentPhrases(matchingRoute.phrases || '')
+                ];
+
+                for (const alias of aliases) {
+                    acceptedHandles.add(rawHandle(alias));
+                    acceptedHandles.add(canonicalHandle(alias));
+                }
+            }
+
+            edge = outgoingEdges.find((item) => {
+                const edgeRaw = rawHandle(item.sourceHandle);
+                const edgeCanonical = canonicalHandle(item.sourceHandle);
+                return acceptedHandles.has(edgeRaw) || acceptedHandles.has(edgeCanonical);
+            });
         }
 
         if (!edge) {
-            edge = outgoingEdges.find((item) => normalizeHandle(item.sourceHandle) === 'default');
+            edge = outgoingEdges.find((item) => rawHandle(item.sourceHandle) === 'default');
+        }
+
+        if (!edge && isIntentNode) {
+            const intentSpecificEdges = outgoingEdges.filter((item) => rawHandle(item.sourceHandle) !== 'default');
+            if (intentSpecificEdges.length === 1) {
+                edge = intentSpecificEdges[0];
+            }
         }
 
         if (!edge && !isIntentNode) {
@@ -1172,6 +1331,14 @@ class FlowService extends EventEmitter {
         if (edge) {
             await this.executeNode(execution, edge.target);
         } else {
+            if (isIntentNode) {
+                const availableHandles = outgoingEdges.map((item) => rawHandle(item.sourceHandle)).join(', ');
+                console.warn(
+                    `[flow-intent] Sem saida correspondente no no ${currentNode?.id || 'desconhecido'} `
+                    + `(fluxo ${execution?.flow?.id || 'n/a'}, conversa ${execution?.conversation?.id || 'n/a'}). `
+                    + `Preferido: ${String(preferredSourceHandle || 'null')}. Disponiveis: [${availableHandles}]`
+                );
+            }
             await this.endFlow(execution, 'completed');
         }
     }
@@ -1217,7 +1384,7 @@ class FlowService extends EventEmitter {
         
         // Remover da lista de execuções ativas
         if (execution.conversation?.id) {
-            this.activeExecutions.delete(execution.conversation.id);
+            this.removeActiveExecution(execution.conversation.id);
         }
         
         this.emit('flow:ended', {
@@ -1255,17 +1422,19 @@ class FlowService extends EventEmitter {
      * Obter execução ativa de uma conversa
      */
     getActiveExecution(conversationId) {
-        return this.activeExecutions.get(conversationId);
+        const key = this.getExecutionConversationKey(conversationId);
+        if (!key) return null;
+        return this.activeExecutions.get(key) || null;
     }
     
     /**
      * Pausar execução
      */
     async pauseExecution(conversationId) {
-        const execution = this.activeExecutions.get(conversationId);
+        const execution = this.getActiveExecution(conversationId);
         if (execution) {
             await run(`UPDATE flow_executions SET status = 'paused' WHERE id = ?`, [execution.id]);
-            this.activeExecutions.delete(conversationId);
+            this.removeActiveExecution(conversationId);
         }
     }
     
@@ -1273,10 +1442,10 @@ class FlowService extends EventEmitter {
      * Cancelar execução
      */
     async cancelExecution(conversationId) {
-        const execution = this.activeExecutions.get(conversationId);
+        const execution = this.getActiveExecution(conversationId);
         if (execution) {
             await run(`UPDATE flow_executions SET status = 'cancelled' WHERE id = ?`, [execution.id]);
-            this.activeExecutions.delete(conversationId);
+            this.removeActiveExecution(conversationId);
         }
     }
     
@@ -1290,7 +1459,3 @@ class FlowService extends EventEmitter {
 
 module.exports = new FlowService();
 module.exports.FlowService = FlowService;
-
-
-
-

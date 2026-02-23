@@ -184,6 +184,54 @@ function findInboxSessionById(sessionId: string) {
     return inboxAvailableSessions.find((session) => sanitizeSessionId(session.session_id) === normalized) || null;
 }
 
+function upsertInboxSessionConnection(sessionId: string, connected: boolean) {
+    const normalized = sanitizeSessionId(sessionId);
+    if (!normalized) return;
+
+    const index = inboxAvailableSessions.findIndex(
+        (session) => sanitizeSessionId(session.session_id) === normalized
+    );
+    const nextStatus = connected ? 'connected' : 'disconnected';
+
+    if (index >= 0) {
+        const current = inboxAvailableSessions[index];
+        inboxAvailableSessions[index] = {
+            ...current,
+            session_id: normalized,
+            connected,
+            status: nextStatus
+        };
+    } else {
+        inboxAvailableSessions.push({
+            session_id: normalized,
+            connected,
+            status: nextStatus
+        });
+    }
+
+    renderInboxSessionFilterOptions();
+}
+
+async function ensureSessionConnected(sessionId: string) {
+    const normalized = sanitizeSessionId(sessionId);
+    if (!normalized) return false;
+
+    const knownSession = findInboxSessionById(normalized);
+    if (knownSession && isInboxSessionConnected(knownSession)) {
+        return true;
+    }
+
+    try {
+        const response = await api.get(`/api/whatsapp/status?sessionId=${encodeURIComponent(normalized)}`);
+        const connected = Boolean(response?.connected);
+        upsertInboxSessionConnection(normalized, connected);
+        return connected;
+    } catch (_) {
+        // Avoid false warnings when status check fails momentarily.
+        return true;
+    }
+}
+
 function resolveConversationSessionLabel(sessionId: string) {
     const normalized = sanitizeSessionId(sessionId);
     if (!normalized) return '';
@@ -1320,12 +1368,15 @@ async function handleMediaInputChange(event: Event) {
     if (!target) return;
 
     try {
-        if (!file || !currentConversation) return;
+        const activeConversation = currentConversation;
+        if (!file || !activeConversation) return;
         if (mediaUploadInProgress) {
             showToast('warning', 'Aviso', 'Aguarde o envio atual terminar');
             return;
         }
-        if (APP.whatsappStatus !== 'connected') {
+        const sessionId = resolveConversationSessionId(activeConversation);
+        const sessionConnected = await ensureSessionConnected(sessionId);
+        if (!sessionConnected) {
             showToast('warning', 'Aviso', 'WhatsApp nao esta conectado');
             return;
         }
@@ -1360,10 +1411,9 @@ async function handleMediaInputChange(event: Event) {
         renderMessagesInto(chatMessages);
         scrollToBottom();
 
-        const sessionId = resolveConversationSessionId(currentConversation);
         const response = await api.post('/api/send', {
             sessionId,
-            to: currentConversation.phone,
+            to: activeConversation.phone,
             message: mediaUrl,
             type: mediaType,
             options: {
@@ -1496,11 +1546,16 @@ async function sendMessage() {
     const input = document.getElementById('messageInput') as HTMLTextAreaElement | null;
     const content = input?.value.trim() || '';
     
-    if (!content || !currentConversation) return;
+    const activeConversation = currentConversation;
+    if (!content || !activeConversation) return;
 
-    if (APP.whatsappStatus !== 'connected') {
-        showToast('warning', 'Aviso', 'WhatsApp não está conectado');
+    const sessionId = resolveConversationSessionId(activeConversation);
+    const sessionConnected = await ensureSessionConnected(sessionId);
+    if (!sessionConnected) {
+        showToast('warning', 'Aviso', 'WhatsApp nao esta conectado');
+        return;
     }
+
 
     // Adicionar mensagem localmente
     const newMessage: ChatMessage = {
@@ -1519,10 +1574,9 @@ async function sendMessage() {
     if (input) input.value = '';
 
     try {
-        const sessionId = resolveConversationSessionId(currentConversation);
         const response = await api.post('/api/send', {
             sessionId,
-            to: currentConversation.phone,
+            to: activeConversation.phone,
             message: content,
             type: 'text'
         });
