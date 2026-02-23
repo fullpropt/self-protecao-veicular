@@ -35,14 +35,26 @@ function toPgStatement(sql, params = []) {
 
 async function queryRows(client, sql, params = []) {
     const stmt = toPgStatement(sql, params);
-    const result = await client.query(stmt.sql, stmt.params);
-    return result.rows || [];
+    try {
+        const result = await client.query(stmt.sql, stmt.params);
+        return result.rows || [];
+    } catch (error) {
+        const preview = stmt.sql.replace(/\s+/g, ' ').trim().slice(0, 220);
+        const typedParams = (stmt.params || []).map((value) => `${typeof value}:${String(value).slice(0, 60)}`);
+        throw new Error(`${error.message} | query=${preview} | params=${typedParams.join(',')}`);
+    }
 }
 
 async function exec(client, sql, params = []) {
     const stmt = toPgStatement(sql, params);
-    const result = await client.query(stmt.sql, stmt.params);
-    return Number(result.rowCount || 0);
+    try {
+        const result = await client.query(stmt.sql, stmt.params);
+        return Number(result.rowCount || 0);
+    } catch (error) {
+        const preview = stmt.sql.replace(/\s+/g, ' ').trim().slice(0, 220);
+        const typedParams = (stmt.params || []).map((value) => `${typeof value}:${String(value).slice(0, 60)}`);
+        throw new Error(`${error.message} | query=${preview} | params=${typedParams.join(',')}`);
+    }
 }
 
 function parseArgs(argv) {
@@ -136,6 +148,15 @@ Exemplo:
 `);
 }
 
+function buildInClause(values = []) {
+    const normalized = Array.isArray(values) ? values : [];
+    if (!normalized.length) {
+        return { placeholders: '', params: [] };
+    }
+    const placeholders = normalized.map(() => '?').join(', ');
+    return { placeholders, params: normalized };
+}
+
 async function ensureOwnerColumn(client) {
     const rows = await queryRows(client, `
         SELECT 1
@@ -193,15 +214,16 @@ async function syncCreatedByByOwner(client, tableName, primaryOwnerId, secondary
     const mapped = await exec(client, `
         UPDATE ${tableName} t
         SET created_by = CASE
-            WHEN (u.id = ? OR u.owner_user_id = ?) THEN ?
-            ELSE ?
+            WHEN (u.id = ? OR u.owner_user_id = ?) THEN (?::integer)
+            ELSE (?::integer)
         END
         FROM users u
-        WHERE t.created_by = u.id
-          AND t.created_by IS DISTINCT FROM CASE
-              WHEN (u.id = ? OR u.owner_user_id = ?) THEN ?
-              ELSE ?
-          END
+        WHERE t.created_by IS NOT NULL
+          AND t.created_by::text = u.id::text
+          AND t.created_by::text IS DISTINCT FROM (CASE
+              WHEN (u.id = ? OR u.owner_user_id = ?) THEN (?::integer)
+              ELSE (?::integer)
+          END)::text
     `, [
         secondaryOwnerId, secondaryOwnerId, secondaryOwnerId, primaryOwnerId,
         secondaryOwnerId, secondaryOwnerId, secondaryOwnerId, primaryOwnerId
@@ -311,29 +333,42 @@ async function main() {
         const secondaryLeadArray = Array.from(secondaryLeadIds.values());
         console.log(`Secondary leads selected: ${secondaryLeadArray.length}`);
 
-        metrics.leadsToSecondary += await exec(client, `
-            UPDATE leads
-            SET assigned_to = ?
-            WHERE id = ANY(?::int[])
-        `, [secondary.id, secondaryLeadArray]);
+        if (secondaryLeadArray.length > 0) {
+            const leadIn = buildInClause(secondaryLeadArray);
+            metrics.leadsToSecondary += await exec(client, `
+                UPDATE leads
+                SET assigned_to = ?
+                WHERE id IN (${leadIn.placeholders})
+            `, [secondary.id, ...leadIn.params]);
 
-        metrics.leadsToPrimary += await exec(client, `
-            UPDATE leads
-            SET assigned_to = ?
-            WHERE NOT (id = ANY(?::int[]))
-        `, [primary.id, secondaryLeadArray]);
+            metrics.leadsToPrimary += await exec(client, `
+                UPDATE leads
+                SET assigned_to = ?
+                WHERE id NOT IN (${leadIn.placeholders})
+            `, [primary.id, ...leadIn.params]);
 
-        metrics.conversationsToSecondary += await exec(client, `
-            UPDATE conversations
-            SET assigned_to = ?
-            WHERE lead_id = ANY(?::int[])
-        `, [secondary.id, secondaryLeadArray]);
+            metrics.conversationsToSecondary += await exec(client, `
+                UPDATE conversations
+                SET assigned_to = ?
+                WHERE lead_id IN (${leadIn.placeholders})
+            `, [secondary.id, ...leadIn.params]);
 
-        metrics.conversationsToPrimary += await exec(client, `
-            UPDATE conversations
-            SET assigned_to = ?
-            WHERE NOT (lead_id = ANY(?::int[]))
-        `, [primary.id, secondaryLeadArray]);
+            metrics.conversationsToPrimary += await exec(client, `
+                UPDATE conversations
+                SET assigned_to = ?
+                WHERE lead_id NOT IN (${leadIn.placeholders})
+            `, [primary.id, ...leadIn.params]);
+        } else {
+            metrics.leadsToPrimary += await exec(client, `
+                UPDATE leads
+                SET assigned_to = ?
+            `, [primary.id]);
+
+            metrics.conversationsToPrimary += await exec(client, `
+                UPDATE conversations
+                SET assigned_to = ?
+            `, [primary.id]);
+        }
 
         const globalSettings = await queryRows(client, `
             SELECT key, value, type
@@ -377,11 +412,12 @@ async function main() {
         }
 
         if (options.secondarySessionIds.length > 0) {
+            const sessionIn = buildInClause(options.secondarySessionIds);
             metrics.sessionsToSecondary += await exec(client, `
                 UPDATE whatsapp_sessions
                 SET created_by = ?
-                WHERE session_id = ANY(?::text[])
-            `, [secondary.id, options.secondarySessionIds]);
+                WHERE session_id IN (${sessionIn.placeholders})
+            `, [secondary.id, ...sessionIn.params]);
         }
 
         console.log('Summary:', metrics);
