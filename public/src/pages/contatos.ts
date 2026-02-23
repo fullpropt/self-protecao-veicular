@@ -208,6 +208,10 @@ function getSessionStatusLabel(session: WhatsappSessionItem) {
     return connected ? 'Conectada' : 'Desconectada';
 }
 
+function isContactsSessionConnected(session: WhatsappSessionItem) {
+    return Boolean(session.connected) || String(session.status || '').toLowerCase() === 'connected';
+}
+
 function getSessionDisplayName(session: WhatsappSessionItem) {
     const sessionId = sanitizeSessionId(session.session_id);
     const name = String(session.name || '').trim();
@@ -257,6 +261,40 @@ async function loadContactsSessionFilters() {
     }
 
     renderContactsSessionFilterOptions();
+}
+
+async function hasConnectedSessionForContactsSend() {
+    const selectedSessionId = sanitizeSessionId(contactsSessionFilter);
+
+    try {
+        const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
+        const sessions = Array.isArray(response?.sessions) ? response.sessions : [];
+        contactsAvailableSessions = sessions;
+        renderContactsSessionFilterOptions();
+
+        if (selectedSessionId) {
+            const selected = sessions.find(
+                (session) => sanitizeSessionId(session.session_id) === selectedSessionId
+            );
+            if (selected) {
+                return isContactsSessionConnected(selected);
+            }
+            const fallbackStatus = await api.get(`/api/whatsapp/status?sessionId=${encodeURIComponent(selectedSessionId)}`);
+            return Boolean(fallbackStatus?.connected);
+        }
+
+        return sessions.some((session) => isContactsSessionConnected(session));
+    } catch (_) {
+        if (selectedSessionId) {
+            try {
+                const fallbackStatus = await api.get(`/api/whatsapp/status?sessionId=${encodeURIComponent(selectedSessionId)}`);
+                return Boolean(fallbackStatus?.connected);
+            } catch (_) {
+                // Keep flow permissive when status cannot be checked.
+            }
+        }
+        return true;
+    }
 }
 
 function changeContactsSessionFilter(sessionId: string) {
@@ -718,8 +756,12 @@ async function sendBulkMessage() {
         return;
     }
 
-    if (APP.whatsappStatus !== 'connected') {
-        showToast('error', 'Erro', 'WhatsApp não está conectado');
+    const hasConnectedSession = await hasConnectedSessionForContactsSend();
+    if (!hasConnectedSession) {
+        const statusMessage = contactsSessionFilter
+            ? 'A conta selecionada nao esta conectada'
+            : 'Nenhuma conta WhatsApp conectada para envio';
+        showToast('error', 'Erro', statusMessage);
         return;
     }
 

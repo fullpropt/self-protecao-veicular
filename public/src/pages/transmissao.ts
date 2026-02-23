@@ -12,6 +12,11 @@ type Contact = {
 type Template = { id: number; name: string; content: string };
 type LeadsResponse = { leads?: Contact[] };
 type TemplatesResponse = { templates?: Template[] };
+type WhatsappSessionItem = {
+    session_id: string;
+    status?: string;
+    connected?: boolean;
+};
 type QueueItem = {
     id: number;
     status: 'pending' | 'processing' | 'sent' | 'failed';
@@ -194,6 +199,21 @@ function getDelayRangeMs() {
     };
 }
 
+function isBroadcastSessionConnected(session: WhatsappSessionItem) {
+    return Boolean(session.connected) || String(session.status || '').toLowerCase() === 'connected';
+}
+
+async function hasConnectedSessionForBroadcast() {
+    try {
+        const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
+        const sessions = Array.isArray(response?.sessions) ? response.sessions : [];
+        return sessions.some((session) => isBroadcastSessionConnected(session));
+    } catch (_) {
+        // Avoid false warnings when status endpoint is temporarily unavailable.
+        return true;
+    }
+}
+
 async function startBroadcast() {
     const message = (document.getElementById('messageContent') as HTMLTextAreaElement | null)?.value.trim() || '';
     const { minMs: delayMinMs, maxMs: delayMaxMs } = getDelayRangeMs();
@@ -209,8 +229,9 @@ async function startBroadcast() {
         return;
     }
 
-    if (APP.whatsappStatus !== 'connected') {
-        showToast('warning', 'Aviso', 'WhatsApp não está conectado. As mensagens serão enviadas quando conectar.');
+    const hasConnectedSession = await hasConnectedSessionForBroadcast();
+    if (!hasConnectedSession) {
+        showToast('warning', 'Aviso', 'Nenhuma conta WhatsApp conectada. As mensagens serao enfileiradas.');
     }
 
     const btn = document.getElementById('startBtn') as HTMLButtonElement | null;
