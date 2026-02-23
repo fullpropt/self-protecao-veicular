@@ -599,6 +599,9 @@ const recoveredFlowMessageIds = new Map();
 const FLOW_RECOVERY_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_DELAY_MS || '', 10) || 2500;
 const FLOW_RECOVERY_WINDOW_MS = parseInt(process.env.FLOW_RECOVERY_WINDOW_MS || '', 10) || (5 * 60 * 1000);
 const FLOW_RECOVERY_TRACKER_LIMIT = 4000;
+const FLOW_RECOVERY_MAX_ATTEMPTS = parseInt(process.env.FLOW_RECOVERY_MAX_ATTEMPTS || '', 10) || 7;
+const FLOW_RECOVERY_MAX_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_MAX_DELAY_MS || '', 10) || 30000;
+const BAILEYS_CIPHERTEXT_STUB_TYPE = 1;
 
 senderAllocatorService.setRuntimeSessionsGetter(() => sessions);
 senderAllocatorService.setDefaultSessionId(DEFAULT_WHATSAPP_SESSION_ID);
@@ -2980,7 +2983,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     if (isGroupMessage(msg)) continue;
                     const hasMessagePayload = Boolean(msg?.message);
-                    const hasCiphertextStub = !hasMessagePayload && Number(msg?.messageStubType || 0) > 0;
+                    const hasCiphertextStub = Number(msg?.messageStubType || 0) === BAILEYS_CIPHERTEXT_STUB_TYPE;
                     if (hasCiphertextStub) {
                         scheduleCiphertextRecovery(sessionId, msg);
                         continue;
@@ -3024,6 +3027,14 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                     } catch (error) {
                         console.error(`[${sessionId}] Erro ao processar patch de messages.update (${update?.key?.id || 'sem-id'}):`, error.message);
                     }
+                }
+
+                const updateCiphertextStub = Number(update?.update?.messageStubType || 0) === BAILEYS_CIPHERTEXT_STUB_TYPE;
+                if (updateCiphertextStub && !Boolean(update?.key?.fromMe)) {
+                    scheduleCiphertextRecovery(sessionId, {
+                        key: update?.key || {},
+                        messageStubType: BAILEYS_CIPHERTEXT_STUB_TYPE
+                    });
                 }
 
                 if (update.update.status) {
@@ -4548,48 +4559,102 @@ function rememberRecoveredFlowMessage(messageId) {
     }
 }
 
-function scheduleCiphertextRecovery(sessionId, rawMessage = {}) {
+function resolveUserJidFromRawMessage(rawMessage = {}) {
+    const key = rawMessage?.key || {};
+    const candidates = [
+        key?.remoteJid,
+        key?.senderPn,
+        key?.participantPn,
+        key?.participant
+    ];
+
+    for (const candidate of candidates) {
+        const normalized = normalizeUserJidCandidate(candidate) || normalizeJid(candidate);
+        if (normalized && isUserJid(normalized)) {
+            return normalized;
+        }
+    }
+
+    return '';
+}
+
+function getCiphertextRecoveryDelayMs(attempt = 1) {
+    const normalizedAttempt = Math.max(1, Number(attempt) || 1);
+    const delay = FLOW_RECOVERY_DELAY_MS * Math.pow(2, normalizedAttempt - 1);
+    return Math.min(Math.max(200, Math.trunc(delay)), FLOW_RECOVERY_MAX_DELAY_MS);
+}
+
+function scheduleCiphertextRecovery(sessionId, rawMessage = {}, attempt = 1) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
     const messageId = String(rawMessage?.key?.id || '').trim();
-    const rawRemoteJid = String(rawMessage?.key?.remoteJid || '').trim();
-    const remoteJid = normalizeUserJidCandidate(rawRemoteJid) || normalizeJid(rawRemoteJid);
+    const remoteJid = resolveUserJidFromRawMessage(rawMessage);
 
     if (!normalizedSessionId || !messageId || !remoteJid || !isUserJid(remoteJid)) {
         return;
     }
 
     const recoveryKey = `${normalizedSessionId}:${messageId}`;
-    if (pendingCiphertextRecoveries.has(recoveryKey)) {
+    const currentEntry = pendingCiphertextRecoveries.get(recoveryKey);
+    if (currentEntry && Number(currentEntry?.attempt || 0) >= Number(attempt || 0)) {
         return;
     }
+    if (currentEntry?.timer) {
+        clearTimeout(currentEntry.timer);
+    }
+
+    const safeAttempt = Math.max(1, Number(attempt) || 1);
+    const delayMs = getCiphertextRecoveryDelayMs(safeAttempt);
 
     const timer = setTimeout(async () => {
         try {
-            await runCiphertextRecovery(normalizedSessionId, rawMessage);
+            const recovered = await runCiphertextRecovery(normalizedSessionId, rawMessage, safeAttempt);
+            if (recovered) {
+                pendingCiphertextRecoveries.delete(recoveryKey);
+                return;
+            }
+
+            if (safeAttempt < FLOW_RECOVERY_MAX_ATTEMPTS) {
+                scheduleCiphertextRecovery(normalizedSessionId, rawMessage, safeAttempt + 1);
+                return;
+            }
+
+            pendingCiphertextRecoveries.delete(recoveryKey);
+            console.warn(`[${normalizedSessionId}] Recuperacao de mensagem cifrada atingiu limite de tentativas (${messageId})`);
         } catch (error) {
             console.warn(`[${normalizedSessionId}] Falha na recuperacao de mensagem cifrada (${messageId}):`, error.message);
-        } finally {
             pendingCiphertextRecoveries.delete(recoveryKey);
         }
-    }, FLOW_RECOVERY_DELAY_MS);
+    }, delayMs);
 
-    pendingCiphertextRecoveries.set(recoveryKey, timer);
+    pendingCiphertextRecoveries.set(recoveryKey, {
+        timer,
+        attempt: safeAttempt,
+        remoteJid,
+        messageId
+    });
+    console.log(`[${normalizedSessionId}] Agendada recuperacao de mensagem cifrada (${messageId}) tentativa ${safeAttempt}/${FLOW_RECOVERY_MAX_ATTEMPTS} em ${delayMs}ms`);
 }
 
-async function runCiphertextRecovery(sessionId, rawMessage = {}) {
-    const rawRemoteJid = String(rawMessage?.key?.remoteJid || '').trim();
-    const remoteJid = normalizeUserJidCandidate(rawRemoteJid) || normalizeJid(rawRemoteJid);
-    if (!remoteJid || !isUserJid(remoteJid)) return;
+async function runCiphertextRecovery(sessionId, rawMessage = {}, attempt = 1) {
+    const remoteJid = resolveUserJidFromRawMessage(rawMessage);
+    if (!remoteJid || !isUserJid(remoteJid)) return false;
+
+    if (attempt > 1) {
+        const runtimeSession = sessions.get(sessionId);
+        if (runtimeSession?.socket) {
+            triggerChatSync(sessionId, runtimeSession.socket, runtimeSession.store, 0);
+        }
+    }
 
     const remotePhone = extractNumber(remoteJid);
     let lead = await Lead.findByJid(remoteJid);
     if (!lead && remotePhone) {
         lead = await Lead.findByPhone(remotePhone);
     }
-    if (!lead?.id) return;
+    if (!lead?.id) return false;
 
     let conversation = await Conversation.findByLeadId(lead.id, sessionId);
-    if (!conversation?.id) return;
+    if (!conversation?.id) return false;
 
     const backfillResult = await backfillConversationMessagesFromStore({
         sessionId,
@@ -4599,7 +4664,7 @@ async function runCiphertextRecovery(sessionId, rawMessage = {}) {
         limit: 40
     });
 
-    if ((backfillResult?.inserted || 0) <= 0) return;
+    if ((backfillResult?.inserted || 0) <= 0) return false;
 
     const recentIncoming = await query(`
         SELECT id, message_id, content, content_encrypted, media_type, metadata, sent_at, created_at, is_from_me
@@ -4609,9 +4674,10 @@ async function runCiphertextRecovery(sessionId, rawMessage = {}) {
         ORDER BY COALESCE(sent_at, created_at) DESC, id DESC
         LIMIT 12
     `, [conversation.id]);
-    if (!Array.isArray(recentIncoming) || recentIncoming.length === 0) return;
+    if (!Array.isArray(recentIncoming) || recentIncoming.length === 0) return false;
 
     const now = Date.now();
+    let recovered = false;
     for (const candidate of recentIncoming) {
         const messageId = String(candidate?.message_id || '').trim();
         if (!messageId || hasRecoveredFlowMessage(messageId)) continue;
@@ -4640,8 +4706,11 @@ async function runCiphertextRecovery(sessionId, rawMessage = {}) {
         );
         rememberRecoveredFlowMessage(messageId);
         console.log(`[${sessionId}] Recuperacao automatica processou mensagem cifrada (${messageId}) para continuar fluxo`);
+        recovered = true;
         break;
     }
+
+    return recovered;
 }
 
 
