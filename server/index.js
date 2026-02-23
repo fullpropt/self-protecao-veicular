@@ -166,6 +166,33 @@ async function resolveWhatsAppBrowserName() {
     }
 }
 
+function getRequesterUserId(req) {
+    const userId = Number(req?.user?.id || 0);
+    return Number.isInteger(userId) && userId > 0 ? userId : 0;
+}
+
+function getRequesterRole(req) {
+    return String(req?.user?.role || '').trim().toLowerCase();
+}
+
+function isScopedAgent(req) {
+    return getRequesterRole(req) === 'agent' && getRequesterUserId(req) > 0;
+}
+
+function getScopedUserId(req) {
+    return isScopedAgent(req) ? getRequesterUserId(req) : null;
+}
+
+function canAccessAssignedRecord(req, assignedTo) {
+    if (!isScopedAgent(req)) return true;
+    return Number(assignedTo) === getRequesterUserId(req);
+}
+
+function canAccessCreatedRecord(req, createdBy) {
+    if (!isScopedAgent(req)) return true;
+    return Number(createdBy) === getRequesterUserId(req);
+}
+
 
 
 // Avisar se chaves de segurança não foram configuradas (não bloqueia startup para deploy funcionar)
@@ -4912,6 +4939,10 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     const jid = formatJid(to);
 
     const normalizedPhone = extractNumber(jid);
+    const requestedAssignee = Number(options?.assigned_to);
+    const assignedTo = Number.isInteger(requestedAssignee) && requestedAssignee > 0
+        ? requestedAssignee
+        : null;
 
     
 
@@ -4923,7 +4954,8 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         jid,
 
-        source: 'manual'
+        source: 'manual',
+        assigned_to: assignedTo
 
     });
 
@@ -4935,6 +4967,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     if (options.conversationId) {
         const existingConversation = await Conversation.findById(options.conversationId);
         if (existingConversation && Number(existingConversation.lead_id) === Number(lead.id)) {
+            if (assignedTo && existingConversation.assigned_to && Number(existingConversation.assigned_to) !== assignedTo) {
+                throw new Error('Sem permissao para enviar nesta conversa');
+            }
             conversation = existingConversation;
         }
     }
@@ -4942,9 +4977,15 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     if (!conversation) {
         const conversationResult = await Conversation.findOrCreate({
             lead_id: lead.id,
-            session_id: sessionId
+            session_id: sessionId,
+            assigned_to: assignedTo
         });
         conversation = conversationResult.conversation;
+    }
+
+    if (conversation && assignedTo && !conversation.assigned_to) {
+        await Conversation.update(conversation.id, { assigned_to: assignedTo });
+        conversation = await Conversation.findById(conversation.id);
     }
 
     
@@ -6463,6 +6504,7 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
         const metric = String(req.query.metric || 'novos_contatos')
             .trim()
             .toLowerCase();
+        const scopedUserId = getScopedUserId(req);
 
         if (!DASHBOARD_PERIOD_METRICS.has(metric)) {
             return res.status(400).json({ success: false, error: 'Métrica inválida' });
@@ -6493,44 +6535,61 @@ app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
 
         let rows = [];
         if (metric === 'novos_contatos') {
+            const params = [startAt, endExclusiveAt];
+            const ownerFilter = scopedUserId ? ' AND assigned_to = ?' : '';
+            if (scopedUserId) {
+                params.push(scopedUserId);
+            }
             rows = await query(
                 `
                 SELECT
                     TO_CHAR((created_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day,
                     COUNT(*)::int AS total
                 FROM leads
-                WHERE created_at >= ? AND created_at < ?
+                WHERE created_at >= ? AND created_at < ?${ownerFilter}
                 GROUP BY (created_at AT TIME ZONE 'UTC')::date
                 ORDER BY (created_at AT TIME ZONE 'UTC')::date ASC
                 `,
-                [startAt, endExclusiveAt]
+                params
             );
         } else if (metric === 'mensagens') {
+            const params = [startAt, endExclusiveAt];
+            const ownerFilter = scopedUserId ? ' AND l.assigned_to = ?' : '';
+            if (scopedUserId) {
+                params.push(scopedUserId);
+            }
             rows = await query(
                 `
                 SELECT
-                    TO_CHAR((COALESCE(sent_at, created_at) AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day,
+                    TO_CHAR((COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day,
                     COUNT(*)::int AS total
-                FROM messages
-                WHERE COALESCE(sent_at, created_at) >= ? AND COALESCE(sent_at, created_at) < ?
-                GROUP BY (COALESCE(sent_at, created_at) AT TIME ZONE 'UTC')::date
-                ORDER BY (COALESCE(sent_at, created_at) AT TIME ZONE 'UTC')::date ASC
+                FROM messages m
+                LEFT JOIN leads l ON l.id = m.lead_id
+                WHERE COALESCE(m.sent_at, m.created_at) >= ? AND COALESCE(m.sent_at, m.created_at) < ?${ownerFilter}
+                GROUP BY (COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date
+                ORDER BY (COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date ASC
                 `,
-                [startAt, endExclusiveAt]
+                params
             );
         } else {
+            const params = [startAt, endExclusiveAt];
+            const ownerFilter = scopedUserId ? ' AND l.assigned_to = ?' : '';
+            if (scopedUserId) {
+                params.push(scopedUserId);
+            }
             rows = await query(
                 `
                 SELECT
-                    TO_CHAR((COALESCE(sent_at, created_at) AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day,
-                    COUNT(DISTINCT lead_id)::int AS total
-                FROM messages
-                WHERE COALESCE(sent_at, created_at) >= ? AND COALESCE(sent_at, created_at) < ?
-                  AND is_from_me = 0
-                GROUP BY (COALESCE(sent_at, created_at) AT TIME ZONE 'UTC')::date
-                ORDER BY (COALESCE(sent_at, created_at) AT TIME ZONE 'UTC')::date ASC
+                    TO_CHAR((COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day,
+                    COUNT(DISTINCT m.lead_id)::int AS total
+                FROM messages m
+                LEFT JOIN leads l ON l.id = m.lead_id
+                WHERE COALESCE(m.sent_at, m.created_at) >= ? AND COALESCE(m.sent_at, m.created_at) < ?
+                  AND m.is_from_me = 0${ownerFilter}
+                GROUP BY (COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date
+                ORDER BY (COALESCE(m.sent_at, m.created_at) AT TIME ZONE 'UTC')::date ASC
                 `,
-                [startAt, endExclusiveAt]
+                params
             );
         }
 
@@ -6593,9 +6652,11 @@ app.get('/api/custom-events/stats', optionalAuth, async (req, res) => {
             req.query.active_only ?? req.query.activeOnly ?? req.query.active,
             false
         );
+        const scopedUserId = getScopedUserId(req);
 
         const events = await CustomEvent.listWithPeriodTotals(periodRange.startAt, periodRange.endAt, {
-            is_active: onlyActive ? 1 : undefined
+            is_active: onlyActive ? 1 : undefined,
+            created_by: scopedUserId || undefined
         });
 
         const totals = events.reduce((acc, event) => {
@@ -6633,10 +6694,12 @@ app.get('/api/custom-events', optionalAuth, async (req, res) => {
         const activeRaw = req.query.active ?? req.query.is_active;
         const activeFilter = hasActiveFilter ? (parseBooleanInput(activeRaw, true) ? 1 : 0) : undefined;
         const search = String(req.query.search || '').trim();
+        const scopedUserId = getScopedUserId(req);
 
         const events = await CustomEvent.list({
             is_active: activeFilter,
-            search
+            search,
+            created_by: scopedUserId || undefined
         });
 
         res.json({ success: true, events });
@@ -6684,6 +6747,9 @@ app.put('/api/custom-events/:id', authenticate, async (req, res) => {
         if (!existing) {
             return res.status(404).json({ success: false, error: 'Evento nao encontrado' });
         }
+        if (!canAccessCreatedRecord(req, existing.created_by)) {
+            return res.status(403).json({ success: false, error: 'Sem permissao para editar este evento' });
+        }
 
         const payload = {};
         if (Object.prototype.hasOwnProperty.call(req.body, 'name')) payload.name = req.body.name;
@@ -6722,6 +6788,9 @@ app.delete('/api/custom-events/:id', authenticate, async (req, res) => {
         if (!existing) {
             return res.status(404).json({ success: false, error: 'Evento nao encontrado' });
         }
+        if (!canAccessCreatedRecord(req, existing.created_by)) {
+            return res.status(403).json({ success: false, error: 'Sem permissao para remover este evento' });
+        }
 
         await CustomEvent.delete(eventId);
         res.json({ success: true });
@@ -6733,14 +6802,19 @@ app.delete('/api/custom-events/:id', authenticate, async (req, res) => {
 
 app.get('/api/leads', optionalAuth, async (req, res) => {
 
-    const { status, search, limit, offset } = req.query;
+    const { status, search, limit, offset, assigned_to } = req.query;
     const sessionId = sanitizeSessionId(req.query.session_id || req.query.sessionId);
+    const scopedUserId = getScopedUserId(req);
+    const requestedAssignedTo = assigned_to ? parseInt(assigned_to, 10) : undefined;
+    const resolvedAssignedTo = scopedUserId || requestedAssignedTo;
 
     const leads = await Lead.list({ 
 
         status: status ? parseInt(status) : undefined,
 
         search,
+
+        assigned_to: resolvedAssignedTo,
 
         session_id: sessionId || undefined,
 
@@ -6752,6 +6826,7 @@ app.get('/api/leads', optionalAuth, async (req, res) => {
 
     const total = await Lead.count({
         status: status ? parseInt(status) : undefined,
+        assigned_to: resolvedAssignedTo,
         session_id: sessionId || undefined
     });
 
@@ -6773,6 +6848,10 @@ app.get('/api/leads/:id', optionalAuth, async (req, res) => {
 
     }
 
+    if (!canAccessAssignedRecord(req, lead.assigned_to)) {
+        return res.status(404).json({ error: 'Lead não encontrado' });
+    }
+
     res.json({ success: true, lead });
 
 });
@@ -6782,8 +6861,15 @@ app.get('/api/leads/:id', optionalAuth, async (req, res) => {
 app.post('/api/leads', authenticate, async (req, res) => {
 
     try {
+        const scopedUserId = getScopedUserId(req);
+        const payload = {
+            ...req.body
+        };
+        if (scopedUserId) {
+            payload.assigned_to = scopedUserId;
+        }
 
-        const result = await Lead.create(req.body);
+        const result = await Lead.create(payload);
 
         const lead = await Lead.findById(result.id);
 
@@ -6813,6 +6899,10 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
         return res.status(404).json({ error: 'Lead não encontrado' });
 
+    }
+
+    if (!canAccessAssignedRecord(req, lead.assigned_to)) {
+        return res.status(404).json({ error: 'Lead não encontrado' });
     }
 
     
@@ -6884,6 +6974,13 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
 
         const lead = await Lead.findById(leadId);
         if (!lead) {
+            return res.status(404).json({
+                success: false,
+                error: 'Lead nao encontrado'
+            });
+        }
+
+        if (!canAccessAssignedRecord(req, lead.assigned_to)) {
             return res.status(404).json({
                 success: false,
                 error: 'Lead nao encontrado'
@@ -7037,9 +7134,12 @@ app.delete('/api/tags/:id', authenticate, async (req, res) => {
 
 app.get('/api/conversations', optionalAuth, async (req, res) => {
     const { status, assigned_to, session_id, limit, offset } = req.query;
+    const scopedUserId = getScopedUserId(req);
+    const requestedAssignedTo = assigned_to ? parseInt(assigned_to) : undefined;
+    const resolvedAssignedTo = scopedUserId || requestedAssignedTo;
     const conversations = await Conversation.list({
         status,
-        assigned_to: assigned_to ? parseInt(assigned_to) : undefined,
+        assigned_to: resolvedAssignedTo,
         session_id,
         limit: limit ? parseInt(limit) : 100,
         offset: offset ? parseInt(offset) : 0
@@ -7170,6 +7270,10 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
     }
 
     try {
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation || !canAccessAssignedRecord(req, conversation.assigned_to)) {
+            return res.status(404).json({ error: 'Conversa nao encontrada' });
+        }
 
         await Conversation.markAsRead(conversationId);
 
@@ -7186,6 +7290,7 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
 app.post('/api/send', authenticate, async (req, res) => {
 
     const { sessionId, to, message, type, options } = req.body;
+    const scopedUserId = getScopedUserId(req);
 
     
 
@@ -7199,7 +7304,12 @@ app.post('/api/send', authenticate, async (req, res) => {
 
     try {
 
-        const result = await sendMessage(sessionId, to, message, type || 'text', options);
+        const sendOptions = {
+            ...(options || {}),
+            ...(scopedUserId ? { assigned_to: scopedUserId } : {})
+        };
+
+        const result = await sendMessage(sessionId, to, message, type || 'text', sendOptions);
 
         res.json({ 
 
@@ -7224,6 +7334,7 @@ app.post('/api/send', authenticate, async (req, res) => {
 app.post('/api/messages/send', authenticate, async (req, res) => {
 
     const { leadId, phone, content, type, options, sessionId } = req.body;
+    const scopedUserId = getScopedUserId(req);
 
 
 
@@ -7232,6 +7343,9 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
     if (!to && leadId) {
 
         const lead = await Lead.findById(leadId);
+        if (!lead || !canAccessAssignedRecord(req, lead.assigned_to)) {
+            return res.status(404).json({ error: 'Lead nao encontrado' });
+        }
 
         to = lead?.phone;
 
@@ -7250,7 +7364,11 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
     try {
 
         const resolvedSessionId = resolveSessionIdOrDefault(sessionId);
-        const result = await sendMessage(resolvedSessionId, to, content, type || 'text', options || {});
+        const sendOptions = {
+            ...(options || {}),
+            ...(scopedUserId ? { assigned_to: scopedUserId } : {})
+        };
+        const result = await sendMessage(resolvedSessionId, to, content, type || 'text', sendOptions);
 
         res.json({
 
@@ -7302,6 +7420,13 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     } else if (Number.isFinite(leadId) && leadId > 0) {
         resolvedLead = await Lead.findById(leadId);
         messages = await Message.listByLead(leadId, { limit });
+    }
+
+    if (resolvedLead && !canAccessAssignedRecord(req, resolvedLead.assigned_to)) {
+        return res.status(404).json({ success: false, error: 'Lead nao encontrado' });
+    }
+    if (!resolvedLead && resolvedConversation && !canAccessAssignedRecord(req, resolvedConversation.assigned_to)) {
+        return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
     }
 
     const backfillSessionId = sanitizeSessionId(
@@ -7521,7 +7646,11 @@ app.delete('/api/queue', authenticate, async (req, res) => {
 
 app.get('/api/templates', optionalAuth, async (req, res) => {
 
-    const templates = await Template.list(req.query);
+    const scopedUserId = getScopedUserId(req);
+    const templates = await Template.list({
+        ...req.query,
+        created_by: scopedUserId || undefined
+    });
 
     res.json({ success: true, templates });
 
@@ -7531,7 +7660,11 @@ app.get('/api/templates', optionalAuth, async (req, res) => {
 
 app.post('/api/templates', authenticate, async (req, res) => {
 
-    const result = await Template.create(req.body);
+    const payload = {
+        ...req.body,
+        created_by: req.user?.id
+    };
+    const result = await Template.create(payload);
 
     const template = await Template.findById(result.id);
 
@@ -7542,6 +7675,14 @@ app.post('/api/templates', authenticate, async (req, res) => {
 
 
 app.put('/api/templates/:id', authenticate, async (req, res) => {
+
+    const existing = await Template.findById(req.params.id);
+    if (!existing) {
+        return res.status(404).json({ error: 'Template nao encontrado' });
+    }
+    if (!canAccessCreatedRecord(req, existing.created_by)) {
+        return res.status(403).json({ error: 'Sem permissao para editar este template' });
+    }
 
     await Template.update(req.params.id, req.body);
 
@@ -7554,6 +7695,14 @@ app.put('/api/templates/:id', authenticate, async (req, res) => {
 
 
 app.delete('/api/templates/:id', authenticate, async (req, res) => {
+
+    const existing = await Template.findById(req.params.id);
+    if (!existing) {
+        return res.status(404).json({ error: 'Template nao encontrado' });
+    }
+    if (!canAccessCreatedRecord(req, existing.created_by)) {
+        return res.status(403).json({ error: 'Sem permissao para remover este template' });
+    }
 
     await Template.delete(req.params.id);
 
@@ -7815,6 +7964,7 @@ async function resolveCampaignLeadIds(options = {}) {
 
     const segment = typeof options === 'string' ? options : options.segment;
     const tagFilter = typeof options === 'string' ? '' : options.tagFilter;
+    const assignedTo = Number(typeof options === 'string' ? 0 : options.assignedTo);
     const segmentStatus = resolveCampaignSegmentStatus(segment);
 
     let sql = 'SELECT id, tags FROM leads WHERE is_blocked = 0';
@@ -7825,6 +7975,11 @@ async function resolveCampaignLeadIds(options = {}) {
     if (segmentStatus !== null) {
         sql += ' AND status = ?';
         params.push(segmentStatus);
+    }
+
+    if (Number.isInteger(assignedTo) && assignedTo > 0) {
+        sql += ' AND assigned_to = ?';
+        params.push(assignedTo);
     }
 
 
@@ -7995,7 +8150,7 @@ async function migrateLegacyTriggerCampaignsToAutomations() {
     };
 }
 
-async function queueCampaignMessages(campaign) {
+async function queueCampaignMessages(campaign, options = {}) {
     const campaignType = String(campaign?.type || '').trim().toLowerCase();
     if (campaignType === 'trigger') {
         throw new Error('Campanhas do tipo gatilho foram descontinuadas. Use Automacao para gatilhos.');
@@ -8015,7 +8170,8 @@ async function queueCampaignMessages(campaign) {
 
     const leadIds = await resolveCampaignLeadIds({
         segment: campaign.segment || 'all',
-        tagFilter: campaign.tag_filter || ''
+        tagFilter: campaign.tag_filter || '',
+        assignedTo: options.assignedTo
     });
 
     if (!leadIds.length) {
@@ -8142,6 +8298,7 @@ async function queueCampaignMessages(campaign) {
 app.get('/api/campaigns', optionalAuth, async (req, res) => {
 
     const { status, type, limit, offset, search } = req.query;
+    const scopedUserId = getScopedUserId(req);
 
     const campaigns = await Campaign.list({
 
@@ -8150,6 +8307,8 @@ app.get('/api/campaigns', optionalAuth, async (req, res) => {
         type,
 
         search,
+
+        created_by: scopedUserId || undefined,
 
         limit: limit ? parseInt(limit) : 50,
 
@@ -8175,6 +8334,10 @@ app.get('/api/campaigns/:id', optionalAuth, async (req, res) => {
 
     }
 
+    if (!canAccessCreatedRecord(req, campaign.created_by)) {
+        return res.status(404).json({ error: 'Campanha não encontrada' });
+    }
+
     res.json({ success: true, campaign: await attachCampaignSenderAccounts(campaign) });
 
 });
@@ -8189,6 +8352,10 @@ app.get('/api/campaigns/:id/recipients', optionalAuth, async (req, res) => {
 
     }
 
+    if (!canAccessCreatedRecord(req, campaign.created_by)) {
+        return res.status(404).json({ error: 'Campanha não encontrada' });
+    }
+
     const requestedLimit = parseInt(String(req.query.limit || '200'), 10);
     const limit = Number.isFinite(requestedLimit)
         ? Math.max(1, Math.min(requestedLimit, 1000))
@@ -8196,7 +8363,8 @@ app.get('/api/campaigns/:id/recipients', optionalAuth, async (req, res) => {
 
     const leadIds = await resolveCampaignLeadIds({
         segment: campaign.segment || 'all',
-        tagFilter: campaign.tag_filter || ''
+        tagFilter: campaign.tag_filter || '',
+        assignedTo: getScopedUserId(req) || undefined
     });
 
     if (!leadIds.length) {
@@ -8253,7 +8421,9 @@ app.post('/api/campaigns', authenticate, async (req, res) => {
         let queueResult = { queued: 0, recipients: 0 };
 
         if (campaign?.status === 'active') {
-            queueResult = await queueCampaignMessages(campaign);
+            queueResult = await queueCampaignMessages(campaign, {
+                assignedTo: getScopedUserId(req) || undefined
+            });
             campaign = await attachCampaignSenderAccounts(await Campaign.findById(result.id));
         }
 
@@ -8281,6 +8451,10 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
 
         }
 
+        if (!canAccessCreatedRecord(req, campaign.created_by)) {
+            return res.status(403).json({ error: 'Sem permissao para editar esta campanha' });
+        }
+
         const senderAccountsProvided =
             Object.prototype.hasOwnProperty.call(req.body || {}, 'sender_accounts') ||
             Object.prototype.hasOwnProperty.call(req.body || {}, 'senderAccounts');
@@ -8299,7 +8473,9 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
         let queueResult = { queued: 0, recipients: 0 };
 
         if (shouldQueue && updatedCampaign) {
-            queueResult = await queueCampaignMessages(updatedCampaign);
+            queueResult = await queueCampaignMessages(updatedCampaign, {
+                assignedTo: getScopedUserId(req) || undefined
+            });
             updatedCampaign = await attachCampaignSenderAccounts(await Campaign.findById(req.params.id));
         }
 
@@ -8316,6 +8492,14 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
 
 
 app.delete('/api/campaigns/:id', authenticate, async (req, res) => {
+
+    const campaign = await Campaign.findById(req.params.id);
+    if (!campaign) {
+        return res.status(404).json({ error: 'Campanha nao encontrada' });
+    }
+    if (!canAccessCreatedRecord(req, campaign.created_by)) {
+        return res.status(403).json({ error: 'Sem permissao para remover esta campanha' });
+    }
 
     await Campaign.delete(req.params.id);
 
@@ -8336,6 +8520,7 @@ app.delete('/api/campaigns/:id', authenticate, async (req, res) => {
 app.get('/api/automations', optionalAuth, async (req, res) => {
 
     const { is_active, trigger_type, limit, offset, search } = req.query;
+    const scopedUserId = getScopedUserId(req);
 
     const automations = await Automation.list({
 
@@ -8344,6 +8529,8 @@ app.get('/api/automations', optionalAuth, async (req, res) => {
         trigger_type,
 
         search,
+
+        created_by: scopedUserId || undefined,
 
         limit: limit ? parseInt(limit) : 50,
 
@@ -8367,6 +8554,10 @@ app.get('/api/automations/:id', optionalAuth, async (req, res) => {
 
         return res.status(404).json({ error: 'Automação não encontrada' });
 
+    }
+
+    if (!canAccessCreatedRecord(req, automation.created_by)) {
+        return res.status(404).json({ error: 'Automação não encontrada' });
     }
 
     res.json({ success: true, automation: enrichAutomationForResponse(automation) });
@@ -8428,6 +8619,10 @@ app.put('/api/automations/:id', authenticate, async (req, res) => {
 
     }
 
+    if (!canAccessCreatedRecord(req, automation.created_by)) {
+        return res.status(403).json({ error: 'Sem permissao para editar esta automacao' });
+    }
+
 
     const payload = {
         ...req.body
@@ -8462,6 +8657,14 @@ app.put('/api/automations/:id', authenticate, async (req, res) => {
 
 app.delete('/api/automations/:id', authenticate, async (req, res) => {
 
+    const automation = await Automation.findById(req.params.id);
+    if (!automation) {
+        return res.status(404).json({ error: 'Automacao nao encontrada' });
+    }
+    if (!canAccessCreatedRecord(req, automation.created_by)) {
+        return res.status(403).json({ error: 'Sem permissao para remover esta automacao' });
+    }
+
     await Automation.delete(req.params.id);
 
     res.json({ success: true });
@@ -8480,7 +8683,11 @@ app.delete('/api/automations/:id', authenticate, async (req, res) => {
 
 app.get('/api/flows', optionalAuth, async (req, res) => {
 
-    const flows = await Flow.list(req.query);
+    const scopedUserId = getScopedUserId(req);
+    const flows = await Flow.list({
+        ...req.query,
+        created_by: scopedUserId || undefined
+    });
 
     res.json({ success: true, flows });
 
@@ -8498,6 +8705,10 @@ app.get('/api/flows/:id', optionalAuth, async (req, res) => {
 
     }
 
+    if (!canAccessCreatedRecord(req, flow.created_by)) {
+        return res.status(404).json({ error: 'Fluxo não encontrado' });
+    }
+
     res.json({ success: true, flow });
 
 });
@@ -8506,7 +8717,11 @@ app.get('/api/flows/:id', optionalAuth, async (req, res) => {
 
 app.post('/api/flows', authenticate, async (req, res) => {
 
-    const result = await Flow.create(req.body);
+    const payload = {
+        ...req.body,
+        created_by: req.user?.id
+    };
+    const result = await Flow.create(payload);
 
     const flow = await Flow.findById(result.id);
 
@@ -8517,6 +8732,14 @@ app.post('/api/flows', authenticate, async (req, res) => {
 
 
 app.put('/api/flows/:id', authenticate, async (req, res) => {
+
+    const existing = await Flow.findById(req.params.id);
+    if (!existing) {
+        return res.status(404).json({ error: 'Fluxo nao encontrado' });
+    }
+    if (!canAccessCreatedRecord(req, existing.created_by)) {
+        return res.status(403).json({ error: 'Sem permissao para editar este fluxo' });
+    }
 
     await Flow.update(req.params.id, req.body);
 
@@ -8529,6 +8752,14 @@ app.put('/api/flows/:id', authenticate, async (req, res) => {
 
 
 app.delete('/api/flows/:id', authenticate, async (req, res) => {
+
+    const existing = await Flow.findById(req.params.id);
+    if (!existing) {
+        return res.status(404).json({ error: 'Fluxo nao encontrado' });
+    }
+    if (!canAccessCreatedRecord(req, existing.created_by)) {
+        return res.status(403).json({ error: 'Sem permissao para remover este fluxo' });
+    }
 
     await Flow.delete(req.params.id);
 
