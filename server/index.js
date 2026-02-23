@@ -1113,6 +1113,31 @@ function sanitizeLeadNameForInsert(value) {
     return text;
 }
 
+function resolveImportedLeadName(input) {
+    if (!input || typeof input !== 'object') return '';
+
+    const nameCandidates = [
+        input.name,
+        input.nome,
+        input.nome_completo,
+        input.nomecompleto,
+        input['nome completo'],
+        input.full_name,
+        input.fullname,
+        input.lead_name,
+        input.lead,
+        input.contato,
+        input.cliente
+    ];
+
+    for (const candidate of nameCandidates) {
+        const value = String(candidate || '').trim();
+        if (value) return value;
+    }
+
+    return '';
+}
+
 function normalizeLeadStatusForImport(value, fallback = 1) {
     const parsed = Number.parseInt(String(value ?? ''), 10);
     if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 5) {
@@ -7873,10 +7898,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                 phone,
                 source: input.source || 'import'
             };
-
-            if (!String(payload.name || '').trim()) {
-                payload.name = 'Sem nome';
-            }
+            const resolvedName = resolveImportedLeadName(payload);
 
             const requestedAssignedTo = Number(payload.assigned_to);
             const assignedTo = Number.isInteger(requestedAssignedTo) && requestedAssignedTo > 0
@@ -7889,7 +7911,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                 uuid: generateUUID(),
                 phone_formatted: String(payload.phone_formatted || payload.phone || phone).trim() || phone,
                 jid: String(payload.jid || `55${phone}@s.whatsapp.net`).trim() || `55${phone}@s.whatsapp.net`,
-                name: String(payload.name || '').trim(),
+                name: resolvedName,
                 email: String(payload.email || '').trim(),
                 vehicle: String(payload.vehicle || '').trim(),
                 plate: String(payload.plate || '').trim(),
@@ -8043,7 +8065,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                         data.phone,
                         NULLIF(TRIM(data.phone_formatted), ''),
                         NULLIF(TRIM(data.jid), ''),
-                        data.name,
+                        COALESCE(NULLIF(TRIM(data.name), ''), data.phone),
                         NULLIF(TRIM(data.email), ''),
                         NULLIF(TRIM(data.vehicle), ''),
                         NULLIF(TRIM(data.plate), ''),
@@ -8105,7 +8127,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                     )
                     UPDATE leads AS l
                     SET
-                        name = COALESCE(incoming.name, l.name),
+                        name = COALESCE(NULLIF(TRIM(incoming.name), ''), l.name),
                         email = COALESCE(incoming.email, l.email),
                         tags = COALESCE(incoming.tags, l.tags),
                         custom_fields = COALESCE(incoming.custom_fields, l.custom_fields),
