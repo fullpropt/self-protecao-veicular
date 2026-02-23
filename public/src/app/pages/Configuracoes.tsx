@@ -31,6 +31,10 @@ type ConfiguracoesGlobals = {
   loadUsers?: () => Promise<void>;
   addUser?: () => Promise<void>;
   deleteAccount?: () => Promise<void>;
+  confirmDeleteUser?: () => Promise<void>;
+  cancelDeleteUser?: () => void;
+  confirmDeleteAccount?: () => Promise<void>;
+  cancelDeleteAccount?: () => void;
   openEditUserModal?: (id: number) => void;
   updateUser?: () => Promise<void>;
   changePassword?: () => Promise<void>;
@@ -780,7 +784,51 @@ export default function Configuracoes() {
                   </div>
               </div>
           </div>
-      
+
+          <div className="modal-overlay" id="confirmDeleteUserModal">
+              <div className="modal">
+                  <div className="modal-header">
+                      <h3 className="modal-title"><span className="icon icon-delete icon-sm"></span> Você tem certeza?</h3>
+                      <button className="modal-close" onClick={() => globals.cancelDeleteUser?.()}>{'\u00D7'}</button>
+                  </div>
+                  <div className="modal-body">
+                      <input type="hidden" id="confirmDeleteUserId" />
+                      <p className="text-muted mb-4">
+                          Esta ação removerá o usuário <strong id="confirmDeleteUserName">usuário</strong> da sua conta.
+                      </p>
+                      <p className="text-muted">Essa ação não pode ser desfeita.</p>
+                  </div>
+                  <div className="modal-footer">
+                      <button className="btn btn-outline" onClick={() => globals.cancelDeleteUser?.()}>Cancelar</button>
+                      <button className="btn btn-danger" onClick={() => globals.confirmDeleteUser?.()}><span className="icon icon-delete icon-sm"></span> Excluir usuário</button>
+                  </div>
+              </div>
+          </div>
+
+          <div className="modal-overlay" id="confirmDeleteAccountModal">
+              <div className="modal">
+                  <div className="modal-header">
+                      <h3 className="modal-title"><span className="icon icon-delete icon-sm"></span> Você tem certeza?</h3>
+                      <button className="modal-close" onClick={() => globals.cancelDeleteAccount?.()}>{'\u00D7'}</button>
+                  </div>
+                  <div className="modal-body">
+                      <p className="text-muted mb-4">Esta ação excluirá sua conta e desativará todos os usuários vinculados.</p>
+                      <div className="form-group">
+                          <label className="form-label required">Digite EXCLUIR para confirmar</label>
+                          <input type="text" className="form-input" id="deleteAccountConfirmText" placeholder="EXCLUIR" />
+                      </div>
+                      <div className="form-group">
+                          <label className="form-label required">Senha atual</label>
+                          <input type="password" className="form-input" id="deleteAccountPassword" />
+                      </div>
+                  </div>
+                  <div className="modal-footer">
+                      <button className="btn btn-outline" onClick={() => globals.cancelDeleteAccount?.()}>Cancelar</button>
+                      <button className="btn btn-danger" onClick={() => globals.confirmDeleteAccount?.()}><span className="icon icon-delete icon-sm"></span> Excluir conta</button>
+                  </div>
+              </div>
+          </div>
+       
           <div className="modal-overlay" id="addTemplateModal">
               <div className="modal">
                   <div className="modal-header">

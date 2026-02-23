@@ -1511,15 +1511,41 @@ async function deleteUser(id: number) {
 
     const user = usersCache.find((item) => Number(item.id) === userId);
     const name = String(user?.name || 'este usuario');
-    if (!confirm(`Deseja remover ${name}?`)) return;
+    const confirmDeleteUserId = document.getElementById('confirmDeleteUserId') as HTMLInputElement | null;
+    const confirmDeleteUserName = document.getElementById('confirmDeleteUserName') as HTMLElement | null;
+    if (confirmDeleteUserId) confirmDeleteUserId.value = String(userId);
+    if (confirmDeleteUserName) confirmDeleteUserName.textContent = name;
+    openModal('confirmDeleteUserModal');
+}
+
+async function confirmDeleteUser() {
+    if (!isCurrentUserAdmin()) {
+        showToast('warning', 'Aviso', 'Apenas administradores podem remover usuarios');
+        return;
+    }
+
+    const confirmDeleteUserId = document.getElementById('confirmDeleteUserId') as HTMLInputElement | null;
+    const userId = Number(confirmDeleteUserId?.value || 0);
+    if (!Number.isFinite(userId) || userId <= 0) {
+        showToast('error', 'Erro', 'Usuario invalido');
+        return;
+    }
 
     try {
         await api.delete(`/api/users/${userId}`);
+        closeModal('confirmDeleteUserModal');
+        if (confirmDeleteUserId) confirmDeleteUserId.value = '';
         await loadUsers();
         showToast('success', 'Sucesso', 'Usuario removido!');
     } catch (error: any) {
         showToast('error', 'Erro', error?.message || 'Nao foi possivel remover o usuario');
     }
+}
+
+function cancelDeleteUser() {
+    const confirmDeleteUserId = document.getElementById('confirmDeleteUserId') as HTMLInputElement | null;
+    if (confirmDeleteUserId) confirmDeleteUserId.value = '';
+    closeModal('confirmDeleteUserModal');
 }
 
 async function deleteAccount() {
@@ -1528,10 +1554,28 @@ async function deleteAccount() {
         return;
     }
 
-    const typed = prompt('Digite EXCLUIR para confirmar a exclusao da conta:');
-    if (typed !== 'EXCLUIR') return;
+    const deleteAccountConfirmText = document.getElementById('deleteAccountConfirmText') as HTMLInputElement | null;
+    const deleteAccountPassword = document.getElementById('deleteAccountPassword') as HTMLInputElement | null;
+    if (deleteAccountConfirmText) deleteAccountConfirmText.value = '';
+    if (deleteAccountPassword) deleteAccountPassword.value = '';
+    openModal('confirmDeleteAccountModal');
+}
 
-    const currentPassword = prompt('Digite sua senha atual para continuar:') || '';
+async function confirmDeleteAccount() {
+    if (!isCurrentUserOwnerAdmin()) {
+        showToast('warning', 'Aviso', 'Apenas o admin principal pode excluir a conta');
+        return;
+    }
+
+    const deleteAccountConfirmText = document.getElementById('deleteAccountConfirmText') as HTMLInputElement | null;
+    const deleteAccountPassword = document.getElementById('deleteAccountPassword') as HTMLInputElement | null;
+    const typed = String(deleteAccountConfirmText?.value || '').trim();
+    const currentPassword = String(deleteAccountPassword?.value || '').trim();
+
+    if (typed !== 'EXCLUIR') {
+        showToast('error', 'Erro', 'Digite EXCLUIR para confirmar');
+        return;
+    }
     if (!currentPassword) {
         showToast('error', 'Erro', 'Senha atual obrigatoria');
         return;
@@ -1539,6 +1583,7 @@ async function deleteAccount() {
 
     try {
         await api.post('/api/account/delete', { currentPassword });
+        closeModal('confirmDeleteAccountModal');
         showToast('success', 'Sucesso', 'Conta excluida');
 
         sessionStorage.removeItem('selfDashboardToken');
@@ -1553,6 +1598,14 @@ async function deleteAccount() {
     } catch (error: any) {
         showToast('error', 'Erro', error?.message || 'Nao foi possivel excluir a conta');
     }
+}
+
+function cancelDeleteAccount() {
+    const deleteAccountConfirmText = document.getElementById('deleteAccountConfirmText') as HTMLInputElement | null;
+    const deleteAccountPassword = document.getElementById('deleteAccountPassword') as HTMLInputElement | null;
+    if (deleteAccountConfirmText) deleteAccountConfirmText.value = '';
+    if (deleteAccountPassword) deleteAccountPassword.value = '';
+    closeModal('confirmDeleteAccountModal');
 }
 
 async function changePassword() {
@@ -1624,6 +1677,10 @@ const windowAny = window as Window & {
     addUser?: () => Promise<void>;
     deleteUser?: (id: number) => Promise<void>;
     deleteAccount?: () => Promise<void>;
+    confirmDeleteUser?: () => Promise<void>;
+    cancelDeleteUser?: () => void;
+    confirmDeleteAccount?: () => Promise<void>;
+    cancelDeleteAccount?: () => void;
     openEditUserModal?: (id: number) => void;
     updateUser?: () => Promise<void>;
     changePassword?: () => Promise<void>;
@@ -1661,6 +1718,10 @@ windowAny.loadUsers = loadUsers;
 windowAny.addUser = addUser;
 windowAny.deleteUser = deleteUser;
 windowAny.deleteAccount = deleteAccount;
+windowAny.confirmDeleteUser = confirmDeleteUser;
+windowAny.cancelDeleteUser = cancelDeleteUser;
+windowAny.confirmDeleteAccount = confirmDeleteAccount;
+windowAny.cancelDeleteAccount = cancelDeleteAccount;
 windowAny.openEditUserModal = openEditUserModal;
 windowAny.updateUser = updateUser;
 windowAny.changePassword = changePassword;
