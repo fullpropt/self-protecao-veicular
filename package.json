@@ -24,6 +24,7 @@
     "health": "curl -s http://localhost:3001/health | jq",
     "update": "node scripts/auto-update.js",
     "update:commit": "AUTO_COMMIT=true node scripts/auto-update.js",
+    "data:split-owners": "node scripts/split-owner-accounts.js",
     "backup": "node server/utils/backup.js",
     "backup:list": "node -e \"require('./server/utils/backup').listBackups().forEach(b => console.log(b))\"",
     "health:check": "node -e \"require('./server/utils/healthCheck').getHealthStatus().then(r => console.log(JSON.stringify(r, null, 2))).catch(err => { console.error(err); process.exit(1); })\""
