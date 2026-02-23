@@ -7797,6 +7797,110 @@ app.post('/api/leads', authenticate, async (req, res) => {
 
 });
 
+app.post('/api/leads/bulk', authenticate, async (req, res) => {
+    try {
+        const leads = Array.isArray(req.body?.leads) ? req.body.leads : [];
+        if (leads.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Lista de leads invalida'
+            });
+        }
+
+        const MAX_BULK_LEADS = 1000;
+        if (leads.length > MAX_BULK_LEADS) {
+            return res.status(400).json({
+                success: false,
+                error: `Quantidade maxima por lote: ${MAX_BULK_LEADS}`
+            });
+        }
+
+        const scopedUserId = getScopedUserId(req);
+        const requesterUserId = getRequesterUserId(req);
+        const fallbackAssignedTo = scopedUserId || requesterUserId || null;
+
+        let imported = 0;
+        let skipped = 0;
+        let failed = 0;
+        const errors = [];
+
+        for (let index = 0; index < leads.length; index += 1) {
+            const input = leads[index];
+            if (!input || typeof input !== 'object') {
+                skipped += 1;
+                continue;
+            }
+
+            const phone = String(input.phone || '').replace(/\D/g, '');
+            if (!phone) {
+                skipped += 1;
+                continue;
+            }
+
+            const payload = {
+                ...input,
+                phone,
+                source: input.source || 'import'
+            };
+
+            if (!String(payload.name || '').trim()) {
+                payload.name = 'Sem nome';
+            }
+
+            const assignedTo = Number(payload.assigned_to);
+            if (!Number.isInteger(assignedTo) || assignedTo <= 0) {
+                if (fallbackAssignedTo) {
+                    payload.assigned_to = fallbackAssignedTo;
+                } else {
+                    delete payload.assigned_to;
+                }
+            }
+
+            try {
+                await Lead.create(payload);
+                imported += 1;
+            } catch (error) {
+                const rawMessage = String(error?.message || '');
+                const message = rawMessage.toLowerCase();
+                const isDuplicate =
+                    error?.code === '23505'
+                    || message.includes('duplicate key')
+                    || message.includes('unique constraint')
+                    || message.includes('already exists');
+
+                if (isDuplicate) {
+                    skipped += 1;
+                    continue;
+                }
+
+                failed += 1;
+                if (errors.length < 25) {
+                    errors.push({
+                        index,
+                        phone,
+                        error: rawMessage || 'Erro ao importar lead'
+                    });
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            total: leads.length,
+            imported,
+            skipped,
+            failed,
+            errors
+        });
+    } catch (error) {
+        console.error('Falha ao importar leads em lote:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao importar leads em lote'
+        });
+    }
+});
+
 
 
 app.put('/api/leads/:id', authenticate, async (req, res) => {

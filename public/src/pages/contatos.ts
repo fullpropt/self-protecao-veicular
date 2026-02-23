@@ -40,6 +40,14 @@ type LeadsResponse = { leads?: Contact[]; total?: number };
 type TagsResponse = { tags?: Tag[] };
 type TemplatesResponse = { templates?: Template[] };
 type ContactFieldsResponse = { fields?: ContactField[]; customFields?: ContactField[] };
+type BulkLeadsImportResponse = {
+    success?: boolean;
+    total?: number;
+    imported?: number;
+    skipped?: number;
+    failed?: number;
+    errors?: Array<{ index?: number; phone?: string; error?: string }>;
+};
 
 let allContacts: Contact[] = [];
 let filteredContacts: Contact[] = [];
@@ -55,6 +63,7 @@ let contactsAvailableSessions: WhatsappSessionItem[] = [];
 const CONTACTS_SESSION_FILTER_STORAGE_KEY = 'zapvender_contacts_session_filter';
 const CONTACTS_FETCH_BATCH_SIZE = 500;
 const CONTACTS_FETCH_MAX_PAGES = 200;
+const CONTACTS_IMPORT_BATCH_SIZE = 200;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true },
@@ -916,49 +925,78 @@ async function importContacts() {
         return;
     }
 
-    try {
-        showLoading(`Importando ${data.length} contatos...`);
-        let imported = 0;
-        
-        for (const row of data) {
-            const normalizedRow = buildNormalizedImportRow(row);
-            const phone = getImportValue(normalizedRow, ['telefone', 'phone', 'whatsapp', 'celular', 'fone', 'numero']).replace(/\D/g, '');
-            if (!phone) continue;
-            const mergedTags = Array.from(new Set(importTags));
-            const customFields: Record<string, string> = {};
+    const leadsToImport: Array<Record<string, any>> = [];
+    for (const row of data) {
+        const normalizedRow = buildNormalizedImportRow(row);
+        const phone = getImportValue(normalizedRow, ['telefone', 'phone', 'whatsapp', 'celular', 'fone', 'numero']).replace(/\D/g, '');
+        if (!phone) continue;
 
-            for (const field of customContactFieldsCache) {
-                const aliases = [field.key, field.label || field.key];
-                const value = getImportValue(normalizedRow, aliases);
-                if (value) {
-                    customFields[normalizeContactFieldKey(field.key)] = value;
-                }
+        const mergedTags = Array.from(new Set(importTags));
+        const customFields: Record<string, string> = {};
+
+        for (const field of customContactFieldsCache) {
+            const aliases = [field.key, field.label || field.key];
+            const value = getImportValue(normalizedRow, aliases);
+            if (value) {
+                customFields[normalizeContactFieldKey(field.key)] = value;
             }
-            
+        }
+
+        const payload: Record<string, any> = {
+            name: getImportValue(normalizedRow, ['nome', 'name', 'nome_completo', 'contato']) || 'Sem nome',
+            phone,
+            email: getImportValue(normalizedRow, ['email', 'e-mail', 'mail']),
+            status,
+            tags: mergedTags,
+            source: 'import'
+        };
+
+        if (Object.keys(customFields).length > 0) {
+            payload.custom_fields = customFields;
+        }
+
+        leadsToImport.push(payload);
+    }
+
+    if (leadsToImport.length === 0) {
+        showToast('error', 'Erro', 'Nenhum contato valido para importar');
+        return;
+    }
+
+    try {
+        let imported = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (let offset = 0; offset < leadsToImport.length; offset += CONTACTS_IMPORT_BATCH_SIZE) {
+            const chunk = leadsToImport.slice(offset, offset + CONTACTS_IMPORT_BATCH_SIZE);
+            const processed = Math.min(offset + chunk.length, leadsToImport.length);
+            showLoading(`Importando ${processed}/${leadsToImport.length} contatos...`);
+
             try {
-                const payload: Record<string, any> = {
-                    name: getImportValue(normalizedRow, ['nome', 'name', 'nome_completo', 'contato']) || 'Sem nome',
-                    phone,
-                    email: getImportValue(normalizedRow, ['email', 'e-mail', 'mail']),
-                    status,
-                    tags: mergedTags,
-                    source: 'import'
-                };
-
-                if (Object.keys(customFields).length > 0) {
-                    payload.custom_fields = customFields;
-                }
-
-                await api.post('/api/leads', payload);
-                imported++;
-            } catch (e) {}
+                const response: BulkLeadsImportResponse = await api.post('/api/leads/bulk', { leads: chunk });
+                imported += Number(response?.imported || 0);
+                skipped += Number(response?.skipped || 0);
+                failed += Number(response?.failed || 0);
+            } catch (error) {
+                failed += chunk.length;
+            }
         }
 
         closeModal('importModal');
         const importTag = document.getElementById('importTag') as HTMLInputElement | null;
         if (importTag) importTag.value = '';
         await loadContacts();
-        showToast('success', 'Sucesso', `${imported} contatos importados!`);
+
+        if (imported <= 0 && failed > 0) {
+            showToast('error', 'Erro', `Falha na importação (${failed} com erro)`);
+            return;
+        }
+
+        const summary = [`${imported} importados`];
+        if (skipped > 0) summary.push(`${skipped} ignorados`);
+        if (failed > 0) summary.push(`${failed} com erro`);
+        showToast(failed > 0 ? 'warning' : 'success', 'Sucesso', `Importação concluída: ${summary.join(', ')}`);
     } catch (error) {
         hideLoading();
         showToast('error', 'Erro', 'Falha na importação');
