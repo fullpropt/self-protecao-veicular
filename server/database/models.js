@@ -581,7 +581,9 @@ const Lead = {
             params.push(String(options.session_id).trim());
         }
         
-        return await queryOne(sql, params)?.total || 0;
+        const row = await queryOne(sql, params);
+        const total = Number(row?.total || 0);
+        return Number.isFinite(total) && total >= 0 ? total : 0;
     }
 };
 

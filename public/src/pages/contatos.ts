@@ -377,7 +377,7 @@ async function fetchAllContacts() {
         const batch = Array.isArray(response?.leads) ? response.leads : [];
         const reportedTotal = Number(response?.total);
 
-        if (Number.isFinite(reportedTotal) && reportedTotal >= 0) {
+        if (Number.isFinite(reportedTotal) && reportedTotal > 0) {
             totalExpected = reportedTotal;
         }
 
