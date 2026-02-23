@@ -36,7 +36,7 @@ type WhatsappSessionItem = {
     phone?: string;
 };
 
-type LeadsResponse = { leads?: Contact[] };
+type LeadsResponse = { leads?: Contact[]; total?: number };
 type TagsResponse = { tags?: Tag[] };
 type TemplatesResponse = { templates?: Template[] };
 type ContactFieldsResponse = { fields?: ContactField[]; customFields?: ContactField[] };
@@ -53,6 +53,8 @@ let contactsSessionFilter = '';
 let contactsAvailableSessions: WhatsappSessionItem[] = [];
 
 const CONTACTS_SESSION_FILTER_STORAGE_KEY = 'zapvender_contacts_session_filter';
+const CONTACTS_FETCH_BATCH_SIZE = 500;
+const CONTACTS_FETCH_MAX_PAGES = 200;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true },
@@ -348,14 +350,47 @@ function initContacts() {
     loadTemplates();
 }
 
+async function fetchAllContacts() {
+    const contacts: Contact[] = [];
+    let offset = 0;
+    let page = 0;
+    let totalExpected: number | null = null;
+
+    while (page < CONTACTS_FETCH_MAX_PAGES) {
+        const params = new URLSearchParams();
+        params.set('limit', String(CONTACTS_FETCH_BATCH_SIZE));
+        params.set('offset', String(offset));
+        if (contactsSessionFilter) {
+            params.set('session_id', contactsSessionFilter);
+        }
+
+        const response: LeadsResponse = await api.get(`/api/leads?${params.toString()}`);
+        const batch = Array.isArray(response?.leads) ? response.leads : [];
+        const reportedTotal = Number(response?.total);
+
+        if (Number.isFinite(reportedTotal) && reportedTotal >= 0) {
+            totalExpected = reportedTotal;
+        }
+
+        contacts.push(...batch);
+        page += 1;
+        offset += batch.length;
+
+        if (batch.length < CONTACTS_FETCH_BATCH_SIZE) break;
+        if (totalExpected !== null && contacts.length >= totalExpected) break;
+    }
+
+    if (page >= CONTACTS_FETCH_MAX_PAGES) {
+        console.warn('Limite maximo de paginas atingido ao carregar contatos.');
+    }
+
+    return contacts;
+}
+
 async function loadContacts() {
     try {
         showLoading('Carregando contatos...');
-        const query = contactsSessionFilter
-            ? `?session_id=${encodeURIComponent(contactsSessionFilter)}`
-            : '';
-        const response: LeadsResponse = await api.get(`/api/leads${query}`);
-        allContacts = response.leads || [];
+        allContacts = await fetchAllContacts();
         filteredContacts = [...allContacts];
         updateStats();
         renderContacts();
