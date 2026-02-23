@@ -44,6 +44,7 @@ type BulkLeadsImportResponse = {
     success?: boolean;
     total?: number;
     imported?: number;
+    updated?: number;
     skipped?: number;
     failed?: number;
     errors?: Array<{ index?: number; phone?: string; error?: string }>;
@@ -64,6 +65,7 @@ const CONTACTS_SESSION_FILTER_STORAGE_KEY = 'zapvender_contacts_session_filter';
 const CONTACTS_FETCH_BATCH_SIZE = 500;
 const CONTACTS_FETCH_MAX_PAGES = 200;
 const CONTACTS_IMPORT_BATCH_SIZE = 200;
+const BASE_CONTACTS_TABLE_COLUMNS = 7;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true },
@@ -199,6 +201,58 @@ function renderContactTagChips(contact: Contact) {
 
     if (chips.length === 0) return '-';
     return `<div class="contacts-tags-cell">${chips.join('')}</div>`;
+}
+
+function getContactsVisibleCustomColumns() {
+    return customContactFieldsCache.filter((field) => String(field.key || '').trim());
+}
+
+function getContactsTableColumnCount() {
+    return BASE_CONTACTS_TABLE_COLUMNS + getContactsVisibleCustomColumns().length;
+}
+
+function resolveContactCustomFieldDisplayValue(contact: Contact, fieldKey: string, parsedCustomFields?: Record<string, any>) {
+    const key = normalizeContactFieldKey(fieldKey);
+    const customFields = parsedCustomFields || parseLeadCustomFields(contact.custom_fields);
+    const customValue = customFields[key];
+    if (customValue !== undefined && customValue !== null && String(customValue).trim()) {
+        return String(customValue).trim();
+    }
+
+    if (key === 'placa' && String(contact.plate || '').trim()) {
+        return String(contact.plate || '').trim();
+    }
+
+    if (key === 'modelo' && String(contact.vehicle || '').trim()) {
+        return String(contact.vehicle || '').trim();
+    }
+
+    return '';
+}
+
+function renderContactsTableHeader() {
+    const headerRow = document.getElementById('contactsTableHeadRow') as HTMLElement | null;
+    if (!headerRow) return;
+
+    const dynamicHeaders = getContactsVisibleCustomColumns()
+        .map((field) => `<th>${escapeHtml(field.label || field.key)}</th>`)
+        .join('');
+
+    headerRow.innerHTML = `
+        <th>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <span class="checkbox-custom"></span>
+            </label>
+        </th>
+        <th>Contato</th>
+        <th>WhatsApp</th>
+        ${dynamicHeaders}
+        <th>Status</th>
+        <th>Tags</th>
+        <th>Última Interação</th>
+        <th>Ações</th>
+    `;
 }
 
 function getStoredContactsSessionFilter() {
@@ -512,6 +566,8 @@ async function loadContactFields() {
     }
 
     renderContactCustomFields();
+    renderContactsTableHeader();
+    renderContacts();
 }
 
 function collectCustomFieldsValues(inputClassName: string) {
@@ -607,6 +663,7 @@ function pruneSelectedContactsByCurrentDataset() {
 }
 
 function renderContacts() {
+    renderContactsTableHeader();
     const tbody = document.getElementById('contactsTableBody') as HTMLElement | null;
     if (!tbody) return;
     const start = (currentPage - 1) * perPage;
@@ -615,8 +672,9 @@ function renderContacts() {
     const selectedIds = new Set(selectedContacts);
 
     if (pageContacts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="table-empty"><div class="table-empty-icon icon icon-empty icon-lg"></div><p>Nenhum contato encontrado</p></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${getContactsTableColumnCount()}" class="table-empty"><div class="table-empty-icon icon icon-empty icon-lg"></div><p>Nenhum contato encontrado</p></td></tr>`;
     } else {
+        const dynamicColumns = getContactsVisibleCustomColumns();
         tbody.innerHTML = pageContacts.map(c => `
             <tr data-id="${c.id}">
                 <td><label class="checkbox-wrapper"><input type="checkbox" class="contact-checkbox" value="${c.id}" onchange="updateSelection()" ${selectedIds.has(c.id) ? 'checked' : ''}><span class="checkbox-custom"></span></label></td>
@@ -630,6 +688,15 @@ function renderContacts() {
                     </div>
                 </td>
                 <td><a href="https://wa.me/55${c.phone}" target="_blank" style="color: var(--whatsapp);">${formatPhone(c.phone)}</a></td>
+                ${(() => {
+                    const parsedCustomFields = parseLeadCustomFields(c.custom_fields);
+                    return dynamicColumns
+                        .map((field) => {
+                            const value = resolveContactCustomFieldDisplayValue(c, field.key, parsedCustomFields);
+                            return `<td>${value ? escapeHtml(value) : '-'}</td>`;
+                        })
+                        .join('');
+                })()}
                 <td>${getStatusBadge(c.status)}</td>
                 <td>${renderContactTagChips(c)}</td>
                 <td>${c.last_message_at ? timeAgo(c.last_message_at) : '-'}</td>
@@ -671,9 +738,13 @@ function filterContacts() {
     const normalizedTag = String(tag || '').trim().toLowerCase();
 
     filteredContacts = allContacts.filter(c => {
+        const customValues = getContactsVisibleCustomColumns()
+            .map((field) => resolveContactCustomFieldDisplayValue(c, field.key).toLowerCase())
+            .filter(Boolean);
         const matchSearch = !search ||
             (c.name && c.name.toLowerCase().includes(search)) ||
-            (c.phone && c.phone.includes(search));
+            (c.phone && c.phone.includes(search)) ||
+            customValues.some((value) => value.includes(search));
         const matchStatus = !status || c.status == (parseInt(status, 10) as LeadStatus);
         const contactTags = parseLeadTags(c.tags).map((item) => item.toLowerCase());
         const matchTag = !normalizedTag || contactTags.includes(normalizedTag);
@@ -919,6 +990,10 @@ function bulkAddTag() {
 }
 
 async function importContacts() {
+    if (!contactFieldsCache.length) {
+        await loadContactFields();
+    }
+
     const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
     const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value.trim() || '';
     const status = parseInt((document.getElementById('importStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus;
@@ -978,6 +1053,7 @@ async function importContacts() {
 
     try {
         let imported = 0;
+        let updated = 0;
         let skipped = 0;
         let failed = 0;
 
@@ -989,6 +1065,7 @@ async function importContacts() {
             try {
                 const response: BulkLeadsImportResponse = await api.post('/api/leads/bulk', { leads: chunk });
                 imported += Number(response?.imported || 0);
+                updated += Number(response?.updated || 0);
                 skipped += Number(response?.skipped || 0);
                 failed += Number(response?.failed || 0);
             } catch (error) {
@@ -1001,12 +1078,13 @@ async function importContacts() {
         if (importTag) importTag.value = '';
         await loadContacts();
 
-        if (imported <= 0 && failed > 0) {
+        if ((imported + updated) <= 0 && failed > 0) {
             showToast('error', 'Erro', `Falha na importação (${failed} com erro)`);
             return;
         }
 
         const summary = [`${imported} importados`];
+        if (updated > 0) summary.push(`${updated} atualizados`);
         if (skipped > 0) summary.push(`${skipped} ignorados`);
         if (failed > 0) summary.push(`${failed} com erro`);
         showToast(failed > 0 ? 'warning' : 'success', 'Sucesso', `Importação concluída: ${summary.join(', ')}`);

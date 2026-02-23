@@ -7820,6 +7820,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
         const fallbackAssignedTo = scopedUserId || requesterUserId || null;
 
         let imported = 0;
+        let updated = 0;
         let skipped = 0;
         let failed = 0;
         const errors = [];
@@ -7869,7 +7870,56 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                     || message.includes('already exists');
 
                 if (isDuplicate) {
-                    skipped += 1;
+                    try {
+                        const existingRows = await query(
+                            'SELECT * FROM leads WHERE phone = ? ORDER BY id DESC LIMIT 1',
+                            [phone]
+                        );
+                        const existingLead = Array.isArray(existingRows) ? existingRows[0] : null;
+                        if (!existingLead) {
+                            skipped += 1;
+                            continue;
+                        }
+
+                        const updates = {};
+                        const incomingName = sanitizeAutoName(payload.name);
+                        if (incomingName) {
+                            updates.name = incomingName;
+                        }
+
+                        const incomingEmail = String(payload.email || '').trim();
+                        const existingEmail = String(existingLead.email || '').trim();
+                        if (incomingEmail && (!existingEmail || existingEmail !== incomingEmail)) {
+                            updates.email = incomingEmail;
+                        }
+
+                        const incomingTags = parseLeadTagsForMerge(payload.tags);
+                        if (incomingTags.length > 0) {
+                            const existingTags = parseLeadTagsForMerge(existingLead.tags);
+                            updates.tags = Array.from(new Set([...existingTags, ...incomingTags]));
+                        }
+
+                        const incomingCustomFields = parseLeadCustomFields(payload.custom_fields);
+                        if (Object.keys(incomingCustomFields).length > 0) {
+                            updates.custom_fields = mergeLeadCustomFields(existingLead.custom_fields, incomingCustomFields);
+                        }
+
+                        if (Object.keys(updates).length > 0) {
+                            await Lead.update(existingLead.id, updates);
+                            updated += 1;
+                        } else {
+                            skipped += 1;
+                        }
+                    } catch (duplicateError) {
+                        failed += 1;
+                        if (errors.length < 25) {
+                            errors.push({
+                                index,
+                                phone,
+                                error: String(duplicateError?.message || 'Falha ao atualizar lead duplicado')
+                            });
+                        }
+                    }
                     continue;
                 }
 
@@ -7888,6 +7938,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
             success: true,
             total: leads.length,
             imported,
+            updated,
             skipped,
             failed,
             errors

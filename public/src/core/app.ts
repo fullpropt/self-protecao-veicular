@@ -690,24 +690,80 @@ function downloadFile(data: string, filename: string, type = 'text/plain') {
     URL.revokeObjectURL(url);
 }
 
+function detectCsvDelimiter(headerLine: string) {
+    const candidates = [',', ';', '\t', '|'];
+    let bestDelimiter = ',';
+    let bestScore = -1;
+
+    for (const delimiter of candidates) {
+        const score = Math.max(0, headerLine.split(delimiter).length - 1);
+        if (score > bestScore) {
+            bestScore = score;
+            bestDelimiter = delimiter;
+        }
+    }
+
+    return bestDelimiter;
+}
+
+function parseCsvLine(line: string, delimiter: string) {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+        const char = line[index];
+        const nextChar = line[index + 1];
+
+        if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+                current += '"';
+                index += 1;
+                continue;
+            }
+            inQuotes = !inQuotes;
+            continue;
+        }
+
+        if (char === delimiter && !inQuotes) {
+            values.push(current.trim());
+            current = '';
+            continue;
+        }
+
+        current += char;
+    }
+
+    values.push(current.trim());
+    return values;
+}
+
 function parseCSV(text: string) {
-    const lines = text.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const normalizedText = String(text || '')
+        .replace(/^\uFEFF/, '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n');
+    const rawLines = normalizedText.split('\n').filter((line) => line.trim().length > 0);
+    if (!rawLines.length) return [];
+
+    const delimiter = detectCsvDelimiter(rawLines[0]);
+    const headers = parseCsvLine(rawLines[0], delimiter)
+        .map((header) => header.replace(/^\uFEFF/, '').trim())
+        .filter(Boolean);
+    if (!headers.length) return [];
+
     const data: Array<Record<string, string>> = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-        if (!lines[i].trim()) continue;
-        
-        const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+    for (let lineIndex = 1; lineIndex < rawLines.length; lineIndex += 1) {
+        const values = parseCsvLine(rawLines[lineIndex], delimiter);
         const row: Record<string, string> = {};
-        
+
         headers.forEach((header, index) => {
-            row[header] = values[index] || '';
+            row[header] = String(values[index] || '').trim();
         });
-        
+
         data.push(row);
     }
-    
+
     return data;
 }
 

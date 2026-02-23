@@ -259,7 +259,7 @@ export default function Contatos() {
           <div className="table-wrapper">
             <table>
               <thead>
-                <tr>
+                <tr id="contactsTableHeadRow">
                   <th>
                     <label className="checkbox-wrapper">
                       <input type="checkbox" id="selectAll" onChange={() => globals.toggleSelectAll?.()} />
