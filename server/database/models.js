@@ -1910,19 +1910,61 @@ const CustomEvent = {
         }
     },
 
-    async findById(id) {
+    async findById(id, options = {}) {
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        if (ownerUserId) {
+            return await queryOne(`
+                SELECT ce.*
+                FROM custom_events ce
+                WHERE ce.id = ?
+                  AND EXISTS (
+                      SELECT 1
+                      FROM users owner_scope
+                      WHERE owner_scope.id = ce.created_by
+                        AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                  )
+            `, [id, ownerUserId, ownerUserId]);
+        }
         return await queryOne('SELECT * FROM custom_events WHERE id = ?', [id]);
     },
 
-    async findByKey(eventKey) {
+    async findByKey(eventKey, options = {}) {
         const normalizedKey = normalizeCustomEventKey(eventKey);
         if (!normalizedKey) return null;
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        if (ownerUserId) {
+            return await queryOne(`
+                SELECT ce.*
+                FROM custom_events ce
+                WHERE ce.event_key = ?
+                  AND EXISTS (
+                      SELECT 1
+                      FROM users owner_scope
+                      WHERE owner_scope.id = ce.created_by
+                        AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                  )
+            `, [normalizedKey, ownerUserId, ownerUserId]);
+        }
         return await queryOne('SELECT * FROM custom_events WHERE event_key = ?', [normalizedKey]);
     },
 
-    async findByName(name) {
+    async findByName(name, options = {}) {
         const normalizedName = normalizeCustomEventName(name);
         if (!normalizedName) return null;
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        if (ownerUserId) {
+            return await queryOne(`
+                SELECT ce.*
+                FROM custom_events ce
+                WHERE LOWER(ce.name) = LOWER(?)
+                  AND EXISTS (
+                      SELECT 1
+                      FROM users owner_scope
+                      WHERE owner_scope.id = ce.created_by
+                        AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                  )
+            `, [normalizedName, ownerUserId, ownerUserId]);
+        }
         return await queryOne('SELECT * FROM custom_events WHERE LOWER(name) = LOWER(?)', [normalizedName]);
     },
 
@@ -1954,6 +1996,21 @@ const CustomEvent = {
         if (options.created_by) {
             filters.push('ce.created_by = ?');
             params.push(options.created_by);
+        }
+
+        if (options.owner_user_id) {
+            const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+            if (ownerUserId) {
+                filters.push(`
+                    EXISTS (
+                        SELECT 1
+                        FROM users owner_scope
+                        WHERE owner_scope.id = ce.created_by
+                          AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                    )
+                `);
+                params.push(ownerUserId, ownerUserId);
+            }
         }
 
         const search = normalizeCustomEventName(options.search || '');
@@ -2006,6 +2063,21 @@ const CustomEvent = {
         if (options.created_by) {
             filters.push('ce.created_by = ?');
             params.push(options.created_by);
+        }
+
+        if (options.owner_user_id) {
+            const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+            if (ownerUserId) {
+                filters.push(`
+                    EXISTS (
+                        SELECT 1
+                        FROM users owner_scope
+                        WHERE owner_scope.id = ce.created_by
+                          AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                    )
+                `);
+                params.push(ownerUserId, ownerUserId);
+            }
         }
 
         if (filters.length > 0) {

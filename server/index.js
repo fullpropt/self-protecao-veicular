@@ -7641,18 +7641,18 @@ function parseBooleanInput(value, fallback = false) {
     return fallback;
 }
 
-app.get('/api/custom-events/stats', optionalAuth, async (req, res) => {
+app.get('/api/custom-events/stats', authenticate, async (req, res) => {
     try {
         const periodRange = resolveCustomEventPeriodRange(req.query.period);
         const onlyActive = parseBooleanInput(
             req.query.active_only ?? req.query.activeOnly ?? req.query.active,
             false
         );
-        const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
         const events = await CustomEvent.listWithPeriodTotals(periodRange.startAt, periodRange.endAt, {
             is_active: onlyActive ? 1 : undefined,
-            created_by: scopedUserId || undefined
+            owner_user_id: ownerScopeUserId || undefined
         });
 
         const totals = events.reduce((acc, event) => {
@@ -7683,19 +7683,19 @@ app.get('/api/custom-events/stats', optionalAuth, async (req, res) => {
     }
 });
 
-app.get('/api/custom-events', optionalAuth, async (req, res) => {
+app.get('/api/custom-events', authenticate, async (req, res) => {
     try {
         const hasActiveFilter = Object.prototype.hasOwnProperty.call(req.query, 'active')
             || Object.prototype.hasOwnProperty.call(req.query, 'is_active');
         const activeRaw = req.query.active ?? req.query.is_active;
         const activeFilter = hasActiveFilter ? (parseBooleanInput(activeRaw, true) ? 1 : 0) : undefined;
         const search = String(req.query.search || '').trim();
-        const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
         const events = await CustomEvent.list({
             is_active: activeFilter,
             search,
-            created_by: scopedUserId || undefined
+            owner_user_id: ownerScopeUserId || undefined
         });
 
         res.json({ success: true, events });
@@ -7711,6 +7711,7 @@ app.post('/api/custom-events', authenticate, async (req, res) => {
         if (!name) {
             return res.status(400).json({ success: false, error: 'Nome do evento e obrigatorio' });
         }
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
         const created = await CustomEvent.create({
             name,
@@ -7720,7 +7721,9 @@ app.post('/api/custom-events', authenticate, async (req, res) => {
             created_by: req.user?.id || null
         });
 
-        const event = await CustomEvent.findById(created.id);
+        const event = await CustomEvent.findById(created.id, {
+            owner_user_id: ownerScopeUserId || undefined
+        });
         res.status(201).json({ success: true, event });
     } catch (error) {
         const message = String(error?.message || '').trim();
@@ -7738,8 +7741,11 @@ app.put('/api/custom-events/:id', authenticate, async (req, res) => {
         if (!Number.isInteger(eventId) || eventId <= 0) {
             return res.status(400).json({ success: false, error: 'ID do evento invalido' });
         }
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
-        const existing = await CustomEvent.findById(eventId);
+        const existing = await CustomEvent.findById(eventId, {
+            owner_user_id: ownerScopeUserId || undefined
+        });
         if (!existing) {
             return res.status(404).json({ success: false, error: 'Evento nao encontrado' });
         }
@@ -7761,7 +7767,10 @@ app.put('/api/custom-events/:id', authenticate, async (req, res) => {
             payload.is_active = req.body.is_active ?? req.body.isActive;
         }
 
-        const event = await CustomEvent.update(eventId, payload);
+        await CustomEvent.update(eventId, payload);
+        const event = await CustomEvent.findById(eventId, {
+            owner_user_id: ownerScopeUserId || undefined
+        });
         res.json({ success: true, event });
     } catch (error) {
         const message = String(error?.message || '').trim();
@@ -7779,8 +7788,11 @@ app.delete('/api/custom-events/:id', authenticate, async (req, res) => {
         if (!Number.isInteger(eventId) || eventId <= 0) {
             return res.status(400).json({ success: false, error: 'ID do evento invalido' });
         }
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
-        const existing = await CustomEvent.findById(eventId);
+        const existing = await CustomEvent.findById(eventId, {
+            owner_user_id: ownerScopeUserId || undefined
+        });
         if (!existing) {
             return res.status(404).json({ success: false, error: 'Evento nao encontrado' });
         }
