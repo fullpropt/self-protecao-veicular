@@ -87,6 +87,16 @@ const CONTACTS_CACHE_MIN_REVALIDATE_INTERVAL_MS = 45 * 1000;
 const CONTACTS_CACHE_PREFIX = 'zapvender_contacts_cache_v2';
 const FUNNEL_CACHE_PREFIX = 'zapvender_funnel_leads_cache_v1';
 
+function getContactsTotalPages(total = filteredContacts.length) {
+    return Math.max(1, Math.ceil(Math.max(0, Number(total) || 0) / perPage));
+}
+
+function clampContactsPage(page: number, total = filteredContacts.length) {
+    const normalizedPage = Number.isFinite(page) ? Math.floor(page) : 1;
+    const totalPages = getContactsTotalPages(total);
+    return Math.min(totalPages, Math.max(1, normalizedPage));
+}
+
 function isContactsRouteActive() {
     const hash = String(window.location.hash || '').toLowerCase();
     return hash.startsWith('#/contatos');
@@ -521,12 +531,34 @@ function initContacts() {
         }, 50);
         return;
     }
+    bindContactsPaginationControls();
     loadContactFields();
     void loadContactsSessionFilters().finally(() => {
         loadContacts();
     });
     loadTags();
     loadTemplates();
+}
+
+function bindContactsPaginationControls() {
+    const prevPage = document.getElementById('prevPage') as HTMLButtonElement | null;
+    const nextPage = document.getElementById('nextPage') as HTMLButtonElement | null;
+
+    if (prevPage && prevPage.dataset.paginationBound !== '1') {
+        prevPage.dataset.paginationBound = '1';
+        prevPage.addEventListener('click', (event) => {
+            event.preventDefault();
+            changePage(-1);
+        });
+    }
+
+    if (nextPage && nextPage.dataset.paginationBound !== '1') {
+        nextPage.dataset.paginationBound = '1';
+        nextPage.addEventListener('click', (event) => {
+            event.preventDefault();
+            changePage(1);
+        });
+    }
 }
 
 async function fetchAllContacts() {
@@ -821,6 +853,8 @@ function renderContacts() {
     renderContactsTableHeader();
     const tbody = document.getElementById('contactsTableBody') as HTMLElement | null;
     if (!tbody) return;
+    const total = filteredContacts.length;
+    currentPage = clampContactsPage(currentPage, total);
     const start = (currentPage - 1) * perPage;
     const end = start + perPage;
     const pageContacts = filteredContacts.slice(start, end);
@@ -872,22 +906,30 @@ function renderContacts() {
     }
 
     // Paginação
-    const total = filteredContacts.length;
-    const totalPages = Math.ceil(total / perPage);
+    const totalPages = getContactsTotalPages(total);
     const paginationInfo = document.getElementById('paginationInfo') as HTMLElement | null;
     const prevPage = document.getElementById('prevPage') as HTMLButtonElement | null;
     const nextPage = document.getElementById('nextPage') as HTMLButtonElement | null;
     if (paginationInfo) {
-        paginationInfo.textContent = `Mostrando ${start + 1}-${Math.min(end, total)} de ${total} contatos`;
+        if (total <= 0) {
+            paginationInfo.textContent = 'Mostrando 0 de 0 contatos';
+        } else {
+            paginationInfo.textContent = `Mostrando ${start + 1}-${Math.min(end, total)} de ${total} contatos`;
+        }
     }
-    if (prevPage) prevPage.disabled = currentPage === 1;
-    if (nextPage) nextPage.disabled = currentPage >= totalPages;
+    if (prevPage) prevPage.disabled = currentPage <= 1 || total <= 0;
+    if (nextPage) nextPage.disabled = currentPage >= totalPages || total <= 0;
 
     syncSelectionUi();
 }
 
 function changePage(delta: number) {
-    currentPage += delta;
+    const totalPages = getContactsTotalPages(filteredContacts.length);
+    const targetPage = clampContactsPage(currentPage + delta, filteredContacts.length);
+    if (targetPage === currentPage || targetPage < 1 || targetPage > totalPages) {
+        return;
+    }
+    currentPage = targetPage;
     renderContacts();
 }
 
