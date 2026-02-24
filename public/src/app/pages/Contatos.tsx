@@ -288,10 +288,10 @@ export default function Contatos() {
             <span id="paginationInfo">Mostrando 0 de 0 contatos</span>
             <div style={{ display: 'flex', gap: '5px' }}>
               <button type="button" className="btn btn-sm btn-outline" id="prevPage" disabled>
-                â† Anterior
+                {'\u2190'} Anterior
               </button>
               <button type="button" className="btn btn-sm btn-outline" id="nextPage" disabled>
-                PrÃ³ximo â†’
+                {'Pr\u00F3ximo \u2192'}
               </button>
             </div>
           </div>
@@ -536,4 +536,3 @@ Use {{nome}} para personalizar`}
     </div>
   );
 }
-
