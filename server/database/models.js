@@ -2349,12 +2349,29 @@ const MessageQueue = {
     async markSent(id) {
         return await run(`
             UPDATE message_queue 
-            SET status = 'sent', processed_at = CURRENT_TIMESTAMP 
+            SET status = 'sent',
+                error_message = NULL,
+                processed_at = CURRENT_TIMESTAMP 
             WHERE id = ?
         `, [id]);
     },
     
-    async markFailed(id, errorMessage) {
+    async markFailed(id, errorMessage, options = {}) {
+        const nextScheduledAt = options?.next_scheduled_at || options?.nextScheduledAt || null;
+
+        if (nextScheduledAt) {
+            return await run(`
+                UPDATE message_queue 
+                SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
+                    error_message = ?,
+                    scheduled_at = CASE
+                        WHEN attempts >= max_attempts THEN scheduled_at
+                        ELSE ?
+                    END
+                WHERE id = ?
+            `, [errorMessage, nextScheduledAt, id]);
+        }
+
         return await run(`
             UPDATE message_queue 
             SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,

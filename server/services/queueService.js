@@ -595,7 +595,23 @@ class QueueService extends EventEmitter {
             console.error('Erro ao processar fila:', error.message);
 
             if (messageId > 0) {
-                await MessageQueue.markFailed(messageId, error.message);
+                const errorText = String(error?.message || '');
+                const normalizedError = errorText
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase();
+                const isDisconnectedSessionError =
+                    normalizedError.includes('sess') &&
+                    (normalizedError.includes('conectada') || normalizedError.includes('conectad'));
+
+                if (isDisconnectedSessionError) {
+                    const retryAt = new Date(Date.now() + 60 * 1000).toISOString();
+                    await MessageQueue.markFailed(messageId, error.message, {
+                        nextScheduledAt: retryAt
+                    });
+                } else {
+                    await MessageQueue.markFailed(messageId, error.message);
+                }
                 if (conversationId > 0 && leadId > 0) {
                     try {
                         await run(

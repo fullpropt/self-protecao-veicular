@@ -3517,6 +3517,93 @@ function buildAutomationVariables(lead, messageText = '') {
 
 
 
+function normalizeTemplateVariableKey(value = '') {
+
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+}
+
+function buildLeadTemplateVariables(lead, extra = {}) {
+
+    const customFields = parseLeadCustomFields(lead?.custom_fields);
+    const variables = {
+        nome: lead?.name || 'Cliente',
+        name: lead?.name || 'Cliente',
+        telefone: lead?.phone || '',
+        phone: lead?.phone || '',
+        email: lead?.email || '',
+        veiculo: lead?.vehicle || '',
+        vehicle: lead?.vehicle || '',
+        placa: lead?.plate || '',
+        plate: lead?.plate || ''
+    };
+
+    for (const [rawKey, rawValue] of Object.entries(customFields || {})) {
+        if (rawKey === '__system') continue;
+
+        const normalizedKey = normalizeTemplateVariableKey(rawKey);
+        const value = rawValue === null || rawValue === undefined ? '' : String(rawValue);
+
+        if (normalizedKey) {
+            variables[normalizedKey] = value;
+        }
+
+        const directKey = String(rawKey || '').trim();
+        if (directKey) {
+            variables[directKey] = value;
+        }
+    }
+
+    for (const [rawKey, rawValue] of Object.entries(extra || {})) {
+        const normalizedKey = normalizeTemplateVariableKey(rawKey);
+        const value = rawValue === null || rawValue === undefined ? '' : String(rawValue);
+
+        if (normalizedKey) {
+            variables[normalizedKey] = value;
+        }
+
+        const directKey = String(rawKey || '').trim();
+        if (directKey) {
+            variables[directKey] = value;
+        }
+    }
+
+    return variables;
+
+}
+
+function applyLeadTemplate(template = '', lead, extraVariables = {}) {
+
+    const variables = buildLeadTemplateVariables(lead, extraVariables);
+
+    return String(template).replace(/\{\{\s*([\w-]+)\s*\}\}/gi, (match, key) => {
+
+        const normalizedKey = normalizeTemplateVariableKey(key);
+
+        if (normalizedKey && Object.prototype.hasOwnProperty.call(variables, normalizedKey)) {
+
+            return variables[normalizedKey] ?? '';
+
+        }
+
+        if (Object.prototype.hasOwnProperty.call(variables, key)) {
+
+            return variables[key] ?? '';
+
+        }
+
+        return '';
+
+    });
+
+}
+
 function applyAutomationTemplate(template = '', variables = {}) {
 
     return String(template).replace(/\{\{\s*([\w-]+)\s*\}\}/gi, (match, key) => {
@@ -5696,6 +5783,13 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
         conversation = await Conversation.findById(conversation.id);
     }
 
+    const renderedTextMessage = type === 'text'
+        ? applyLeadTemplate(message, lead, { mensagem: message || '' })
+        : message;
+    const renderedCaption = type !== 'text' && String(options.caption || '').trim()
+        ? applyLeadTemplate(options.caption || '', lead, { mensagem: options.caption || '' })
+        : (options.caption || '');
+
     
 
     let result;
@@ -5704,7 +5798,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     if (type === 'text') {
 
-        result = await session.socket.sendMessage(jid, { text: message });
+        result = await session.socket.sendMessage(jid, { text: renderedTextMessage });
 
     } else if (type === 'image') {
 
@@ -5712,7 +5806,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             image: { url: options.url || message },
 
-            caption: options.caption || ''
+            caption: renderedCaption || ''
 
         });
 
@@ -5722,7 +5816,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             video: { url: options.url || message },
 
-            caption: options.caption || ''
+            caption: renderedCaption || ''
 
         });
 
@@ -5792,9 +5886,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             sender_type: 'agent',
 
-            content: type === 'text' ? message : (options.caption || ''),
+            content: type === 'text' ? renderedTextMessage : (renderedCaption || ''),
 
-            content_encrypted: encryptMessage(type === 'text' ? message : (options.caption || '')),
+            content_encrypted: encryptMessage(type === 'text' ? renderedTextMessage : (renderedCaption || '')),
 
             media_type: type,
 
@@ -5842,7 +5936,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         to,
 
-        content: message,
+        content: type === 'text' ? renderedTextMessage : (renderedCaption || ''),
 
         type
 
