@@ -7808,6 +7808,25 @@ app.delete('/api/custom-events/:id', authenticate, async (req, res) => {
     }
 });
 
+app.get('/api/leads/summary', authenticate, async (req, res) => {
+
+    const { assigned_to } = req.query;
+    const sessionId = sanitizeSessionId(req.query.session_id || req.query.sessionId);
+    const scopedUserId = getScopedUserId(req);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const requestedAssignedTo = assigned_to ? parseInt(assigned_to, 10) : undefined;
+    const resolvedAssignedTo = scopedUserId || requestedAssignedTo;
+
+    const summary = await Lead.summary({
+        assigned_to: resolvedAssignedTo,
+        owner_user_id: ownerScopeUserId || undefined,
+        session_id: sessionId || undefined
+    });
+
+    res.json({ success: true, ...summary });
+
+});
+
 app.get('/api/leads', optionalAuth, async (req, res) => {
 
     const { status, search, limit, offset, assigned_to } = req.query;

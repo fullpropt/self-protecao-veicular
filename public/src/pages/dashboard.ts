@@ -24,6 +24,18 @@ type Lead = {
 };
 
 type LeadsResponse = { leads?: Lead[]; total?: number };
+type LeadSummaryResponse = {
+    total?: number;
+    by_status?: Record<string, unknown> | null;
+    pending?: number;
+    completed?: number;
+};
+type LeadSummary = {
+    total: number;
+    by_status: Record<LeadStatus, number>;
+    pending: number;
+    completed: number;
+};
 type StatsMetric = 'novos_contatos' | 'mensagens' | 'interacoes';
 type StatsChartType = 'line' | 'bar';
 type StatsPeriodResponse = {
@@ -54,6 +66,12 @@ type CustomEventsStatsResponse = {
 let allLeads: Lead[] = [];
 let selectedLeads: number[] = [];
 let customEvents: CustomEventItem[] = [];
+let dashboardLeadSummary: LeadSummary = {
+    total: 0,
+    by_status: { 1: 0, 2: 0, 3: 0, 4: 0 },
+    pending: 0,
+    completed: 0
+};
 
 let statsChartInstance: { destroy?: () => void } | null = null;
 let statsChartType: StatsChartType = 'line';
@@ -70,8 +88,8 @@ const CUSTOM_EVENT_PERIODS: Record<string, CustomEventsPeriod> = {
     year: 'year',
     last_30_days: 'last_30_days'
 };
-const DASHBOARD_FETCH_BATCH_SIZE = 200;
-const DASHBOARD_FETCH_MAX_PAGES = 1000;
+const DASHBOARD_TABLE_FETCH_LIMIT = 100;
+const DASHBOARD_SUMMARY_CACHE_TTL_MS = 60 * 1000;
 
 function escapeHtml(value: string) {
     return String(value || '')
@@ -80,6 +98,78 @@ function escapeHtml(value: string) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function toNonNegativeInt(value: unknown) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return Math.floor(parsed);
+}
+
+function buildDefaultLeadSummary(): LeadSummary {
+    return {
+        total: 0,
+        by_status: { 1: 0, 2: 0, 3: 0, 4: 0 },
+        pending: 0,
+        completed: 0
+    };
+}
+
+function normalizeLeadSummaryResponse(response: LeadSummaryResponse | null | undefined): LeadSummary {
+    const fallback = buildDefaultLeadSummary();
+    const sourceByStatus = response?.by_status && typeof response.by_status === 'object'
+        ? response.by_status
+        : {};
+    const stage1 = toNonNegativeInt((sourceByStatus as Record<string, unknown>)['1']);
+    const stage2 = toNonNegativeInt((sourceByStatus as Record<string, unknown>)['2']);
+    const stage3 = toNonNegativeInt((sourceByStatus as Record<string, unknown>)['3']);
+    const stage4 = toNonNegativeInt((sourceByStatus as Record<string, unknown>)['4']);
+    const derivedTotal = stage1 + stage2 + stage3 + stage4;
+    const total = toNonNegativeInt(response?.total);
+    const pending = toNonNegativeInt(response?.pending);
+    const completed = toNonNegativeInt(response?.completed);
+
+    return {
+        ...fallback,
+        total: total || derivedTotal,
+        by_status: { 1: stage1, 2: stage2, 3: stage3, 4: stage4 },
+        pending: pending || (stage1 + stage2),
+        completed: completed || stage3
+    };
+}
+
+function getDashboardSummaryCacheKey() {
+    const token = String(sessionStorage.getItem('selfDashboardToken') || '').trim();
+    const tokenSuffix = token ? token.slice(-12) : 'anon';
+    return `zapvender_dashboard_summary_v1:${tokenSuffix}`;
+}
+
+function readDashboardSummaryCache() {
+    try {
+        const raw = sessionStorage.getItem(getDashboardSummaryCacheKey());
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { savedAt?: number; summary?: LeadSummaryResponse };
+        const savedAt = Number(parsed?.savedAt || 0);
+        if (!Number.isFinite(savedAt) || savedAt <= 0) return null;
+        if (Date.now() - savedAt > DASHBOARD_SUMMARY_CACHE_TTL_MS) return null;
+        return normalizeLeadSummaryResponse(parsed.summary);
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeDashboardSummaryCache(summary: LeadSummary) {
+    try {
+        sessionStorage.setItem(
+            getDashboardSummaryCacheKey(),
+            JSON.stringify({
+                savedAt: Date.now(),
+                summary
+            })
+        );
+    } catch (_) {
+        // ignore storage failure
+    }
 }
 
 function normalizeDateInputValue(value: string | null | undefined) {
@@ -523,13 +613,34 @@ async function loadDashboardData() {
     try {
         showLoading('Carregando dados...');
 
-        allLeads = await fetchAllDashboardLeads();
-        
-        updateStats();
-        updateFunnel();
-        renderLeadsTable();
-        await updateStatsPeriodChart({ silent: true });
-        await loadCustomEvents({ silent: true });
+        const cachedSummary = readDashboardSummaryCache();
+        if (cachedSummary) {
+            dashboardLeadSummary = cachedSummary;
+            updateStats();
+            updateFunnel();
+        } else {
+            dashboardLeadSummary = buildDefaultLeadSummary();
+            updateStats();
+            updateFunnel();
+        }
+
+        const hasLeadsTable = Boolean(document.getElementById('leadsTableBody'));
+        const leadsTablePromise = hasLeadsTable
+            ? fetchDashboardTableLeads().then((leads) => {
+                allLeads = leads;
+                renderLeadsTable();
+            }).catch(() => {
+                allLeads = [];
+                renderLeadsTable();
+            })
+            : Promise.resolve();
+
+        await Promise.all([
+            loadDashboardLeadSummary({ silent: true }),
+            leadsTablePromise,
+            updateStatsPeriodChart({ silent: true }),
+            loadCustomEvents({ silent: true })
+        ]);
         
         hideLoading();
     } catch (error) {
@@ -539,38 +650,27 @@ async function loadDashboardData() {
     }
 }
 
-async function fetchAllDashboardLeads() {
-    const leads: Lead[] = [];
-    let offset = 0;
-    let page = 0;
-    let totalExpected: number | null = null;
-
-    while (page < DASHBOARD_FETCH_MAX_PAGES) {
-        const params = new URLSearchParams();
-        params.set('limit', String(DASHBOARD_FETCH_BATCH_SIZE));
-        params.set('offset', String(offset));
-
-        const response: LeadsResponse = await api.get(`/api/leads?${params.toString()}`);
-        const batch = Array.isArray(response?.leads) ? response.leads : [];
-        const reportedTotal = Number(response?.total);
-
-        if (Number.isFinite(reportedTotal) && reportedTotal >= 0) {
-            totalExpected = reportedTotal;
+async function loadDashboardLeadSummary(options: { silent?: boolean } = {}) {
+    try {
+        const response: LeadSummaryResponse = await api.get('/api/leads/summary');
+        dashboardLeadSummary = normalizeLeadSummaryResponse(response);
+        writeDashboardSummaryCache(dashboardLeadSummary);
+        updateStats();
+        updateFunnel();
+    } catch (error) {
+        if (!options.silent) {
+            showToast('warning', 'Aviso', 'Não foi possível carregar resumo de leads');
         }
-
-        leads.push(...batch);
-        page += 1;
-        offset += batch.length;
-
-        if (batch.length < DASHBOARD_FETCH_BATCH_SIZE) break;
-        if (totalExpected !== null && leads.length >= totalExpected) break;
+        console.error(error);
     }
+}
 
-    if (page >= DASHBOARD_FETCH_MAX_PAGES) {
-        console.warn('Limite maximo de paginas atingido ao carregar leads do dashboard.');
-    }
-
-    return leads;
+async function fetchDashboardTableLeads() {
+    const params = new URLSearchParams();
+    params.set('limit', String(DASHBOARD_TABLE_FETCH_LIMIT));
+    params.set('offset', '0');
+    const response: LeadsResponse = await api.get(`/api/leads?${params.toString()}`);
+    return Array.isArray(response?.leads) ? response.leads : [];
 }
 
 function initStatsChart() {
@@ -581,9 +681,12 @@ function initStatsChart() {
 
 // Atualizar estatísticas
 function updateStats() {
-    const total = allLeads.length;
-    const completed = allLeads.filter(l => l.status === 3).length;
-    const pending = allLeads.filter(l => l.status === 1 || l.status === 2).length;
+    const total = toNonNegativeInt(dashboardLeadSummary.total) || allLeads.length;
+    const stage1 = toNonNegativeInt(dashboardLeadSummary.by_status[1]);
+    const stage2 = toNonNegativeInt(dashboardLeadSummary.by_status[2]);
+    const stage3 = toNonNegativeInt(dashboardLeadSummary.by_status[3]);
+    const completed = toNonNegativeInt(dashboardLeadSummary.completed) || stage3;
+    const pending = toNonNegativeInt(dashboardLeadSummary.pending) || (stage1 + stage2);
     const conversion = total > 0 ? (completed / total * 100) : 0;
 
     const totalLeads = document.getElementById('totalLeads') as HTMLElement | null;
@@ -606,11 +709,11 @@ function updateStats() {
 
 // Atualizar funil
 function updateFunnel() {
-    const total = allLeads.length;
-    const stage1 = allLeads.filter(l => l.status === 1).length;
-    const stage2 = allLeads.filter(l => l.status === 2).length;
-    const stage3 = allLeads.filter(l => l.status === 3).length;
-    const stage4 = allLeads.filter(l => l.status === 4).length;
+    const total = toNonNegativeInt(dashboardLeadSummary.total) || allLeads.length;
+    const stage1 = toNonNegativeInt(dashboardLeadSummary.by_status[1]);
+    const stage2 = toNonNegativeInt(dashboardLeadSummary.by_status[2]);
+    const stage3 = toNonNegativeInt(dashboardLeadSummary.by_status[3]);
+    const stage4 = toNonNegativeInt(dashboardLeadSummary.by_status[4]);
 
     const funnel1 = document.getElementById('funnel1') as HTMLElement | null;
     const funnel2 = document.getElementById('funnel2') as HTMLElement | null;

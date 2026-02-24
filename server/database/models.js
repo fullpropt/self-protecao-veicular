@@ -645,6 +645,63 @@ const Lead = {
         const row = await queryOne(sql, params);
         const total = Number(row?.total || 0);
         return Number.isFinite(total) && total >= 0 ? total : 0;
+    },
+
+    async summary(options = {}) {
+        let sql = `
+            SELECT leads.status AS status, COUNT(*)::int AS total
+            FROM leads
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (options.assigned_to) {
+            sql += ' AND assigned_to = ?';
+            params.push(options.assigned_to);
+        }
+
+        if (options.owner_user_id) {
+            const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+            if (ownerUserId) {
+                sql += `
+                    AND EXISTS (
+                        SELECT 1
+                        FROM users owner_scope
+                        WHERE owner_scope.id = leads.assigned_to
+                          AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                    )
+                `;
+                params.push(ownerUserId, ownerUserId);
+            }
+        }
+
+        if (options.session_id) {
+            sql += ' AND EXISTS (SELECT 1 FROM conversations c WHERE c.lead_id = leads.id AND c.session_id = ?)';
+            params.push(String(options.session_id).trim());
+        }
+
+        sql += ' GROUP BY leads.status';
+
+        const rows = await query(sql, params);
+        const byStatus = { 1: 0, 2: 0, 3: 0, 4: 0 };
+        let total = 0;
+
+        for (const row of rows || []) {
+            const status = Number(row?.status);
+            const amount = Number(row?.total || 0);
+            if (!Number.isFinite(amount) || amount <= 0) continue;
+            total += amount;
+            if (status === 1 || status === 2 || status === 3 || status === 4) {
+                byStatus[status] = amount;
+            }
+        }
+
+        return {
+            total,
+            by_status: byStatus,
+            pending: byStatus[1] + byStatus[2],
+            completed: byStatus[3]
+        };
     }
 };
 
