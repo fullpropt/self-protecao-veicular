@@ -305,7 +305,6 @@ export default function Configuracoes() {
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Etiquetas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas rápidas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Horários</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('flows')}><span className="icon icon-flows icon-sm"></span> Fluxos Padrões</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('funnel')}><span className="icon icon-funnel icon-sm"></span> Funil de Vendas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('notifications')}><span className="icon icon-bell icon-sm"></span> Notificações</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('users')}><span className="icon icon-user icon-sm"></span> Usuários</div>
@@ -521,8 +520,6 @@ export default function Configuracoes() {
                               </button>
                           </div>
                       </div>
-                      <div className="settings-panel" id="panel-flows"><h3 className="settings-section-title">Fluxos Padrões</h3><p className="text-muted">Em breve.</p></div>
-      
                       <div className="settings-panel" id="panel-funnel">
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-funnel icon-sm"></span> Etapas do Funil</h3>
