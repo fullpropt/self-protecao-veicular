@@ -58,6 +58,16 @@ type BulkLeadsDeleteResponse = {
     failed?: number;
     errors?: Array<{ id?: number; error?: string }>;
 };
+type BulkLeadsUpdateResponse = {
+    success?: boolean;
+    total?: number;
+    updated?: number;
+    skipped?: number;
+    failed?: number;
+    statusChanged?: number;
+    tagsUpdated?: number;
+    errors?: Array<{ id?: number; error?: string }>;
+};
 
 type ContactsCachePayload = {
     savedAt: number;
@@ -1195,6 +1205,137 @@ function bulkAddTag() {
     showToast('info', 'Info', 'Função em desenvolvimento');
 }
 
+async function bulkChangeStatusSelection() {
+    const uniqueLeadIds = Array.from(
+        new Set(
+            selectedContacts
+                .map((value) => parseInt(String(value), 10))
+                .filter((value) => Number.isInteger(value) && value > 0)
+        )
+    );
+
+    if (uniqueLeadIds.length === 0) {
+        showToast('warning', 'Atencao', 'Nenhum contato selecionado');
+        return;
+    }
+
+    const statusInput = prompt('Novo status (1=Novo, 2=Em Andamento, 3=Concluido, 4=Perdido):');
+    if (statusInput === null) return;
+
+    const normalizedStatusInput = String(statusInput || '').trim().toLowerCase();
+    const statusMap: Record<string, LeadStatus> = {
+        '1': 1,
+        'novo': 1,
+        '2': 2,
+        'em andamento': 2,
+        'em_andamento': 2,
+        'andamento': 2,
+        '3': 3,
+        'concluido': 3,
+        'concluído': 3,
+        '4': 4,
+        'perdido': 4
+    };
+
+    const status = statusMap[normalizedStatusInput];
+    if (!status) {
+        showToast('warning', 'Atencao', 'Status invalido. Use 1, 2, 3 ou 4.');
+        return;
+    }
+
+    try {
+        showLoading(`Alterando status de ${uniqueLeadIds.length} contato(s)...`);
+
+        const response: BulkLeadsUpdateResponse = await api.post('/api/leads/bulk-update', {
+            leadIds: uniqueLeadIds,
+            status
+        });
+
+        clearSelection();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
+
+        const updated = Number(response?.updated || 0);
+        const skipped = Number(response?.skipped || 0);
+        const failed = Number(response?.failed || 0);
+        const changed = Number(response?.statusChanged || 0);
+        const summary = [`${updated} atualizados`];
+        if (changed > 0) summary.push(`${changed} com status alterado`);
+        if (skipped > 0) summary.push(`${skipped} ignorados`);
+        if (failed > 0) summary.push(`${failed} com erro`);
+
+        showToast(
+            failed > 0 ? 'warning' : 'success',
+            failed > 0 ? 'Concluido com alertas' : 'Sucesso',
+            `Atualizacao de status concluida: ${summary.join(', ')}`
+        );
+    } catch (error) {
+        hideLoading();
+        showToast('error', 'Erro', error instanceof Error ? error.message : 'Erro ao alterar status em lote');
+    }
+}
+
+async function bulkAddTagSelection() {
+    const uniqueLeadIds = Array.from(
+        new Set(
+            selectedContacts
+                .map((value) => parseInt(String(value), 10))
+                .filter((value) => Number.isInteger(value) && value > 0)
+        )
+    );
+
+    if (uniqueLeadIds.length === 0) {
+        showToast('warning', 'Atencao', 'Nenhum contato selecionado');
+        return;
+    }
+
+    const rawInput = prompt('Digite a(s) tag(s) para adicionar (separadas por virgula):');
+    if (rawInput === null) return;
+
+    const tagsToAdd = Array.from(new Set(
+        String(rawInput || '')
+            .split(/[,;|]/)
+            .map((tag) => String(tag || '').trim())
+            .filter(Boolean)
+    ));
+
+    if (tagsToAdd.length === 0) {
+        showToast('warning', 'Atencao', 'Informe pelo menos uma tag');
+        return;
+    }
+
+    try {
+        showLoading(`Adicionando tag em ${uniqueLeadIds.length} contato(s)...`);
+
+        const response: BulkLeadsUpdateResponse = await api.post('/api/leads/bulk-update', {
+            leadIds: uniqueLeadIds,
+            addTags: tagsToAdd
+        });
+
+        clearSelection();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
+
+        const updated = Number(response?.updated || 0);
+        const skipped = Number(response?.skipped || 0);
+        const failed = Number(response?.failed || 0);
+        const tagsUpdated = Number(response?.tagsUpdated || 0);
+        const summary = [`${updated} atualizados`];
+        if (tagsUpdated > 0) summary.push(`${tagsUpdated} com tags adicionadas`);
+        if (skipped > 0) summary.push(`${skipped} ignorados`);
+        if (failed > 0) summary.push(`${failed} com erro`);
+
+        showToast(
+            failed > 0 ? 'warning' : 'success',
+            failed > 0 ? 'Concluido com alertas' : 'Sucesso',
+            `Adicao de tags concluida: ${summary.join(', ')}`
+        );
+    } catch (error) {
+        hideLoading();
+        showToast('error', 'Erro', error instanceof Error ? error.message : 'Erro ao adicionar tag em lote');
+    }
+}
+
 async function importContacts() {
     if (!contactFieldsCache.length) {
         await loadContactFields();
@@ -1368,8 +1509,8 @@ windowAny.openWhatsApp = openWhatsApp;
 windowAny.bulkSendMessage = bulkSendMessage;
 windowAny.sendBulkMessage = sendBulkMessage;
 windowAny.bulkDelete = bulkDelete;
-windowAny.bulkChangeStatus = bulkChangeStatus;
-windowAny.bulkAddTag = bulkAddTag;
+windowAny.bulkChangeStatus = () => { void bulkChangeStatusSelection(); };
+windowAny.bulkAddTag = () => { void bulkAddTagSelection(); };
 windowAny.importContacts = importContacts;
 windowAny.exportContacts = exportContacts;
 windowAny.switchTab = switchTab;

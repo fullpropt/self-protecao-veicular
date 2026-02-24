@@ -8468,6 +8468,199 @@ app.post('/api/leads/bulk-delete', authenticate, async (req, res) => {
     }
 });
 
+app.post('/api/leads/bulk-update', authenticate, async (req, res) => {
+    try {
+        const rawLeadIds = Array.isArray(req.body?.leadIds) ? req.body.leadIds : [];
+        const leadIds = Array.from(
+            new Set(
+                rawLeadIds
+                    .map((value) => parseInt(value, 10))
+                    .filter((value) => Number.isInteger(value) && value > 0)
+            )
+        );
+
+        if (leadIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Lista de IDs inválida'
+            });
+        }
+
+        const MAX_BULK_UPDATE_LEADS = 2000;
+        if (leadIds.length > MAX_BULK_UPDATE_LEADS) {
+            return res.status(400).json({
+                success: false,
+                error: `Quantidade maxima por lote: ${MAX_BULK_UPDATE_LEADS}`
+            });
+        }
+
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const hasStatusField = Object.prototype.hasOwnProperty.call(body, 'status');
+        const requestedStatus = hasStatusField ? parseInt(String(body.status || ''), 10) : null;
+
+        if (hasStatusField && ![1, 2, 3, 4].includes(Number(requestedStatus))) {
+            return res.status(400).json({
+                success: false,
+                error: 'Status inválido. Use 1, 2, 3 ou 4.'
+            });
+        }
+
+        const addTagsInput = Object.prototype.hasOwnProperty.call(body, 'addTags')
+            ? body.addTags
+            : body.tags;
+        const tagsToAdd = Array.from(new Set(parseLeadTagsForMerge(addTagsInput)));
+
+        if (!hasStatusField && tagsToAdd.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhuma alteração informada (status ou addTags)'
+            });
+        }
+
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const existingLeads = await query(
+            'SELECT id, assigned_to, status, tags FROM leads WHERE id = ANY(?::int[])',
+            [leadIds]
+        );
+        const leadById = new Map(
+            (existingLeads || []).map((lead) => [Number(lead.id), lead])
+        );
+
+        const canAccessAssignedCache = new Map();
+        const canAccessLeadAssignedTo = async (assignedTo) => {
+            const cacheKey = String(Number(assignedTo || 0));
+            if (canAccessAssignedCache.has(cacheKey)) {
+                return canAccessAssignedCache.get(cacheKey) === true;
+            }
+
+            const allowed = await canAccessAssignedRecordInOwnerScope(req, assignedTo, ownerScopeUserId || null);
+            canAccessAssignedCache.set(cacheKey, allowed === true);
+            return allowed === true;
+        };
+
+        let updated = 0;
+        let skipped = 0;
+        let failed = 0;
+        let statusChanged = 0;
+        let tagsUpdated = 0;
+        const errors = [];
+
+        for (const leadId of leadIds) {
+            const lead = leadById.get(leadId);
+            if (!lead) {
+                skipped += 1;
+                continue;
+            }
+
+            if (!await canAccessLeadAssignedTo(lead.assigned_to)) {
+                skipped += 1;
+                continue;
+            }
+
+            try {
+                const updateData = {};
+                let tagsWereUpdated = false;
+
+                if (hasStatusField && Number(lead.status) !== Number(requestedStatus)) {
+                    updateData.status = Number(requestedStatus);
+                }
+
+                if (tagsToAdd.length > 0) {
+                    const currentTags = parseLeadTagsForMerge(lead.tags);
+                    const mergedTags = Array.from(new Set([...currentTags, ...tagsToAdd]));
+                    const tagsChanged = mergedTags.length !== currentTags.length
+                        || mergedTags.some((tag, index) => tag !== currentTags[index]);
+
+                    if (tagsChanged) {
+                        updateData.tags = mergedTags;
+                        tagsWereUpdated = true;
+                    }
+                }
+
+                if (Object.keys(updateData).length === 0) {
+                    skipped += 1;
+                    continue;
+                }
+
+                const oldStatus = normalizeAutomationStatus(lead.status);
+                await Lead.update(leadId, updateData);
+
+                const updatedLead = await Lead.findById(leadId);
+                if (!updatedLead) {
+                    failed += 1;
+                    if (errors.length < 25) {
+                        errors.push({ id: leadId, error: 'Lead não encontrado após atualização' });
+                    }
+                    continue;
+                }
+
+                updated += 1;
+                if (tagsWereUpdated) {
+                    tagsUpdated += 1;
+                }
+
+                webhookService.trigger('lead.updated', { lead: updatedLead });
+
+                const hasStatusInPayload = Object.prototype.hasOwnProperty.call(updateData, 'status');
+                const newStatus = hasStatusInPayload
+                    ? normalizeAutomationStatus(updateData.status)
+                    : oldStatus;
+                const didChangeStatus = oldStatus !== null && newStatus !== null && oldStatus !== newStatus;
+
+                if (didChangeStatus) {
+                    statusChanged += 1;
+
+                    webhookService.trigger('lead.status_changed', {
+                        lead: updatedLead,
+                        oldStatus,
+                        newStatus
+                    });
+
+                    try {
+                        const statusConversation = await Conversation.findByLeadId(updatedLead.id, null);
+                        await scheduleAutomations({
+                            event: AUTOMATION_EVENT_TYPES.STATUS_CHANGE,
+                            sessionId: statusConversation?.session_id || DEFAULT_AUTOMATION_SESSION_ID,
+                            lead: updatedLead,
+                            conversation: statusConversation || null,
+                            oldStatus,
+                            newStatus,
+                            text: ''
+                        });
+                    } catch (automationError) {
+                        console.error(`Falha ao agendar automacoes para lead ${leadId} em bulk status:`, automationError);
+                    }
+                }
+            } catch (error) {
+                failed += 1;
+                if (errors.length < 25) {
+                    errors.push({
+                        id: leadId,
+                        error: String(error?.message || 'Erro ao atualizar lead em lote')
+                    });
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            total: leadIds.length,
+            updated,
+            skipped,
+            failed,
+            statusChanged,
+            tagsUpdated,
+            errors
+        });
+    } catch (error) {
+        console.error('Falha ao atualizar leads em lote:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao atualizar leads em lote'
+        });
+    }
+});
+
 
 
 app.put('/api/leads/:id', authenticate, async (req, res) => {
