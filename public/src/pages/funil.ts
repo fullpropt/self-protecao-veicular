@@ -14,11 +14,32 @@ type Lead = {
 
 type LeadsResponse = {
     leads?: Lead[];
+    total?: number;
 };
+
+type FunnelStageConfig = {
+    name: string;
+    description: string;
+};
+
+type SettingsResponse = {
+    settings?: Record<string, unknown>;
+};
+
+const DEFAULT_FUNNEL_STAGES: FunnelStageConfig[] = [
+    { name: 'Novo', description: 'Lead recém cadastrado' },
+    { name: 'Em Andamento', description: 'Em negociação' },
+    { name: 'Concluído', description: 'Venda realizada' },
+    { name: 'Perdido', description: 'Não converteu' }
+];
+const FUNNEL_STAGES_STORAGE_KEY = 'zapvender_funnel_stages';
+const FUNNEL_FETCH_BATCH_SIZE = 200;
+const FUNNEL_FETCH_MAX_PAGES = 1000;
 
 let leads: Lead[] = [];
 let currentView: 'kanban' | 'funnel' = 'kanban';
 let currentLead: Lead | null = null;
+let funnelStages: FunnelStageConfig[] = DEFAULT_FUNNEL_STAGES.map((stage) => ({ ...stage }));
 
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
@@ -33,8 +54,93 @@ function getContatosUrl(stage: number | string) {
     return `#/contatos?status=${stage}`;
 }
 
-function initFunil() {
+function normalizeFunnelStageName(value: unknown, fallback: string) {
+    const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+    return normalized || fallback;
+}
 
+function normalizeFunnelStageDescription(value: unknown, fallback: string) {
+    const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+    return normalized || fallback;
+}
+
+function normalizeFunnelStagesInput(value: unknown) {
+    const source = Array.isArray(value) ? value : [];
+    return DEFAULT_FUNNEL_STAGES.map((defaultStage, index) => {
+        const item = source[index] || {};
+        return {
+            name: normalizeFunnelStageName((item as { name?: unknown }).name, defaultStage.name),
+            description: normalizeFunnelStageDescription((item as { description?: unknown }).description, defaultStage.description)
+        };
+    });
+}
+
+function setTextContentById(id: string, value: string) {
+    const element = document.getElementById(id) as HTMLElement | null;
+    if (element) element.textContent = value;
+}
+
+function setInputValueById(id: string, value: string) {
+    const input = document.getElementById(id) as HTMLInputElement | null;
+    if (input) input.value = value;
+}
+
+function applyFunnelStagesToUi() {
+    for (let index = 0; index < DEFAULT_FUNNEL_STAGES.length; index += 1) {
+        const stage = funnelStages[index] || DEFAULT_FUNNEL_STAGES[index];
+        const stageNumber = index + 1;
+        setTextContentById(`stage${stageNumber}Label`, stage.name);
+        setTextContentById(`kanbanStage${stageNumber}Label`, stage.name);
+        setInputValueById(`stage${stageNumber}Name`, stage.name);
+        setInputValueById(`stage${stageNumber}Desc`, stage.description);
+    }
+}
+
+function readLocalFunnelStages() {
+    try {
+        const raw = localStorage.getItem(FUNNEL_STAGES_STORAGE_KEY);
+        if (!raw) return null;
+        return normalizeFunnelStagesInput(JSON.parse(raw));
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeLocalFunnelStages(stages: FunnelStageConfig[]) {
+    try {
+        localStorage.setItem(FUNNEL_STAGES_STORAGE_KEY, JSON.stringify(stages));
+    } catch (_) {
+        // ignore storage failure
+    }
+}
+
+async function loadFunnelStageConfig() {
+    const localStages = readLocalFunnelStages();
+    if (localStages) {
+        funnelStages = localStages;
+        applyFunnelStagesToUi();
+    } else {
+        applyFunnelStagesToUi();
+    }
+
+    try {
+        const response: SettingsResponse = await api.get('/api/settings');
+        const settings = response?.settings || {};
+        const fromServer = Object.prototype.hasOwnProperty.call(settings, 'funnel_stages')
+            ? settings.funnel_stages
+            : settings.funnel;
+        if (fromServer) {
+            funnelStages = normalizeFunnelStagesInput(fromServer);
+            writeLocalFunnelStages(funnelStages);
+            applyFunnelStagesToUi();
+        }
+    } catch (_) {
+        // keep local/default values when server config is unavailable
+    }
+}
+
+function initFunil() {
+    void loadFunnelStageConfig();
     loadFunnel();
     initDragAndDrop();
 }
@@ -44,8 +150,7 @@ onReady(initFunil);
 async function loadFunnel() {
     try {
         showLoading('Carregando funil...');
-        const response: LeadsResponse = await api.get('/api/leads');
-        leads = response.leads || [];
+        leads = await fetchAllFunnelLeads();
         updateFunnelStats();
         renderKanban();
         hideLoading();
@@ -53,6 +158,40 @@ async function loadFunnel() {
         hideLoading();
         showToast('error', 'Erro', 'Não foi possível carregar o funil');
     }
+}
+
+async function fetchAllFunnelLeads() {
+    const allLeads: Lead[] = [];
+    let offset = 0;
+    let page = 0;
+    let totalExpected: number | null = null;
+
+    while (page < FUNNEL_FETCH_MAX_PAGES) {
+        const params = new URLSearchParams();
+        params.set('limit', String(FUNNEL_FETCH_BATCH_SIZE));
+        params.set('offset', String(offset));
+
+        const response: LeadsResponse = await api.get(`/api/leads?${params.toString()}`);
+        const batch = Array.isArray(response?.leads) ? response.leads : [];
+        const reportedTotal = Number(response?.total);
+
+        if (Number.isFinite(reportedTotal) && reportedTotal >= 0) {
+            totalExpected = reportedTotal;
+        }
+
+        allLeads.push(...batch);
+        page += 1;
+        offset += batch.length;
+
+        if (batch.length < FUNNEL_FETCH_BATCH_SIZE) break;
+        if (totalExpected !== null && allLeads.length >= totalExpected) break;
+    }
+
+    if (page >= FUNNEL_FETCH_MAX_PAGES) {
+        console.warn('Limite maximo de paginas atingido ao carregar o funil.');
+    }
+
+    return allLeads;
 }
 
 function updateFunnelStats() {
@@ -268,8 +407,30 @@ function filterByStage(stage: number | string) {
     window.location.href = getContatosUrl(stage);
 }
 
-function saveStagesConfig() {
-    showToast('success', 'Sucesso', 'Configurações salvas!');
+async function saveStagesConfig() {
+    const nextStages = DEFAULT_FUNNEL_STAGES.map((defaultStage, index) => {
+        const stageNumber = index + 1;
+        const nameInput = document.getElementById(`stage${stageNumber}Name`) as HTMLInputElement | null;
+        const descInput = document.getElementById(`stage${stageNumber}Desc`) as HTMLInputElement | null;
+        return {
+            name: normalizeFunnelStageName(nameInput?.value, defaultStage.name),
+            description: normalizeFunnelStageDescription(descInput?.value, defaultStage.description)
+        };
+    });
+
+    funnelStages = nextStages;
+    applyFunnelStagesToUi();
+    writeLocalFunnelStages(nextStages);
+
+    try {
+        await api.put('/api/settings', {
+            funnel_stages: nextStages
+        });
+        showToast('success', 'Sucesso', 'Configura��es salvas!');
+    } catch (_) {
+        showToast('warning', 'Aviso', 'Salvo localmente, mas n�o foi poss�vel sincronizar no servidor');
+    }
+
     closeModal('configModal');
 }
 
@@ -295,3 +456,4 @@ windowAny.filterByStage = filterByStage;
 windowAny.saveStagesConfig = saveStagesConfig;
 
 export { initFunil };
+

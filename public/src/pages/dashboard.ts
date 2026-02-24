@@ -23,7 +23,7 @@ type Lead = {
     created_at: string;
 };
 
-type LeadsResponse = { leads?: Lead[] };
+type LeadsResponse = { leads?: Lead[]; total?: number };
 type StatsMetric = 'novos_contatos' | 'mensagens' | 'interacoes';
 type StatsChartType = 'line' | 'bar';
 type StatsPeriodResponse = {
@@ -70,6 +70,8 @@ const CUSTOM_EVENT_PERIODS: Record<string, CustomEventsPeriod> = {
     year: 'year',
     last_30_days: 'last_30_days'
 };
+const DASHBOARD_FETCH_BATCH_SIZE = 200;
+const DASHBOARD_FETCH_MAX_PAGES = 1000;
 
 function escapeHtml(value: string) {
     return String(value || '')
@@ -520,9 +522,8 @@ onReady(initDashboard);
 async function loadDashboardData() {
     try {
         showLoading('Carregando dados...');
-        
-        const response: LeadsResponse = await api.get('/api/leads');
-        allLeads = response.leads || [];
+
+        allLeads = await fetchAllDashboardLeads();
         
         updateStats();
         updateFunnel();
@@ -536,6 +537,40 @@ async function loadDashboardData() {
         showToast('error', 'Erro', 'Não foi possível carregar os dados');
         console.error(error);
     }
+}
+
+async function fetchAllDashboardLeads() {
+    const leads: Lead[] = [];
+    let offset = 0;
+    let page = 0;
+    let totalExpected: number | null = null;
+
+    while (page < DASHBOARD_FETCH_MAX_PAGES) {
+        const params = new URLSearchParams();
+        params.set('limit', String(DASHBOARD_FETCH_BATCH_SIZE));
+        params.set('offset', String(offset));
+
+        const response: LeadsResponse = await api.get(`/api/leads?${params.toString()}`);
+        const batch = Array.isArray(response?.leads) ? response.leads : [];
+        const reportedTotal = Number(response?.total);
+
+        if (Number.isFinite(reportedTotal) && reportedTotal >= 0) {
+            totalExpected = reportedTotal;
+        }
+
+        leads.push(...batch);
+        page += 1;
+        offset += batch.length;
+
+        if (batch.length < DASHBOARD_FETCH_BATCH_SIZE) break;
+        if (totalExpected !== null && leads.length >= totalExpected) break;
+    }
+
+    if (page >= DASHBOARD_FETCH_MAX_PAGES) {
+        console.warn('Limite maximo de paginas atingido ao carregar leads do dashboard.');
+    }
+
+    return leads;
 }
 
 function initStatsChart() {
