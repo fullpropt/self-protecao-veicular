@@ -681,7 +681,6 @@ export default function Dashboard() {
         <EventsCard />
         <StatsCards />
         <Funnel />
-        <LeadsTable />
       </main>
       <LeadModals />
       <FloatingAddLeadButton />

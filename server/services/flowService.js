@@ -1126,16 +1126,24 @@ class FlowService extends EventEmitter {
                     const rawEventId = Number(node?.data?.eventId);
                     const eventKey = String(node?.data?.eventKey || '').trim();
                     const eventName = String(node?.data?.eventName || '').trim();
+                    const ownerScopeUserId = await resolveOwnerScopeUserIdFromAssignee(
+                        execution?.flow?.created_by,
+                        execution?.conversation?.assigned_to,
+                        execution?.lead?.assigned_to
+                    );
+                    const customEventScopeOptions = ownerScopeUserId
+                        ? { owner_user_id: ownerScopeUserId }
+                        : {};
 
                     let customEvent = null;
                     if (Number.isFinite(rawEventId) && rawEventId > 0) {
-                        customEvent = await CustomEvent.findById(rawEventId);
+                        customEvent = await CustomEvent.findById(rawEventId, customEventScopeOptions);
                     }
                     if (!customEvent && eventKey) {
-                        customEvent = await CustomEvent.findByKey(eventKey);
+                        customEvent = await CustomEvent.findByKey(eventKey, customEventScopeOptions);
                     }
                     if (!customEvent && eventName) {
-                        customEvent = await CustomEvent.findByName(eventName);
+                        customEvent = await CustomEvent.findByName(eventName, customEventScopeOptions);
                     }
 
                     if (customEvent) {

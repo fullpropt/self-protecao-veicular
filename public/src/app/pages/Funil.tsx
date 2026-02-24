@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
 type FunilGlobals = {
   initFunil?: () => void;
-  loadFunnel?: () => void;
+  loadFunnel?: (options?: { forceRefresh?: boolean; silent?: boolean }) => void;
   toggleView?: () => void;
   filterByStage?: (stage: number | string) => void;
   openModal?: (id: string) => void;
@@ -154,6 +154,17 @@ export default function Funil() {
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius-lg);
             min-height: 400px;
+            display: flex;
+            flex-direction: column;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+        }
+        .kanban-column.drop-active {
+            border-color: rgba(var(--primary-rgb), 0.7);
+            box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.22);
+            background: rgba(var(--primary-rgb), 0.06);
+        }
+        .kanban-column.drop-active .kanban-header {
+            background: rgba(var(--primary-rgb), 0.15);
         }
         .kanban-header {
             padding: 15px 20px;
@@ -177,8 +188,14 @@ export default function Funil() {
         }
         .kanban-body {
             padding: 15px;
-            max-height: 500px;
+            max-height: 560px;
+            min-height: 340px;
+            flex: 1;
             overflow-y: auto;
+            transition: background-color 0.16s ease;
+        }
+        .kanban-column.drop-active .kanban-body {
+            background: rgba(var(--primary-rgb), 0.09);
         }
         .kanban-card {
             background: var(--surface-muted);
@@ -281,7 +298,7 @@ export default function Funil() {
                       <p>Visualize e gerencie seu pipeline de vendas</p>
                   </div>
                   <div className="page-actions">
-                      <button className="btn btn-outline" onClick={() => globals.loadFunnel?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
+                      <button className="btn btn-outline" onClick={() => globals.loadFunnel?.({ forceRefresh: true })}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
                       <button className="btn btn-outline" onClick={() => globals.toggleView?.()}>
                           <span id="viewIcon"><span className="icon icon-chart-bar icon-sm"></span></span> <span id="viewText">Kanban</span>
                       </button>
@@ -293,28 +310,28 @@ export default function Funil() {
                   <div className="funnel-stage-visual" onClick={() => globals.filterByStage?.(1)}>
                       <div className="funnel-stage-info">
                           <div className="funnel-stage-count" id="stage1Count">0</div>
-                          <div className="funnel-stage-name">Novo</div>
+                          <div className="funnel-stage-name" id="stage1Label">Novo</div>
                           <div className="funnel-stage-percent">100%</div>
                       </div>
                   </div>
                   <div className="funnel-stage-visual" onClick={() => globals.filterByStage?.(2)}>
                       <div className="funnel-stage-info">
                           <div className="funnel-stage-count" id="stage2Count">0</div>
-                          <div className="funnel-stage-name">Em Andamento</div>
+                          <div className="funnel-stage-name" id="stage2Label">Em Andamento</div>
                           <div className="funnel-stage-percent" id="stage2Percent">0%</div>
                       </div>
                   </div>
                   <div className="funnel-stage-visual" onClick={() => globals.filterByStage?.(3)}>
                       <div className="funnel-stage-info">
                           <div className="funnel-stage-count" id="stage3Count">0</div>
-                          <div className="funnel-stage-name">Concluído</div>
+                          <div className="funnel-stage-name" id="stage3Label">Concluído</div>
                           <div className="funnel-stage-percent" id="stage3Percent">0%</div>
                       </div>
                   </div>
                   <div className="funnel-stage-visual" onClick={() => globals.filterByStage?.(4)}>
                       <div className="funnel-stage-info">
                           <div className="funnel-stage-count" id="stage4Count">0</div>
-                          <div className="funnel-stage-name">Perdido</div>
+                          <div className="funnel-stage-name" id="stage4Label">Perdido</div>
                           <div className="funnel-stage-percent" id="stage4Percent">0%</div>
                       </div>
                   </div>
@@ -323,28 +340,28 @@ export default function Funil() {
               <div className="kanban-container" id="kanbanView">
                   <div className="kanban-column" data-stage="1">
                       <div className="kanban-header stage-1">
-                          <span className="kanban-title"><span className="icon icon-spark icon-sm"></span> Novo</span>
+                          <span className="kanban-title"><span className="icon icon-spark icon-sm"></span> <span id="kanbanStage1Label">Novo</span></span>
                           <span className="kanban-count" id="kanban1Count">0</span>
                       </div>
                       <div className="kanban-body" id="kanban1Body"></div>
                   </div>
                   <div className="kanban-column" data-stage="2">
                       <div className="kanban-header stage-2">
-                          <span className="kanban-title"><span className="icon icon-clock icon-sm"></span> Em Andamento</span>
+                          <span className="kanban-title"><span className="icon icon-clock icon-sm"></span> <span id="kanbanStage2Label">Em Andamento</span></span>
                           <span className="kanban-count" id="kanban2Count">0</span>
                       </div>
                       <div className="kanban-body" id="kanban2Body"></div>
                   </div>
                   <div className="kanban-column" data-stage="3">
                       <div className="kanban-header stage-3">
-                          <span className="kanban-title"><span className="icon icon-check icon-sm"></span> Concluído</span>
+                          <span className="kanban-title"><span className="icon icon-check icon-sm"></span> <span id="kanbanStage3Label">Concluído</span></span>
                           <span className="kanban-count" id="kanban3Count">0</span>
                       </div>
                       <div className="kanban-body" id="kanban3Body"></div>
                   </div>
                   <div className="kanban-column" data-stage="4">
                       <div className="kanban-header stage-4">
-                          <span className="kanban-title"><span className="icon icon-close icon-sm"></span> Perdido</span>
+                          <span className="kanban-title"><span className="icon icon-close icon-sm"></span> <span id="kanbanStage4Label">Perdido</span></span>
                           <span className="kanban-count" id="kanban4Count">0</span>
                       </div>
                       <div className="kanban-body" id="kanban4Body"></div>
@@ -365,29 +382,29 @@ export default function Funil() {
                           <div className="stage-item">
                               <div className="stage-color" style={{ background: 'rgba(var(--primary-rgb), 0.95)' }}></div>
                               <div className="stage-item-info">
-                                  <input type="text" className="form-input" value="Novo" id="stage1Name" />
-                                  <input type="text" className="form-input mt-2" value="Lead recém cadastrado" id="stage1Desc" placeholder="Descrição" />
+                                  <input type="text" className="form-input" defaultValue="Novo" id="stage1Name" />
+                                  <input type="text" className="form-input mt-2" defaultValue="Lead recém cadastrado" id="stage1Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
                               <div className="stage-color" style={{ background: 'rgba(var(--primary-rgb), 0.75)' }}></div>
                               <div className="stage-item-info">
-                                  <input type="text" className="form-input" value="Em Andamento" id="stage2Name" />
-                                  <input type="text" className="form-input mt-2" value="Em negociação" id="stage2Desc" placeholder="Descrição" />
+                                  <input type="text" className="form-input" defaultValue="Em Andamento" id="stage2Name" />
+                                  <input type="text" className="form-input mt-2" defaultValue="Em negociação" id="stage2Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
                               <div className="stage-color" style={{ background: 'rgba(var(--primary-rgb), 0.55)' }}></div>
                               <div className="stage-item-info">
-                                  <input type="text" className="form-input" value="Concluído" id="stage3Name" />
-                                  <input type="text" className="form-input mt-2" value="Venda realizada" id="stage3Desc" placeholder="Descrição" />
+                                  <input type="text" className="form-input" defaultValue="Concluído" id="stage3Name" />
+                                  <input type="text" className="form-input mt-2" defaultValue="Venda realizada" id="stage3Desc" placeholder="Descrição" />
                               </div>
                           </div>
                           <div className="stage-item">
                               <div className="stage-color" style={{ background: 'rgba(var(--primary-rgb), 0.35)' }}></div>
                               <div className="stage-item-info">
-                                  <input type="text" className="form-input" value="Perdido" id="stage4Name" />
-                                  <input type="text" className="form-input mt-2" value="Não converteu" id="stage4Desc" placeholder="Descrição" />
+                                  <input type="text" className="form-input" defaultValue="Perdido" id="stage4Name" />
+                                  <input type="text" className="form-input mt-2" defaultValue="Não converteu" id="stage4Desc" placeholder="Descrição" />
                               </div>
                           </div>
                       </div>
