@@ -51,6 +51,7 @@ type ManagedUser = {
     name?: string;
     email?: string;
     role?: string;
+    owner_user_id?: number | string | null;
     is_active?: number | boolean;
     last_login_at?: string | null;
     created_at?: string | null;
@@ -153,6 +154,39 @@ function showPanel(panelId: string) {
 function sanitizeSessionId(value: unknown, fallback = '') {
     const normalized = String(value || '').trim();
     return normalized || fallback;
+}
+
+const LEGACY_SETTINGS_STORAGE_KEY = 'selfSettings';
+
+function getScopedSettingsStorageKey() {
+    const ownerUserId = getCurrentOwnerUserIdFromToken() || getCurrentUserIdFromToken();
+    if (Number.isFinite(ownerUserId) && ownerUserId > 0) {
+        return `self_settings_owner_${ownerUserId}`;
+    }
+    return LEGACY_SETTINGS_STORAGE_KEY;
+}
+
+function parseStoredSettings(value: string | null): Settings {
+    if (!value) return {};
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object') {
+            return parsed;
+        }
+    } catch (_) {
+        // Ignore malformed storage payload and fallback to defaults.
+    }
+    return {};
+}
+
+function readLocalSettingsStorage(): Settings {
+    const scopedKey = getScopedSettingsStorageKey();
+    const scopedValue = localStorage.getItem(scopedKey);
+    return parseStoredSettings(scopedValue);
+}
+
+function writeLocalSettingsStorage(settings: Settings) {
+    localStorage.setItem(getScopedSettingsStorageKey(), JSON.stringify(settings || {}));
 }
 
 function parseConnectedStatus(session: WhatsAppSessionRecord) {
@@ -298,7 +332,7 @@ function readNotificationSettingsFromForm() {
 }
 
 async function loadSettings() {
-    const localSettings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const localSettings: Settings = readLocalSettingsStorage();
     applyCompanySettings(localSettings.company || {});
     applyBusinessHoursSettings(localSettings.businessHours || DEFAULT_BUSINESS_HOURS_SETTINGS);
     applyNotificationSettings(localSettings.notifications || DEFAULT_NOTIFICATION_SETTINGS);
@@ -333,19 +367,19 @@ async function loadSettings() {
         applyBusinessHoursSettings(businessHours);
         applyNotificationSettings(notifications);
 
-        localStorage.setItem('selfSettings', JSON.stringify({
+        writeLocalSettingsStorage({
             ...localSettings,
             company: hasCompanySettings ? company : (localSettings.company || {}),
             businessHours,
             notifications
-        }));
+        });
     } catch (error) {
         // Mantem fallback local sem interromper a pagina
     }
 }
 
 async function saveGeneralSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     const company = {
         name: ((document.getElementById('companyName') as HTMLInputElement | null)?.value || '').trim(),
         cnpj: ((document.getElementById('companyCnpj') as HTMLInputElement | null)?.value || '').trim(),
@@ -354,7 +388,7 @@ async function saveGeneralSettings() {
     };
 
     settings.company = company;
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
 
     try {
         await api.put('/api/settings', {
@@ -370,11 +404,11 @@ async function saveGeneralSettings() {
 }
 
 async function saveBusinessHoursSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     const businessHours = readBusinessHoursSettingsFromForm();
 
     settings.businessHours = businessHours;
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
 
     try {
         await api.put('/api/settings', {
@@ -734,7 +768,7 @@ function getQuickReplyVariableKeys() {
 }
 
 function saveFunnelSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     settings.funnel = [];
     for (let i = 1; i <= 4; i++) {
         settings.funnel.push({
@@ -743,7 +777,7 @@ function saveFunnelSettings() {
             description: (document.getElementById(`funnel${i}Desc`) as HTMLInputElement | null)?.value || ''
         });
     }
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
     showToast('success', 'Sucesso', 'Funil salvo!');
 }
 
@@ -1216,23 +1250,23 @@ async function disconnectWhatsApp() {
 }
 
 function saveWhatsAppSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     settings.whatsapp = {
         interval: (document.getElementById('messageInterval') as HTMLInputElement | null)?.value || '',
         messagesPerHour: (document.getElementById('messagesPerHour') as HTMLInputElement | null)?.value || '',
         workStart: (document.getElementById('workStart') as HTMLInputElement | null)?.value || '',
         workEnd: (document.getElementById('workEnd') as HTMLInputElement | null)?.value || ''
     };
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
     showToast('success', 'Sucesso', 'Configurações salvas!');
 }
 
 async function saveNotificationSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     const notifications = readNotificationSettingsFromForm();
 
     settings.notifications = notifications;
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
 
     try {
         await api.put('/api/settings', {
@@ -1248,8 +1282,8 @@ async function saveNotificationSettings() {
 
 function normalizeUserRole(value: unknown) {
     const normalized = String(value || '').trim().toLowerCase();
-    if (normalized === 'user') return 'agent';
-    if (normalized === 'admin' || normalized === 'supervisor') return normalized;
+    if (normalized === 'user' || normalized === 'supervisor') return 'agent';
+    if (normalized === 'admin') return 'admin';
     return 'agent';
 }
 
@@ -1272,25 +1306,67 @@ function isManagedUserActive(user: ManagedUser) {
     return Number(user.is_active) > 0;
 }
 
-function getCurrentUserRoleFromToken() {
+function getCurrentUserTokenPayload() {
     const token = sessionStorage.getItem('selfDashboardToken');
-    if (!token) return '';
+    if (!token) return null;
 
     try {
         const parts = token.split('.');
-        if (parts.length < 2) return '';
+        if (parts.length < 2) return null;
         const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
         const padded = payloadBase64 + '='.repeat((4 - (payloadBase64.length % 4)) % 4);
-        const payload = JSON.parse(atob(padded));
-        return String(payload?.role || '').trim().toLowerCase();
+        return JSON.parse(atob(padded));
     } catch {
-        return '';
+        return null;
     }
+}
+
+function getCurrentUserRoleFromToken() {
+    return String(getCurrentUserTokenPayload()?.role || '').trim().toLowerCase();
+}
+
+function getCurrentUserIdFromToken() {
+    const value = Number(getCurrentUserTokenPayload()?.id || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function getCurrentOwnerUserIdFromToken() {
+    const value = Number(getCurrentUserTokenPayload()?.owner_user_id || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function getCurrentOwnerUserIdFromUsersCache() {
+    const currentUserId = getCurrentUserIdFromToken();
+    if (!currentUserId) return 0;
+    const currentUser = usersCache.find((user) => Number(user.id) === currentUserId);
+    const value = Number(currentUser?.owner_user_id || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function isCurrentUserAdmin() {
+    return getCurrentUserRoleFromToken() === 'admin';
+}
+
+function isCurrentUserOwnerAdmin() {
+    if (!isCurrentUserAdmin()) return false;
+    const currentUserId = getCurrentUserIdFromToken();
+    if (!currentUserId) return false;
+    const ownerUserId = getCurrentOwnerUserIdFromUsersCache() || getCurrentOwnerUserIdFromToken();
+    return ownerUserId > 0 && currentUserId === ownerUserId;
+}
+
+function updateUsersPanelPermissions() {
+    const addUserButton = document.getElementById('addUserButton') as HTMLButtonElement | null;
+    if (addUserButton) addUserButton.style.display = isCurrentUserAdmin() ? '' : 'none';
+    const deleteAccountButton = document.getElementById('deleteAccountButton') as HTMLButtonElement | null;
+    if (deleteAccountButton) deleteAccountButton.style.display = isCurrentUserOwnerAdmin() ? '' : 'none';
 }
 
 function renderUsersTable() {
     const tbody = document.getElementById('usersTableBody') as HTMLElement | null;
     if (!tbody) return;
+    const isAdmin = isCurrentUserAdmin();
+    const currentUserId = getCurrentUserIdFromToken();
 
     if (!usersCache.length) {
         tbody.innerHTML = `
@@ -1307,6 +1383,7 @@ function renderUsersTable() {
     tbody.innerHTML = usersCache.map((user) => {
         const active = isManagedUserActive(user);
         const userId = Number(user.id) || 0;
+        const canDelete = isAdmin && userId > 0 && userId !== currentUserId;
         return `
             <tr data-user-id="${userId}">
                 <td>${escapeHtml(String(user.name || 'Sem nome'))}</td>
@@ -1317,6 +1394,11 @@ function renderUsersTable() {
                     <button class="btn btn-sm btn-outline" onclick="openEditUserModal(${userId})" title="Editar usuário">
                         <span class="icon icon-edit icon-sm"></span>
                     </button>
+                    ${canDelete ? `
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${userId})" title="Remover usuario">
+                        <span class="icon icon-delete icon-sm"></span>
+                    </button>
+                    ` : ''}
                 </td>
             </tr>
         `;
@@ -1324,6 +1406,7 @@ function renderUsersTable() {
 }
 
 async function loadUsers() {
+    updateUsersPanelPermissions();
     const tbody = document.getElementById('usersTableBody') as HTMLElement | null;
     if (tbody) {
         tbody.innerHTML = `
@@ -1339,9 +1422,11 @@ async function loadUsers() {
     try {
         const response = await api.get('/api/users');
         usersCache = Array.isArray(response?.users) ? response.users : [];
+        updateUsersPanelPermissions();
         renderUsersTable();
     } catch (error: any) {
         usersCache = [];
+        updateUsersPanelPermissions();
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
@@ -1381,7 +1466,7 @@ function openEditUserModal(id: number) {
     if (editUserRole) editUserRole.value = normalizeUserRole(user.role);
     if (editUserActive) editUserActive.value = isManagedUserActive(user) ? '1' : '0';
 
-    const isAdmin = getCurrentUserRoleFromToken() === 'admin';
+    const isAdmin = isCurrentUserAdmin();
     if (editUserRole) editUserRole.disabled = !isAdmin;
     if (editUserActive) editUserActive.disabled = !isAdmin;
 
@@ -1405,7 +1490,7 @@ async function updateUser() {
     }
 
     const payload: Record<string, unknown> = { name, email };
-    const isAdmin = getCurrentUserRoleFromToken() === 'admin';
+    const isAdmin = isCurrentUserAdmin();
     if (isAdmin) {
         payload.role = normalizeUserRole(editUserRole?.value || 'agent');
         payload.is_active = editUserActive?.value === '0' ? 0 : 1;
@@ -1422,6 +1507,11 @@ async function updateUser() {
 }
 
 async function addUser() {
+    if (!isCurrentUserAdmin()) {
+        showToast('warning', 'Aviso', 'Apenas administradores podem adicionar usuarios');
+        return;
+    }
+
     const name = (document.getElementById('newUserName') as HTMLInputElement | null)?.value.trim() || '';
     const email = (document.getElementById('newUserEmail') as HTMLInputElement | null)?.value.trim() || '';
     const password = (document.getElementById('newUserPassword') as HTMLInputElement | null)?.value || '';
@@ -1453,6 +1543,95 @@ async function addUser() {
     } catch (error: any) {
         showToast('error', 'Erro', error?.message || 'Não foi possível adicionar o usuário');
     }
+}
+
+async function deleteUser(id: number) {
+    if (!isCurrentUserAdmin()) {
+        showToast('warning', 'Aviso', 'Apenas administradores podem remover usuarios');
+        return;
+    }
+
+    const userId = Number(id);
+    if (!Number.isFinite(userId) || userId <= 0) {
+        showToast('error', 'Erro', 'Usuario invalido');
+        return;
+    }
+
+    const user = usersCache.find((item) => Number(item.id) === userId);
+    const name = String(user?.name || 'este usuario');
+    const confirmDeleteUserId = document.getElementById('confirmDeleteUserId') as HTMLInputElement | null;
+    const confirmDeleteUserName = document.getElementById('confirmDeleteUserName') as HTMLElement | null;
+    if (confirmDeleteUserId) confirmDeleteUserId.value = String(userId);
+    if (confirmDeleteUserName) confirmDeleteUserName.textContent = name;
+    openModal('confirmDeleteUserModal');
+}
+
+async function confirmDeleteUser() {
+    if (!isCurrentUserAdmin()) {
+        showToast('warning', 'Aviso', 'Apenas administradores podem remover usuarios');
+        return;
+    }
+
+    const confirmDeleteUserId = document.getElementById('confirmDeleteUserId') as HTMLInputElement | null;
+    const userId = Number(confirmDeleteUserId?.value || 0);
+    if (!Number.isFinite(userId) || userId <= 0) {
+        showToast('error', 'Erro', 'Usuario invalido');
+        return;
+    }
+
+    try {
+        await api.delete(`/api/users/${userId}`);
+        closeModal('confirmDeleteUserModal');
+        if (confirmDeleteUserId) confirmDeleteUserId.value = '';
+        await loadUsers();
+        showToast('success', 'Sucesso', 'Usuario removido!');
+    } catch (error: any) {
+        showToast('error', 'Erro', error?.message || 'Nao foi possivel remover o usuario');
+    }
+}
+
+function cancelDeleteUser() {
+    const confirmDeleteUserId = document.getElementById('confirmDeleteUserId') as HTMLInputElement | null;
+    if (confirmDeleteUserId) confirmDeleteUserId.value = '';
+    closeModal('confirmDeleteUserModal');
+}
+
+async function deleteAccount() {
+    if (!isCurrentUserOwnerAdmin()) {
+        showToast('warning', 'Aviso', 'Apenas o admin principal pode excluir a conta');
+        return;
+    }
+
+    openModal('confirmDeleteAccountModal');
+}
+
+async function confirmDeleteAccount() {
+    if (!isCurrentUserOwnerAdmin()) {
+        showToast('warning', 'Aviso', 'Apenas o admin principal pode excluir a conta');
+        return;
+    }
+
+    try {
+        await api.post('/api/account/delete');
+        closeModal('confirmDeleteAccountModal');
+        showToast('success', 'Sucesso', 'Conta excluida');
+
+        sessionStorage.removeItem('selfDashboardToken');
+        sessionStorage.removeItem('selfDashboardUser');
+        sessionStorage.removeItem('selfDashboardUserId');
+        sessionStorage.removeItem('selfDashboardUserEmail');
+
+        setTimeout(() => {
+            window.location.href = '#/login';
+            window.location.reload();
+        }, 400);
+    } catch (error: any) {
+        showToast('error', 'Erro', error?.message || 'Nao foi possivel excluir a conta');
+    }
+}
+
+function cancelDeleteAccount() {
+    closeModal('confirmDeleteAccountModal');
 }
 
 async function changePassword() {
@@ -1522,6 +1701,12 @@ const windowAny = window as Window & {
     deleteSettingsTag?: (id: number) => Promise<void>;
     loadUsers?: () => Promise<void>;
     addUser?: () => Promise<void>;
+    deleteUser?: (id: number) => Promise<void>;
+    deleteAccount?: () => Promise<void>;
+    confirmDeleteUser?: () => Promise<void>;
+    cancelDeleteUser?: () => void;
+    confirmDeleteAccount?: () => Promise<void>;
+    cancelDeleteAccount?: () => void;
     openEditUserModal?: (id: number) => void;
     updateUser?: () => Promise<void>;
     changePassword?: () => Promise<void>;
@@ -1557,6 +1742,12 @@ windowAny.updateSettingsTag = updateSettingsTag;
 windowAny.deleteSettingsTag = deleteSettingsTag;
 windowAny.loadUsers = loadUsers;
 windowAny.addUser = addUser;
+windowAny.deleteUser = deleteUser;
+windowAny.deleteAccount = deleteAccount;
+windowAny.confirmDeleteUser = confirmDeleteUser;
+windowAny.cancelDeleteUser = cancelDeleteUser;
+windowAny.confirmDeleteAccount = confirmDeleteAccount;
+windowAny.cancelDeleteAccount = cancelDeleteAccount;
 windowAny.openEditUserModal = openEditUserModal;
 windowAny.updateUser = updateUser;
 windowAny.changePassword = changePassword;

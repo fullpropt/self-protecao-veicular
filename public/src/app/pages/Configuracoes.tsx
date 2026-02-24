@@ -30,6 +30,11 @@ type ConfiguracoesGlobals = {
   deleteSettingsTag?: (id: number) => Promise<void>;
   loadUsers?: () => Promise<void>;
   addUser?: () => Promise<void>;
+  deleteAccount?: () => Promise<void>;
+  confirmDeleteUser?: () => Promise<void>;
+  cancelDeleteUser?: () => void;
+  confirmDeleteAccount?: () => Promise<void>;
+  cancelDeleteAccount?: () => void;
   openEditUserModal?: (id: number) => void;
   updateUser?: () => Promise<void>;
   changePassword?: () => Promise<void>;
@@ -300,7 +305,6 @@ export default function Configuracoes() {
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Etiquetas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas rápidas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Horários</div>
-                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('flows')}><span className="icon icon-flows icon-sm"></span> Fluxos Padrões</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('funnel')}><span className="icon icon-funnel icon-sm"></span> Funil de Vendas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('notifications')}><span className="icon icon-bell icon-sm"></span> Notificações</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('users')}><span className="icon icon-user icon-sm"></span> Usuários</div>
@@ -516,8 +520,6 @@ export default function Configuracoes() {
                               </button>
                           </div>
                       </div>
-                      <div className="settings-panel" id="panel-flows"><h3 className="settings-section-title">Fluxos Padrões</h3><p className="text-muted">Em breve.</p></div>
-      
                       <div className="settings-panel" id="panel-funnel">
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-funnel icon-sm"></span> Etapas do Funil</h3>
@@ -652,7 +654,8 @@ export default function Configuracoes() {
                                       </tbody>
                                   </table>
                               </div>
-                              <button className="btn btn-primary mt-4" onClick={() => globals.openModal?.('addUserModal')}><span className="icon icon-add icon-sm"></span> Adicionar Usuário</button>
+                              <button id="addUserButton" className="btn btn-primary mt-4" onClick={() => globals.openModal?.('addUserModal')}><span className="icon icon-add icon-sm"></span> Adicionar Usuário</button>
+                              <button id="deleteAccountButton" className="btn btn-outline-danger mt-4 ml-2" onClick={() => globals.deleteAccount?.()}><span className="icon icon-delete icon-sm"></span> Excluir conta</button>
                           </div>
       
                           <div className="settings-section">
@@ -728,7 +731,6 @@ export default function Configuracoes() {
                           <label className="form-label">Função</label>
                           <select className="form-select" id="newUserRole">
                               <option value="agent">Usuário</option>
-                              <option value="supervisor">Supervisor</option>
                               <option value="admin">Administrador</option>
                           </select>
                       </div>
@@ -758,12 +760,11 @@ export default function Configuracoes() {
                       </div>
                       <div className="form-row">
                           <div className="form-group">
-                              <label className="form-label">Função</label>
-                              <select className="form-select" id="editUserRole">
-                                  <option value="agent">Usuário</option>
-                                  <option value="supervisor">Supervisor</option>
-                                  <option value="admin">Administrador</option>
-                              </select>
+                               <label className="form-label">Função</label>
+                               <select className="form-select" id="editUserRole">
+                                   <option value="agent">Usuário</option>
+                                   <option value="admin">Administrador</option>
+                               </select>
                           </div>
                           <div className="form-group">
                               <label className="form-label">Status</label>
@@ -780,7 +781,43 @@ export default function Configuracoes() {
                   </div>
               </div>
           </div>
-      
+
+          <div className="modal-overlay" id="confirmDeleteUserModal">
+              <div className="modal">
+                  <div className="modal-header">
+                      <h3 className="modal-title"><span className="icon icon-delete icon-sm"></span> Você tem certeza?</h3>
+                      <button className="modal-close" onClick={() => globals.cancelDeleteUser?.()}>{'\u00D7'}</button>
+                  </div>
+                  <div className="modal-body">
+                      <input type="hidden" id="confirmDeleteUserId" />
+                      <p className="text-muted mb-4">
+                          Esta ação removerá o usuário <strong id="confirmDeleteUserName">usuário</strong> da sua conta.
+                      </p>
+                      <p className="text-muted">Essa ação não pode ser desfeita.</p>
+                  </div>
+                  <div className="modal-footer">
+                      <button className="btn btn-outline" onClick={() => globals.cancelDeleteUser?.()}>Cancelar</button>
+                      <button className="btn btn-danger" onClick={() => globals.confirmDeleteUser?.()}><span className="icon icon-delete icon-sm"></span> Excluir usuário</button>
+                  </div>
+              </div>
+          </div>
+
+          <div className="modal-overlay" id="confirmDeleteAccountModal">
+              <div className="modal">
+                  <div className="modal-header">
+                      <h3 className="modal-title"><span className="icon icon-delete icon-sm"></span> Você tem certeza?</h3>
+                      <button className="modal-close" onClick={() => globals.cancelDeleteAccount?.()}>{'\u00D7'}</button>
+                  </div>
+                  <div className="modal-body">
+                      <p className="text-muted mb-4">Esta ação excluirá sua conta e desativará todos os usuários vinculados. Deseja continuar?</p>
+                  </div>
+                  <div className="modal-footer">
+                      <button className="btn btn-outline" onClick={() => globals.cancelDeleteAccount?.()}>Cancelar</button>
+                      <button className="btn btn-danger" onClick={() => globals.confirmDeleteAccount?.()}><span className="icon icon-delete icon-sm"></span> Excluir conta</button>
+                  </div>
+              </div>
+          </div>
+       
           <div className="modal-overlay" id="addTemplateModal">
               <div className="modal">
                   <div className="modal-header">
