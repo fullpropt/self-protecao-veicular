@@ -36,10 +36,28 @@ type WhatsappSessionItem = {
     phone?: string;
 };
 
-type LeadsResponse = { leads?: Contact[] };
+type LeadsResponse = { leads?: Contact[]; total?: number };
 type TagsResponse = { tags?: Tag[] };
 type TemplatesResponse = { templates?: Template[] };
 type ContactFieldsResponse = { fields?: ContactField[]; customFields?: ContactField[] };
+type BulkLeadsImportResponse = {
+    success?: boolean;
+    total?: number;
+    imported?: number;
+    updated?: number;
+    insertConflicts?: number;
+    skipped?: number;
+    failed?: number;
+    errors?: Array<{ index?: number; phone?: string; error?: string }>;
+};
+type BulkLeadsDeleteResponse = {
+    success?: boolean;
+    total?: number;
+    deleted?: number;
+    skipped?: number;
+    failed?: number;
+    errors?: Array<{ id?: number; error?: string }>;
+};
 
 let allContacts: Contact[] = [];
 let filteredContacts: Contact[] = [];
@@ -53,6 +71,11 @@ let contactsSessionFilter = '';
 let contactsAvailableSessions: WhatsappSessionItem[] = [];
 
 const CONTACTS_SESSION_FILTER_STORAGE_KEY = 'zapvender_contacts_session_filter';
+const CONTACTS_FETCH_BATCH_SIZE = 500;
+const CONTACTS_FETCH_MAX_PAGES = 200;
+const CONTACTS_IMPORT_BATCH_SIZE = 200;
+const CONTACTS_BULK_DELETE_BATCH_SIZE = 1000;
+const BASE_CONTACTS_TABLE_COLUMNS = 7;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true },
@@ -126,6 +149,28 @@ function sanitizeSessionId(value: unknown, fallback = '') {
     return normalized || fallback;
 }
 
+function normalizeContactPhoneForWhatsapp(value: unknown) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+
+    while (digits.startsWith('55') && digits.length > 11) {
+        digits = digits.slice(2);
+    }
+
+    return digits;
+}
+
+function buildWhatsappLinkFromPhone(value: unknown) {
+    const phone = normalizeContactPhoneForWhatsapp(value);
+    if (!phone) return '';
+    return `https://wa.me/55${phone}`;
+}
+
+function formatContactPhoneForDisplay(value: unknown) {
+    const phone = normalizeContactPhoneForWhatsapp(value);
+    return phone ? formatPhone(phone) : '';
+}
+
 function parseLeadTags(value: unknown) {
     if (!value) return [];
 
@@ -188,6 +233,58 @@ function renderContactTagChips(contact: Contact) {
 
     if (chips.length === 0) return '-';
     return `<div class="contacts-tags-cell">${chips.join('')}</div>`;
+}
+
+function getContactsVisibleCustomColumns() {
+    return customContactFieldsCache.filter((field) => String(field.key || '').trim());
+}
+
+function getContactsTableColumnCount() {
+    return BASE_CONTACTS_TABLE_COLUMNS + getContactsVisibleCustomColumns().length;
+}
+
+function resolveContactCustomFieldDisplayValue(contact: Contact, fieldKey: string, parsedCustomFields?: Record<string, any>) {
+    const key = normalizeContactFieldKey(fieldKey);
+    const customFields = parsedCustomFields || parseLeadCustomFields(contact.custom_fields);
+    const customValue = customFields[key];
+    if (customValue !== undefined && customValue !== null && String(customValue).trim()) {
+        return String(customValue).trim();
+    }
+
+    if (key === 'placa' && String(contact.plate || '').trim()) {
+        return String(contact.plate || '').trim();
+    }
+
+    if (key === 'modelo' && String(contact.vehicle || '').trim()) {
+        return String(contact.vehicle || '').trim();
+    }
+
+    return '';
+}
+
+function renderContactsTableHeader() {
+    const headerRow = document.getElementById('contactsTableHeadRow') as HTMLElement | null;
+    if (!headerRow) return;
+
+    const dynamicHeaders = getContactsVisibleCustomColumns()
+        .map((field) => `<th>${escapeHtml(field.label || field.key)}</th>`)
+        .join('');
+
+    headerRow.innerHTML = `
+        <th>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <span class="checkbox-custom"></span>
+            </label>
+        </th>
+        <th>Contato</th>
+        <th>WhatsApp</th>
+        ${dynamicHeaders}
+        <th>Status</th>
+        <th>Tags</th>
+        <th>Última Interação</th>
+        <th>Ações</th>
+    `;
 }
 
 function getStoredContactsSessionFilter() {
@@ -348,14 +445,48 @@ function initContacts() {
     loadTemplates();
 }
 
+async function fetchAllContacts() {
+    const contacts: Contact[] = [];
+    let offset = 0;
+    let page = 0;
+    let totalExpected: number | null = null;
+
+    while (page < CONTACTS_FETCH_MAX_PAGES) {
+        const params = new URLSearchParams();
+        params.set('limit', String(CONTACTS_FETCH_BATCH_SIZE));
+        params.set('offset', String(offset));
+        if (contactsSessionFilter) {
+            params.set('session_id', contactsSessionFilter);
+        }
+
+        const response: LeadsResponse = await api.get(`/api/leads?${params.toString()}`);
+        const batch = Array.isArray(response?.leads) ? response.leads : [];
+        const reportedTotal = Number(response?.total);
+
+        if (Number.isFinite(reportedTotal) && reportedTotal > 0) {
+            totalExpected = reportedTotal;
+        }
+
+        contacts.push(...batch);
+        page += 1;
+        offset += batch.length;
+
+        if (batch.length < CONTACTS_FETCH_BATCH_SIZE) break;
+        if (totalExpected !== null && contacts.length >= totalExpected) break;
+    }
+
+    if (page >= CONTACTS_FETCH_MAX_PAGES) {
+        console.warn('Limite maximo de paginas atingido ao carregar contatos.');
+    }
+
+    return contacts;
+}
+
 async function loadContacts() {
     try {
         showLoading('Carregando contatos...');
-        const query = contactsSessionFilter
-            ? `?session_id=${encodeURIComponent(contactsSessionFilter)}`
-            : '';
-        const response: LeadsResponse = await api.get(`/api/leads${query}`);
-        allContacts = response.leads || [];
+        allContacts = await fetchAllContacts();
+        pruneSelectedContactsByCurrentDataset();
         filteredContacts = [...allContacts];
         updateStats();
         renderContacts();
@@ -371,11 +502,27 @@ async function loadTags() {
     try {
         const response: TagsResponse = await api.get('/api/tags');
         tags = response.tags || [];
-        const select = document.getElementById('filterTag') as HTMLSelectElement | null;
-        if (!select) return;
-        tags.forEach(tag => {
-            select.innerHTML += `<option value="${tag.name}">${tag.name}</option>`;
-        });
+        const filterSelect = document.getElementById('filterTag') as HTMLSelectElement | null;
+        const importSelect = document.getElementById('importTag') as HTMLSelectElement | null;
+        const tagOptions = tags
+            .map((tag) => `<option value="${escapeHtml(tag.name)}">${escapeHtml(tag.name)}</option>`)
+            .join('');
+
+        if (filterSelect) {
+            const currentFilterValue = String(filterSelect.value || '').trim();
+            filterSelect.innerHTML = `<option value="">Todas as Tags</option>${tagOptions}`;
+            if (currentFilterValue && tags.some((tag) => tag.name === currentFilterValue)) {
+                filterSelect.value = currentFilterValue;
+            }
+        }
+
+        if (importSelect) {
+            const currentImportValue = String(importSelect.value || '').trim();
+            importSelect.innerHTML = `<option value="">Sem etiqueta</option>${tagOptions}`;
+            if (currentImportValue && tags.some((tag) => tag.name === currentImportValue)) {
+                importSelect.value = currentImportValue;
+            }
+        }
     } catch (e) {}
 }
 
@@ -451,6 +598,8 @@ async function loadContactFields() {
     }
 
     renderContactCustomFields();
+    renderContactsTableHeader();
+    renderContacts();
 }
 
 function collectCustomFieldsValues(inputClassName: string) {
@@ -517,19 +666,50 @@ function updateStats() {
     }
 }
 
+function syncSelectionUi() {
+    const bulkActions = document.getElementById('bulkActions') as HTMLElement | null;
+    const selectedCount = document.getElementById('selectedCount') as HTMLElement | null;
+    const selectAll = document.getElementById('selectAll') as HTMLInputElement | null;
+
+    if (bulkActions) bulkActions.style.display = selectedContacts.length > 0 ? 'block' : 'none';
+    if (selectedCount) selectedCount.textContent = String(selectedContacts.length);
+
+    if (!selectAll) return;
+
+    if (filteredContacts.length === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+        return;
+    }
+
+    const filteredIds = new Set(filteredContacts.map((contact) => contact.id));
+    const selectedInFilter = selectedContacts.filter((id) => filteredIds.has(id)).length;
+
+    selectAll.checked = selectedInFilter > 0 && selectedInFilter === filteredContacts.length;
+    selectAll.indeterminate = selectedInFilter > 0 && selectedInFilter < filteredContacts.length;
+}
+
+function pruneSelectedContactsByCurrentDataset() {
+    const availableIds = new Set(allContacts.map((contact) => contact.id));
+    selectedContacts = selectedContacts.filter((id) => availableIds.has(id));
+}
+
 function renderContacts() {
+    renderContactsTableHeader();
     const tbody = document.getElementById('contactsTableBody') as HTMLElement | null;
     if (!tbody) return;
     const start = (currentPage - 1) * perPage;
     const end = start + perPage;
     const pageContacts = filteredContacts.slice(start, end);
+    const selectedIds = new Set(selectedContacts);
 
     if (pageContacts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="table-empty"><div class="table-empty-icon icon icon-empty icon-lg"></div><p>Nenhum contato encontrado</p></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${getContactsTableColumnCount()}" class="table-empty"><div class="table-empty-icon icon icon-empty icon-lg"></div><p>Nenhum contato encontrado</p></td></tr>`;
     } else {
+        const dynamicColumns = getContactsVisibleCustomColumns();
         tbody.innerHTML = pageContacts.map(c => `
             <tr data-id="${c.id}">
-                <td><label class="checkbox-wrapper"><input type="checkbox" class="contact-checkbox" value="${c.id}" onchange="updateSelection()"><span class="checkbox-custom"></span></label></td>
+                <td><label class="checkbox-wrapper"><input type="checkbox" class="contact-checkbox" value="${c.id}" onchange="updateSelection()" ${selectedIds.has(c.id) ? 'checked' : ''}><span class="checkbox-custom"></span></label></td>
                 <td>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <div class="avatar" style="background: ${getAvatarColor(c.name)}">${getInitials(c.name)}</div>
@@ -539,7 +719,21 @@ function renderContacts() {
                         </div>
                     </div>
                 </td>
-                <td><a href="https://wa.me/55${c.phone}" target="_blank" style="color: var(--whatsapp);">${formatPhone(c.phone)}</a></td>
+                <td>${(() => {
+                    const whatsappLink = buildWhatsappLinkFromPhone(c.phone);
+                    const phoneLabel = formatContactPhoneForDisplay(c.phone) || '-';
+                    if (!whatsappLink) return '-';
+                    return `<a href="${whatsappLink}" target="_blank" style="color: var(--whatsapp);">${phoneLabel}</a>`;
+                })()}</td>
+                ${(() => {
+                    const parsedCustomFields = parseLeadCustomFields(c.custom_fields);
+                    return dynamicColumns
+                        .map((field) => {
+                            const value = resolveContactCustomFieldDisplayValue(c, field.key, parsedCustomFields);
+                            return `<td>${value ? escapeHtml(value) : '-'}</td>`;
+                        })
+                        .join('');
+                })()}
                 <td>${getStatusBadge(c.status)}</td>
                 <td>${renderContactTagChips(c)}</td>
                 <td>${c.last_message_at ? timeAgo(c.last_message_at) : '-'}</td>
@@ -565,6 +759,8 @@ function renderContacts() {
     }
     if (prevPage) prevPage.disabled = currentPage === 1;
     if (nextPage) nextPage.disabled = currentPage >= totalPages;
+
+    syncSelectionUi();
 }
 
 function changePage(delta: number) {
@@ -579,14 +775,21 @@ function filterContacts() {
     const normalizedTag = String(tag || '').trim().toLowerCase();
 
     filteredContacts = allContacts.filter(c => {
+        const customValues = getContactsVisibleCustomColumns()
+            .map((field) => resolveContactCustomFieldDisplayValue(c, field.key).toLowerCase())
+            .filter(Boolean);
         const matchSearch = !search ||
             (c.name && c.name.toLowerCase().includes(search)) ||
-            (c.phone && c.phone.includes(search));
+            (c.phone && c.phone.includes(search)) ||
+            customValues.some((value) => value.includes(search));
         const matchStatus = !status || c.status == (parseInt(status, 10) as LeadStatus);
         const contactTags = parseLeadTags(c.tags).map((item) => item.toLowerCase());
         const matchTag = !normalizedTag || contactTags.includes(normalizedTag);
         return matchSearch && matchStatus && matchTag;
     });
+
+    const filteredIds = new Set(filteredContacts.map((contact) => contact.id));
+    selectedContacts = selectedContacts.filter((id) => filteredIds.has(id));
 
     currentPage = 1;
     renderContacts();
@@ -594,28 +797,36 @@ function filterContacts() {
 
 function toggleSelectAll() {
     const checked = (document.getElementById('selectAll') as HTMLInputElement | null)?.checked || false;
-    document.querySelectorAll('.contact-checkbox').forEach(cb => {
-        (cb as HTMLInputElement).checked = checked;
-    });
-    updateSelection();
+    if (checked) {
+        selectedContacts = Array.from(new Set(filteredContacts.map((contact) => contact.id)));
+    } else {
+        const filteredIds = new Set(filteredContacts.map((contact) => contact.id));
+        selectedContacts = selectedContacts.filter((id) => !filteredIds.has(id));
+    }
+    renderContacts();
 }
 
 function updateSelection() {
-    selectedContacts = Array.from(document.querySelectorAll('.contact-checkbox:checked'))
-        .map(cb => parseInt((cb as HTMLInputElement).value, 10));
-    const bulkActions = document.getElementById('bulkActions') as HTMLElement | null;
-    const selectedCount = document.getElementById('selectedCount') as HTMLElement | null;
-    if (bulkActions) bulkActions.style.display = selectedContacts.length > 0 ? 'block' : 'none';
-    if (selectedCount) selectedCount.textContent = String(selectedContacts.length);
+    const start = (currentPage - 1) * perPage;
+    const end = start + perPage;
+    const pageContacts = filteredContacts.slice(start, end);
+    const pageIds = new Set(pageContacts.map((contact) => contact.id));
+
+    const checkedOnPage = Array.from(document.querySelectorAll('.contact-checkbox:checked'))
+        .map((checkbox) => parseInt((checkbox as HTMLInputElement).value, 10))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+    selectedContacts = selectedContacts.filter((id) => !pageIds.has(id));
+    selectedContacts.push(...checkedOnPage);
+    selectedContacts = Array.from(new Set(selectedContacts));
+
+    syncSelectionUi();
 }
 
 function clearSelection() {
-    const selectAll = document.getElementById('selectAll') as HTMLInputElement | null;
-    if (selectAll) selectAll.checked = false;
-    document.querySelectorAll('.contact-checkbox').forEach(cb => {
-        (cb as HTMLInputElement).checked = false;
-    });
-    updateSelection();
+    selectedContacts = [];
+    syncSelectionUi();
+    renderContacts();
 }
 
 async function saveContact() {
@@ -730,14 +941,18 @@ async function deleteContact(id: number) {
 function quickMessage(id: number) {
     const contact = allContacts.find(c => c.id === id);
     if (contact) {
-        window.open(`https://wa.me/55${contact.phone}`, '_blank');
+        const whatsappLink = buildWhatsappLinkFromPhone(contact.phone);
+        if (whatsappLink) {
+            window.open(whatsappLink, '_blank');
+        }
     }
 }
 
 function openWhatsApp() {
-    const phone = (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
-    if (phone) {
-        window.open(`https://wa.me/55${phone}`, '_blank');
+    const rawPhone = (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value || '';
+    const whatsappLink = buildWhatsappLinkFromPhone(rawPhone);
+    if (whatsappLink) {
+        window.open(whatsappLink, '_blank');
     }
 }
 
@@ -787,16 +1002,54 @@ async function sendBulkMessage() {
 }
 
 async function bulkDelete() {
-    if (!confirm(`Excluir ${selectedContacts.length} contatos?`)) return;
-    
+    const uniqueLeadIds = Array.from(
+        new Set(
+            selectedContacts
+                .map((value) => parseInt(String(value), 10))
+                .filter((value) => Number.isInteger(value) && value > 0)
+        )
+    );
+
+    if (uniqueLeadIds.length === 0) {
+        showToast('warning', 'Atencao', 'Nenhum contato selecionado');
+        return;
+    }
+
+    if (!confirm(`Excluir ${formatNumber(uniqueLeadIds.length)} contatos?`)) return;
+
     try {
-        showLoading('Excluindo...');
-        for (const id of selectedContacts) {
-            await api.delete(`/api/leads/${id}`);
+        let deleted = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (let offset = 0; offset < uniqueLeadIds.length; offset += CONTACTS_BULK_DELETE_BATCH_SIZE) {
+            const chunk = uniqueLeadIds.slice(offset, offset + CONTACTS_BULK_DELETE_BATCH_SIZE);
+            const processed = Math.min(offset + chunk.length, uniqueLeadIds.length);
+            showLoading(`Excluindo ${processed}/${uniqueLeadIds.length} contatos...`);
+
+            try {
+                const response: BulkLeadsDeleteResponse = await api.post('/api/leads/bulk-delete', { leadIds: chunk });
+                deleted += Number(response?.deleted || 0);
+                skipped += Number(response?.skipped || 0);
+                failed += Number(response?.failed || 0);
+            } catch (error) {
+                failed += chunk.length;
+            }
         }
+
         clearSelection();
         await loadContacts();
-        showToast('success', 'Sucesso', 'Contatos excluídos!');
+
+        const summary = [`${deleted} removidos`];
+        if (skipped > 0) summary.push(`${skipped} ignorados`);
+        if (failed > 0) summary.push(`${failed} com erro`);
+
+        if (deleted === 0 && skipped === 0 && failed > 0) {
+            showToast('error', 'Erro', `Falha na exclusao (${failed} com erro)`);
+            return;
+        }
+
+        showToast(failed > 0 ? 'warning' : 'success', 'Sucesso', `Exclusao concluida: ${summary.join(', ')}`);
     } catch (error) {
         hideLoading();
         showToast('error', 'Erro', error instanceof Error ? error.message : 'Erro ao excluir');
@@ -816,14 +1069,15 @@ function bulkAddTag() {
 }
 
 async function importContacts() {
+    if (!contactFieldsCache.length) {
+        await loadContactFields();
+    }
+
     const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
     const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value.trim() || '';
     const status = parseInt((document.getElementById('importStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus;
-    const importTagRaw = (document.getElementById('importTag') as HTMLInputElement | null)?.value.trim() || '';
-    const importTags = importTagRaw
-        .split(/[,;|]/)
-        .map(t => t.trim())
-        .filter(Boolean);
+    const importTagValue = (document.getElementById('importTag') as HTMLSelectElement | null)?.value.trim() || '';
+    const importTags = importTagValue ? [importTagValue] : [];
 
     let data: Array<Record<string, string>> = [];
     if (fileInput?.files && fileInput.files.length > 0) {
@@ -838,49 +1092,84 @@ async function importContacts() {
         return;
     }
 
-    try {
-        showLoading(`Importando ${data.length} contatos...`);
-        let imported = 0;
-        
-        for (const row of data) {
-            const normalizedRow = buildNormalizedImportRow(row);
-            const phone = getImportValue(normalizedRow, ['telefone', 'phone', 'whatsapp', 'celular', 'fone', 'numero']).replace(/\D/g, '');
-            if (!phone) continue;
-            const mergedTags = Array.from(new Set(importTags));
-            const customFields: Record<string, string> = {};
+    const leadsToImport: Array<Record<string, any>> = [];
+    for (const row of data) {
+        const normalizedRow = buildNormalizedImportRow(row);
+        const phone = getImportValue(normalizedRow, ['telefone', 'phone', 'whatsapp', 'celular', 'fone', 'numero']).replace(/\D/g, '');
+        if (!phone) continue;
 
-            for (const field of customContactFieldsCache) {
-                const aliases = [field.key, field.label || field.key];
-                const value = getImportValue(normalizedRow, aliases);
-                if (value) {
-                    customFields[normalizeContactFieldKey(field.key)] = value;
-                }
+        const mergedTags = Array.from(new Set(importTags));
+        const customFields: Record<string, string> = {};
+
+        for (const field of customContactFieldsCache) {
+            const aliases = [field.key, field.label || field.key];
+            const value = getImportValue(normalizedRow, aliases);
+            if (value) {
+                customFields[normalizeContactFieldKey(field.key)] = value;
             }
-            
+        }
+
+        const payload: Record<string, any> = {
+            name: getImportValue(normalizedRow, ['nome', 'name', 'nome_completo', 'contato']) || 'Sem nome',
+            phone,
+            email: getImportValue(normalizedRow, ['email', 'e-mail', 'mail']),
+            status,
+            tags: mergedTags,
+            source: 'import'
+        };
+
+        if (Object.keys(customFields).length > 0) {
+            payload.custom_fields = customFields;
+        }
+
+        leadsToImport.push(payload);
+    }
+
+    if (leadsToImport.length === 0) {
+        showToast('error', 'Erro', 'Nenhum contato valido para importar');
+        return;
+    }
+
+    try {
+        let imported = 0;
+        let updated = 0;
+        let insertConflicts = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (let offset = 0; offset < leadsToImport.length; offset += CONTACTS_IMPORT_BATCH_SIZE) {
+            const chunk = leadsToImport.slice(offset, offset + CONTACTS_IMPORT_BATCH_SIZE);
+            const processed = Math.min(offset + chunk.length, leadsToImport.length);
+            showLoading(`Importando ${processed}/${leadsToImport.length} contatos...`);
+
             try {
-                const payload: Record<string, any> = {
-                    name: getImportValue(normalizedRow, ['nome', 'name', 'nome_completo', 'contato']) || 'Sem nome',
-                    phone,
-                    email: getImportValue(normalizedRow, ['email', 'e-mail', 'mail']),
-                    status,
-                    tags: mergedTags,
-                    source: 'import'
-                };
-
-                if (Object.keys(customFields).length > 0) {
-                    payload.custom_fields = customFields;
-                }
-
-                await api.post('/api/leads', payload);
-                imported++;
-            } catch (e) {}
+                const response: BulkLeadsImportResponse = await api.post('/api/leads/bulk', { leads: chunk });
+                imported += Number(response?.imported || 0);
+                updated += Number(response?.updated || 0);
+                insertConflicts += Number(response?.insertConflicts || 0);
+                skipped += Number(response?.skipped || 0);
+                failed += Number(response?.failed || 0);
+            } catch (error) {
+                failed += chunk.length;
+            }
         }
 
         closeModal('importModal');
-        const importTag = document.getElementById('importTag') as HTMLInputElement | null;
+        const importTag = document.getElementById('importTag') as HTMLSelectElement | null;
         if (importTag) importTag.value = '';
         await loadContacts();
-        showToast('success', 'Sucesso', `${imported} contatos importados!`);
+
+        if ((imported + updated) <= 0 && failed > 0) {
+            showToast('error', 'Erro', `Falha na importação (${failed} com erro)`);
+            return;
+        }
+
+        const summary = [`${imported} importados`];
+        if (updated > 0) summary.push(`${updated} atualizados`);
+        if (insertConflicts > 0) summary.push(`${insertConflicts} conflitos de insercao`);
+        if (skipped > 0) summary.push(`${skipped} ignorados`);
+        if (failed > 0) summary.push(`${failed} com erro`);
+        showToast(failed > 0 ? 'warning' : 'success', 'Sucesso', `Importação concluída: ${summary.join(', ')}`);
     } catch (error) {
         hideLoading();
         showToast('error', 'Erro', 'Falha na importação');

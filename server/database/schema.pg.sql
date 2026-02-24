@@ -316,10 +316,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE TABLE IF NOT EXISTS tags (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
+    name TEXT UNIQUE NOT NULL,
     color TEXT DEFAULT '#5a2a6b',
     description TEXT,
-    created_by INTEGER REFERENCES users(id),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -400,8 +399,6 @@ CREATE INDEX IF NOT EXISTS idx_queue_session ON message_queue(session_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_sender_accounts_campaign ON campaign_sender_accounts(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_sender_accounts_session ON campaign_sender_accounts(session_id);
 CREATE INDEX IF NOT EXISTS idx_whatsapp_sessions_created_by ON whatsapp_sessions(created_by);
-CREATE INDEX IF NOT EXISTS idx_tags_created_by ON tags(created_by);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name_owner_unique ON tags(LOWER(TRIM(name)), COALESCE(created_by, 0));
 
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);

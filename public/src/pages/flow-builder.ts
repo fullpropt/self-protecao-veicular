@@ -87,6 +87,9 @@ let hasGlobalCanvasListeners = false;
 let contactFieldsCache: ContactField[] = [];
 let customEventsCache: CustomEventOption[] = [];
 
+type ToastType = 'success' | 'error' | 'warning' | 'info';
+type ToastFn = (type: ToastType, title: string, message: string, duration?: number) => void;
+
 const DEFAULT_HANDLE = 'default';
 const LAST_OPEN_FLOW_ID_STORAGE_KEY = 'flow_builder:last_open_flow_id';
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
@@ -94,6 +97,16 @@ const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'telefone', label: 'Telefone', source: 'phone', is_default: true, required: true, placeholder: 'Somente números com DDD' },
     { key: 'email', label: 'Email', source: 'email', is_default: true, required: false, placeholder: 'email@exemplo.com' }
 ];
+
+function notify(type: ToastType, title: string, message: string, fallbackMessage?: string) {
+    const globalToast = (window as Window & { showToast?: ToastFn }).showToast;
+    if (typeof globalToast === 'function') {
+        globalToast(type, title, message);
+        return;
+    }
+
+    alert(fallbackMessage || message);
+}
 
 function isIntentTrigger(node?: FlowNode | null) {
     if (!node) return false;
@@ -1766,7 +1779,7 @@ async function saveFlow() {
             persistLastOpenFlowId(currentFlowId);
             setCurrentFlowActive(result.flow?.is_active);
             renderCurrentFlowName();
-            alert('Fluxo salvo com sucesso!');
+            notify('success', 'Sucesso', 'Fluxo salvo com sucesso!');
         } else {
             alert('Erro ao salvar: ' + result.error);
         }
