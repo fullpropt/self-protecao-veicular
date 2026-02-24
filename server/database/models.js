@@ -2374,20 +2374,12 @@ const MessageQueue = {
 
         if (!nextScheduledAt && isDisconnectedSessionError) {
             const retryAt = new Date(Date.now() + 60 * 1000).toISOString();
-            console.log('[QueueDebug] MODEL_MARKFAILED_FALLBACK_TO_REQUEUE', {
-                messageId: id,
-                retryAt,
-                errorMessage: errorText
-            });
-            return await this.requeueTransient(id, errorMessage, retryAt);
+            console.log(`[QueueDebug][model] MODEL_MARKFAILED_FALLBACK_TO_REQUEUE messageId=${id} retryAt=${retryAt} error=${errorText}`);
+            return await this.requeueTransient(id, `[M_REQUEUE] ${errorMessage}`, retryAt);
         }
 
         if (nextScheduledAt) {
-            console.log('[QueueDebug] MODEL_MARKFAILED_WITH_SCHEDULE', {
-                messageId: id,
-                nextScheduledAt,
-                errorMessage: errorText
-            });
+            console.log(`[QueueDebug][model] MODEL_MARKFAILED_WITH_SCHEDULE messageId=${id} nextScheduledAt=${nextScheduledAt} error=${errorText}`);
             return await run(`
                 UPDATE message_queue 
                 SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
@@ -2400,25 +2392,18 @@ const MessageQueue = {
             `, [errorMessage, nextScheduledAt, id]);
         }
 
-        console.log('[QueueDebug] MODEL_MARKFAILED_DIRECT', {
-            messageId: id,
-            errorMessage: errorText
-        });
+        console.log(`[QueueDebug][model] MODEL_MARKFAILED_DIRECT messageId=${id} error=${errorText}`);
         return await run(`
             UPDATE message_queue 
             SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
                 error_message = ?
             WHERE id = ?
-        `, [errorMessage, id]);
+        `, [`[M_FAIL_DIRECT] ${errorMessage}`, id]);
     },
 
     async requeueTransient(id, errorMessage, nextScheduledAt) {
         const scheduledAt = nextScheduledAt || new Date(Date.now() + 60 * 1000).toISOString();
-        console.log('[QueueDebug] MODEL_REQUEUE_TRANSIENT', {
-            messageId: id,
-            scheduledAt,
-            errorMessage: String(errorMessage || '')
-        });
+        console.log(`[QueueDebug][model] MODEL_REQUEUE_TRANSIENT messageId=${id} scheduledAt=${scheduledAt} error=${String(errorMessage || '')}`);
 
         return await run(`
             UPDATE message_queue
