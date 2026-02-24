@@ -51,6 +51,7 @@ type ManagedUser = {
     name?: string;
     email?: string;
     role?: string;
+    owner_user_id?: number | string | null;
     is_active?: number | boolean;
     last_login_at?: string | null;
     created_at?: string | null;
@@ -1334,12 +1335,24 @@ function getCurrentOwnerUserIdFromToken() {
     return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function getCurrentOwnerUserIdFromUsersCache() {
+    const currentUserId = getCurrentUserIdFromToken();
+    if (!currentUserId) return 0;
+    const currentUser = usersCache.find((user) => Number(user.id) === currentUserId);
+    const value = Number(currentUser?.owner_user_id || 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 function isCurrentUserAdmin() {
     return getCurrentUserRoleFromToken() === 'admin';
 }
 
 function isCurrentUserOwnerAdmin() {
-    return isCurrentUserAdmin() && getCurrentUserIdFromToken() === getCurrentOwnerUserIdFromToken();
+    if (!isCurrentUserAdmin()) return false;
+    const currentUserId = getCurrentUserIdFromToken();
+    if (!currentUserId) return false;
+    const ownerUserId = getCurrentOwnerUserIdFromUsersCache() || getCurrentOwnerUserIdFromToken();
+    return ownerUserId > 0 && currentUserId === ownerUserId;
 }
 
 function updateUsersPanelPermissions() {
@@ -1409,9 +1422,11 @@ async function loadUsers() {
     try {
         const response = await api.get('/api/users');
         usersCache = Array.isArray(response?.users) ? response.users : [];
+        updateUsersPanelPermissions();
         renderUsersTable();
     } catch (error: any) {
         usersCache = [];
+        updateUsersPanelPermissions();
         if (tbody) {
             tbody.innerHTML = `
                 <tr>
