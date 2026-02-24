@@ -38,7 +38,7 @@ const qrcode = require('qrcode');
 
 // Database
 
-const { getDatabase, close: closeDatabase, query, run, generateUUID } = require('./database/connection');
+const { getDatabase, close: closeDatabase, query, run, generateUUID, USE_POSTGRES } = require('./database/connection');
 
 const { migrate } = require('./database/migrate');
 
@@ -69,6 +69,7 @@ const queueService = require('./services/queueService');
 
 const flowService = require('./services/flowService');
 const senderAllocatorService = require('./services/senderAllocatorService');
+const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
 const {
     MailMktIntegrationError,
     createEmailConfirmationTokenPayload,
@@ -182,6 +183,39 @@ function parsePositiveIntEnv(value, fallback) {
     const parsed = parseInt(String(value ?? ''), 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
+
+const POSTGRES_WORKER_LEADER_LOCK_ENABLED = USE_POSTGRES && parseBooleanEnv(
+    process.env.POSTGRES_WORKER_LEADER_LOCK_ENABLED,
+    process.env.NODE_ENV === 'production'
+);
+const POSTGRES_WORKER_LEADER_LOCK_POLL_MS = parsePositiveIntEnv(
+    process.env.POSTGRES_WORKER_LEADER_LOCK_POLL_MS,
+    5000
+);
+const QUEUE_WORKER_ENABLED = parseBooleanEnv(
+    process.env.QUEUE_WORKER_ENABLED,
+    true
+);
+const SCHEDULED_AUTOMATIONS_WORKER_ENABLED = parseBooleanEnv(
+    process.env.SCHEDULED_AUTOMATIONS_WORKER_ENABLED,
+    true
+);
+
+const queueWorkerLeaderLock = new PostgresAdvisoryLock({
+    name: 'queue-worker',
+    key1: 47321,
+    key2: 1,
+    pollMs: POSTGRES_WORKER_LEADER_LOCK_POLL_MS,
+    enabled: POSTGRES_WORKER_LEADER_LOCK_ENABLED && QUEUE_WORKER_ENABLED
+});
+
+const scheduledAutomationLeaderLock = new PostgresAdvisoryLock({
+    name: 'scheduled-automations',
+    key1: 47321,
+    key2: 2,
+    pollMs: POSTGRES_WORKER_LEADER_LOCK_POLL_MS,
+    enabled: POSTGRES_WORKER_LEADER_LOCK_ENABLED && SCHEDULED_AUTOMATIONS_WORKER_ENABLED
+});
 
 function parseBaileysVersionFromEnv(value) {
     const normalized = String(value || '').trim();
@@ -4406,6 +4440,9 @@ async function armInactivityAutomation(automation, context) {
 }
 
 async function processScheduledAutomationsTick() {
+    if (SCHEDULED_AUTOMATIONS_WORKER_ENABLED && !scheduledAutomationLeaderLock.isHeld()) {
+        return;
+    }
     if (scheduleAutomationsTickRunning) return;
     scheduleAutomationsTickRunning = true;
 
@@ -4495,6 +4532,14 @@ async function processScheduledAutomationsTick() {
 
 function startScheduledAutomationsWorker() {
     if (scheduleAutomationIntervalId) return;
+    if (!SCHEDULED_AUTOMATIONS_WORKER_ENABLED) {
+        console.log('[LeaderLock][scheduled-automations] worker desabilitado por configuracao');
+        return;
+    }
+
+    scheduledAutomationLeaderLock.start().catch((error) => {
+        console.error('[LeaderLock][scheduled-automations] falha ao iniciar lock:', error.message);
+    });
 
     scheduleAutomationIntervalId = setInterval(() => {
         processScheduledAutomationsTick().catch((error) => {
@@ -6326,6 +6371,8 @@ function sessionExists(sessionId) {
             }
         );
     }, {
+        workerEnabled: QUEUE_WORKER_ENABLED,
+        leaderLock: queueWorkerLeaderLock,
         resolveSessionForMessage: async ({ message, lead }) => {
             const allocation = await senderAllocatorService.allocateForSingleLead({
                 leadId: lead?.id,

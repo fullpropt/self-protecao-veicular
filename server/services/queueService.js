@@ -15,6 +15,8 @@ class QueueService extends EventEmitter {
         this.sendFunction = null;
         this.resolveSessionForMessage = null;
         this.getSessionDispatchState = null;
+        this.leaderLock = null;
+        this.workerEnabled = true;
         this.defaultDelay = 3000; // 3 segundos entre mensagens
         this.maxMessagesPerMinute = 30;
         this.messagesSentThisMinute = 0;
@@ -39,6 +41,13 @@ class QueueService extends EventEmitter {
         this.getSessionDispatchState = typeof options.getSessionDispatchState === 'function'
             ? options.getSessionDispatchState
             : null;
+        this.workerEnabled = options.workerEnabled !== false;
+        this.leaderLock = options.leaderLock && typeof options.leaderLock.isHeld === 'function'
+            ? options.leaderLock
+            : null;
+        if (this.leaderLock && typeof this.leaderLock.start === 'function') {
+            await this.leaderLock.start();
+        }
         
         // Carregar configuracoes do banco
         const defaultSettings = await this.getQueueSettings(null, true);
@@ -46,7 +55,11 @@ class QueueService extends EventEmitter {
         this.maxMessagesPerMinute = defaultSettings.maxPerMinute;
         
         // Iniciar processamento
-        this.startProcessing();
+        if (this.workerEnabled) {
+            this.startProcessing();
+        } else {
+            console.log('[LeaderLock][queue-worker] worker desabilitado por configuracao');
+        }
         console.log('[QueueDebug][boot] queue instrumentation active');
         
         console.log('Servico de fila de mensagens iniciado');
@@ -526,6 +539,8 @@ class QueueService extends EventEmitter {
     async processNext() {
         if (this.isProcessing) return;
         if (!this.sendFunction) return;
+        if (!this.workerEnabled) return;
+        if (this.leaderLock && !this.leaderLock.isHeld()) return;
 
         this.isProcessing = true;
 
