@@ -610,7 +610,7 @@ class QueueService extends EventEmitter {
                                 ? 'Sessao reconectando'
                                 : 'Sessao nao conectada'
                     );
-                    console.log('[QueueDebug] QUEUE_TRANSIENT_REQUEUE pre-send session unavailable', {
+                    console.log(`[QueueDebug][${assignedSessionId}] QUEUE_TRANSIENT_REQUEUE pre-send session unavailable`, {
                         messageId: message.id,
                         leadId: message.lead_id,
                         sessionId: assignedSessionId,
@@ -674,7 +674,7 @@ class QueueService extends EventEmitter {
             const leadId = Number(error?.leadId || 0);
             const conversationId = Number(error?.conversationId || 0);
             const failedSessionId = String(error?.sessionId || '').trim();
-            console.error('Erro ao processar fila:', error.message);
+            console.error(`[QueueDebug][${failedSessionId || 'unknown'}] Erro ao processar fila:`, error.message);
 
             if (messageId > 0) {
                 const errorText = String(error?.message || '');
@@ -715,7 +715,7 @@ class QueueService extends EventEmitter {
                         const runtimeSessionState = this.normalizeSessionDispatchState(
                             await this.getSessionDispatchState(failedSessionId)
                         );
-                        console.log('[QueueDebug] RUNTIME_SESSION_STATE after send error', {
+                        console.log(`[QueueDebug][${failedSessionId}] RUNTIME_SESSION_STATE after send error`, {
                             messageId,
                             sessionId: failedSessionId,
                             runtimeSessionStatus: runtimeSessionState.status,
@@ -740,7 +740,7 @@ class QueueService extends EventEmitter {
                                     : 'disconnected'
                         });
                     const retryAt = new Date(Date.now() + retryDelayMs).toISOString();
-                    console.log('[QueueDebug] QUEUE_TRANSIENT_REQUEUE send-error', {
+                    console.log(`[QueueDebug][${failedSessionId || 'unknown'}] QUEUE_TRANSIENT_REQUEUE send-error`, {
                         messageId,
                         leadId: leadId || null,
                         sessionId: failedSessionId || null,
@@ -750,7 +750,7 @@ class QueueService extends EventEmitter {
                     });
                     await MessageQueue.requeueTransient(messageId, error.message, retryAt);
                 } else {
-                    console.log('[QueueDebug] QUEUE_FINAL_FAIL send-error', {
+                    console.log(`[QueueDebug][${failedSessionId || 'unknown'}] QUEUE_FINAL_FAIL send-error`, {
                         messageId,
                         leadId: leadId || null,
                         sessionId: failedSessionId || null,
