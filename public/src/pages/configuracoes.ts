@@ -155,6 +155,39 @@ function sanitizeSessionId(value: unknown, fallback = '') {
     return normalized || fallback;
 }
 
+const LEGACY_SETTINGS_STORAGE_KEY = 'selfSettings';
+
+function getScopedSettingsStorageKey() {
+    const ownerUserId = getCurrentOwnerUserIdFromToken() || getCurrentUserIdFromToken();
+    if (Number.isFinite(ownerUserId) && ownerUserId > 0) {
+        return `self_settings_owner_${ownerUserId}`;
+    }
+    return LEGACY_SETTINGS_STORAGE_KEY;
+}
+
+function parseStoredSettings(value: string | null): Settings {
+    if (!value) return {};
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object') {
+            return parsed;
+        }
+    } catch (_) {
+        // Ignore malformed storage payload and fallback to defaults.
+    }
+    return {};
+}
+
+function readLocalSettingsStorage(): Settings {
+    const scopedKey = getScopedSettingsStorageKey();
+    const scopedValue = localStorage.getItem(scopedKey);
+    return parseStoredSettings(scopedValue);
+}
+
+function writeLocalSettingsStorage(settings: Settings) {
+    localStorage.setItem(getScopedSettingsStorageKey(), JSON.stringify(settings || {}));
+}
+
 function parseConnectedStatus(session: WhatsAppSessionRecord) {
     if (typeof session.connected === 'boolean') return session.connected;
     return String(session.status || '').toLowerCase() === 'connected';
@@ -298,7 +331,7 @@ function readNotificationSettingsFromForm() {
 }
 
 async function loadSettings() {
-    const localSettings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const localSettings: Settings = readLocalSettingsStorage();
     applyCompanySettings(localSettings.company || {});
     applyBusinessHoursSettings(localSettings.businessHours || DEFAULT_BUSINESS_HOURS_SETTINGS);
     applyNotificationSettings(localSettings.notifications || DEFAULT_NOTIFICATION_SETTINGS);
@@ -333,19 +366,19 @@ async function loadSettings() {
         applyBusinessHoursSettings(businessHours);
         applyNotificationSettings(notifications);
 
-        localStorage.setItem('selfSettings', JSON.stringify({
+        writeLocalSettingsStorage({
             ...localSettings,
             company: hasCompanySettings ? company : (localSettings.company || {}),
             businessHours,
             notifications
-        }));
+        });
     } catch (error) {
         // Mantem fallback local sem interromper a pagina
     }
 }
 
 async function saveGeneralSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     const company = {
         name: ((document.getElementById('companyName') as HTMLInputElement | null)?.value || '').trim(),
         cnpj: ((document.getElementById('companyCnpj') as HTMLInputElement | null)?.value || '').trim(),
@@ -354,7 +387,7 @@ async function saveGeneralSettings() {
     };
 
     settings.company = company;
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
 
     try {
         await api.put('/api/settings', {
@@ -370,11 +403,11 @@ async function saveGeneralSettings() {
 }
 
 async function saveBusinessHoursSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     const businessHours = readBusinessHoursSettingsFromForm();
 
     settings.businessHours = businessHours;
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
 
     try {
         await api.put('/api/settings', {
@@ -734,7 +767,7 @@ function getQuickReplyVariableKeys() {
 }
 
 function saveFunnelSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     settings.funnel = [];
     for (let i = 1; i <= 4; i++) {
         settings.funnel.push({
@@ -743,7 +776,7 @@ function saveFunnelSettings() {
             description: (document.getElementById(`funnel${i}Desc`) as HTMLInputElement | null)?.value || ''
         });
     }
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
     showToast('success', 'Sucesso', 'Funil salvo!');
 }
 
@@ -1216,23 +1249,23 @@ async function disconnectWhatsApp() {
 }
 
 function saveWhatsAppSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     settings.whatsapp = {
         interval: (document.getElementById('messageInterval') as HTMLInputElement | null)?.value || '',
         messagesPerHour: (document.getElementById('messagesPerHour') as HTMLInputElement | null)?.value || '',
         workStart: (document.getElementById('workStart') as HTMLInputElement | null)?.value || '',
         workEnd: (document.getElementById('workEnd') as HTMLInputElement | null)?.value || ''
     };
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
     showToast('success', 'Sucesso', 'Configurações salvas!');
 }
 
 async function saveNotificationSettings() {
-    const settings: Settings = JSON.parse(localStorage.getItem('selfSettings') || '{}');
+    const settings: Settings = readLocalSettingsStorage();
     const notifications = readNotificationSettingsFromForm();
 
     settings.notifications = notifications;
-    localStorage.setItem('selfSettings', JSON.stringify(settings));
+    writeLocalSettingsStorage(settings);
 
     try {
         await api.put('/api/settings', {

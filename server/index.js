@@ -6327,6 +6327,11 @@ app.get('/api/whatsapp/sessions', authenticate, async (req, res) => {
     try {
         const includeDisabled = String(req.query?.includeDisabled ?? 'true').toLowerCase() !== 'false';
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+            payload: { error: 'Conta sem escopo valido para listar sessoes' }
+        })) {
+            return;
+        }
         const sessionsList = await senderAllocatorService.listDispatchSessions({
             includeDisabled,
             ownerUserId: ownerScopeUserId || undefined
@@ -6819,21 +6824,41 @@ function isSameUserOwner(user, ownerUserId) {
 
 async function resolveRequesterOwnerUserId(req) {
     const requesterId = Number(req.user?.id || 0);
-    let ownerUserId = normalizeOwnerUserId(req.user?.owner_user_id);
+    if (!Number.isInteger(requesterId) || requesterId <= 0) {
+        return 0;
+    }
 
-    if (!ownerUserId && requesterId > 0) {
-        const currentUser = await User.findById(requesterId);
-        ownerUserId = normalizeOwnerUserId(currentUser?.owner_user_id);
-        if (!ownerUserId) {
-            ownerUserId = requesterId;
-            await User.update(requesterId, { owner_user_id: ownerUserId });
-        }
-        if (req.user) {
-            req.user.owner_user_id = ownerUserId;
-        }
+    const currentUser = await User.findById(requesterId);
+    let ownerUserId = normalizeOwnerUserId(currentUser?.owner_user_id);
+    if (!ownerUserId) {
+        ownerUserId = requesterId;
+    }
+
+    if (!currentUser || normalizeOwnerUserId(currentUser.owner_user_id) !== ownerUserId) {
+        await User.update(requesterId, { owner_user_id: ownerUserId });
+    }
+
+    if (req.user) {
+        req.user.owner_user_id = ownerUserId;
     }
 
     return ownerUserId;
+}
+
+function ensureOwnerScopeOrReply(res, ownerUserId, options = {}) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    if (normalizedOwnerUserId) {
+        return true;
+    }
+
+    const errorMessage = String(options.error || 'Conta sem escopo valido');
+    const statusCode = Number(options.status || 403);
+    const payload = options.payload && typeof options.payload === 'object'
+        ? options.payload
+        : { success: false, error: errorMessage };
+
+    res.status(statusCode).json(payload);
+    return false;
 }
 
 async function countActiveAdminsByOwner(ownerUserId) {
@@ -7244,6 +7269,11 @@ async function getContactFieldConfig(ownerUserId = null) {
 app.get('/api/contact-fields', authenticate, async (req, res) => {
     try {
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+            payload: { success: false, error: 'Conta sem escopo valido para campos de contato' }
+        })) {
+            return;
+        }
         const payload = await getContactFieldConfig(ownerScopeUserId);
         res.json({ success: true, ...payload });
     } catch (error) {
@@ -7255,6 +7285,11 @@ app.get('/api/contact-fields', authenticate, async (req, res) => {
 app.put('/api/contact-fields', authenticate, async (req, res) => {
     try {
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+            payload: { success: false, error: 'Conta sem escopo valido para salvar campos de contato' }
+        })) {
+            return;
+        }
         const settingsKey = buildScopedSettingsKey('contact_data_fields', ownerScopeUserId);
         const incoming = Array.isArray(req.body?.fields) ? req.body.fields : [];
         const customFields = sanitizeStoredContactFields(incoming);
@@ -7923,10 +7958,15 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
 
 // ============================================
 
-app.get('/api/tags', optionalAuth, async (req, res) => {
+app.get('/api/tags', authenticate, async (req, res) => {
     try {
         const scopedUserId = getScopedUserId(req);
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+            payload: { success: false, error: 'Conta sem escopo valido para etiquetas' }
+        })) {
+            return;
+        }
         const tagScopeUserId = scopedUserId || ownerScopeUserId || undefined;
         await Tag.syncFromLeads({
             assigned_to: scopedUserId || undefined,
@@ -7948,6 +7988,11 @@ app.post('/api/tags', authenticate, async (req, res) => {
     try {
         const scopedUserId = getScopedUserId(req);
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+            payload: { success: false, error: 'Conta sem escopo valido para criar etiquetas' }
+        })) {
+            return;
+        }
         const tagScopeUserId = scopedUserId || ownerScopeUserId || undefined;
         const name = normalizeTagNameInput(req.body?.name);
         const color = normalizeTagColorInput(req.body?.color);
@@ -7982,6 +8027,11 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
     try {
         const scopedUserId = getScopedUserId(req);
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+            payload: { success: false, error: 'Conta sem escopo valido para atualizar etiquetas' }
+        })) {
+            return;
+        }
         const tagScopeUserId = scopedUserId || ownerScopeUserId || undefined;
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
@@ -8067,6 +8117,11 @@ app.delete('/api/tags/:id', authenticate, async (req, res) => {
     try {
         const scopedUserId = getScopedUserId(req);
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+            payload: { success: false, error: 'Conta sem escopo valido para remover etiquetas' }
+        })) {
+            return;
+        }
         const tagScopeUserId = scopedUserId || ownerScopeUserId || undefined;
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
@@ -10091,6 +10146,11 @@ app.post('/api/webhook/incoming', async (req, res) => {
 app.get('/api/settings', authenticate, async (req, res) => {
 
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+        payload: { success: false, error: 'Conta sem escopo valido para configuracoes' }
+    })) {
+        return;
+    }
     const settings = normalizeSettingsForResponse(await Settings.getAll(), ownerScopeUserId);
 
     res.json({ success: true, settings });
@@ -10102,6 +10162,11 @@ app.get('/api/settings', authenticate, async (req, res) => {
 app.put('/api/settings', authenticate, async (req, res) => {
 
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    if (!ensureOwnerScopeOrReply(res, ownerScopeUserId, {
+        payload: { success: false, error: 'Conta sem escopo valido para salvar configuracoes' }
+    })) {
+        return;
+    }
     const incomingSettings = req.body && typeof req.body === 'object' ? req.body : {};
     const changedKeys = Object.keys(incomingSettings);
 
