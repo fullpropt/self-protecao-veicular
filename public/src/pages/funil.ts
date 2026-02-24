@@ -31,6 +31,8 @@ type FunnelCacheSnapshot = {
     leads: Lead[];
 };
 
+type FunnelStageCounts = Record<LeadStatus, number>;
+
 const DEFAULT_FUNNEL_STAGES: FunnelStageConfig[] = [
     { name: 'Novo', description: 'Lead rec\u00E9m cadastrado' },
     { name: 'Em Andamento', description: 'Em negocia\u00E7\u00E3o' },
@@ -43,7 +45,9 @@ const FUNNEL_FETCH_MAX_PAGES = 1000;
 const FUNNEL_CACHE_TTL_MS = 10 * 60 * 1000;
 const FUNNEL_CACHE_MIN_REVALIDATE_INTERVAL_MS = FUNNEL_CACHE_TTL_MS;
 const FUNNEL_CACHE_PREFIX = 'zapvender_funnel_cache_v1';
+const FUNNEL_CACHE_WRITE_DEBOUNCE_MS = 1200;
 const VALID_LEAD_STATUS = new Set<LeadStatus>([1, 2, 3, 4]);
+const EMPTY_STAGE_HTML = `<div class="text-center text-muted py-4">Nenhum lead</div>`;
 const TEXT_MOJIBAKE_REPLACEMENTS: Array<[RegExp, string]> = [
     [/\u00C3\u0080/g, '\u00C0'],
     [/\u00C3\u0081/g, '\u00C1'],
@@ -76,6 +80,10 @@ let currentView: 'kanban' | 'funnel' = 'kanban';
 let currentLead: Lead | null = null;
 let funnelStages: FunnelStageConfig[] = DEFAULT_FUNNEL_STAGES.map((stage) => ({ ...stage }));
 let funnelRuntimeCache: FunnelCacheSnapshot | null = null;
+let funnelStageCounts: FunnelStageCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+let funnelCacheWriteTimer: ReturnType<typeof window.setTimeout> | null = null;
+let funnelCacheWriteDirty = false;
+const pendingLeadStatusUpdates = new Set<number>();
 
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
@@ -167,7 +175,34 @@ function writeFunnelCache(nextLeads: Lead[]) {
     }
 }
 
+function setRuntimeCacheFromLeads() {
+    funnelRuntimeCache = {
+        savedAt: Date.now(),
+        leads: [...leads]
+    };
+}
+
+function flushFunnelCacheWrite() {
+    if (!funnelCacheWriteDirty || !funnelRuntimeCache) return;
+    funnelCacheWriteDirty = false;
+    writeFunnelCache(funnelRuntimeCache.leads);
+}
+
+function scheduleFunnelCacheWrite() {
+    funnelCacheWriteDirty = true;
+    if (funnelCacheWriteTimer !== null) return;
+    funnelCacheWriteTimer = window.setTimeout(() => {
+        funnelCacheWriteTimer = null;
+        flushFunnelCacheWrite();
+    }, FUNNEL_CACHE_WRITE_DEBOUNCE_MS);
+}
+
 function clearFunnelCache() {
+    if (funnelCacheWriteTimer !== null) {
+        window.clearTimeout(funnelCacheWriteTimer);
+        funnelCacheWriteTimer = null;
+    }
+    funnelCacheWriteDirty = false;
     try {
         sessionStorage.removeItem(getFunnelCacheKey());
     } catch (_) {
@@ -176,8 +211,17 @@ function clearFunnelCache() {
     funnelRuntimeCache = null;
 }
 
+function buildStageCounts(nextLeads: Lead[]) {
+    const counts: FunnelStageCounts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    for (const lead of nextLeads) {
+        counts[lead.status] += 1;
+    }
+    return counts;
+}
+
 function applyFunnelSnapshot(nextLeads: Lead[]) {
     leads = normalizeLeadList(nextLeads);
+    funnelStageCounts = buildStageCounts(leads);
     updateFunnelStats();
     renderKanban();
 }
@@ -214,6 +258,67 @@ function setTextContentById(id: string, value: string) {
 function setInputValueById(id: string, value: string) {
     const input = document.getElementById(id) as HTMLInputElement | null;
     if (input) input.value = value;
+}
+
+function setKanbanBodyEmptyState(body: HTMLElement) {
+    body.innerHTML = EMPTY_STAGE_HTML;
+}
+
+function removeKanbanBodyEmptyState(body: HTMLElement) {
+    const empty = body.querySelector('.text-center.text-muted.py-4');
+    if (empty) empty.remove();
+}
+
+function renderLeadCard(lead: Lead) {
+    return `
+        <div class="kanban-card" draggable="true" data-id="${lead.id}" onclick="viewLead(${lead.id})">
+            <div class="kanban-card-header">
+                <div class="avatar avatar-sm" style="background: ${getAvatarColor(lead.name)}">${getInitials(lead.name)}</div>
+                <div>
+                    <div class="kanban-card-name">${lead.name || 'Sem nome'}</div>
+                    <div class="kanban-card-phone">${formatPhone(lead.phone)}</div>
+                </div>
+            </div>
+            ${lead.vehicle ? `<div class="kanban-card-vehicle"><span class="icon icon-car icon-sm"></span> ${lead.vehicle}</div>` : ''}
+            <div class="kanban-card-footer">
+                <span class="kanban-card-date">${timeAgo(lead.created_at)}</span>
+                <button class="btn btn-sm btn-whatsapp btn-icon" onclick="event.stopPropagation(); quickWhatsApp('${lead.phone}')"><span class="icon icon-message icon-sm"></span></button>
+            </div>
+        </div>
+    `;
+}
+
+function renderKanbanStage(stage: LeadStatus) {
+    const stageLeads = leads.filter((lead) => lead.status === stage);
+    const body = document.getElementById(`kanban${stage}Body`) as HTMLElement | null;
+    if (!body) return;
+
+    if (stageLeads.length === 0) {
+        setKanbanBodyEmptyState(body);
+        return;
+    }
+
+    body.innerHTML = stageLeads.map(renderLeadCard).join('');
+}
+
+function moveLeadCardToStage(leadId: number, newStage: LeadStatus) {
+    const card = document.querySelector(`.kanban-card[data-id="${leadId}"]`) as HTMLElement | null;
+    if (!card) return false;
+
+    const targetBody = document.getElementById(`kanban${newStage}Body`) as HTMLElement | null;
+    const sourceBody = card.parentElement as HTMLElement | null;
+    if (!targetBody || !sourceBody) return false;
+
+    if (sourceBody === targetBody) return true;
+
+    removeKanbanBodyEmptyState(targetBody);
+    targetBody.prepend(card);
+
+    if (!sourceBody.querySelector('.kanban-card')) {
+        setKanbanBodyEmptyState(sourceBody);
+    }
+
+    return true;
 }
 
 function applyFunnelStagesToUi() {
@@ -305,12 +410,13 @@ async function loadFunnel(options: { forceRefresh?: boolean; silent?: boolean } 
         }
 
         const fetchedLeads = await fetchAllFunnelLeads();
+        const normalizedLeads = normalizeLeadList(fetchedLeads);
         funnelRuntimeCache = {
             savedAt: Date.now(),
-            leads: normalizeLeadList(fetchedLeads)
+            leads: normalizedLeads
         };
         writeFunnelCache(fetchedLeads);
-        applyFunnelSnapshot(fetchedLeads);
+        applyFunnelSnapshot(normalizedLeads);
 
         if (!cached) {
             hideLoading();
@@ -370,11 +476,11 @@ async function fetchAllFunnelLeads() {
 }
 
 function updateFunnelStats() {
-    const total = leads.length;
-    const stage1 = leads.filter(l => l.status === 1).length;
-    const stage2 = leads.filter(l => l.status === 2).length;
-    const stage3 = leads.filter(l => l.status === 3).length;
-    const stage4 = leads.filter(l => l.status === 4).length;
+    const stage1 = funnelStageCounts[1];
+    const stage2 = funnelStageCounts[2];
+    const stage3 = funnelStageCounts[3];
+    const stage4 = funnelStageCounts[4];
+    const total = stage1 + stage2 + stage3 + stage4;
 
     const stage1Count = document.getElementById('stage1Count') as HTMLElement | null;
     const stage2Count = document.getElementById('stage2Count') as HTMLElement | null;
@@ -397,6 +503,10 @@ function updateFunnelStats() {
         if (stage2Percent) stage2Percent.textContent = formatPercent(stage2 / total * 100);
         if (stage3Percent) stage3Percent.textContent = formatPercent(stage3 / total * 100);
         if (stage4Percent) stage4Percent.textContent = formatPercent(stage4 / total * 100);
+    } else {
+        if (stage2Percent) stage2Percent.textContent = '0%';
+        if (stage3Percent) stage3Percent.textContent = '0%';
+        if (stage4Percent) stage4Percent.textContent = '0%';
     }
 
     if (kanban1Count) kanban1Count.textContent = String(stage1);
@@ -407,30 +517,7 @@ function updateFunnelStats() {
 
 function renderKanban() {
     for (let stage = 1; stage <= 4; stage++) {
-        const stageLeads = leads.filter(l => l.status === stage);
-        const body = document.getElementById(`kanban${stage}Body`) as HTMLElement | null;
-        if (!body) continue;
-        
-        if (stageLeads.length === 0) {
-            body.innerHTML = `<div class="text-center text-muted py-4">Nenhum lead</div>`;
-        } else {
-            body.innerHTML = stageLeads.map(l => `
-                <div class="kanban-card" draggable="true" data-id="${l.id}" onclick="viewLead(${l.id})">
-                    <div class="kanban-card-header">
-                        <div class="avatar avatar-sm" style="background: ${getAvatarColor(l.name)}">${getInitials(l.name)}</div>
-                        <div>
-                            <div class="kanban-card-name">${l.name || 'Sem nome'}</div>
-                            <div class="kanban-card-phone">${formatPhone(l.phone)}</div>
-                        </div>
-                    </div>
-                    ${l.vehicle ? `<div class="kanban-card-vehicle"><span class="icon icon-car icon-sm"></span> ${l.vehicle}</div>` : ''}
-                    <div class="kanban-card-footer">
-                        <span class="kanban-card-date">${timeAgo(l.created_at)}</span>
-                        <button class="btn btn-sm btn-whatsapp btn-icon" onclick="event.stopPropagation(); quickWhatsApp('${l.phone}')"><span class="icon icon-message icon-sm"></span></button>
-                    </div>
-                </div>
-            `).join('');
-        }
+        renderKanbanStage(stage as LeadStatus);
     }
 }
 
@@ -460,7 +547,7 @@ function initDragAndDrop() {
             (body as HTMLElement).style.background = '';
         });
 
-        body.addEventListener('drop', async (e) => {
+        body.addEventListener('drop', (e) => {
             e.preventDefault();
             (body as HTMLElement).style.background = '';
             
@@ -469,7 +556,7 @@ function initDragAndDrop() {
             const newStage = parseInt(parent?.dataset.stage || '0', 10);
             
             if (leadId && newStage) {
-                await updateLeadStage(leadId, newStage as LeadStatus);
+                void updateLeadStage(leadId, newStage as LeadStatus);
             }
         });
     });
@@ -484,25 +571,49 @@ async function updateLeadStage(leadId: number, newStage: LeadStatus) {
         return;
     }
 
+    if (pendingLeadStatusUpdates.has(leadId)) {
+        return;
+    }
+
+    if (previousStage === newStage) {
+        return;
+    }
+
+    pendingLeadStatusUpdates.add(leadId);
+    lead.status = newStage;
+    if (previousStage) {
+        funnelStageCounts[previousStage] = Math.max(0, funnelStageCounts[previousStage] - 1);
+    }
+    funnelStageCounts[newStage] += 1;
+    updateFunnelStats();
+    const movedInDom = moveLeadCardToStage(leadId, newStage);
+    if (!movedInDom && previousStage) {
+        renderKanbanStage(previousStage);
+        renderKanbanStage(newStage);
+    }
+    setRuntimeCacheFromLeads();
+
     try {
         await api.put(`/api/leads/${leadId}`, { status: newStage });
-        lead.status = newStage;
-        funnelRuntimeCache = {
-            savedAt: Date.now(),
-            leads: [...leads]
-        };
-        writeFunnelCache(leads);
-        updateFunnelStats();
-        renderKanban();
-        showToast('success', 'Sucesso', 'Lead movido!');
+        setRuntimeCacheFromLeads();
+        scheduleFunnelCacheWrite();
     } catch (error) {
         if (previousStage !== undefined) {
             lead.status = previousStage;
+            funnelStageCounts[newStage] = Math.max(0, funnelStageCounts[newStage] - 1);
+            funnelStageCounts[previousStage] += 1;
         }
-        clearFunnelCache();
         updateFunnelStats();
-        renderKanban();
+        const revertedInDom = previousStage ? moveLeadCardToStage(leadId, previousStage) : false;
+        if (!revertedInDom && previousStage) {
+            renderKanbanStage(previousStage);
+            renderKanbanStage(newStage);
+        }
+        setRuntimeCacheFromLeads();
+        scheduleFunnelCacheWrite();
         showToast('error', 'Erro', 'N\u00E3o foi poss\u00EDvel mover o lead');
+    } finally {
+        pendingLeadStatusUpdates.delete(leadId);
     }
 }
 
