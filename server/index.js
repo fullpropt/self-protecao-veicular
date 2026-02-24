@@ -70,6 +70,15 @@ const queueService = require('./services/queueService');
 const flowService = require('./services/flowService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const {
+    MailMktIntegrationError,
+    createEmailConfirmationTokenPayload,
+    hashEmailConfirmationToken,
+    isEmailConfirmed,
+    isEmailConfirmationExpired,
+    sendRegistrationConfirmationEmail,
+    tokenFingerprint
+} = require('./services/emailConfirmationService');
+const {
     DEFAULT_WHATSAPP_SESSION_ID,
     LEGACY_WHATSAPP_SESSION_ALIASES,
     listDefaultSessionCandidates,
@@ -3456,11 +3465,33 @@ function extractAutomationKeywords(value = '') {
 
     return String(value)
 
-        .split(',')
+        .split(/[,\n;]+/)
 
         .map((keyword) => normalizeAutomationText(keyword))
 
         .filter(Boolean);
+
+}
+
+
+
+function escapeAutomationRegex(value = '') {
+
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+}
+
+
+
+function matchesAutomationKeyword(normalizedText = '', keyword = '') {
+
+    const text = String(normalizedText || '').trim();
+    const normalizedKeyword = normalizeAutomationText(keyword);
+    if (!text || !normalizedKeyword) return false;
+
+    const keywordPattern = escapeAutomationRegex(normalizedKeyword).replace(/\s+/g, '\\s+');
+    const regex = new RegExp(`(?:^|[^a-z0-9])${keywordPattern}(?:$|[^a-z0-9])`, 'i');
+    return regex.test(text);
 
 }
 
@@ -3876,7 +3907,7 @@ function shouldTriggerAutomation(automation, context, normalizedText) {
 
         const keywords = extractAutomationKeywords(automation.trigger_value || '');
         if (keywords.length === 0) return false;
-        return keywords.some((keyword) => normalizedText.includes(keyword));
+        return keywords.some((keyword) => matchesAutomationKeyword(normalizedText, keyword));
     }
 
     if (triggerType === 'message_received') {
@@ -6701,6 +6732,15 @@ app.post('/api/auth/login', async (req, res) => {
 
         }
 
+        if (!isEmailConfirmed(user)) {
+
+            return res.status(403).json({
+                error: 'Confirme seu email antes de entrar',
+                code: 'EMAIL_NOT_CONFIRMED'
+            });
+
+        }
+
         // Recupera ambientes legados: se nao houver admin ativo, promove
         // automaticamente o usuario autenticado para admin.
         const allUsers = await User.listAll();
@@ -6786,7 +6826,7 @@ app.post('/api/auth/register', async (req, res) => {
 
         if (!name || !email || !password) {
 
-            return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+            return res.status(400).json({ error: 'Nome, email e senha sao obrigatorios' });
 
         }
 
@@ -6800,81 +6840,197 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 
-        const { User } = require('./database/models');
+        const { hashPassword } = require('./middleware/auth');
 
-        const { generateToken, generateRefreshToken, hashPassword } = require('./middleware/auth');
-
-
-
+        const normalizedName = String(name || '').trim();
         const normalizedEmail = String(email || '').trim().toLowerCase();
-
         const existing = await User.findActiveByEmail(normalizedEmail);
+        const registrationPasswordHash = hashPassword(String(password));
+        const confirmationTokenPayload = createEmailConfirmationTokenPayload();
 
-        if (existing) {
+        let user = null;
+        let createdNewUser = false;
+        let resentForPendingUser = false;
 
-            return res.status(409).json({ error: 'Email já cadastrado' });
+        if (existing && isEmailConfirmed(existing)) {
+
+            return res.status(409).json({ error: 'Email ja cadastrado' });
 
         }
 
+        if (existing && !isEmailConfirmed(existing)) {
+            resentForPendingUser = true;
+
+            await User.update(existing.id, {
+                name: normalizedName,
+                email: normalizedEmail,
+                email_confirmed: 0,
+                email_confirmed_at: null,
+                email_confirmation_token_hash: confirmationTokenPayload.tokenHash,
+                email_confirmation_expires_at: confirmationTokenPayload.expiresAt
+            });
+            await User.updatePassword(existing.id, registrationPasswordHash);
+
+            const existingOwnerUserId = Number(existing?.owner_user_id || 0);
+            if (!Number.isInteger(existingOwnerUserId) || existingOwnerUserId <= 0) {
+                await User.update(existing.id, { owner_user_id: existing.id });
+            }
+
+            user = await User.findByIdWithPassword(existing.id);
+        } else {
+            createdNewUser = true;
+
+            const created = await User.create({
+
+                name: normalizedName,
+
+                email: normalizedEmail,
+
+                password_hash: registrationPasswordHash,
+                email_confirmed: 0,
+                email_confirmed_at: null,
+                email_confirmation_token_hash: confirmationTokenPayload.tokenHash,
+                email_confirmation_expires_at: confirmationTokenPayload.expiresAt,
+
+                role: 'admin'
+
+            });
 
 
-        const created = await User.create({
 
-            name: String(name || '').trim(),
+            if (Number(created?.id) > 0) {
+                await User.update(Number(created.id), { owner_user_id: Number(created.id) });
+            }
 
-            email: normalizedEmail,
-
-            password_hash: hashPassword(String(password)),
-
-            role: 'admin'
-
-        });
-
-
-
-        if (Number(created?.id) > 0) {
-            await User.update(Number(created.id), { owner_user_id: Number(created.id) });
+            user = await User.findByIdWithPassword(Number(created?.id || 0));
         }
-
-        const user = await User.findById(Number(created?.id || 0));
 
         if (!user) {
 
-            return res.status(500).json({ error: 'Falha ao criar usuário' });
+            return res.status(500).json({ error: 'Falha ao preparar cadastro do usuario' });
 
         }
 
-
-
-        const token = generateToken(user);
-
-        const refreshToken = generateRefreshToken(user);
-
-
-
-        res.json({
-
-            success: true,
-
-            token,
-
-            refreshToken,
-
-            user: {
-
-                id: user.id,
-
-                uuid: user.uuid,
-
-                name: user.name,
-
-                email: user.email,
-
-                role: user.role,
-                owner_user_id: user.owner_user_id
-
+        try {
+            await sendRegistrationConfirmationEmail(req, user, confirmationTokenPayload);
+        } catch (error) {
+            if (error instanceof MailMktIntegrationError) {
+                return res.status(error.statusCode || 502).json({
+                    error: createdNewUser
+                        ? 'Conta criada, mas nao foi possivel enviar o email de confirmacao agora'
+                        : 'Nao foi possivel reenviar o email de confirmacao agora',
+                    code: 'EMAIL_CONFIRMATION_SEND_FAILED',
+                    retryable: error.retryable !== false,
+                    requiresEmailConfirmation: true,
+                    accountCreated: createdNewUser
+                });
             }
+            throw error;
+        }
 
+        return res.status(createdNewUser ? 201 : 200).json({
+            success: true,
+            requiresEmailConfirmation: true,
+            message: resentForPendingUser
+                ? 'Sua conta ainda nao foi confirmada. Enviamos um novo link de confirmacao para o seu email.'
+                : 'Conta criada com sucesso. Verifique seu email para confirmar o cadastro antes de entrar.',
+            email: user.email,
+            expiresInText: confirmationTokenPayload.expiresInText
+        });
+
+    } catch (error) {
+
+        res.status(500).json({ error: error.message });
+
+    }
+
+});
+
+
+
+app.get('/api/auth/confirm-email', async (req, res) => {
+
+    try {
+
+        const rawToken = String(req.query?.token || '').trim();
+
+        if (!rawToken) {
+            return res.status(400).json({
+                error: 'Token de confirmacao e obrigatorio',
+                code: 'EMAIL_CONFIRMATION_TOKEN_REQUIRED'
+            });
+        }
+
+        const confirmationTokenHash = hashEmailConfirmationToken(rawToken);
+        const confirmationTokenFingerprint = tokenFingerprint(rawToken);
+        const user = await User.findByEmailConfirmationTokenHash(confirmationTokenHash);
+
+        if (!user) {
+            console.warn('[auth/confirm-email] Token invalido', JSON.stringify({
+                tokenFingerprint: confirmationTokenFingerprint
+            }));
+            return res.status(400).json({
+                error: 'Link de confirmacao invalido ou ja utilizado',
+                code: 'EMAIL_CONFIRMATION_INVALID'
+            });
+        }
+
+        if (isEmailConfirmed(user)) {
+            await User.update(user.id, {
+                email_confirmation_token_hash: null,
+                email_confirmation_expires_at: null
+            });
+            console.warn('[auth/confirm-email] Token reutilizado para email ja confirmado', JSON.stringify({
+                userId: Number(user?.id || 0) || null,
+                tokenFingerprint: confirmationTokenFingerprint
+            }));
+            return res.status(400).json({
+                error: 'Link de confirmacao invalido ou ja utilizado',
+                code: 'EMAIL_CONFIRMATION_INVALID'
+            });
+        }
+
+        if (isEmailConfirmationExpired(user)) {
+            await User.update(user.id, {
+                email_confirmation_token_hash: null,
+                email_confirmation_expires_at: null
+            });
+            console.warn('[auth/confirm-email] Token expirado', JSON.stringify({
+                userId: Number(user?.id || 0) || null,
+                tokenFingerprint: confirmationTokenFingerprint
+            }));
+            return res.status(400).json({
+                error: 'Link de confirmacao expirado. Faca um novo cadastro para reenviar o email.',
+                code: 'EMAIL_CONFIRMATION_EXPIRED'
+            });
+        }
+
+        const confirmedUser = await User.consumeEmailConfirmationToken(confirmationTokenHash);
+
+        if (!confirmedUser) {
+            console.warn('[auth/confirm-email] Token invalido apos validacao (concorrencia/reuso)', JSON.stringify({
+                userId: Number(user?.id || 0) || null,
+                tokenFingerprint: confirmationTokenFingerprint
+            }));
+            return res.status(400).json({
+                error: 'Link de confirmacao invalido ou ja utilizado',
+                code: 'EMAIL_CONFIRMATION_INVALID'
+            });
+        }
+
+        console.log('[auth/confirm-email] Email confirmado com sucesso', JSON.stringify({
+            userId: Number(confirmedUser?.id || 0) || null,
+            email: confirmedUser?.email || null
+        }));
+
+        return res.json({
+            success: true,
+            message: 'Email confirmado com sucesso. Voce ja pode entrar no ZapVender.',
+            user: {
+                id: confirmedUser.id,
+                email: confirmedUser.email,
+                name: confirmedUser.name
+            }
         });
 
     } catch (error) {
@@ -9279,6 +9435,29 @@ function randomIntBetween(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function buildCampaignScheduledAtByLead(leadIds = [], assignmentMetaByLead = {}, baseStartMs = Date.now(), delayMinMs = 0, delayMaxMs = 0) {
+    const scheduledAtByLead = {};
+    const nextMsByDayOffset = new Map();
+
+    for (const leadId of leadIds) {
+        const key = String(leadId);
+        const meta = assignmentMetaByLead && typeof assignmentMetaByLead === 'object'
+            ? assignmentMetaByLead[key]
+            : null;
+        const dayOffsetRaw = Number(meta?.day_offset);
+        const dayOffset = Number.isFinite(dayOffsetRaw) && dayOffsetRaw > 0 ? Math.floor(dayOffsetRaw) : 0;
+        const bucketStartMs = baseStartMs + (dayOffset * 24 * 60 * 60 * 1000);
+        const nextMs = nextMsByDayOffset.has(dayOffset)
+            ? Number(nextMsByDayOffset.get(dayOffset))
+            : bucketStartMs;
+
+        scheduledAtByLead[key] = new Date(nextMs).toISOString();
+        nextMsByDayOffset.set(dayOffset, nextMs + randomIntBetween(delayMinMs, delayMaxMs));
+    }
+
+    return scheduledAtByLead;
+}
+
 function parseCampaignSteps(campaign) {
 
     const raw = String(campaign?.message || '').replace(/\r\n/g, '\n').trim();
@@ -9607,13 +9786,22 @@ async function queueCampaignMessages(campaign, options = {}) {
         campaign?.distribution_strategy,
         senderAccounts.length ? 'round_robin' : 'single'
     );
-    const distributionPlan = await senderAllocatorService.buildDistributionPlan({
-        leadIds,
-        campaignId: campaign.id,
-        senderAccounts,
-        strategy: distributionStrategy,
-        ownerUserId: options.ownerUserId
-    });
+    let distributionPlan;
+    try {
+        distributionPlan = await senderAllocatorService.buildDistributionPlan({
+            leadIds,
+            campaignId: campaign.id,
+            senderAccounts,
+            strategy: distributionStrategy,
+            ownerUserId: options.ownerUserId
+        });
+    } catch (error) {
+        const reason = String(error?.message || 'Falha ao alocar contas de envio');
+        throw new Error(
+            `${reason}. Destinatarios filtrados: ${leadIds.length}. ` +
+            'Revise contas de envio conectadas e o limite diario (por exemplo, 0 = sem limite).'
+        );
+    }
     const sessionAssignments = distributionPlan.assignmentsByLead || {};
     const assignmentMetaByLead = distributionPlan.assignmentMetaByLead || {};
 
@@ -9624,6 +9812,13 @@ async function queueCampaignMessages(campaign, options = {}) {
     const { minMs: delayMinMsRaw, maxMs: delayMaxMsRaw } = resolveCampaignDelayRange(campaign, 5000);
     const delayMinMs = Math.max(250, delayMinMsRaw || 0);
     const delayMaxMs = Math.max(delayMinMs, delayMaxMsRaw || 0);
+    const scheduledAtByLead = buildCampaignScheduledAtByLead(
+        leadIds,
+        assignmentMetaByLead,
+        baseStartMs,
+        delayMinMs,
+        delayMaxMs
+    );
 
     let queuedCount = 0;
 
@@ -9633,12 +9828,19 @@ async function queueCampaignMessages(campaign, options = {}) {
 
             const content = steps[stepIndex];
             const stepBaseMs = baseStartMs + (stepIndex * delayMaxMs);
-            let nextLeadAtMs = stepBaseMs;
+            const nextLeadAtMsByDayOffset = new Map([[0, stepBaseMs]]);
 
             for (let leadIndex = 0; leadIndex < leadIds.length; leadIndex++) {
 
                 const leadId = leadIds[leadIndex];
-
+                const assignmentMeta = assignmentMetaByLead[String(leadId)] || null;
+                const leadDayOffsetRaw = Number(assignmentMeta?.day_offset);
+                const leadDayOffset = Number.isFinite(leadDayOffsetRaw) && leadDayOffsetRaw > 0
+                    ? Math.floor(leadDayOffsetRaw)
+                    : 0;
+                const nextLeadAtMs = nextLeadAtMsByDayOffset.has(leadDayOffset)
+                    ? Number(nextLeadAtMsByDayOffset.get(leadDayOffset))
+                    : (stepBaseMs + (leadDayOffset * 24 * 60 * 60 * 1000));
                 const scheduledAt = new Date(nextLeadAtMs).toISOString();
 
                 await queueService.add({
@@ -9651,7 +9853,7 @@ async function queueCampaignMessages(campaign, options = {}) {
 
                     isFirstContact: stepIndex === 0,
 
-                    assignmentMeta: assignmentMetaByLead[String(leadId)] || null,
+                    assignmentMeta,
 
                     content,
 
@@ -9665,7 +9867,10 @@ async function queueCampaignMessages(campaign, options = {}) {
 
                 queuedCount += 1;
 
-                nextLeadAtMs += randomIntBetween(delayMinMs, delayMaxMs);
+                nextLeadAtMsByDayOffset.set(
+                    leadDayOffset,
+                    nextLeadAtMs + randomIntBetween(delayMinMs, delayMaxMs)
+                );
 
             }
 
@@ -9688,6 +9893,8 @@ async function queueCampaignMessages(campaign, options = {}) {
             sessionAssignments,
 
             assignmentMetaByLead,
+
+            scheduledAtByLead,
 
             isFirstContact: true
 
@@ -9837,13 +10044,20 @@ app.post('/api/campaigns', authenticate, async (req, res) => {
 
         }, { applyDefaultType: true });
 
-        const result = await Campaign.create(payload);
+        const requestedStatus = String(payload?.status || '').trim().toLowerCase();
+        const createPayload = { ...payload };
+        if (requestedStatus === 'active') {
+            // So marca como ativa apos o enfileiramento ocorrer com sucesso.
+            createPayload.status = 'draft';
+        }
+
+        const result = await Campaign.create(createPayload);
         await CampaignSenderAccount.replaceForCampaign(result.id, senderAccountsPayload);
 
         let campaign = await attachCampaignSenderAccounts(await Campaign.findById(result.id));
         let queueResult = { queued: 0, recipients: 0 };
 
-        if (campaign?.status === 'active') {
+        if (requestedStatus === 'active' && campaign) {
             const scopedUserId = getScopedUserId(req);
             queueResult = await queueCampaignMessages(campaign, {
                 assignedTo: scopedUserId || undefined,
@@ -9887,9 +10101,15 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
             ? normalizeSenderAccountsPayload(req.body?.sender_accounts ?? req.body?.senderAccounts)
             : null;
         const payload = sanitizeCampaignPayload(req.body, { applyDefaultType: false });
-        const shouldQueue = campaign.status !== 'active' && payload.status === 'active';
+        const requestedStatus = String(payload?.status || '').trim().toLowerCase();
+        const shouldQueue = campaign.status !== 'active' && requestedStatus === 'active';
+        const payloadBeforeQueue = { ...payload };
+        if (shouldQueue) {
+            // Evita deixar campanha "ativa" quando o enfileiramento falha.
+            delete payloadBeforeQueue.status;
+        }
 
-        await Campaign.update(req.params.id, payload);
+        await Campaign.update(req.params.id, payloadBeforeQueue);
         if (senderAccountsProvided) {
             await CampaignSenderAccount.replaceForCampaign(req.params.id, senderAccountsPayload || []);
         }
@@ -10451,6 +10671,17 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
 // ROTAS DE PÁGINAS
 
 // ============================================
+
+
+
+app.get('/confirm-email', (req, res) => {
+    const rawToken = String(req.query?.token || '').trim();
+    if (!rawToken) {
+        return res.redirect('/#/login?emailConfirmError=token_required');
+    }
+
+    return res.redirect(`/#/login?confirmEmailToken=${encodeURIComponent(rawToken)}`);
+});
 
 
 

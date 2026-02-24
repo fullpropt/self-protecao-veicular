@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT NOT NULL,
     password_hash TEXT NOT NULL,
+    email_confirmed INTEGER DEFAULT 1,
+    email_confirmed_at TIMESTAMPTZ,
+    email_confirmation_token_hash TEXT,
+    email_confirmation_expires_at TIMESTAMPTZ,
     role TEXT DEFAULT 'agent' CHECK(role IN ('admin', 'supervisor', 'agent')),
     avatar_url TEXT,
     is_active INTEGER DEFAULT 1,
@@ -348,9 +352,17 @@ ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS cooldown_until TIMESTAMPT
 ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);
 ALTER TABLE tags ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_user_id INTEGER REFERENCES users(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmed INTEGER DEFAULT 1;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmed_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmation_token_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmation_expires_at TIMESTAMPTZ;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
 DROP INDEX IF EXISTS users_email_key;
 ALTER TABLE tags DROP CONSTRAINT IF EXISTS tags_name_key;
+
+UPDATE users
+SET email_confirmed = 1
+WHERE email_confirmed IS NULL;
 
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_lead_id_fkey;
 ALTER TABLE messages ADD CONSTRAINT messages_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
@@ -365,6 +377,7 @@ CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_users_owner ON users(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_email_confirmation_token_hash ON users(email_confirmation_token_hash);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_active_unique ON users(email) WHERE is_active = 1;
 CREATE UNIQUE INDEX IF NOT EXISTS leads_phone_unique ON leads(phone);
 

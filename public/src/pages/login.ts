@@ -5,9 +5,18 @@ type LoginResponse = {
     refreshToken?: string;
     user?: { id?: number | string; uuid?: string; name?: string; email?: string };
     error?: string;
+    code?: string;
 };
 
-type RegisterResponse = LoginResponse;
+type RegisterResponse = LoginResponse & {
+    success?: boolean;
+    message?: string;
+    email?: string;
+    expiresInText?: string;
+    requiresEmailConfirmation?: boolean;
+    retryable?: boolean;
+    accountCreated?: boolean;
+};
 
 type AuthMode = 'login' | 'register';
 
@@ -58,13 +67,47 @@ function getRegisterErrorElement(): HTMLElement | null {
     return document.getElementById('registerErrorMsg');
 }
 
+function getAuthInfoElement(): HTMLElement | null {
+    return document.getElementById('authInfoMsg');
+}
+
 function setErrorMessage(target: HTMLElement | null, message: string) {
     if (!target) return;
+    target.classList.remove('success-message');
     target.style.display = 'block';
     target.textContent = message;
     setTimeout(() => {
         target.style.display = 'none';
     }, 4000);
+}
+
+function setInfoMessage(target: HTMLElement | null, message: string, success = true) {
+    if (!target) return;
+    target.classList.toggle('success-message', success);
+    target.style.display = 'block';
+    target.textContent = message;
+}
+
+function hideInfoMessage() {
+    const target = getAuthInfoElement();
+    if (!target) return;
+    target.style.display = 'none';
+    target.textContent = '';
+    target.classList.remove('success-message');
+}
+
+function getHashRouteQueryParams(): URLSearchParams {
+    const hash = String(window.location.hash || '');
+    const queryStart = hash.indexOf('?');
+    if (queryStart < 0) return new URLSearchParams();
+    return new URLSearchParams(hash.slice(queryStart + 1));
+}
+
+function replaceLoginHashQuery(params: URLSearchParams) {
+    const query = params.toString();
+    const nextHash = query ? `#/login?${query}` : '#/login';
+    const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+    window.history.replaceState(null, '', nextUrl);
 }
 
 function setAuthMode(mode: AuthMode) {
@@ -87,6 +130,7 @@ function setAuthMode(mode: AuthMode) {
         registerForm?.classList.remove('hidden');
         if (authTitle) authTitle.textContent = 'Criar conta';
         if (authSubtitle) authSubtitle.textContent = 'Cadastre sua conta para acessar a plataforma.';
+        hideInfoMessage();
         const registerNameInput = document.getElementById('registerName') as HTMLInputElement | null;
         registerNameInput?.focus();
     }
@@ -173,6 +217,7 @@ async function handleLogin(e: Event) {
     const identifier = getInputValue('username').trim();
     const password = getInputValue('password');
     const errorMsg = getErrorMessageElement();
+    hideInfoMessage();
 
     try {
         const response = await fetch(`${window.location.origin}/api/auth/login`, {
@@ -210,6 +255,8 @@ async function handleRegister(e: Event) {
     const password = getInputValue('registerPassword');
     const confirm = getInputValue('registerConfirm');
     const errorMsg = getRegisterErrorElement();
+    const infoMsg = getAuthInfoElement();
+    hideInfoMessage();
 
     if (!name || !email || !password || !confirm) {
         setErrorMessage(errorMsg, 'Preencha todos os campos');
@@ -241,12 +288,34 @@ async function handleRegister(e: Event) {
 
         const data: RegisterResponse = await response.json();
 
-        if (!response.ok || !data?.token) {
+        if (!response.ok) {
             throw new Error(data?.error || 'Falha ao criar conta');
         }
 
-        saveSession(data, name);
-        window.location.href = getDashboardUrl();
+        if (data?.token) {
+            saveSession(data, name);
+            window.location.href = getDashboardUrl();
+            return false;
+        }
+
+        if (data?.requiresEmailConfirmation) {
+            const loginUsername = document.getElementById('username') as HTMLInputElement | null;
+            if (loginUsername) {
+                loginUsername.value = String(data.email || email);
+            }
+
+            const registerFormEl = document.getElementById('registerForm') as HTMLFormElement | null;
+            registerFormEl?.reset();
+
+            setAuthMode('login');
+            setInfoMessage(
+                infoMsg,
+                data.message || 'Conta criada. Verifique seu email para confirmar o cadastro.'
+            );
+            return false;
+        }
+
+        throw new Error(data?.error || 'Falha ao criar conta');
     } catch (error) {
         setErrorMessage(errorMsg, error instanceof Error ? error.message : 'Falha ao criar conta');
     }
@@ -254,9 +323,67 @@ async function handleRegister(e: Event) {
     return false;
 }
 
+let confirmEmailRequestInFlight = false;
+
+async function handleConfirmEmailFromRoute() {
+    const infoMsg = getAuthInfoElement();
+    const hashParams = getHashRouteQueryParams();
+    const confirmEmailToken = String(hashParams.get('confirmEmailToken') || '').trim();
+    const confirmEmailError = String(hashParams.get('emailConfirmError') || '').trim();
+
+    if (!confirmEmailToken) {
+        if (confirmEmailError === 'token_required') {
+            setAuthMode('login');
+            setInfoMessage(infoMsg, 'Link de confirmacao invalido: token ausente.', false);
+            hashParams.delete('emailConfirmError');
+            replaceLoginHashQuery(hashParams);
+        }
+        return;
+    }
+
+    if (confirmEmailRequestInFlight) return;
+    confirmEmailRequestInFlight = true;
+
+    try {
+        setAuthMode('login');
+        setInfoMessage(infoMsg, 'Confirmando seu email...', true);
+
+        const response = await fetch(
+            `${window.location.origin}/api/auth/confirm-email?token=${encodeURIComponent(confirmEmailToken)}`,
+            { method: 'GET' }
+        );
+
+        const data = await response.json().catch(() => ({} as RegisterResponse));
+
+        if (!response.ok) {
+            setInfoMessage(infoMsg, String(data?.error || 'Falha ao confirmar email'), false);
+            return;
+        }
+
+        setInfoMessage(
+            infoMsg,
+            String(data?.message || 'Email confirmado com sucesso. Voce ja pode entrar.'),
+            true
+        );
+    } catch (error) {
+        setInfoMessage(
+            infoMsg,
+            error instanceof Error ? error.message : 'Falha ao confirmar email',
+            false
+        );
+    } finally {
+        hashParams.delete('confirmEmailToken');
+        replaceLoginHashQuery(hashParams);
+        confirmEmailRequestInFlight = false;
+    }
+}
+
 function initLogin() {
+    const hashParams = getHashRouteQueryParams();
+    const hasPendingEmailConfirmation = Boolean(String(hashParams.get('confirmEmailToken') || '').trim());
+
     // Verificar se ja esta logado
-    if (sessionStorage.getItem('selfDashboardToken')) {
+    if (!hasPendingEmailConfirmation && sessionStorage.getItem('selfDashboardToken')) {
         const expiry = sessionStorage.getItem('selfDashboardExpiry');
         if (expiry && Date.now() < parseInt(expiry)) {
             window.location.href = getDashboardUrl();
@@ -278,6 +405,7 @@ function initLogin() {
     windowAny.showRegister = () => setAuthMode('register');
 
     setAuthMode('login');
+    void handleConfirmEmailFromRoute();
 }
 
 onReady(initLogin);

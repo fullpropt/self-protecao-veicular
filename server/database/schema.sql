@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT NOT NULL,
     password_hash TEXT NOT NULL,
+    email_confirmed INTEGER DEFAULT 1,
+    email_confirmed_at TEXT,
+    email_confirmation_token_hash TEXT,
+    email_confirmation_expires_at TEXT,
     role TEXT DEFAULT 'agent' CHECK(role IN ('admin', 'supervisor', 'agent')),
     avatar_url TEXT,
     is_active INTEGER DEFAULT 1,
@@ -374,6 +378,7 @@ CREATE INDEX IF NOT EXISTS idx_leads_jid ON leads(jid);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_email_confirmation_token_hash ON users(email_confirmation_token_hash);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_active_unique ON users(email) WHERE is_active = 1;
 CREATE UNIQUE INDEX IF NOT EXISTS leads_phone_unique ON leads(phone);
 

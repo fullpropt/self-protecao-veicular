@@ -101,6 +101,9 @@ class QueueService extends EventEmitter {
         const assignmentMetaByLead = (options.assignmentMetaByLead && typeof options.assignmentMetaByLead === 'object')
             ? options.assignmentMetaByLead
             : {};
+        const scheduledAtByLead = (options.scheduledAtByLead && typeof options.scheduledAtByLead === 'object')
+            ? options.scheduledAtByLead
+            : {};
         const perLeadIsFirstContact = (options.isFirstContactByLead && typeof options.isFirstContactByLead === 'object')
             ? options.isFirstContactByLead
             : {};
@@ -141,9 +144,12 @@ class QueueService extends EventEmitter {
             const leadId = leadIds[i];
             
             // Calcular tempo de agendamento baseado na posicao na fila
-            const scheduledAt = hasValidStartAt
-                ? new Date(nextScheduledAtMs).toISOString()
-                : null;
+            const explicitScheduledAt = String(scheduledAtByLead[String(leadId)] || '').trim();
+            const scheduledAt = explicitScheduledAt || (
+                hasValidStartAt
+                    ? new Date(nextScheduledAtMs).toISOString()
+                    : null
+            );
             
             const result = await this.add({
                 leadId,
@@ -162,7 +168,7 @@ class QueueService extends EventEmitter {
             
             results.push(result);
 
-            if (hasValidStartAt) {
+            if (!explicitScheduledAt && hasValidStartAt) {
                 nextScheduledAtMs += pickStepDelay();
             }
         }
@@ -478,7 +484,7 @@ class QueueService extends EventEmitter {
         this.isProcessing = true;
 
         try {
-            const pendingMessages = await MessageQueue.getPending({ limit: 100 });
+            const pendingMessages = await MessageQueue.getPending({ limit: 100, ready_only: true });
             if (!pendingMessages || pendingMessages.length === 0) return;
 
             let selected = null;
@@ -709,4 +715,3 @@ class QueueService extends EventEmitter {
 
 module.exports = new QueueService();
 module.exports.QueueService = QueueService;
-

@@ -278,7 +278,46 @@ class SenderAllocatorService {
         this.cursorByScope.set(scope, next % modulo);
     }
 
-    pickAvailableStateIndex(order, states, scope) {
+    normalizeStateCapacityWindow(state) {
+        if (!state) return;
+        if (!Number.isFinite(Number(state.remaining))) {
+            state.day_offset = 0;
+            return;
+        }
+
+        const effectiveDailyLimit = this.toNonNegativeInt(state.effective_daily_limit, 0);
+        if (effectiveDailyLimit <= 0) {
+            state.remaining = Number.POSITIVE_INFINITY;
+            state.day_offset = 0;
+            return;
+        }
+
+        let remaining = Number(state.remaining);
+        let dayOffset = this.toNonNegativeInt(state.day_offset, 0);
+        while (remaining <= 0) {
+            dayOffset += 1;
+            remaining = effectiveDailyLimit;
+        }
+
+        state.remaining = remaining;
+        state.day_offset = dayOffset;
+    }
+
+    getMinAvailableDayOffset(states = []) {
+        let minDayOffset = null;
+        for (const state of states) {
+            if (!state) continue;
+            this.normalizeStateCapacityWindow(state);
+            if (!(Number(state.remaining) > 0)) continue;
+            const dayOffset = this.toNonNegativeInt(state.day_offset, 0);
+            if (minDayOffset === null || dayOffset < minDayOffset) {
+                minDayOffset = dayOffset;
+            }
+        }
+        return minDayOffset;
+    }
+
+    pickAvailableStateIndex(order, states, scope, targetDayOffset = null) {
         if (!order.length) return -1;
 
         const startCursor = this.getCursor(scope, order.length);
@@ -287,7 +326,9 @@ class SenderAllocatorService {
             const stateIndex = order[ringIndex];
             const state = states[stateIndex];
             if (!state) continue;
+            this.normalizeStateCapacityWindow(state);
             if (state.remaining <= 0) continue;
+            if (targetDayOffset !== null && this.toNonNegativeInt(state.day_offset, 0) !== targetDayOffset) continue;
 
             this.setCursor(scope, ringIndex + 1, order.length);
             return stateIndex;
@@ -296,12 +337,14 @@ class SenderAllocatorService {
         return -1;
     }
 
-    pickRandomAvailableStateIndex(states) {
+    pickRandomAvailableStateIndex(states, targetDayOffset = null) {
         const availableIndexes = [];
         for (let index = 0; index < states.length; index++) {
             const state = states[index];
             if (!state) continue;
+            this.normalizeStateCapacityWindow(state);
             if (state.remaining <= 0) continue;
+            if (targetDayOffset !== null && this.toNonNegativeInt(state.day_offset, 0) !== targetDayOffset) continue;
             availableIndexes.push(index);
         }
 
@@ -468,9 +511,10 @@ class SenderAllocatorService {
                 ...entry,
                 effective_daily_limit: effectiveLimit,
                 used,
-                remaining
+                remaining,
+                day_offset: 0
             };
-        }).filter((entry) => entry.remaining > 0);
+        });
 
         if (!states.length) {
             throw new Error('Todas as contas de envio atingiram o limite diário configurado');
@@ -489,14 +533,17 @@ class SenderAllocatorService {
 
         const assignLead = (leadId, state) => {
             if (!state) return;
+            this.normalizeStateCapacityWindow(state);
             const key = String(leadId);
+            const dayOffset = this.toNonNegativeInt(state.day_offset, 0);
             assignmentsByLead[key] = state.session_id;
             assignmentMetaByLead[key] = {
                 strategy: strategyUsed,
                 session_id: state.session_id,
                 campaign_id: Number(options.campaignId) || null,
                 assigned_at: new Date().toISOString(),
-                daily_limit: state.effective_daily_limit || 0
+                daily_limit: state.effective_daily_limit || 0,
+                day_offset: dayOffset
             };
             summary[state.session_id] = (summary[state.session_id] || 0) + 1;
             if (Number.isFinite(state.remaining)) {
@@ -507,9 +554,6 @@ class SenderAllocatorService {
         if (strategyUsed === 'single') {
             const state = states[0];
             for (const leadId of uniqueLeadIds) {
-                if (state.remaining <= 0) {
-                    throw new Error('Limite diário da conta de envio foi atingido durante a alocação');
-                }
                 assignLead(leadId, state);
             }
             return { strategyUsed, assignmentsByLead, assignmentMetaByLead, summary };
@@ -517,7 +561,8 @@ class SenderAllocatorService {
 
         if (strategyUsed === 'random') {
             for (const leadId of uniqueLeadIds) {
-                const selectedIndex = this.pickRandomAvailableStateIndex(states);
+                const targetDayOffset = this.getMinAvailableDayOffset(states);
+                const selectedIndex = this.pickRandomAvailableStateIndex(states, targetDayOffset);
                 if (selectedIndex < 0) {
                     throw new Error('Capacidade diária de envio esgotada para as contas selecionadas');
                 }
@@ -528,7 +573,8 @@ class SenderAllocatorService {
 
         const order = this.buildRoundRobinOrder(strategyUsed, states);
         for (const leadId of uniqueLeadIds) {
-            const selectedIndex = this.pickAvailableStateIndex(order, states, scope);
+            const targetDayOffset = this.getMinAvailableDayOffset(states);
+            const selectedIndex = this.pickAvailableStateIndex(order, states, scope, targetDayOffset);
             if (selectedIndex < 0) {
                 throw new Error('Capacidade diária de envio esgotada para as contas selecionadas');
             }

@@ -173,6 +173,12 @@ export default function Login() {
             font-size: 13px;
         }
 
+        .error-message.success-message {
+            background: rgba(22, 101, 52, 0.25);
+            border-color: rgba(74, 222, 128, 0.35);
+            color: #bbf7d0;
+        }
+
         .hidden {
             display: none;
         }
@@ -230,6 +236,10 @@ export default function Login() {
         </div>
         <h1 className="login-title" id="authTitle">Acesso ao Dashboard</h1>
         <p className="login-subtitle" id="authSubtitle">{'Entre com seu usu\u00E1rio para continuar.'}</p>
+
+        <div className="error-message" id="authInfoMsg">
+          {'Verifique seu e-mail para concluir o cadastro'}
+        </div>
 
         <div className="error-message" id="errorMsg">
           {'Usu\u00E1rio ou senha incorretos'}

@@ -2198,12 +2198,31 @@ const MessageQueue = {
         return await run(`UPDATE message_queue SET status = 'cancelled' WHERE id = ?`, [id]);
     },
     
-    async getPending() {
-        return await query(`
+    async getPending(options = {}) {
+        const params = [];
+        const readyOnly = options?.ready_only === true || options?.readyOnly === true;
+        const limit = Number(options?.limit || 0);
+
+        let sql = `
             SELECT * FROM message_queue 
-            WHERE status = 'pending' 
-            ORDER BY priority DESC, created_at ASC
-        `);
+            WHERE status = 'pending'
+        `;
+
+        if (readyOnly) {
+            sql += `
+                AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
+                AND attempts < max_attempts
+            `;
+        }
+
+        sql += ' ORDER BY priority DESC, created_at ASC';
+
+        if (Number.isFinite(limit) && limit > 0) {
+            sql += ' LIMIT ?';
+            params.push(Math.floor(limit));
+        }
+
+        return await query(sql, params);
     },
 
     async hasQueuedOrSentForCampaignLead(campaignId, leadId) {
@@ -2522,15 +2541,35 @@ const User = {
         const safeName = deriveUserName(data.name, data.email);
         const ownerUserId = Number(data.owner_user_id);
         const normalizedOwnerUserId = Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : null;
+        const hasEmailConfirmed = Object.prototype.hasOwnProperty.call(data, 'email_confirmed');
+        const hasEmailConfirmedAt = Object.prototype.hasOwnProperty.call(data, 'email_confirmed_at');
+        const hasEmailConfirmationTokenHash = Object.prototype.hasOwnProperty.call(data, 'email_confirmation_token_hash');
+        const hasEmailConfirmationExpiresAt = Object.prototype.hasOwnProperty.call(data, 'email_confirmation_expires_at');
         
         const result = await run(`
-            INSERT INTO users (uuid, name, email, password_hash, role, avatar_url, owner_user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (
+                uuid,
+                name,
+                email,
+                password_hash,
+                email_confirmed,
+                email_confirmed_at,
+                email_confirmation_token_hash,
+                email_confirmation_expires_at,
+                role,
+                avatar_url,
+                owner_user_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             safeName,
             data.email,
             data.password_hash,
+            hasEmailConfirmed ? (Number(data.email_confirmed) > 0 ? 1 : 0) : 1,
+            hasEmailConfirmedAt ? (data.email_confirmed_at || null) : null,
+            hasEmailConfirmationTokenHash ? (String(data.email_confirmation_token_hash || '').trim() || null) : null,
+            hasEmailConfirmationExpiresAt ? (data.email_confirmation_expires_at || null) : null,
             data.role || 'agent',
             data.avatar_url,
             normalizedOwnerUserId
@@ -2540,7 +2579,10 @@ const User = {
     },
     
     async findById(id) {
-        return await queryOne('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users WHERE id = ?', [id]);
+        return await queryOne(
+            'SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, email_confirmed, email_confirmed_at, last_login_at, created_at FROM users WHERE id = ?',
+            [id]
+        );
     },
 
     async findByIdWithPassword(id) {
@@ -2566,17 +2608,51 @@ const User = {
     async findActiveByEmail(email) {
         return await this.findByEmail(email, { includeInactive: false });
     },
+
+    async findByEmailConfirmationTokenHash(tokenHash) {
+        const normalizedHash = String(tokenHash || '').trim().toLowerCase();
+        if (!normalizedHash) return null;
+        return await queryOne(
+            `SELECT *
+             FROM users
+             WHERE email_confirmation_token_hash = ?
+             ORDER BY id DESC
+             LIMIT 1`,
+            [normalizedHash]
+        );
+    },
+
+    async consumeEmailConfirmationToken(tokenHash) {
+        const normalizedHash = String(tokenHash || '').trim().toLowerCase();
+        if (!normalizedHash) return null;
+        return await queryOne(
+            `UPDATE users
+             SET email_confirmed = 1,
+                 email_confirmed_at = CURRENT_TIMESTAMP,
+                 email_confirmation_token_hash = NULL,
+                 email_confirmation_expires_at = NULL,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE email_confirmation_token_hash = ?
+               AND COALESCE(email_confirmed, 1) = 0
+               AND (
+                    email_confirmation_expires_at IS NULL
+                    OR email_confirmation_expires_at >= CURRENT_TIMESTAMP
+               )
+             RETURNING id, uuid, name, email, role, avatar_url, is_active, owner_user_id, email_confirmed, email_confirmed_at, last_login_at, created_at`,
+            [normalizedHash]
+        );
+    },
     
     async updateLastLogin(id) {
         return await run("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
     },
     
     async list() {
-        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users WHERE is_active = 1 ORDER BY name ASC');
+        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, email_confirmed, email_confirmed_at, last_login_at, created_at FROM users WHERE is_active = 1 ORDER BY name ASC');
     },
 
     async listAll() {
-        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at FROM users ORDER BY name ASC');
+        return await query('SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, email_confirmed, email_confirmed_at, last_login_at, created_at FROM users ORDER BY name ASC');
     },
 
     async listByOwner(ownerUserId, options = {}) {
@@ -2586,7 +2662,7 @@ const User = {
         const includeInactive = options?.includeInactive === true;
         const whereActive = includeInactive ? '' : ' AND is_active = 1';
         return await query(
-            `SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, last_login_at, created_at
+            `SELECT id, uuid, name, email, role, avatar_url, is_active, owner_user_id, email_confirmed, email_confirmed_at, last_login_at, created_at
              FROM users
              WHERE owner_user_id = ?${whereActive}
              ORDER BY name ASC`,
@@ -2612,6 +2688,26 @@ const User = {
         if (Object.prototype.hasOwnProperty.call(data, 'role')) {
             updates.push('role = ?');
             params.push(String(data.role || '').trim().toLowerCase() || 'agent');
+        }
+
+        if (Object.prototype.hasOwnProperty.call(data, 'email_confirmed')) {
+            updates.push('email_confirmed = ?');
+            params.push(Number(data.email_confirmed) > 0 ? 1 : 0);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(data, 'email_confirmed_at')) {
+            updates.push('email_confirmed_at = ?');
+            params.push(data.email_confirmed_at || null);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(data, 'email_confirmation_token_hash')) {
+            updates.push('email_confirmation_token_hash = ?');
+            params.push(String(data.email_confirmation_token_hash || '').trim() || null);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(data, 'email_confirmation_expires_at')) {
+            updates.push('email_confirmation_expires_at = ?');
+            params.push(data.email_confirmation_expires_at || null);
         }
 
         if (Object.prototype.hasOwnProperty.call(data, 'is_active')) {
