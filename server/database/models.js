@@ -2358,6 +2358,19 @@ const MessageQueue = {
     
     async markFailed(id, errorMessage, options = {}) {
         const nextScheduledAt = options?.next_scheduled_at || options?.nextScheduledAt || null;
+        const errorText = String(errorMessage || '');
+        const normalizedError = errorText
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
+        const isDisconnectedSessionError =
+            normalizedError.includes('sess') &&
+            (normalizedError.includes('conectad') || normalizedError.includes('not connected'));
+
+        if (!nextScheduledAt && isDisconnectedSessionError) {
+            const retryAt = new Date(Date.now() + 60 * 1000).toISOString();
+            return await this.requeueTransient(id, errorMessage, retryAt);
+        }
 
         if (nextScheduledAt) {
             return await run(`
