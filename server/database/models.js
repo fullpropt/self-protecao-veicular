@@ -2380,6 +2380,20 @@ const MessageQueue = {
         `, [errorMessage, id]);
     },
 
+    async requeueTransient(id, errorMessage, nextScheduledAt) {
+        const scheduledAt = nextScheduledAt || new Date(Date.now() + 60 * 1000).toISOString();
+
+        return await run(`
+            UPDATE message_queue
+            SET status = 'pending',
+                error_message = ?,
+                scheduled_at = ?,
+                processed_at = NULL,
+                attempts = CASE WHEN attempts > 0 THEN attempts - 1 ELSE 0 END
+            WHERE id = ?
+        `, [errorMessage, scheduledAt, id]);
+    },
+
     async setAssignment(id, sessionId, assignmentMeta = null) {
         return await run(`
             UPDATE message_queue

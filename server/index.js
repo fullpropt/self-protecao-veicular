@@ -5725,7 +5725,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     if (!session || !session.isConnected) {
 
-        throw new Error('Sessão não está conectada');
+        const connectionError = new Error('Sess?o n?o est? conectada');
+        connectionError.code = 'SESSION_DISCONNECTED';
+        throw connectionError;
 
     }
 

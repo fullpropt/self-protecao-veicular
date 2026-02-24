@@ -600,15 +600,15 @@ class QueueService extends EventEmitter {
                     .normalize('NFD')
                     .replace(/[\u0300-\u036f]/g, '')
                     .toLowerCase();
+                const errorCode = String(error?.code || '').trim().toUpperCase();
                 const isDisconnectedSessionError =
-                    normalizedError.includes('sess') &&
-                    (normalizedError.includes('conectada') || normalizedError.includes('conectad'));
+                    errorCode === 'SESSION_DISCONNECTED' ||
+                    (normalizedError.includes('sess') &&
+                        (normalizedError.includes('conectada') || normalizedError.includes('conectad') || normalizedError.includes('not connected')));
 
                 if (isDisconnectedSessionError) {
                     const retryAt = new Date(Date.now() + 60 * 1000).toISOString();
-                    await MessageQueue.markFailed(messageId, error.message, {
-                        nextScheduledAt: retryAt
-                    });
+                    await MessageQueue.requeueTransient(messageId, error.message, retryAt);
                 } else {
                     await MessageQueue.markFailed(messageId, error.message);
                 }
