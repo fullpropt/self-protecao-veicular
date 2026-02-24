@@ -1,4 +1,4 @@
-// Funil page logic migrated to module
+﻿// Funil page logic migrated to module
 
 type LeadStatus = 1 | 2 | 3 | 4;
 
@@ -27,14 +27,17 @@ type SettingsResponse = {
 };
 
 const DEFAULT_FUNNEL_STAGES: FunnelStageConfig[] = [
-    { name: 'Novo', description: 'Lead recém cadastrado' },
-    { name: 'Em Andamento', description: 'Em negociação' },
-    { name: 'Concluído', description: 'Venda realizada' },
-    { name: 'Perdido', description: 'Não converteu' }
+    { name: 'Novo', description: 'Lead recÃ©m cadastrado' },
+    { name: 'Em Andamento', description: 'Em negociaÃ§Ã£o' },
+    { name: 'ConcluÃ­do', description: 'Venda realizada' },
+    { name: 'Perdido', description: 'NÃ£o converteu' }
 ];
 const FUNNEL_STAGES_STORAGE_KEY = 'zapvender_funnel_stages';
-const FUNNEL_FETCH_BATCH_SIZE = 200;
+const FUNNEL_FETCH_BATCH_SIZE = 1000;
 const FUNNEL_FETCH_MAX_PAGES = 1000;
+const FUNNEL_CACHE_TTL_MS = 10 * 60 * 1000;
+const FUNNEL_CACHE_MIN_REVALIDATE_INTERVAL_MS = 45 * 1000;
+const FUNNEL_CACHE_PREFIX = 'zapvender_funnel_cache_v1';
 
 let leads: Lead[] = [];
 let currentView: 'kanban' | 'funnel' = 'kanban';
@@ -50,6 +53,59 @@ function onReady(callback: () => void) {
 }
 
 
+function getFunnelTokenSuffix() {
+    const token = String(sessionStorage.getItem('selfDashboardToken') || '').trim();
+    return token ? token.slice(-12) : 'anon';
+}
+
+function getFunnelCacheKey() {
+    return `${FUNNEL_CACHE_PREFIX}:${getFunnelTokenSuffix()}`;
+}
+
+function readFunnelCache() {
+    try {
+        const raw = sessionStorage.getItem(getFunnelCacheKey());
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { savedAt?: number; leads?: Lead[] };
+        const savedAt = Number(parsed?.savedAt || 0);
+        if (!Number.isFinite(savedAt) || savedAt <= 0) return null;
+        if (Date.now() - savedAt > FUNNEL_CACHE_TTL_MS) return null;
+        return {
+            savedAt,
+            leads: Array.isArray(parsed?.leads) ? parsed.leads : []
+        };
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeFunnelCache(nextLeads: Lead[]) {
+    try {
+        sessionStorage.setItem(
+            getFunnelCacheKey(),
+            JSON.stringify({
+                savedAt: Date.now(),
+                leads: Array.isArray(nextLeads) ? nextLeads : []
+            })
+        );
+    } catch (_) {
+        // ignore storage failure
+    }
+}
+
+function clearFunnelCache() {
+    try {
+        sessionStorage.removeItem(getFunnelCacheKey());
+    } catch (_) {
+        // ignore storage failure
+    }
+}
+
+function applyFunnelSnapshot(nextLeads: Lead[]) {
+    leads = Array.isArray(nextLeads) ? nextLeads : [];
+    updateFunnelStats();
+    renderKanban();
+}
 function getContatosUrl(stage: number | string) {
     return `#/contatos?status=${stage}`;
 }
@@ -147,16 +203,39 @@ function initFunil() {
 
 onReady(initFunil);
 
-async function loadFunnel() {
+async function loadFunnel(options: { forceRefresh?: boolean; silent?: boolean } = {}) {
+    const forceRefresh = options.forceRefresh === true;
+    const cached = forceRefresh ? null : readFunnelCache();
+    const cacheAgeMs = cached ? Math.max(0, Date.now() - cached.savedAt) : Number.POSITIVE_INFINITY;
+    const shouldSkipRefresh = !forceRefresh && !!cached && cacheAgeMs <= FUNNEL_CACHE_MIN_REVALIDATE_INTERVAL_MS;
+
+    if (cached) {
+        applyFunnelSnapshot(cached.leads || []);
+    }
+
+    if (shouldSkipRefresh) {
+        return;
+    }
+
     try {
-        showLoading('Carregando funil...');
-        leads = await fetchAllFunnelLeads();
-        updateFunnelStats();
-        renderKanban();
-        hideLoading();
+        if (!cached) {
+            showLoading('Carregando funil...');
+        }
+
+        const fetchedLeads = await fetchAllFunnelLeads();
+        writeFunnelCache(fetchedLeads);
+        applyFunnelSnapshot(fetchedLeads);
+
+        if (!cached) {
+            hideLoading();
+        }
     } catch (error) {
-        hideLoading();
-        showToast('error', 'Erro', 'Não foi possível carregar o funil');
+        if (!cached) {
+            hideLoading();
+            showToast('error', 'Erro', 'NÃ£o foi possÃ­vel carregar o funil');
+        } else if (!options.silent) {
+            console.warn('Falha ao revalidar funil:', error);
+        }
     }
 }
 
@@ -171,7 +250,17 @@ async function fetchAllFunnelLeads() {
         params.set('limit', String(FUNNEL_FETCH_BATCH_SIZE));
         params.set('offset', String(offset));
 
-        const response: LeadsResponse = await api.get(`/api/leads?${params.toString()}`);
+        let response: LeadsResponse;
+        try {
+            response = await api.get(`/api/leads?${params.toString()}`);
+        } catch (error) {
+            if (allLeads.length > 0) {
+                console.warn('Interrompendo carregamento parcial do funil por erro de pagina:', error);
+                break;
+            }
+            throw error;
+        }
+
         const batch = Array.isArray(response?.leads) ? response.leads : [];
         const reportedTotal = Number(response?.total);
 
@@ -301,21 +390,29 @@ function initDragAndDrop() {
 }
 
 async function updateLeadStage(leadId: number, newStage: LeadStatus) {
+    const lead = leads.find((item) => item.id === leadId);
+    const previousStage = lead?.status;
+
+    if (!lead) {
+        showToast('error', 'Erro', 'Lead nÃ£o encontrado');
+        return;
+    }
+
     try {
         await api.put(`/api/leads/${leadId}`, { status: newStage });
-        
-        const lead = leads.find(l => l.id === leadId);
-        if (lead) lead.status = newStage;
-        
+        lead.status = newStage;
+        writeFunnelCache(leads);
         updateFunnelStats();
         renderKanban();
         showToast('success', 'Sucesso', 'Lead movido!');
     } catch (error) {
-        const lead = leads.find(l => l.id === leadId);
-        if (lead) lead.status = newStage;
+        if (previousStage !== undefined) {
+            lead.status = previousStage;
+        }
+        clearFunnelCache();
         updateFunnelStats();
         renderKanban();
-        showToast('success', 'Sucesso', 'Lead movido!');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel mover o lead');
     }
 }
 
@@ -340,7 +437,7 @@ function viewLead(id: number) {
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label class="form-label">Veículo</label>
+                <label class="form-label">VeÃ­culo</label>
                 <p>${currentLead.vehicle || '-'}</p>
             </div>
             <div class="form-group">
@@ -353,7 +450,7 @@ function viewLead(id: number) {
             <select class="form-select" id="leadStatus" onchange="changeLeadStatus(${currentLead.id}, this.value)">
                 <option value="1" ${currentLead.status === 1 ? 'selected' : ''}>Novo</option>
                 <option value="2" ${currentLead.status === 2 ? 'selected' : ''}>Em Andamento</option>
-                <option value="3" ${currentLead.status === 3 ? 'selected' : ''}>Concluído</option>
+                <option value="3" ${currentLead.status === 3 ? 'selected' : ''}>ConcluÃ­do</option>
                 <option value="4" ${currentLead.status === 4 ? 'selected' : ''}>Perdido</option>
             </select>
         </div>
@@ -426,9 +523,9 @@ async function saveStagesConfig() {
         await api.put('/api/settings', {
             funnel_stages: nextStages
         });
-        showToast('success', 'Sucesso', 'Configura��es salvas!');
+        showToast('success', 'Sucesso', 'Configurações salvas!');
     } catch (_) {
-        showToast('warning', 'Aviso', 'Salvo localmente, mas n�o foi poss�vel sincronizar no servidor');
+        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
     }
 
     closeModal('configModal');
