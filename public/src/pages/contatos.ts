@@ -59,6 +59,12 @@ type BulkLeadsDeleteResponse = {
     errors?: Array<{ id?: number; error?: string }>;
 };
 
+type ContactsCachePayload = {
+    savedAt: number;
+    contacts?: Contact[];
+    total?: number;
+};
+
 let allContacts: Contact[] = [];
 let filteredContacts: Contact[] = [];
 let selectedContacts: number[] = [];
@@ -76,10 +82,76 @@ const CONTACTS_FETCH_MAX_PAGES = 200;
 const CONTACTS_IMPORT_BATCH_SIZE = 200;
 const CONTACTS_BULK_DELETE_BATCH_SIZE = 1000;
 const BASE_CONTACTS_TABLE_COLUMNS = 7;
+const CONTACTS_CACHE_TTL_MS = 10 * 60 * 1000;
+const CONTACTS_CACHE_MIN_REVALIDATE_INTERVAL_MS = 45 * 1000;
+const CONTACTS_CACHE_PREFIX = 'zapvender_contacts_cache_v2';
+const FUNNEL_CACHE_PREFIX = 'zapvender_funnel_leads_cache_v1';
 
 function isContactsRouteActive() {
     const hash = String(window.location.hash || '').toLowerCase();
     return hash.startsWith('#/contatos');
+}
+
+function getContactsTokenSuffix() {
+    const token = String(sessionStorage.getItem('selfDashboardToken') || '').trim();
+    return token ? token.slice(-12) : 'anon';
+}
+
+function getContactsCacheKey(sessionFilter = contactsSessionFilter) {
+    const normalizedFilter = sanitizeSessionId(sessionFilter, 'all');
+    return `${CONTACTS_CACHE_PREFIX}:${getContactsTokenSuffix()}:${normalizedFilter}`;
+}
+
+function readContactsCache(sessionFilter = contactsSessionFilter): ContactsCachePayload | null {
+    try {
+        const raw = sessionStorage.getItem(getContactsCacheKey(sessionFilter));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as ContactsCachePayload;
+        const savedAt = Number(parsed?.savedAt || 0);
+        const contacts = Array.isArray(parsed?.contacts) ? parsed.contacts : [];
+        if (!Number.isFinite(savedAt) || savedAt <= 0) return null;
+        if (Date.now() - savedAt > CONTACTS_CACHE_TTL_MS) return null;
+        return {
+            savedAt,
+            contacts,
+            total: Number(parsed?.total || contacts.length || 0)
+        };
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeContactsCache(contacts: Contact[], sessionFilter = contactsSessionFilter) {
+    try {
+        const list = Array.isArray(contacts) ? contacts : [];
+        sessionStorage.setItem(
+            getContactsCacheKey(sessionFilter),
+            JSON.stringify({
+                savedAt: Date.now(),
+                total: list.length,
+                contacts: list
+            } satisfies ContactsCachePayload)
+        );
+    } catch (_) {
+        // ignore storage failure
+    }
+}
+
+function clearLeadViewCaches() {
+    const suffix = getContactsTokenSuffix();
+    const contactsPrefix = `${CONTACTS_CACHE_PREFIX}:${suffix}:`;
+    const funnelPrefix = `${FUNNEL_CACHE_PREFIX}:${suffix}`;
+    const toRemove: string[] = [];
+
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+        const key = String(sessionStorage.key(index) || '');
+        if (!key) continue;
+        if (key.startsWith(contactsPrefix) || key.startsWith(funnelPrefix)) {
+            toRemove.push(key);
+        }
+    }
+
+    toRemove.forEach((key) => sessionStorage.removeItem(key));
 }
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
@@ -494,32 +566,57 @@ async function fetchAllContacts() {
     return contacts;
 }
 
-async function loadContacts() {
+function applyContactsSnapshot(nextContacts: Contact[]) {
+    allContacts = Array.isArray(nextContacts) ? nextContacts : [];
+    pruneSelectedContactsByCurrentDataset();
+    filteredContacts = [...allContacts];
+    updateStats();
+    renderContacts();
+    applyUrlFilters();
+}
+
+async function loadContacts(options: { forceRefresh?: boolean; silent?: boolean } = {}) {
     const canRenderContacts = () => isContactsRouteActive() && Boolean(document.getElementById('contactsTableBody'));
     const shouldHandleUi = canRenderContacts();
+    const forceRefresh = options.forceRefresh === true;
+    const cached = forceRefresh ? null : readContactsCache();
+    const cacheAgeMs = cached ? Math.max(0, Date.now() - cached.savedAt) : Number.POSITIVE_INFINITY;
+    const shouldSkipRefresh = !forceRefresh && !!cached && cacheAgeMs <= CONTACTS_CACHE_MIN_REVALIDATE_INTERVAL_MS;
+
+    if (cached && canRenderContacts()) {
+        applyContactsSnapshot(cached.contacts || []);
+    }
+
+    if (shouldSkipRefresh) {
+        return;
+    }
 
     try {
-        if (shouldHandleUi) {
+        if (shouldHandleUi && !cached) {
             showLoading('Carregando contatos...');
         }
-        allContacts = await fetchAllContacts();
+
+        const fetchedContacts = await fetchAllContacts();
+        writeContactsCache(fetchedContacts);
+
         if (!canRenderContacts()) {
             return;
         }
-        pruneSelectedContactsByCurrentDataset();
-        filteredContacts = [...allContacts];
-        updateStats();
-        renderContacts();
-        applyUrlFilters();
-        if (shouldHandleUi) {
+
+        applyContactsSnapshot(fetchedContacts);
+
+        if (shouldHandleUi && !cached) {
             hideLoading();
         }
     } catch (error) {
-        if (shouldHandleUi) {
+        if (shouldHandleUi && !cached) {
             hideLoading();
         }
-        if (canRenderContacts()) {
+
+        if (!cached && canRenderContacts()) {
             showToast('error', 'Erro', 'Não foi possível carregar os contatos');
+        } else if (!options.silent) {
+            console.warn('Falha ao revalidar cache de contatos:', error);
         }
     }
 }
@@ -879,7 +976,8 @@ async function saveContact() {
         closeModal('addContactModal');
         (document.getElementById('addContactForm') as HTMLFormElement | null)?.reset();
         applyCustomFieldsValues('contact-custom-field', {});
-        await loadContacts();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
         showToast('success', 'Sucesso', 'Contato adicionado!');
     } catch (error) {
         hideLoading();
@@ -943,7 +1041,8 @@ async function updateContact() {
         showLoading('Salvando...');
         await api.put(`/api/leads/${id}`, data);
         closeModal('editContactModal');
-        await loadContacts();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
         showToast('success', 'Sucesso', 'Contato atualizado!');
     } catch (error) {
         hideLoading();
@@ -956,7 +1055,8 @@ async function deleteContact(id: number) {
     try {
         showLoading('Excluindo...');
         await api.delete(`/api/leads/${id}`);
-        await loadContacts();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
         showToast('success', 'Sucesso', 'Contato excluído!');
     } catch (error) {
         hideLoading();
@@ -1064,7 +1164,8 @@ async function bulkDelete() {
         }
 
         clearSelection();
-        await loadContacts();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
 
         const summary = [`${deleted} removidos`];
         if (skipped > 0) summary.push(`${skipped} ignorados`);
@@ -1183,7 +1284,8 @@ async function importContacts() {
         closeModal('importModal');
         const importTag = document.getElementById('importTag') as HTMLSelectElement | null;
         if (importTag) importTag.value = '';
-        await loadContacts();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
 
         if ((imported + updated) <= 0 && failed > 0) {
             showToast('error', 'Erro', `Falha na importação (${failed} com erro)`);
