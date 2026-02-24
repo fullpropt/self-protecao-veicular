@@ -100,6 +100,7 @@ let campaignContactFieldsCache: ContactFieldDefinition[] = [];
 let campaignMessageVariableGlobalEventsBound = false;
 const DEFAULT_DELAY_MIN_SECONDS = 5;
 const DEFAULT_DELAY_MAX_SECONDS = 15;
+const CAMPAIGNS_CACHE_TTL_MS = 60 * 1000;
 const FIXED_CAMPAIGN_MESSAGE_VARIABLES: ReadonlyArray<CampaignMessageVariable> = Object.freeze([
     { key: 'nome', label: 'Nome do contato' },
     { key: 'telefone', label: 'Telefone' },
@@ -107,6 +108,37 @@ const FIXED_CAMPAIGN_MESSAGE_VARIABLES: ReadonlyArray<CampaignMessageVariable> =
     { key: 'veiculo', label: 'Veículo' },
     { key: 'placa', label: 'Placa' }
 ]);
+
+function getCampaignsCacheKey() {
+    const token = String(sessionStorage.getItem('selfDashboardToken') || '').trim();
+    const tokenSuffix = token ? token.slice(-12) : 'anon';
+    return `zapvender_campaigns_cache_v1:${tokenSuffix}`;
+}
+
+function readCampaignsCache() {
+    try {
+        const raw = sessionStorage.getItem(getCampaignsCacheKey());
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { savedAt?: number; campaigns?: Campaign[] };
+        const savedAt = Number(parsed?.savedAt || 0);
+        if (!Number.isFinite(savedAt) || savedAt <= 0) return null;
+        if (Date.now() - savedAt > CAMPAIGNS_CACHE_TTL_MS) return null;
+        return Array.isArray(parsed?.campaigns) ? parsed.campaigns : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function writeCampaignsCache(nextCampaigns: Campaign[]) {
+    try {
+        sessionStorage.setItem(getCampaignsCacheKey(), JSON.stringify({
+            savedAt: Date.now(),
+            campaigns: Array.isArray(nextCampaigns) ? nextCampaigns : []
+        }));
+    } catch (_) {
+        // ignore storage failure
+    }
+}
 
 function getCampaignStatusLabel(status: CampaignStatus) {
     if (status === 'active') return 'Ativa';
@@ -803,16 +835,37 @@ function shouldUseLocalCampaignFallback(error: unknown) {
 }
 
 async function loadCampaigns() {
-    try {
-        showLoading('Carregando campanhas...');
-        const response: CampaignResponse = await api.get('/api/campaigns');
-        campaigns = response.campaigns || [];
+    const cachedCampaigns = readCampaignsCache();
+    if (Array.isArray(cachedCampaigns) && cachedCampaigns.length > 0) {
+        campaigns = cachedCampaigns;
         updateStats();
         renderCampaigns();
-        hideLoading();
+    }
+
+    const shouldShowLoading = !cachedCampaigns || cachedCampaigns.length === 0;
+    try {
+        if (shouldShowLoading) {
+            showLoading('Carregando campanhas...');
+        }
+        const response: CampaignResponse = await api.get('/api/campaigns');
+        campaigns = response.campaigns || [];
+        writeCampaignsCache(campaigns);
+        updateStats();
+        renderCampaigns();
+        if (shouldShowLoading) {
+            hideLoading();
+        }
     } catch (error) {
-        hideLoading();
-        // Se nÃ£o houver endpoint, mostrar campanhas de exemplo
+        if (shouldShowLoading) {
+            hideLoading();
+        }
+        if (Array.isArray(cachedCampaigns) && cachedCampaigns.length > 0) {
+            if (!shouldUseLocalCampaignFallback(error)) {
+                showToast('warning', 'Aviso', 'Falha ao atualizar campanhas em segundo plano');
+            }
+            return;
+        }
+        // Se não houver endpoint, mostrar campanhas de exemplo
         campaigns = [
             {
                 id: 1,
@@ -853,6 +906,7 @@ async function loadCampaigns() {
         ];
         updateStats();
         renderCampaigns();
+        writeCampaignsCache(campaigns);
     }
 }
 
