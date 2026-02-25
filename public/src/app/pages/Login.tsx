@@ -143,6 +143,27 @@ export default function Login() {
             background: rgba(34, 56, 84, 0.94);
         }
 
+        .remember-row {
+            margin-bottom: 14px;
+        }
+
+        .remember-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: #c8d7ec;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .remember-checkbox {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #1aae5e;
+        }
+
         .btn-login {
             width: 100%;
             padding: 15px;
@@ -262,6 +283,13 @@ export default function Login() {
           <div className="form-group">
             <label className="form-label">Senha</label>
             <input type="password" className="form-input" id="password" placeholder="Digite sua senha" required />
+          </div>
+
+          <div className="remember-row">
+            <label className="remember-label" htmlFor="rememberSession">
+              <input type="checkbox" className="remember-checkbox" id="rememberSession" />
+              Manter sessão salva
+            </label>
           </div>
 
           <button type="submit" className="btn-login">Entrar</button>

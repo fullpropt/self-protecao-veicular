@@ -43,6 +43,7 @@ const APP_LOCAL_STORAGE_PREFIXES = [
     'whatsapp_'
 ];
 const LAST_IDENTITY_STORAGE_KEY = 'self_last_identity';
+const REMEMBER_SESSION_PREF_STORAGE_KEY = 'self_dashboard_remember_session';
 
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
@@ -177,7 +178,15 @@ function clearAppLocalStorageState() {
     toRemove.forEach((key) => localStorage.removeItem(key));
 }
 
-function saveSession(data: LoginResponse, fallbackName: string) {
+function readRememberSessionPreference() {
+    return localStorage.getItem(REMEMBER_SESSION_PREF_STORAGE_KEY) === '1';
+}
+
+function persistRememberSessionPreference(remember: boolean) {
+    localStorage.setItem(REMEMBER_SESSION_PREF_STORAGE_KEY, remember ? '1' : '0');
+}
+
+function saveSession(data: LoginResponse, fallbackName: string, rememberSession = readRememberSessionPreference()) {
     if (!data?.token) return;
     const previousIdentity = normalizeIdentityPart(localStorage.getItem(LAST_IDENTITY_STORAGE_KEY));
     const nextIdentity = resolveSessionIdentity(data, fallbackName);
@@ -211,7 +220,12 @@ function saveSession(data: LoginResponse, fallbackName: string) {
         localStorage.removeItem(LAST_IDENTITY_STORAGE_KEY);
     }
     sessionStorage.setItem('selfDashboardExpiry', String(Date.now() + (8 * 60 * 60 * 1000)));
-    writePersistedAuthSessionFromSessionStorage();
+    persistRememberSessionPreference(rememberSession);
+    if (rememberSession) {
+        writePersistedAuthSessionFromSessionStorage();
+    } else {
+        localStorage.removeItem('self_dashboard_auth_v1');
+    }
 }
 
 async function handleLogin(e: Event) {
@@ -219,6 +233,7 @@ async function handleLogin(e: Event) {
 
     const identifier = getInputValue('username').trim();
     const password = getInputValue('password');
+    const rememberSession = (document.getElementById('rememberSession') as HTMLInputElement | null)?.checked === true;
     const errorMsg = getErrorMessageElement();
     hideInfoMessage();
 
@@ -240,7 +255,7 @@ async function handleLogin(e: Event) {
             throw new Error(data?.error || 'Credenciais inv\u00E1lidas');
         }
 
-        saveSession(data, identifier);
+        saveSession(data, identifier, rememberSession);
 
         window.location.href = getDashboardUrl();
     } catch (error) {
@@ -412,6 +427,10 @@ async function initLogin() {
     windowAny.showRegister = () => setAuthMode('register');
 
     setAuthMode('login');
+    const rememberInput = document.getElementById('rememberSession') as HTMLInputElement | null;
+    if (rememberInput) {
+        rememberInput.checked = readRememberSessionPreference();
+    }
     void handleConfirmEmailFromRoute();
 }
 
