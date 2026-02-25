@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
 type ContatosGlobals = {
   initContacts?: () => void;
-  loadContacts?: () => void;
+  loadContacts?: (options?: { forceRefresh?: boolean; silent?: boolean; bypassMinRevalidate?: boolean }) => void;
   changeContactsSessionFilter?: (sessionId: string) => void;
   exportContacts?: () => void;
   openModal?: (id: string) => void;
@@ -164,7 +164,7 @@ export default function Contatos() {
             <p>Gerencie todos os seus leads e contatos</p>
           </div>
           <div className="page-actions">
-            <button className="btn btn-outline" onClick={() => globals.loadContacts?.()}>
+            <button className="btn btn-outline" onClick={() => globals.loadContacts?.({ forceRefresh: true })}>
               <span className="icon icon-refresh icon-sm"></span> Atualizar
             </button>
             <button className="btn btn-outline" onClick={() => globals.openModal?.('importModal')}>

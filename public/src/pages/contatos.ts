@@ -75,6 +75,12 @@ type ContactsCachePayload = {
     total?: number;
 };
 
+type LoadContactsOptions = {
+    forceRefresh?: boolean;
+    silent?: boolean;
+    bypassMinRevalidate?: boolean;
+};
+
 let allContacts: Contact[] = [];
 let filteredContacts: Contact[] = [];
 let selectedContacts: number[] = [];
@@ -96,6 +102,7 @@ const CONTACTS_CACHE_TTL_MS = 10 * 60 * 1000;
 const CONTACTS_CACHE_MIN_REVALIDATE_INTERVAL_MS = 45 * 1000;
 const CONTACTS_CACHE_PREFIX = 'zapvender_contacts_cache_v2';
 const FUNNEL_CACHE_PREFIX = 'zapvender_funnel_leads_cache_v1';
+let contactsBootstrappedOnce = false;
 
 function getContactsTotalPages(total = filteredContacts.length) {
     return Math.max(1, Math.ceil(Math.max(0, Number(total) || 0) / perPage));
@@ -544,7 +551,12 @@ function initContacts() {
     bindContactsPaginationControls();
     loadContactFields();
     void loadContactsSessionFilters().finally(() => {
-        loadContacts();
+        void loadContacts({
+            // Ao reabrir a aba, atualiza em background mesmo com cache recente.
+            bypassMinRevalidate: true,
+            silent: contactsBootstrappedOnce
+        });
+        contactsBootstrappedOnce = true;
     });
     loadTags();
     loadTemplates();
@@ -617,13 +629,14 @@ function applyContactsSnapshot(nextContacts: Contact[]) {
     applyUrlFilters();
 }
 
-async function loadContacts(options: { forceRefresh?: boolean; silent?: boolean } = {}) {
+async function loadContacts(options: LoadContactsOptions = {}) {
     const canRenderContacts = () => isContactsRouteActive() && Boolean(document.getElementById('contactsTableBody'));
     const shouldHandleUi = canRenderContacts();
     const forceRefresh = options.forceRefresh === true;
+    const bypassMinRevalidate = options.bypassMinRevalidate === true;
     const cached = forceRefresh ? null : readContactsCache();
     const cacheAgeMs = cached ? Math.max(0, Date.now() - cached.savedAt) : Number.POSITIVE_INFINITY;
-    const shouldSkipRefresh = !forceRefresh && !!cached && cacheAgeMs <= CONTACTS_CACHE_MIN_REVALIDATE_INTERVAL_MS;
+    const shouldSkipRefresh = !forceRefresh && !bypassMinRevalidate && !!cached && cacheAgeMs <= CONTACTS_CACHE_MIN_REVALIDATE_INTERVAL_MS;
 
     if (cached && canRenderContacts()) {
         applyContactsSnapshot(cached.contacts || []);
