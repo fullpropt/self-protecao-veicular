@@ -884,6 +884,8 @@ const sessionInitLocks = new Set();
 const pendingCiphertextRecoveries = new Map();
 const pendingLidResolutionRecoveries = new Map();
 const recoveredFlowMessageIds = new Map();
+const sessionReconnectCatchupTimers = new Map();
+const sessionReconnectCatchupInFlight = new Set();
 const reconnectInFlight = new Set();
 const FLOW_RECOVERY_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_DELAY_MS || '', 10) || 2500;
 const FLOW_RECOVERY_WINDOW_MS = parseInt(process.env.FLOW_RECOVERY_WINDOW_MS || '', 10) || (5 * 60 * 1000);
@@ -894,6 +896,11 @@ const LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS = parseInt(process.env.LID_RESOLUTION
 const LID_RESOLUTION_RECOVERY_BASE_DELAY_MS = parseInt(process.env.LID_RESOLUTION_RECOVERY_BASE_DELAY_MS || '', 10) || 1200;
 const LID_RESOLUTION_RECOVERY_MAX_DELAY_MS = parseInt(process.env.LID_RESOLUTION_RECOVERY_MAX_DELAY_MS || '', 10) || 9000;
 const BAILEYS_CIPHERTEXT_STUB_TYPE = 1;
+const WHATSAPP_RECONNECT_CATCHUP_ENABLED = parseBooleanEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_ENABLED, true);
+const WHATSAPP_RECONNECT_CATCHUP_DELAY_MS = parsePositiveIntEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_DELAY_MS, 7000);
+const WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS = parsePositiveIntEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS, 40);
+const WHATSAPP_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION = parsePositiveIntEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION, 80);
+const WHATSAPP_RECONNECT_CATCHUP_MAX_RUNTIME_MS = parsePositiveIntEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_MAX_RUNTIME_MS, 45000);
 
 senderAllocatorService.setRuntimeSessionsGetter(() => sessions);
 senderAllocatorService.setDefaultSessionId(DEFAULT_WHATSAPP_SESSION_ID);
@@ -3089,6 +3096,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
     const sessionPath = path.join(SESSIONS_DIR, sessionId);
 
     const previousSession = sessions.get(sessionId);
+    clearSessionReconnectCatchupTimer(sessionId);
     if (previousSession?.socket) {
         stopSessionHealthMonitor(previousSession);
         try {
@@ -3377,6 +3385,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
             
 
             if (connection === 'close') {
+                clearSessionReconnectCatchupTimer(sessionId);
 
                 if (qrTimeouts.has(sessionId)) {
 
@@ -3604,6 +3613,10 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                         triggerChatSync(sessionId, sock, store);
 
                     }, 1500);
+                    scheduleSessionReconnectCatchup(sessionId, {
+                        trigger: attempt > 0 ? 'reconnect-open' : 'initial-open',
+                        expectedSocket: sock
+                    });
 
                     
 
@@ -5547,6 +5560,216 @@ async function backfillConversationMessagesFromStore(options = {}) {
 
     console.log(`[${sessionId}] Backfill local recuperou ${inserted} mensagem(ns) e atualizou ${hydratedMedia} mídia(s) na conversa ${conversation.id}`);
     return createStoreBackfillResult(inserted, hydratedMedia);
+}
+
+function clearSessionReconnectCatchupTimer(sessionId) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return;
+
+    const scheduled = sessionReconnectCatchupTimers.get(normalizedSessionId);
+    if (scheduled?.timer) {
+        clearTimeout(scheduled.timer);
+    }
+    sessionReconnectCatchupTimers.delete(normalizedSessionId);
+}
+
+async function listRecentConversationsForSessionCatchup(sessionId, limit = WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return [];
+
+    const safeLimit = Math.max(1, Math.min(Number(limit) || WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS, 200));
+    return await query(`
+        SELECT
+            c.id AS conversation_id,
+            c.lead_id AS conversation_lead_id,
+            c.session_id AS conversation_session_id,
+            c.unread_count AS conversation_unread_count,
+            c.metadata AS conversation_metadata,
+            c.assigned_to AS conversation_assigned_to,
+            c.created_at AS conversation_created_at,
+            c.updated_at AS conversation_updated_at,
+            l.id AS lead_id,
+            l.phone AS lead_phone,
+            l.jid AS lead_jid,
+            l.name AS lead_name,
+            l.owner_user_id AS lead_owner_user_id
+        FROM conversations c
+        INNER JOIN leads l ON l.id = c.lead_id
+        WHERE c.session_id = ?
+        ORDER BY
+            CASE WHEN COALESCE(c.unread_count, 0) > 0 THEN 0 ELSE 1 END ASC,
+            COALESCE(c.updated_at, c.created_at) DESC,
+            c.id DESC
+        LIMIT ${safeLimit}
+    `, [normalizedSessionId]);
+}
+
+function mapCatchupConversationRow(row) {
+    if (!row) return { conversation: null, lead: null };
+
+    return {
+        conversation: {
+            id: Number(row.conversation_id || 0) || null,
+            lead_id: Number(row.conversation_lead_id || 0) || null,
+            session_id: row.conversation_session_id || null,
+            unread_count: Number(row.conversation_unread_count || 0) || 0,
+            metadata: row.conversation_metadata || null,
+            assigned_to: row.conversation_assigned_to || null,
+            created_at: row.conversation_created_at || null,
+            updated_at: row.conversation_updated_at || null
+        },
+        lead: {
+            id: Number(row.lead_id || 0) || null,
+            phone: row.lead_phone || null,
+            jid: row.lead_jid || null,
+            name: row.lead_name || null,
+            owner_user_id: Number(row.lead_owner_user_id || 0) || null
+        }
+    };
+}
+
+async function runSessionReconnectCatchup(sessionId, options = {}) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const trigger = String(options.trigger || 'reconnect-open').trim() || 'reconnect-open';
+    const expectedSocket = options.expectedSocket || null;
+
+    if (!WHATSAPP_RECONNECT_CATCHUP_ENABLED) return { skipped: 'disabled' };
+    if (!normalizedSessionId) return { skipped: 'invalid_session' };
+    if (sessionReconnectCatchupInFlight.has(normalizedSessionId)) return { skipped: 'in_flight' };
+
+    sessionReconnectCatchupInFlight.add(normalizedSessionId);
+    const startedAtMs = Date.now();
+    const summary = {
+        sessionId: normalizedSessionId,
+        trigger,
+        conversationsScanned: 0,
+        conversationsUpdated: 0,
+        messagesInserted: 0,
+        mediaHydrated: 0,
+        skipped: null,
+        elapsedMs: 0
+    };
+
+    try {
+        const runtimeSession = sessions.get(normalizedSessionId);
+        if (!runtimeSession) {
+            summary.skipped = 'session_not_found';
+            return summary;
+        }
+        if (expectedSocket && runtimeSession.socket !== expectedSocket) {
+            summary.skipped = 'stale_socket';
+            return summary;
+        }
+        if (!runtimeSession.isConnected) {
+            summary.skipped = 'session_not_connected';
+            return summary;
+        }
+        if (!runtimeSession.store || typeof runtimeSession.store.loadMessages !== 'function') {
+            summary.skipped = 'store_unavailable';
+            return summary;
+        }
+
+        try {
+            await triggerChatSync(normalizedSessionId, runtimeSession.socket, runtimeSession.store, 0);
+        } catch (syncError) {
+            console.warn(`[${normalizedSessionId}] Falha no sync preliminar do catch-up:`, syncError.message);
+        }
+
+        const rows = await listRecentConversationsForSessionCatchup(
+            normalizedSessionId,
+            WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS
+        );
+        if (!Array.isArray(rows) || rows.length === 0) {
+            summary.skipped = 'no_conversations';
+            return summary;
+        }
+
+        for (const row of rows) {
+            summary.conversationsScanned += 1;
+
+            if ((Date.now() - startedAtMs) > WHATSAPP_RECONNECT_CATCHUP_MAX_RUNTIME_MS) {
+                summary.skipped = 'runtime_limit_reached';
+                break;
+            }
+
+            const latestRuntimeSession = sessions.get(normalizedSessionId);
+            if (!latestRuntimeSession || !latestRuntimeSession.isConnected) {
+                summary.skipped = 'session_disconnected';
+                break;
+            }
+            if (expectedSocket && latestRuntimeSession.socket !== expectedSocket) {
+                summary.skipped = 'stale_socket';
+                break;
+            }
+
+            const { conversation, lead } = mapCatchupConversationRow(row);
+            if (!conversation?.id || !lead?.id) continue;
+
+            const backfillResult = await backfillConversationMessagesFromStore({
+                sessionId: normalizedSessionId,
+                conversation,
+                lead,
+                contactJid: lead.jid || '',
+                limit: WHATSAPP_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION
+            });
+
+            const inserted = Number(backfillResult?.inserted || 0);
+            const hydratedMedia = Number(backfillResult?.hydratedMedia || 0);
+            if (inserted > 0 || hydratedMedia > 0) {
+                summary.conversationsUpdated += 1;
+                summary.messagesInserted += Math.max(0, inserted);
+                summary.mediaHydrated += Math.max(0, hydratedMedia);
+            }
+        }
+
+        summary.elapsedMs = Math.max(0, Date.now() - startedAtMs);
+        console.log(
+            `[${normalizedSessionId}] Catch-up pos-reconexao (${trigger}) ` +
+            `conversas=${summary.conversationsScanned}/${WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS}, ` +
+            `atualizadas=${summary.conversationsUpdated}, mensagens=${summary.messagesInserted}, ` +
+            `midias=${summary.mediaHydrated}, skipped=${summary.skipped || 'none'}, ${summary.elapsedMs}ms`
+        );
+        return summary;
+    } catch (error) {
+        summary.elapsedMs = Math.max(0, Date.now() - startedAtMs);
+        console.error(`[${normalizedSessionId}] Falha no catch-up pos-reconexao:`, error.message);
+        throw error;
+    } finally {
+        sessionReconnectCatchupInFlight.delete(normalizedSessionId);
+    }
+}
+
+function scheduleSessionReconnectCatchup(sessionId, options = {}) {
+    if (!WHATSAPP_RECONNECT_CATCHUP_ENABLED) return;
+
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return;
+
+    clearSessionReconnectCatchupTimer(normalizedSessionId);
+
+    const delayMs = Math.max(
+        300,
+        Number(options.delayMs || WHATSAPP_RECONNECT_CATCHUP_DELAY_MS) || WHATSAPP_RECONNECT_CATCHUP_DELAY_MS
+    );
+    const expectedSocket = options.expectedSocket || null;
+    const trigger = String(options.trigger || 'reconnect-open').trim() || 'reconnect-open';
+
+    const timer = setTimeout(() => {
+        sessionReconnectCatchupTimers.delete(normalizedSessionId);
+        runSessionReconnectCatchup(normalizedSessionId, {
+            trigger,
+            expectedSocket
+        }).catch((error) => {
+            console.error(`[${normalizedSessionId}] Falha no catch-up agendado pos-reconexao:`, error.message);
+        });
+    }, delayMs);
+
+    sessionReconnectCatchupTimers.set(normalizedSessionId, {
+        timer,
+        scheduledAtMs: Date.now(),
+        trigger,
+        expectedSocket
+    });
 }
 
 function parseJsonSafe(value, fallback = null) {
