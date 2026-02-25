@@ -768,13 +768,6 @@ export default function Configuracoes() {
                                    <option value="admin">Administrador</option>
                                </select>
                           </div>
-                          <div className="form-group">
-                              <label className="form-label">Status</label>
-                              <select className="form-select" id="editUserActive">
-                                  <option value="1">Ativo</option>
-                                  <option value="0">Inativo</option>
-                              </select>
-                          </div>
                       </div>
                   </div>
                   <div className="modal-footer">

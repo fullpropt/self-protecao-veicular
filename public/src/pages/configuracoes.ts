@@ -1509,13 +1509,11 @@ function openEditUserModal(id: number) {
     const editUserName = document.getElementById('editUserName') as HTMLInputElement | null;
     const editUserEmail = document.getElementById('editUserEmail') as HTMLInputElement | null;
     const editUserRole = document.getElementById('editUserRole') as HTMLSelectElement | null;
-    const editUserActive = document.getElementById('editUserActive') as HTMLSelectElement | null;
 
     if (editUserId) editUserId.value = String(userId);
     if (editUserName) editUserName.value = String(user.name || '');
     if (editUserEmail) editUserEmail.value = String(user.email || '');
     if (editUserRole) editUserRole.value = normalizeUserRole(user.role);
-    if (editUserActive) editUserActive.value = isManagedUserActive(user) ? '1' : '0';
 
     const isAdmin = isCurrentUserAdmin();
     const lockPrimaryForCurrent = isPrimaryAdmin && !isCurrentUserOwnerAdmin();
@@ -1525,7 +1523,6 @@ function openEditUserModal(id: number) {
         editUserEmail.readOnly = true;
     }
     if (editUserRole) editUserRole.disabled = !isAdmin || isPrimaryAdmin;
-    if (editUserActive) editUserActive.disabled = !isAdmin || isPrimaryAdmin;
 
     openModal('editUserModal');
 }
@@ -1534,7 +1531,6 @@ async function updateUser() {
     const editUserId = document.getElementById('editUserId') as HTMLInputElement | null;
     const editUserName = document.getElementById('editUserName') as HTMLInputElement | null;
     const editUserRole = document.getElementById('editUserRole') as HTMLSelectElement | null;
-    const editUserActive = document.getElementById('editUserActive') as HTMLSelectElement | null;
 
     const id = parseInt(editUserId?.value || '0', 10);
     const name = String(editUserName?.value || '').trim();
@@ -1554,7 +1550,6 @@ async function updateUser() {
     const isAdmin = isCurrentUserAdmin();
     if (isAdmin) {
         payload.role = isPrimaryAdmin ? 'admin' : normalizeUserRole(editUserRole?.value || 'agent');
-        payload.is_active = isPrimaryAdmin ? 1 : (editUserActive?.value === '0' ? 0 : 1);
     }
 
     try {
