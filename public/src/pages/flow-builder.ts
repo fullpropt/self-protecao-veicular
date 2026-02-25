@@ -891,7 +891,7 @@ function getNodePreview(node: FlowNode) {
             return transferMessage.length > 55 ? `${transferMessage.substring(0, 55)}...` : transferMessage;
         }
         case 'status':
-            return `Novo status: ${getLeadStatusLabel(node.data.status)}`;
+            return getLeadStatusLabel(node.data.status);
         case 'event':
             return node.data.eventName || node.data.eventKey || 'Selecione um evento personalizado';
         case 'trigger':
