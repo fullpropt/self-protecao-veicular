@@ -660,6 +660,7 @@ function toggleSidebar() {
 
 function logout() {
     localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('self_dashboard_auth_v1');
     sessionStorage.removeItem('selfDashboardToken');
     sessionStorage.removeItem('selfDashboardExpiry');
     sessionStorage.removeItem('selfDashboardUser');

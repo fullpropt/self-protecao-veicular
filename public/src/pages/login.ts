@@ -1,5 +1,7 @@
 // Login page logic migrated to module
 
+import { restoreAuthSessionFromPersistence, writePersistedAuthSessionFromSessionStorage } from '../core/authPersistence';
+
 type LoginResponse = {
     token?: string;
     refreshToken?: string;
@@ -209,6 +211,7 @@ function saveSession(data: LoginResponse, fallbackName: string) {
         localStorage.removeItem(LAST_IDENTITY_STORAGE_KEY);
     }
     sessionStorage.setItem('selfDashboardExpiry', String(Date.now() + (8 * 60 * 60 * 1000)));
+    writePersistedAuthSessionFromSessionStorage();
 }
 
 async function handleLogin(e: Event) {
@@ -378,11 +381,15 @@ async function handleConfirmEmailFromRoute() {
     }
 }
 
-function initLogin() {
+async function initLogin() {
     const hashParams = getHashRouteQueryParams();
     const hasPendingEmailConfirmation = Boolean(String(hashParams.get('confirmEmailToken') || '').trim());
 
     // Verificar se ja esta logado
+    if (!hasPendingEmailConfirmation) {
+        await restoreAuthSessionFromPersistence({ allowRefresh: true });
+    }
+
     if (!hasPendingEmailConfirmation && sessionStorage.getItem('selfDashboardToken')) {
         const expiry = sessionStorage.getItem('selfDashboardExpiry');
         if (expiry && Date.now() < parseInt(expiry)) {

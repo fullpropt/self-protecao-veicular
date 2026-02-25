@@ -1,3 +1,5 @@
+import { clearPersistedAuthSession, clearSessionAuthStorage, restoreAuthSessionFromPersistence } from './authPersistence';
+
 /**
  * ZapVender - JavaScript Global
  * Sistema estilo BotConversa
@@ -165,11 +167,14 @@ function onReady(callback: () => void) {
     }
 }
 
-onReady(initApp);
+onReady(() => {
+    void initApp();
+});
 
-function initApp() {
+async function initApp() {
     // Verificar autenticação
-    checkAuth();
+    const isAuthenticated = await checkAuth();
+    if (!isAuthenticated) return;
     
     // Inicializar Socket.IO
     initSocket();
@@ -188,8 +193,9 @@ function initApp() {
 // AUTENTICAÇÃO
 // ============================================
 
-function checkAuth() {
+async function checkAuth() {
     ensureStorageIdentityConsistency();
+    await restoreAuthSessionFromPersistence({ allowRefresh: true });
 
     const token = sessionStorage.getItem('selfDashboardToken');
     const expiry = sessionStorage.getItem('selfDashboardExpiry');
@@ -222,13 +228,8 @@ function updateUserInfo() {
 
 function logout() {
     window.dispatchEvent(new CustomEvent('app:logout'));
-    sessionStorage.removeItem('selfDashboardToken');
-    sessionStorage.removeItem('selfDashboardUser');
-    sessionStorage.removeItem('selfDashboardExpiry');
-    sessionStorage.removeItem('selfDashboardRefreshToken');
-    sessionStorage.removeItem('selfDashboardUserId');
-    sessionStorage.removeItem('selfDashboardUserEmail');
-    sessionStorage.removeItem('selfDashboardIdentity');
+    clearSessionAuthStorage();
+    clearPersistedAuthSession();
     window.location.href = getLoginUrl();
 }
 

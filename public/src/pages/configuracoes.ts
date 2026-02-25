@@ -1648,6 +1648,7 @@ async function confirmDeleteAccount() {
         sessionStorage.removeItem('selfDashboardUser');
         sessionStorage.removeItem('selfDashboardUserId');
         sessionStorage.removeItem('selfDashboardUserEmail');
+        localStorage.removeItem('self_dashboard_auth_v1');
 
         setTimeout(() => {
             window.location.href = '#/login';
