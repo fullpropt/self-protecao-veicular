@@ -1109,22 +1109,70 @@ const Template = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    async findById(id) {
-        return await queryOne('SELECT * FROM templates WHERE id = ?', [id]);
+    async findById(id, options = {}) {
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        const createdBy = parsePositiveInteger(options.created_by, null);
+        const params = [id];
+        let filters = '';
+
+        if (ownerUserId) {
+            filters += `
+                AND (
+                    templates.created_by = ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM users u
+                        WHERE u.id = templates.created_by
+                          AND (u.owner_user_id = ? OR u.id = ?)
+                    )
+                )
+            `;
+            params.push(ownerUserId, ownerUserId, ownerUserId);
+        }
+
+        if (createdBy) {
+            filters += ' AND templates.created_by = ?';
+            params.push(createdBy);
+        }
+
+        return await queryOne(`
+            SELECT templates.*
+            FROM templates
+            WHERE templates.id = ?
+            ${filters}
+        `, params);
     },
     
     async list(options = {}) {
-        let sql = 'SELECT * FROM templates WHERE is_active = 1';
+        let sql = 'SELECT templates.* FROM templates WHERE templates.is_active = 1';
         const params = [];
         
         if (options.category) {
-            sql += ' AND category = ?';
+            sql += ' AND templates.category = ?';
             params.push(options.category);
         }
 
-        if (options.created_by) {
-            sql += ' AND created_by = ?';
-            params.push(options.created_by);
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        const createdBy = parsePositiveInteger(options.created_by, null);
+
+        if (ownerUserId) {
+            sql += `
+                AND (
+                    templates.created_by = ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM users u
+                        WHERE u.id = templates.created_by
+                          AND (u.owner_user_id = ? OR u.id = ?)
+                    )
+                )
+            `;
+            params.push(ownerUserId, ownerUserId, ownerUserId);
+        }
+
+        if (createdBy) {
+            sql += ' AND templates.created_by = ?';
+            params.push(createdBy);
         }
         
         sql += ' ORDER BY usage_count DESC, name ASC';
@@ -2596,43 +2644,246 @@ const MessageQueue = {
 // ============================================
 
 const DEFAULT_TAG_COLOR = '#5a2a6b';
+let hasTagCreatedByColumnCache = null;
+
+async function tagsTableHasCreatedByColumn() {
+    if (hasTagCreatedByColumnCache !== null) {
+        return hasTagCreatedByColumnCache;
+    }
+
+    try {
+        await queryOne('SELECT created_by FROM tags LIMIT 1');
+        hasTagCreatedByColumnCache = true;
+        return true;
+    } catch (error) {
+        const message = String(error?.message || '').toLowerCase();
+        if (
+            message.includes('no such column') ||
+            message.includes('does not exist')
+        ) {
+            hasTagCreatedByColumnCache = false;
+            return false;
+        }
+        throw error;
+    }
+}
+
+function appendOwnerCreatedByFilters(filters, params, options = {}, config = {}) {
+    if (!Array.isArray(filters) || !Array.isArray(params)) {
+        return { ownerUserId: null, createdBy: null };
+    }
+
+    const ownerUserId = parsePositiveInteger(options?.owner_user_id, null);
+    const createdBy = parsePositiveInteger(options?.created_by, null);
+    const tableAlias = normalizeTagValue(config?.tableAlias || '');
+    const createdByColumn = normalizeTagValue(config?.createdByColumn || 'created_by') || 'created_by';
+    const columnRef = tableAlias ? `${tableAlias}.${createdByColumn}` : createdByColumn;
+
+    if (ownerUserId) {
+        filters.push(`(
+            ${columnRef} = ?
+            OR EXISTS (
+                SELECT 1
+                FROM users owner_scope
+                WHERE owner_scope.id = ${columnRef}
+                  AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+            )
+        )`);
+        params.push(ownerUserId, ownerUserId, ownerUserId);
+    }
+
+    if (createdBy) {
+        filters.push(`${columnRef} = ?`);
+        params.push(createdBy);
+    }
+
+    return { ownerUserId, createdBy };
+}
+
+async function listOwnerScopedTagNames(ownerUserId) {
+    const normalizedOwnerUserId = parsePositiveInteger(ownerUserId, null);
+    if (!normalizedOwnerUserId) return [];
+
+    const discoveredTags = new Set();
+
+    const leadRows = await query(`
+        SELECT tags
+        FROM leads
+        WHERE owner_user_id = ?
+          AND tags IS NOT NULL
+          AND tags <> ''
+    `, [normalizedOwnerUserId]);
+
+    for (const row of leadRows || []) {
+        for (const tag of parseTagList(row.tags)) {
+            discoveredTags.add(tag);
+        }
+    }
+
+    const campaignRows = await query(`
+        SELECT c.tag_filter
+        FROM campaigns c
+        WHERE c.tag_filter IS NOT NULL
+          AND TRIM(c.tag_filter) <> ''
+          AND (
+              c.created_by = ?
+              OR EXISTS (
+                  SELECT 1
+                  FROM users owner_scope
+                  WHERE owner_scope.id = c.created_by
+                    AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+              )
+          )
+    `, [normalizedOwnerUserId, normalizedOwnerUserId, normalizedOwnerUserId]);
+
+    for (const row of campaignRows || []) {
+        const value = normalizeTagValue(row?.tag_filter);
+        if (value) discoveredTags.add(value);
+    }
+
+    return uniqueTags(Array.from(discoveredTags));
+}
+
+async function isTagVisibleInOwnerScope(tagName, ownerUserId) {
+    const normalizedOwnerUserId = parsePositiveInteger(ownerUserId, null);
+    if (!normalizedOwnerUserId) return true;
+
+    const targetKey = normalizeTagKey(tagName);
+    if (!targetKey) return false;
+
+    const visibleTagNames = await listOwnerScopedTagNames(normalizedOwnerUserId);
+    return visibleTagNames.some((candidate) => normalizeTagKey(candidate) === targetKey);
+}
 
 const Tag = {
-    async list() {
-        return await query(`
+    async list(options = {}) {
+        const hasCreatedByColumn = await tagsTableHasCreatedByColumn();
+
+        if (hasCreatedByColumn) {
+            const filters = [];
+            const params = [];
+            appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'tags' });
+
+            const whereClause = filters.length > 0
+                ? `WHERE ${filters.join(' AND ')}`
+                : '';
+
+            return await query(`
+                SELECT id, name, color, description, created_at, created_by
+                FROM tags
+                ${whereClause}
+                ORDER BY LOWER(name) ASC, id ASC
+            `, params);
+        }
+
+        const allTags = await query(`
             SELECT id, name, color, description, created_at
             FROM tags
             ORDER BY LOWER(name) ASC, id ASC
         `);
+
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        if (!ownerUserId) {
+            return allTags;
+        }
+
+        const visibleTagNames = await listOwnerScopedTagNames(ownerUserId);
+        if (visibleTagNames.length === 0) {
+            return [];
+        }
+
+        const visibleKeys = new Set(visibleTagNames.map((tagName) => normalizeTagKey(tagName)));
+        return (allTags || []).filter((tag) => visibleKeys.has(normalizeTagKey(tag.name)));
     },
 
-    async findById(id) {
-        return await queryOne('SELECT id, name, color, description, created_at FROM tags WHERE id = ?', [id]);
+    async findById(id, options = {}) {
+        const hasCreatedByColumn = await tagsTableHasCreatedByColumn();
+
+        if (hasCreatedByColumn) {
+            const filters = ['tags.id = ?'];
+            const params = [id];
+            appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'tags' });
+
+            return await queryOne(`
+                SELECT id, name, color, description, created_at, created_by
+                FROM tags
+                WHERE ${filters.join(' AND ')}
+            `, params);
+        }
+
+        const tag = await queryOne('SELECT id, name, color, description, created_at FROM tags WHERE id = ?', [id]);
+        if (!tag) return null;
+
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        if (!ownerUserId) return tag;
+
+        const visible = await isTagVisibleInOwnerScope(tag.name, ownerUserId);
+        return visible ? tag : null;
     },
 
-    async findByName(name) {
-        return await queryOne(
+    async findByName(name, options = {}) {
+        const hasCreatedByColumn = await tagsTableHasCreatedByColumn();
+        const normalizedName = normalizeTagValue(name);
+        if (!normalizedName) return null;
+
+        if (hasCreatedByColumn) {
+            const filters = ['LOWER(TRIM(tags.name)) = LOWER(TRIM(?))'];
+            const params = [normalizedName];
+            appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'tags' });
+
+            return await queryOne(`
+                SELECT id, name, color, description, created_at, created_by
+                FROM tags
+                WHERE ${filters.join(' AND ')}
+            `, params);
+        }
+
+        const tag = await queryOne(
             'SELECT id, name, color, description, created_at FROM tags WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))',
-            [name]
+            [normalizedName]
         );
+        if (!tag) return null;
+
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        if (!ownerUserId) return tag;
+
+        const visible = await isTagVisibleInOwnerScope(tag.name, ownerUserId);
+        return visible ? tag : null;
     },
 
-    async create(data) {
+    async create(data, options = {}) {
         const tagName = normalizeTagValue(data.name);
         const tagColor = normalizeTagValue(data.color) || DEFAULT_TAG_COLOR;
         const tagDescription = normalizeTagValue(data.description);
+        const hasCreatedByColumn = await tagsTableHasCreatedByColumn();
+        const createdBy = parsePositiveInteger(data?.created_by ?? options?.created_by, null);
 
-        const result = await run(`
-            INSERT INTO tags (name, color, description)
-            VALUES (?, ?, ?)
-        `, [tagName, tagColor, tagDescription || null]);
+        let result;
+        if (hasCreatedByColumn && createdBy) {
+            result = await run(`
+                INSERT INTO tags (name, color, description, created_by)
+                VALUES (?, ?, ?, ?)
+            `, [tagName, tagColor, tagDescription || null, createdBy]);
+        } else {
+            result = await run(`
+                INSERT INTO tags (name, color, description)
+                VALUES (?, ?, ?)
+            `, [tagName, tagColor, tagDescription || null]);
+        }
 
-        return await this.findById(result.lastInsertRowid);
+        return await this.findById(
+            result.lastInsertRowid,
+            hasCreatedByColumn ? options : {}
+        );
     },
 
-    async update(id, data) {
+    async update(id, data, options = {}) {
+        const existingTag = await this.findById(id, options);
+        if (!existingTag) return null;
+
         const fields = [];
         const values = [];
+        const hasCreatedByColumn = await tagsTableHasCreatedByColumn();
 
         if (Object.prototype.hasOwnProperty.call(data, 'name')) {
             fields.push('name = ?');
@@ -2648,23 +2899,40 @@ const Tag = {
             values.push(description || null);
         }
 
-        if (fields.length === 0) return await this.findById(id);
+        if (fields.length === 0) return existingTag;
 
         values.push(id);
         await run(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?`, values);
 
-        return await this.findById(id);
+        return await this.findById(id, hasCreatedByColumn ? options : {});
     },
 
-    async delete(id) {
+    async delete(id, options = {}) {
+        const existingTag = await this.findById(id, options);
+        if (!existingTag) return null;
         return await run('DELETE FROM tags WHERE id = ?', [id]);
     },
 
-    async syncFromLeads() {
-        const rows = await query("SELECT tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
+    async syncFromLeads(options = {}) {
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        const createdBy = parsePositiveInteger(options.created_by, null);
+        const hasCreatedByColumn = await tagsTableHasCreatedByColumn();
+
+        let rows;
+        if (ownerUserId) {
+            rows = await query(`
+                SELECT tags
+                FROM leads
+                WHERE owner_user_id = ?
+                  AND tags IS NOT NULL
+                  AND tags <> ''
+            `, [ownerUserId]);
+        } else {
+            rows = await query("SELECT tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
+        }
         if (!rows || rows.length === 0) return;
 
-        const existingTags = await this.list();
+        const existingTags = await this.list(options);
         const existingKeys = new Set(existingTags.map((tag) => normalizeTagKey(tag.name)));
         const discoveredTags = new Set();
 
@@ -2678,22 +2946,40 @@ const Tag = {
             const key = normalizeTagKey(tagName);
             if (existingKeys.has(key)) continue;
 
-            await run(
-                `INSERT INTO tags (name, color, description)
-                 VALUES (?, ?, ?)
-                 ON CONFLICT(name) DO NOTHING`,
-                [tagName, DEFAULT_TAG_COLOR, null]
-            );
+            if (hasCreatedByColumn && (createdBy || ownerUserId)) {
+                await run(
+                    `INSERT INTO tags (name, color, description, created_by)
+                     VALUES (?, ?, ?, ?)
+                     ON CONFLICT(name) DO NOTHING`,
+                    [tagName, DEFAULT_TAG_COLOR, null, createdBy || ownerUserId]
+                );
+            } else {
+                await run(
+                    `INSERT INTO tags (name, color, description)
+                     VALUES (?, ?, ?)
+                     ON CONFLICT(name) DO NOTHING`,
+                    [tagName, DEFAULT_TAG_COLOR, null]
+                );
+            }
             existingKeys.add(key);
         }
     },
 
-    async renameInLeads(previousName, nextName) {
+    async renameInLeads(previousName, nextName, options = {}) {
         const previousKey = normalizeTagKey(previousName);
         const sanitizedNext = normalizeTagValue(nextName);
         if (!previousKey || !sanitizedNext) return 0;
 
-        const leads = await query("SELECT id, tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        const leads = ownerUserId
+            ? await query(`
+                SELECT id, tags
+                FROM leads
+                WHERE owner_user_id = ?
+                  AND tags IS NOT NULL
+                  AND tags <> ''
+            `, [ownerUserId])
+            : await query("SELECT id, tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
         let updatedLeads = 0;
 
         for (const lead of leads) {
@@ -2727,11 +3013,20 @@ const Tag = {
         return updatedLeads;
     },
 
-    async removeFromLeads(tagName) {
+    async removeFromLeads(tagName, options = {}) {
         const normalized = normalizeTagKey(tagName);
         if (!normalized) return 0;
 
-        const leads = await query("SELECT id, tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+        const leads = ownerUserId
+            ? await query(`
+                SELECT id, tags
+                FROM leads
+                WHERE owner_user_id = ?
+                  AND tags IS NOT NULL
+                  AND tags <> ''
+            `, [ownerUserId])
+            : await query("SELECT id, tags FROM leads WHERE tags IS NOT NULL AND tags <> ''");
         let updatedLeads = 0;
 
         for (const lead of leads) {
@@ -2781,22 +3076,54 @@ const Webhook = {
         return { id: result.lastInsertRowid, uuid };
     },
     
-    async findById(id) {
-        return await queryOne('SELECT * FROM webhooks WHERE id = ?', [id]);
+    async findById(id, options = {}) {
+        const filters = ['webhooks.id = ?'];
+        const params = [id];
+        appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'webhooks' });
+
+        return await queryOne(`
+            SELECT webhooks.*
+            FROM webhooks
+            WHERE ${filters.join(' AND ')}
+        `, params);
     },
     
-    async findByEvent(event) {
+    async findByEvent(event, options = {}) {
+        const filters = [
+            'webhooks.is_active = 1',
+            'webhooks.events LIKE ?'
+        ];
+        const params = [`%"${event}"%`];
+        appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'webhooks' });
+
         return await query(`
-            SELECT * FROM webhooks 
-            WHERE is_active = 1 AND events LIKE ?
-        `, [`%"${event}"%`]);
+            SELECT webhooks.*
+            FROM webhooks
+            WHERE ${filters.join(' AND ')}
+        `, params);
     },
     
-    async list() {
-        return await query('SELECT * FROM webhooks ORDER BY name ASC');
+    async list(options = {}) {
+        const filters = [];
+        const params = [];
+        appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'webhooks' });
+
+        const whereClause = filters.length > 0
+            ? `WHERE ${filters.join(' AND ')}`
+            : '';
+
+        return await query(`
+            SELECT webhooks.*
+            FROM webhooks
+            ${whereClause}
+            ORDER BY webhooks.name ASC
+        `, params);
     },
     
-    async update(id, data) {
+    async update(id, data, options = {}) {
+        const existing = await this.findById(id, options);
+        if (!existing) return null;
+
         const fields = [];
         const values = [];
         
@@ -2809,12 +3136,13 @@ const Webhook = {
             }
         }
         
-        if (fields.length === 0) return null;
+        if (fields.length === 0) return existing;
         
         fields.push("updated_at = CURRENT_TIMESTAMP");
         values.push(id);
         
-        return await run(`UPDATE webhooks SET ${fields.join(', ')} WHERE id = ?`, values);
+        await run(`UPDATE webhooks SET ${fields.join(', ')} WHERE id = ?`, values);
+        return await this.findById(id, options);
     },
     
     async logTrigger(webhookId, event, payload, responseStatus, responseBody, durationMs) {
@@ -2824,7 +3152,9 @@ const Webhook = {
         `, [webhookId, event, JSON.stringify(payload), responseStatus, responseBody, durationMs]);
     },
     
-    async delete(id) {
+    async delete(id, options = {}) {
+        const existing = await this.findById(id, options);
+        if (!existing) return null;
         return await run('DELETE FROM webhooks WHERE id = ?', [id]);
     }
 };

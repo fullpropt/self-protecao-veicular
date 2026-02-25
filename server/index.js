@@ -750,6 +750,56 @@ const io = new Server(server, {
 
 // Autenticação via JWT no handshake do Socket.IO
 
+function getOwnerScopeRoom(ownerUserId) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    return normalizedOwnerUserId > 0 ? `owner:${normalizedOwnerUserId}` : '';
+}
+
+function emitToOwnerScope(ownerUserId, eventName, payload, options = {}) {
+    const room = getOwnerScopeRoom(ownerUserId);
+    if (room) {
+        io.to(room).emit(eventName, payload);
+        return true;
+    }
+
+    if (options.allowGlobalFallback === true) {
+        io.emit(eventName, payload);
+        return true;
+    }
+
+    return false;
+}
+
+async function emitToSessionOwnerScope(sessionId, eventName, payload, options = {}) {
+    const explicitOwnerUserId = normalizeOwnerUserId(options.ownerUserId);
+    const ownerUserId = explicitOwnerUserId || await resolveSessionOwnerUserId(sessionId);
+    return emitToOwnerScope(ownerUserId, eventName, payload, options);
+}
+
+async function ensureSocketOwnerScopeRoom(socket) {
+    const ownerUserId = await resolveSocketOwnerUserId(socket);
+    const roomName = getOwnerScopeRoom(ownerUserId);
+    const socketData = socket && typeof socket === 'object'
+        ? (socket.data = socket.data || {})
+        : {};
+    const previousRoomName = String(socketData.ownerScopeRoom || '').trim();
+
+    if (previousRoomName && previousRoomName !== roomName) {
+        socket.leave(previousRoomName);
+    }
+    if (roomName && previousRoomName !== roomName) {
+        socket.join(roomName);
+    }
+
+    socketData.ownerScopeUserId = ownerUserId || null;
+    socketData.ownerScopeRoom = roomName || null;
+    return ownerUserId || null;
+}
+
+function buildSocketRequestLike(socket) {
+    return { user: socket?.user || null };
+}
+
 io.use((socket, next) => {
 
     try {
@@ -2612,11 +2662,12 @@ async function rehydrateSessions(ioInstance) {
 
     try {
 
-        const stored = await query(`SELECT session_id FROM whatsapp_sessions`);
+        const stored = await query(`SELECT session_id, created_by FROM whatsapp_sessions`);
 
         for (const row of stored) {
 
             const sessionId = row.session_id;
+            const ownerUserId = Number(row?.created_by || 0);
             const hasLocalSession = sessionExists(sessionId);
             const hasDbAuthState = !hasLocalSession && WHATSAPP_AUTH_STATE_DRIVER !== 'multi_file'
                 ? await hasPersistedBaileysAuthState(sessionId)
@@ -2626,7 +2677,9 @@ async function rehydrateSessions(ioInstance) {
 
                 console.log(`[${sessionId}] Reidratando sessão armazenada...`);
 
-                await createSession(sessionId, null);
+                await createSession(sessionId, null, 0, {
+                    ownerUserId: Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : undefined
+                });
 
             } else {
 
@@ -2940,9 +2993,11 @@ async function requestSessionPairingCode(sessionId, clientSocket, phoneNumber, o
                     phoneNumber: normalizedPhone,
                     code: pairingCode
                 });
-                io.emit('whatsapp-pairing-code', {
+                await emitToSessionOwnerScope(sessionId, 'whatsapp-pairing-code', {
                     sessionId,
                     phoneNumber: normalizedPhone
+                }, {
+                    ownerUserId: Number(session?.ownerUserId || 0) || null
                 });
 
                 console.log(`[${sessionId}] Codigo de pareamento gerado para ${normalizedPhone}`);
@@ -3243,13 +3298,17 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     activeClientSocket.emit('qr', { qr: qrDataUrl, sessionId, expiresIn: 30 });
 
-                    io.emit('whatsapp-qr', { qr: qrDataUrl, sessionId });
+                    await emitToSessionOwnerScope(sessionId, 'whatsapp-qr', { qr: qrDataUrl, sessionId }, {
+                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                    });
 
                     
 
                     // Webhook
 
-                    webhookService.trigger('whatsapp.qr_generated', { sessionId });
+                    webhookService.trigger('whatsapp.qr_generated', { sessionId }, {
+                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || undefined
+                    });
 
                     persistWhatsappSession(sessionId, 'qr_pending', {
                         qr_code: qrDataUrl,
@@ -3349,7 +3408,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 // Webhook
 
-                webhookService.trigger('whatsapp.disconnected', { sessionId, statusCode, errorType: errorInfo.type });
+                webhookService.trigger('whatsapp.disconnected', { sessionId, statusCode, errorType: errorInfo.type }, {
+                    ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || undefined
+                });
 
                 
 
@@ -3376,7 +3437,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                             }
 
                             activeClientSocket.emit('reconnecting', { sessionId, attempt: currentAttempt + 1 });
-                            io.emit('whatsapp-status', { sessionId, status: 'reconnecting' });
+                            await emitToSessionOwnerScope(sessionId, 'whatsapp-status', { sessionId, status: 'reconnecting' }, {
+                                ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                            });
 
                             await delay(RECONNECT_DELAY);
 
@@ -3422,7 +3485,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 activeClientSocket.emit('connecting', { sessionId });
 
-                io.emit('whatsapp-status', { sessionId, status: 'connecting' });
+                await emitToSessionOwnerScope(sessionId, 'whatsapp-status', { sessionId, status: 'connecting' }, {
+                    ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                });
 
             }
 
@@ -3481,7 +3546,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     activeClientSocket.emit('connected', { sessionId, user: session.user });
 
-                    io.emit('whatsapp-status', { sessionId, status: 'connected', user: session.user });
+                    await emitToSessionOwnerScope(sessionId, 'whatsapp-status', { sessionId, status: 'connected', user: session.user }, {
+                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                    });
 
                     persistWhatsappSession(sessionId, 'connected', {
                         last_connected_at: new Date().toISOString(),
@@ -3492,7 +3559,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     // Webhook
 
-                    webhookService.trigger('whatsapp.connected', { sessionId, user: session.user });
+                    webhookService.trigger('whatsapp.connected', { sessionId, user: session.user }, {
+                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || undefined
+                    });
 
                     
 
@@ -3620,7 +3689,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     
 
-                    io.emit('message-status', {
+                    await emitToSessionOwnerScope(sessionId, 'message-status', {
 
                         sessionId,
 
@@ -3630,6 +3699,8 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                         status
 
+                    }, {
+                        ownerUserId: Number(sessions.get(sessionId)?.ownerUserId || 0) || null
                     });
 
                     
@@ -3638,11 +3709,15 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     if (status === 'delivered') {
 
-                        webhookService.trigger('message.delivered', { messageId: update.key.id, status });
+                        webhookService.trigger('message.delivered', { messageId: update.key.id, status }, {
+                            ownerUserId: Number(sessions.get(sessionId)?.ownerUserId || 0) || undefined
+                        });
 
                     } else if (status === 'read') {
 
-                        webhookService.trigger('message.read', { messageId: update.key.id, status });
+                        webhookService.trigger('message.read', { messageId: update.key.id, status }, {
+                            ownerUserId: Number(sessions.get(sessionId)?.ownerUserId || 0) || undefined
+                        });
 
                     }
 
@@ -3799,7 +3874,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
             
 
-            io.emit('typing-status', {
+            emitToOwnerScope(Number(sessions.get(sessionId)?.ownerUserId || 0) || null, 'typing-status', {
 
                 sessionId,
 
@@ -4763,6 +4838,8 @@ async function executeAutomationAction(automation, context) {
                 automationId: automation.id,
                 message,
                 lead: { id: lead.id, name: lead.name, phone: lead.phone }
+            }, {
+                ownerUserId: Number(lead?.owner_user_id || 0) || undefined
             });
             break;
         }
@@ -6107,7 +6184,7 @@ async function processIncomingMessage(sessionId, msg) {
 
     
 
-    io.emit('new-message', messageForClient);
+    emitToOwnerScope(sessionOwnerUserId || null, 'new-message', messageForClient);
 
     
 
@@ -6121,6 +6198,8 @@ async function processIncomingMessage(sessionId, msg) {
 
             lead: { id: lead.id, name: lead.name, phone: lead.phone }
 
+        }, {
+            ownerUserId: Number(sessionOwnerUserId || lead?.owner_user_id || 0) || undefined
         });
 
         
@@ -6252,6 +6331,13 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     if (options.conversationId) {
         const existingConversation = await Conversation.findById(options.conversationId);
         if (existingConversation && Number(existingConversation.lead_id) === Number(lead.id)) {
+            const existingConversationSessionId = sanitizeSessionId(existingConversation.session_id);
+            if (existingConversationSessionId && existingConversationSessionId !== sessionId) {
+                throw new Error('Conversa informada pertence a outra conta WhatsApp');
+            }
+            if (sessionOwnerUserId && lead?.owner_user_id && Number(lead.owner_user_id) !== Number(sessionOwnerUserId)) {
+                throw new Error('Lead nao pertence ao mesmo owner da sessao informada');
+            }
             if (assignedTo && existingConversation.assigned_to && Number(existingConversation.assigned_to) !== assignedTo) {
                 throw new Error('Sem permissao para enviar nesta conversa');
             }
@@ -6444,6 +6530,8 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         type
 
+    }, {
+        ownerUserId: Number(sessionOwnerUserId || lead?.owner_user_id || 0) || undefined
     });
 
     
@@ -6572,6 +6660,9 @@ function sessionExists(sessionId) {
 io.on('connection', (socket) => {
 
     console.log('?? Cliente conectado:', socket.id);
+    ensureSocketOwnerScopeRoom(socket).catch((error) => {
+        console.warn(`[socket:${socket.id}] Falha ao resolver escopo inicial:`, error.message);
+    });
 
     
 
@@ -6583,7 +6674,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         if (ownerScopeUserId) {
             const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
                 owner_user_id: ownerScopeUserId
@@ -6635,7 +6726,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const storedSession = await WhatsAppSession.findBySessionId(sessionId);
         if (ownerScopeUserId && storedSession) {
             const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
@@ -6696,7 +6787,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const storedSession = await WhatsAppSession.findBySessionId(sessionId);
         if (ownerScopeUserId && storedSession) {
             const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
@@ -6740,12 +6831,42 @@ io.on('connection', (socket) => {
     socket.on('send-message', async ({ sessionId, to, message, type, options }) => {
 
         try {
+            const normalizedSessionId = sanitizeSessionId(sessionId);
+            if (!normalizedSessionId) {
+                socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
+                return;
+            }
 
-            const result = await sendMessage(sessionId, to, message, type, options);
+            const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+            if (ownerScopeUserId) {
+                const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                    owner_user_id: ownerScopeUserId
+                });
+                if (!allowedSession) {
+                    socket.emit('error', { message: 'Sem permissao para usar esta conta WhatsApp', code: 'SESSION_FORBIDDEN' });
+                    return;
+                }
+            }
+
+            const safeOptions = options && typeof options === 'object' ? { ...options } : {};
+            const normalizedConversationId = Number(safeOptions.conversationId);
+            if (Number.isInteger(normalizedConversationId) && normalizedConversationId > 0) {
+                const socketReq = buildSocketRequestLike(socket);
+                const conversation = await Conversation.findById(normalizedConversationId);
+                const hasConversationAccess = conversation
+                    ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
+                    : false;
+                if (!conversation || !hasConversationAccess) {
+                    socket.emit('error', { message: 'Sem permissao para enviar nesta conversa', code: 'CONVERSATION_FORBIDDEN' });
+                    return;
+                }
+            }
+
+            const result = await sendMessage(normalizedSessionId, to, message, type, safeOptions);
 
             socket.emit('message-sent', {
 
-                sessionId,
+                sessionId: normalizedSessionId,
 
                 to,
 
@@ -6769,12 +6890,24 @@ io.on('connection', (socket) => {
 
     socket.on('get-messages', async ({ sessionId, contactJid, leadId, conversationId }) => {
         let messages = [];
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const normalizedSessionId = sanitizeSessionId(sessionId);
         const normalizedContactJid = normalizeJid(contactJid);
         const normalizedConversationId = Number(conversationId);
         const hasConversationId = Number.isFinite(normalizedConversationId) && normalizedConversationId > 0;
         let resolvedConversation = null;
         let resolvedLead = null;
+
+        if (ownerScopeUserId && normalizedSessionId) {
+            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!allowedSession) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                return;
+            }
+        }
 
         if (hasConversationId) {
             const conversation = await Conversation.findById(normalizedConversationId);
@@ -6814,6 +6947,23 @@ io.on('connection', (socket) => {
         const backfillSessionId = sanitizeSessionId(
             normalizedSessionId || resolvedConversation?.session_id
         );
+        const hasConversationAccess = resolvedConversation
+            ? await canAccessConversationInOwnerScope(socketReq, resolvedConversation, ownerScopeUserId)
+            : false;
+
+        if (resolvedLead && !hasConversationAccess) {
+            const hasLeadAccess = await canAccessLeadRecordInOwnerScope(socketReq, resolvedLead, ownerScopeUserId);
+            if (!hasLeadAccess) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+                return;
+            }
+        }
+
+        if (!resolvedLead && resolvedConversation && !hasConversationAccess) {
+            socket.emit('error', { message: 'Sem permissao para acessar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+            return;
+        }
+
         const hasMissingMedia = messages.some((item) => {
             const mediaType = String(item?.media_type || '').trim().toLowerCase();
             if (!mediaType || mediaType === 'text') return false;
@@ -6859,10 +7009,24 @@ io.on('connection', (socket) => {
     
 
     socket.on('get-contacts', async ({ sessionId }) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const scopedUserId = getScopedUserId(socketReq);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const normalizedSessionId = sanitizeSessionId(sessionId);
+        if (ownerScopeUserId && normalizedSessionId) {
+            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!allowedSession) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                return;
+            }
+        }
         const leads = await Lead.list({
             limit: 200,
-            session_id: normalizedSessionId || undefined
+            session_id: normalizedSessionId || undefined,
+            assigned_to: scopedUserId || undefined,
+            owner_user_id: ownerScopeUserId || undefined
         });
         const sessionPhone = getSessionPhone(normalizedSessionId);
         const sessionDisplayName = normalizeText(getSessionDisplayName(normalizedSessionId) || 'Usuário');
@@ -6907,10 +7071,23 @@ io.on('connection', (socket) => {
     
 
     socket.on('get-leads', async (options = {}) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const scopedUserId = getScopedUserId(socketReq);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const normalizedOptions = options && typeof options === 'object' ? options : {};
+        const requestedAssignedTo = Number(normalizedOptions.assigned_to ?? normalizedOptions.assignedTo);
+        const resolvedAssignedTo = scopedUserId || (Number.isInteger(requestedAssignedTo) && requestedAssignedTo > 0 ? requestedAssignedTo : undefined);
+        const normalizedSessionId = sanitizeSessionId(normalizedOptions.session_id || normalizedOptions.sessionId);
+        const queryOptions = {
+            ...normalizedOptions,
+            assigned_to: resolvedAssignedTo,
+            owner_user_id: ownerScopeUserId || undefined,
+            session_id: normalizedSessionId || undefined
+        };
 
-        const leads = await Lead.list(options);
+        const leads = await Lead.list(queryOptions);
 
-        const total = await Lead.count(options);
+        const total = await Lead.count(queryOptions);
 
         socket.emit('leads-list', { leads, total });
 
@@ -6919,12 +7096,33 @@ io.on('connection', (socket) => {
     
 
     socket.on('mark-read', async ({ sessionId, contactJid, conversationId }) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const normalizedSessionId = sanitizeSessionId(sessionId);
         const normalizedContactJid = normalizeJid(contactJid);
 
-        if (conversationId) {
+        if (ownerScopeUserId && normalizedSessionId) {
+            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!allowedSession) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                return;
+            }
+        }
 
-            await Conversation.markAsRead(conversationId);
+        if (conversationId) {
+            const normalizedConversationId = Number(conversationId);
+            const conversation = await Conversation.findById(normalizedConversationId);
+            const hasAccess = conversation
+                ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
+                : false;
+            if (!conversation || !hasAccess) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+                return;
+            }
+
+            await Conversation.markAsRead(normalizedConversationId);
 
         } else if (normalizedContactJid && normalizedSessionId) {
 
@@ -6946,8 +7144,13 @@ io.on('connection', (socket) => {
     
 
     socket.on('get-templates', async () => {
-
-        const templates = await Template.list();
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const scopedUserId = getScopedUserId(socketReq);
+        const templates = await Template.list({
+            owner_user_id: ownerScopeUserId || undefined,
+            created_by: scopedUserId || undefined
+        });
 
         socket.emit('templates-list', { templates });
 
@@ -6957,7 +7160,7 @@ io.on('connection', (socket) => {
 
     socket.on('get-flows', async () => {
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const flows = ownerScopeUserId
             ? await Flow.list({ owner_user_id: ownerScopeUserId })
             : [];
@@ -6969,24 +7172,60 @@ io.on('connection', (socket) => {
     
 
     socket.on('toggle-bot', async ({ conversationId, active }) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const normalizedConversationId = Number(conversationId);
+        const conversation = await Conversation.findById(normalizedConversationId);
+        const hasAccess = conversation
+            ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
+            : false;
+        if (!conversation || !hasAccess) {
+            socket.emit('error', { message: 'Sem permissao para atualizar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+            return;
+        }
 
-        await Conversation.update(conversationId, { is_bot_active: active ? 1 : 0 });
+        await Conversation.update(normalizedConversationId, { is_bot_active: active ? 1 : 0 });
 
-        socket.emit('bot-toggled', { conversationId, active });
+        socket.emit('bot-toggled', { conversationId: normalizedConversationId, active });
 
     });
 
     
 
     socket.on('assign-conversation', async ({ conversationId, userId }) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const normalizedConversationId = Number(conversationId);
+        const conversation = await Conversation.findById(normalizedConversationId);
+        const hasConversationAccess = conversation
+            ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
+            : false;
+        if (!conversation || !hasConversationAccess) {
+            socket.emit('error', { message: 'Sem permissao para atualizar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+            return;
+        }
 
-        await Conversation.update(conversationId, { assigned_to: userId });
+        const normalizedUserId = Number(userId);
+        const nextAssignedUserId = Number.isInteger(normalizedUserId) && normalizedUserId > 0
+            ? normalizedUserId
+            : null;
+        if (nextAssignedUserId) {
+            const canAssignToUser = await canAccessAssignedRecordInOwnerScope(socketReq, nextAssignedUserId, ownerScopeUserId);
+            if (!canAssignToUser) {
+                socket.emit('error', { message: 'Sem permissao para atribuir para este usuario', code: 'ASSIGNEE_FORBIDDEN' });
+                return;
+            }
+        }
 
-        socket.emit('conversation-assigned', { conversationId, userId });
+        await Conversation.update(normalizedConversationId, { assigned_to: nextAssignedUserId });
+
+        socket.emit('conversation-assigned', { conversationId: normalizedConversationId, userId: nextAssignedUserId });
 
         
 
-        webhookService.trigger('conversation.assigned', { conversationId, userId });
+        webhookService.trigger('conversation.assigned', { conversationId: normalizedConversationId, userId: nextAssignedUserId }, {
+            ownerUserId: Number(ownerScopeUserId || 0) || undefined
+        });
 
     });
 
@@ -7000,7 +7239,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         if (ownerScopeUserId) {
             const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
                 owner_user_id: ownerScopeUserId
@@ -7059,7 +7298,7 @@ io.on('connection', (socket) => {
 
         socket.emit('disconnected', { sessionId: normalizedSessionId });
 
-        io.emit('whatsapp-status', { sessionId: normalizedSessionId, status: 'disconnected' });
+        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId: normalizedSessionId, status: 'disconnected' });
 
     });
 
@@ -7193,7 +7432,7 @@ app.delete('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) =
             created_by: ownerScopeUserId || undefined
         });
 
-        io.emit('whatsapp-status', { sessionId, status: 'disconnected' });
+        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId, status: 'disconnected' });
         res.json({ success: true, session_id: sessionId });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -7220,7 +7459,7 @@ app.post('/api/whatsapp/disconnect', authenticate, async (req, res) => {
         await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
         await clearPersistedBaileysAuthState(sessionId);
 
-        io.emit('whatsapp-status', { sessionId, status: 'disconnected' });
+        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId, status: 'disconnected' });
 
         res.json({ success: true });
 
@@ -8254,7 +8493,7 @@ function resolveCustomEventPeriodRange(periodInput) {
     };
 }
 
-app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
+app.get('/api/dashboard/stats-period', authenticate, async (req, res) => {
     try {
         const metric = String(req.query.metric || 'novos_contatos')
             .trim()
@@ -8608,7 +8847,7 @@ app.get('/api/leads/summary', authenticate, async (req, res) => {
     }
 });
 
-app.get('/api/leads', optionalAuth, async (req, res) => {
+app.get('/api/leads', authenticate, async (req, res) => {
     try {
         const { status, search, limit, offset, assigned_to } = req.query;
         const sessionId = sanitizeSessionId(req.query.session_id || req.query.sessionId);
@@ -8641,7 +8880,7 @@ app.get('/api/leads', optionalAuth, async (req, res) => {
     }
 });
 
-app.get('/api/leads/:id', optionalAuth, async (req, res) => {
+app.get('/api/leads/:id', authenticate, async (req, res) => {
 
     const lead = await Lead.findById(req.params.id);
 
@@ -8682,7 +8921,9 @@ app.post('/api/leads', authenticate, async (req, res) => {
 
         
 
-        webhookService.trigger('lead.created', { lead });
+        webhookService.trigger('lead.created', { lead }, {
+            ownerUserId: Number(lead?.owner_user_id || ownerScopeUserId || 0) || undefined
+        });
 
         
 
@@ -9251,7 +9492,9 @@ app.post('/api/leads/bulk-update', authenticate, async (req, res) => {
                     tagsUpdated += 1;
                 }
 
-                webhookService.trigger('lead.updated', { lead: updatedLead });
+                webhookService.trigger('lead.updated', { lead: updatedLead }, {
+                    ownerUserId: Number(updatedLead?.owner_user_id || ownerScopeUserId || 0) || undefined
+                });
 
                 const hasStatusInPayload = Object.prototype.hasOwnProperty.call(updateData, 'status');
                 const newStatus = hasStatusInPayload
@@ -9266,6 +9509,8 @@ app.post('/api/leads/bulk-update', authenticate, async (req, res) => {
                         lead: updatedLead,
                         oldStatus,
                         newStatus
+                    }, {
+                        ownerUserId: Number(updatedLead?.owner_user_id || ownerScopeUserId || 0) || undefined
                     });
 
                     try {
@@ -9349,7 +9594,9 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
     
 
-    webhookService.trigger('lead.updated', { lead: updatedLead });
+    webhookService.trigger('lead.updated', { lead: updatedLead }, {
+        ownerUserId: Number(updatedLead?.owner_user_id || 0) || undefined
+    });
 
     
 
@@ -9364,6 +9611,8 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
             lead: updatedLead,
             oldStatus,
             newStatus
+        }, {
+            ownerUserId: Number(updatedLead?.owner_user_id || 0) || undefined
         });
 
         const statusSessionId = sanitizeSessionId(
@@ -9434,10 +9683,15 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
 
 // ============================================
 
-app.get('/api/tags', optionalAuth, async (req, res) => {
+app.get('/api/tags', authenticate, async (req, res) => {
     try {
-        await Tag.syncFromLeads();
-        const tags = await Tag.list();
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const tagScope = {
+            owner_user_id: ownerScopeUserId || undefined
+        };
+
+        await Tag.syncFromLeads(tagScope);
+        const tags = await Tag.list(tagScope);
         res.json({ success: true, tags });
     } catch (error) {
         console.error('Falha ao listar tags:', error);
@@ -9447,6 +9701,11 @@ app.get('/api/tags', optionalAuth, async (req, res) => {
 
 app.post('/api/tags', authenticate, async (req, res) => {
     try {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const requesterUserId = getRequesterUserId(req);
+        const tagScope = {
+            owner_user_id: ownerScopeUserId || undefined
+        };
         const name = normalizeTagNameInput(req.body?.name);
         const color = normalizeTagColorInput(req.body?.color);
         const description = normalizeTagDescriptionInput(req.body?.description);
@@ -9455,12 +9714,15 @@ app.post('/api/tags', authenticate, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Nome da tag é obrigatório' });
         }
 
-        const existing = await Tag.findByName(name);
+        const existing = await Tag.findByName(name, tagScope);
         if (existing) {
             return res.status(409).json({ success: false, error: 'Já existe uma tag com este nome' });
         }
 
-        const tag = await Tag.create({ name, color, description });
+        const tag = await Tag.create(
+            { name, color, description, created_by: requesterUserId || undefined },
+            { ...tagScope, created_by: requesterUserId || undefined }
+        );
         res.status(201).json({ success: true, tag });
     } catch (error) {
         console.error('Falha ao criar tag:', error);
@@ -9470,12 +9732,16 @@ app.post('/api/tags', authenticate, async (req, res) => {
 
 app.put('/api/tags/:id', authenticate, async (req, res) => {
     try {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const tagScope = {
+            owner_user_id: ownerScopeUserId || undefined
+        };
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
             return res.status(400).json({ success: false, error: 'ID de tag inválido' });
         }
 
-        const currentTag = await Tag.findById(tagId);
+        const currentTag = await Tag.findById(tagId, tagScope);
         if (!currentTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
@@ -9487,7 +9753,7 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Nome da tag é obrigatório' });
             }
 
-            const duplicate = await Tag.findByName(nextName);
+            const duplicate = await Tag.findByName(nextName, tagScope);
             if (duplicate && Number(duplicate.id) !== tagId) {
                 return res.status(409).json({ success: false, error: 'Já existe uma tag com este nome' });
             }
@@ -9500,7 +9766,7 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
             payload.description = normalizeTagDescriptionInput(req.body.description);
         }
 
-        const updatedTag = await Tag.update(tagId, payload);
+        const updatedTag = await Tag.update(tagId, payload, tagScope);
         if (!updatedTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
@@ -9509,11 +9775,28 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
             payload.name &&
             normalizeTagNameInput(currentTag.name).toLowerCase() !== normalizeTagNameInput(updatedTag.name).toLowerCase()
         ) {
-            await Tag.renameInLeads(currentTag.name, updatedTag.name);
-            await run(
-                'UPDATE campaigns SET tag_filter = ? WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-                [updatedTag.name, currentTag.name]
-            );
+            await Tag.renameInLeads(currentTag.name, updatedTag.name, tagScope);
+            if (ownerScopeUserId) {
+                await run(`
+                    UPDATE campaigns
+                    SET tag_filter = ?
+                    WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))
+                      AND (
+                          created_by = ?
+                          OR EXISTS (
+                              SELECT 1
+                              FROM users owner_scope
+                              WHERE owner_scope.id = campaigns.created_by
+                                AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                          )
+                      )
+                `, [updatedTag.name, currentTag.name, ownerScopeUserId, ownerScopeUserId, ownerScopeUserId]);
+            } else {
+                await run(
+                    'UPDATE campaigns SET tag_filter = ? WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
+                    [updatedTag.name, currentTag.name]
+                );
+            }
         }
 
         res.json({ success: true, tag: updatedTag });
@@ -9525,22 +9808,47 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
 
 app.delete('/api/tags/:id', authenticate, async (req, res) => {
     try {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const tagScope = {
+            owner_user_id: ownerScopeUserId || undefined
+        };
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
             return res.status(400).json({ success: false, error: 'ID de tag inválido' });
         }
 
-        const currentTag = await Tag.findById(tagId);
+        const currentTag = await Tag.findById(tagId, tagScope);
         if (!currentTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
 
-        await Tag.delete(tagId);
-        await Tag.removeFromLeads(currentTag.name);
-        await run(
-            'UPDATE campaigns SET tag_filter = NULL WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-            [currentTag.name]
-        );
+        const deleted = await Tag.delete(tagId, tagScope);
+        if (!deleted) {
+            return res.status(404).json({ success: false, error: 'Tag nao encontrada' });
+        }
+
+        await Tag.removeFromLeads(currentTag.name, tagScope);
+        if (ownerScopeUserId) {
+            await run(`
+                UPDATE campaigns
+                SET tag_filter = NULL
+                WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))
+                  AND (
+                      created_by = ?
+                      OR EXISTS (
+                          SELECT 1
+                          FROM users owner_scope
+                          WHERE owner_scope.id = campaigns.created_by
+                            AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                      )
+                  )
+            `, [currentTag.name, ownerScopeUserId, ownerScopeUserId, ownerScopeUserId]);
+        } else {
+            await run(
+                'UPDATE campaigns SET tag_filter = NULL WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
+                [currentTag.name]
+            );
+        }
 
         res.json({ success: true });
     } catch (error) {
@@ -9788,7 +10096,7 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
 
         const lead = await Lead.findById(leadId);
         const hasAccess = lead
-            ? await canAccessAssignedRecordInOwnerScope(req, lead.assigned_to, ownerScopeUserId)
+            ? await canAccessLeadRecordInOwnerScope(req, lead, ownerScopeUserId)
             : false;
         if (!lead || !hasAccess) {
             return res.status(404).json({ error: 'Lead nao encontrado' });
@@ -9965,12 +10273,12 @@ app.post('/api/queue/add', authenticate, async (req, res) => {
 
     let resolvedSessionId = sanitizeSessionId(sessionId);
     if (!resolvedSessionId) {
-        const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
         const allocation = await senderAllocatorService.allocateForSingleLead({
             leadId,
             campaignId,
             strategy: 'round_robin',
-            ownerUserId: scopedUserId || undefined
+            ownerUserId: ownerScopeUserId || undefined
         });
         resolvedSessionId = sanitizeSessionId(allocation?.sessionId);
     }
@@ -10050,14 +10358,14 @@ app.post('/api/queue/bulk', authenticate, async (req, res) => {
 
     let distribution = { strategyUsed: fixedSessionId ? 'single' : distributionStrategy, summary: {} };
     if (!hasSessionAssignments) {
-        const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
         const allocationPlan = await senderAllocatorService.buildDistributionPlan({
             leadIds: normalizedLeadIds,
             campaignId: options.campaignId || req.body?.campaignId || null,
             senderAccounts,
             strategy: distributionStrategy,
             sessionId: fixedSessionId || null,
-            ownerUserId: scopedUserId || undefined
+            ownerUserId: ownerScopeUserId || undefined
         });
         options.sessionAssignments = allocationPlan.assignmentsByLead;
         options.assignmentMetaByLead = allocationPlan.assignmentMetaByLead;
@@ -10114,11 +10422,13 @@ app.delete('/api/queue', authenticate, async (req, res) => {
 
 
 
-app.get('/api/templates', optionalAuth, async (req, res) => {
+app.get('/api/templates', authenticate, async (req, res) => {
 
     const scopedUserId = getScopedUserId(req);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
     const templates = await Template.list({
         ...req.query,
+        owner_user_id: ownerScopeUserId || undefined,
         created_by: scopedUserId || undefined
     });
 
@@ -10145,8 +10455,11 @@ app.post('/api/templates', authenticate, async (req, res) => {
 
 
 app.put('/api/templates/:id', authenticate, async (req, res) => {
-
-    const existing = await Template.findById(req.params.id);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const existing = await Template.findById(req.params.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: getScopedUserId(req) || undefined
+    });
     if (!existing) {
         return res.status(404).json({ error: 'Template nao encontrado' });
     }
@@ -10156,7 +10469,10 @@ app.put('/api/templates/:id', authenticate, async (req, res) => {
 
     await Template.update(req.params.id, req.body);
 
-    const template = await Template.findById(req.params.id);
+    const template = await Template.findById(req.params.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: getScopedUserId(req) || undefined
+    });
 
     res.json({ success: true, template });
 
@@ -10165,8 +10481,11 @@ app.put('/api/templates/:id', authenticate, async (req, res) => {
 
 
 app.delete('/api/templates/:id', authenticate, async (req, res) => {
-
-    const existing = await Template.findById(req.params.id);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const existing = await Template.findById(req.params.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: getScopedUserId(req) || undefined
+    });
     if (!existing) {
         return res.status(404).json({ error: 'Template nao encontrado' });
     }
@@ -10831,7 +11150,7 @@ async function queueCampaignMessages(campaign, options = {}) {
 }
 
 
-app.get('/api/campaigns', optionalAuth, async (req, res) => {
+app.get('/api/campaigns', authenticate, async (req, res) => {
 
     const { status, type, limit, offset, search } = req.query;
     const scopedUserId = getScopedUserId(req);
@@ -10862,7 +11181,7 @@ app.get('/api/campaigns', optionalAuth, async (req, res) => {
 
 
 
-app.get('/api/campaigns/:id', optionalAuth, async (req, res) => {
+app.get('/api/campaigns/:id', authenticate, async (req, res) => {
 
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
     const campaign = await Campaign.findById(req.params.id, {
@@ -10884,7 +11203,7 @@ app.get('/api/campaigns/:id', optionalAuth, async (req, res) => {
 
 });
 
-app.get('/api/campaigns/:id/recipients', optionalAuth, async (req, res) => {
+app.get('/api/campaigns/:id/recipients', authenticate, async (req, res) => {
 
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
     const campaign = await Campaign.findById(req.params.id, {
@@ -11428,7 +11747,12 @@ app.get('/api/webhooks', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    const webhooks = await Webhook.list();
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const scopedUserId = getScopedUserId(req);
+    const webhooks = await Webhook.list({
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: scopedUserId || undefined
+    });
 
     res.json({ success: true, webhooks });
 
@@ -11440,9 +11764,18 @@ app.post('/api/webhooks', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    const result = await Webhook.create(req.body);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const scopedUserId = getScopedUserId(req);
+    const requesterUserId = getRequesterUserId(req);
+    const result = await Webhook.create({
+        ...(req.body && typeof req.body === 'object' ? req.body : {}),
+        created_by: requesterUserId || undefined
+    });
 
-    const webhook = await Webhook.findById(result.id);
+    const webhook = await Webhook.findById(result.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: scopedUserId || undefined
+    });
 
     res.json({ success: true, webhook });
 
@@ -11454,9 +11787,16 @@ app.put('/api/webhooks/:id', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    await Webhook.update(req.params.id, req.body);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const scopedUserId = getScopedUserId(req);
+    const webhook = await Webhook.update(req.params.id, req.body, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: scopedUserId || undefined
+    });
 
-    const webhook = await Webhook.findById(req.params.id);
+    if (!webhook) {
+        return res.status(404).json({ error: 'Webhook nao encontrado' });
+    }
 
     res.json({ success: true, webhook });
 
@@ -11468,7 +11808,16 @@ app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    await Webhook.delete(req.params.id);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const scopedUserId = getScopedUserId(req);
+    const deleted = await Webhook.delete(req.params.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: scopedUserId || undefined
+    });
+
+    if (!deleted) {
+        return res.status(404).json({ error: 'Webhook nao encontrado' });
+    }
 
     res.json({ success: true });
 
