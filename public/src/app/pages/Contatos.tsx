@@ -16,6 +16,8 @@ type ContatosGlobals = {
   bulkSendMessage?: () => void;
   bulkChangeStatus?: () => void;
   bulkAddTag?: () => void;
+  submitBulkChangeStatus?: () => void;
+  submitBulkAddTag?: () => void;
   bulkDelete?: () => void;
   clearSelection?: () => void;
   filterContacts?: () => void;
@@ -529,6 +531,67 @@ Use {{nome}} para personalizar`}
             <button className="btn btn-outline" onClick={() => globals.closeModal?.('bulkMessageModal')}>Cancelar</button>
             <button className="btn btn-whatsapp" onClick={() => globals.sendBulkMessage?.()}>
               <span className="icon icon-whatsapp icon-sm"></span> Enviar para Todos
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="modal-overlay" id="bulkStatusModal">
+        <div className="modal">
+          <div className="modal-header">
+            <h3 className="modal-title"><span className="icon icon-refresh icon-sm"></span> Alterar Status em Lote</h3>
+            <button className="modal-close" onClick={() => globals.closeModal?.('bulkStatusModal')}>×</button>
+          </div>
+          <div className="modal-body">
+            <div className="form-group">
+              <label className="form-label">Destinatários</label>
+              <p className="text-muted"><span id="bulkStatusRecipients">0</span> contatos selecionados</p>
+            </div>
+            <div className="form-group">
+              <label className="form-label required" htmlFor="bulkStatusValue">Novo status</label>
+              <select className="form-select" id="bulkStatusValue" defaultValue="1">
+                <option value="1">Novo</option>
+                <option value="2">Em Andamento</option>
+                <option value="3">Concluído</option>
+                <option value="4">Perdido</option>
+              </select>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-outline" onClick={() => globals.closeModal?.('bulkStatusModal')}>Cancelar</button>
+            <button className="btn btn-primary" onClick={() => globals.submitBulkChangeStatus?.()}>
+              <span className="icon icon-refresh icon-sm"></span> Aplicar Status
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="modal-overlay" id="bulkTagModal">
+        <div className="modal">
+          <div className="modal-header">
+            <h3 className="modal-title"><span className="icon icon-tag icon-sm"></span> Adicionar Tag em Lote</h3>
+            <button className="modal-close" onClick={() => globals.closeModal?.('bulkTagModal')}>×</button>
+          </div>
+          <div className="modal-body">
+            <div className="form-group">
+              <label className="form-label">Destinatários</label>
+              <p className="text-muted"><span id="bulkTagRecipients">0</span> contatos selecionados</p>
+            </div>
+            <div className="form-group">
+              <label className="form-label required" htmlFor="bulkTagInput">Tags para adicionar</label>
+              <input
+                type="text"
+                className="form-input"
+                id="bulkTagInput"
+                placeholder="Ex.: Lead, Campanha Março"
+              />
+              <p className="form-help">Separe múltiplas tags por vírgula.</p>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-outline" onClick={() => globals.closeModal?.('bulkTagModal')}>Cancelar</button>
+            <button className="btn btn-primary" onClick={() => globals.submitBulkAddTag?.()}>
+              <span className="icon icon-tag icon-sm"></span> Adicionar Tags
             </button>
           </div>
         </div>

@@ -3,7 +3,7 @@
  * Gerencia envio de mensagens em massa com delay para evitar bloqueios
  */
 
-const { MessageQueue, Settings, Lead } = require('../database/models');
+const { MessageQueue, Settings, Lead, Campaign } = require('../database/models');
 const { run, queryOne } = require('../database/connection');
 const EventEmitter = require('events');
 
@@ -22,6 +22,8 @@ class QueueService extends EventEmitter {
         this.intervalId = null;
         this.sendFunction = null;
         this.resolveSessionForMessage = null;
+        this.getSessionDispatchState = null;
+        this.leaderLock = null;
         this.workerEnabled = parseBooleanEnv(process.env.QUEUE_WORKER_ENABLED, true);
         this.defaultDelay = 3000; // 3 segundos entre mensagens
         this.maxMessagesPerMinute = 30;
@@ -31,6 +33,9 @@ class QueueService extends EventEmitter {
         this.queueSettingsCacheTtlMs = 30000;
         this.businessHoursCacheByOwner = new Map();
         this.businessHoursCacheTtlMs = 30000;
+        this.sessionDisconnectedRetryMs = this.parsePositiveNumber(process.env.WHATSAPP_SESSION_DISCONNECTED_RETRY_MS, 60000);
+        this.sessionReconnectingRetryMs = this.parsePositiveNumber(process.env.WHATSAPP_SESSION_RECONNECTING_RETRY_MS, 20000);
+        this.sessionWarmingRetryMs = this.parsePositiveNumber(process.env.WHATSAPP_SESSION_WARMING_UP_RETRY_MS, 10000);
     }
     
     /**
@@ -41,6 +46,16 @@ class QueueService extends EventEmitter {
         this.resolveSessionForMessage = typeof options.resolveSessionForMessage === 'function'
             ? options.resolveSessionForMessage
             : null;
+        this.getSessionDispatchState = typeof options.getSessionDispatchState === 'function'
+            ? options.getSessionDispatchState
+            : null;
+        this.workerEnabled = options.workerEnabled !== false;
+        this.leaderLock = options.leaderLock && typeof options.leaderLock.isHeld === 'function'
+            ? options.leaderLock
+            : null;
+        if (this.leaderLock && typeof this.leaderLock.start === 'function') {
+            await this.leaderLock.start();
+        }
         
         // Carregar configuracoes do banco
         const defaultSettings = await this.getQueueSettings(null, true);
@@ -51,8 +66,9 @@ class QueueService extends EventEmitter {
         if (this.workerEnabled) {
             this.startProcessing();
         } else {
-            console.log('[QueueWorker] desabilitado por QUEUE_WORKER_ENABLED=false');
+            console.log('[LeaderLock][queue-worker] worker desabilitado por configuracao');
         }
+        console.log('[QueueDebug][boot] queue instrumentation active');
         
         console.log('Servico de fila de mensagens iniciado');
         console.log(`   - Delay entre mensagens: ${this.defaultDelay}ms`);
@@ -114,6 +130,9 @@ class QueueService extends EventEmitter {
         const assignmentMetaByLead = (options.assignmentMetaByLead && typeof options.assignmentMetaByLead === 'object')
             ? options.assignmentMetaByLead
             : {};
+        const scheduledAtByLead = (options.scheduledAtByLead && typeof options.scheduledAtByLead === 'object')
+            ? options.scheduledAtByLead
+            : {};
         const perLeadIsFirstContact = (options.isFirstContactByLead && typeof options.isFirstContactByLead === 'object')
             ? options.isFirstContactByLead
             : {};
@@ -154,9 +173,12 @@ class QueueService extends EventEmitter {
             const leadId = leadIds[i];
             
             // Calcular tempo de agendamento baseado na posicao na fila
-            const scheduledAt = hasValidStartAt
-                ? new Date(nextScheduledAtMs).toISOString()
-                : null;
+            const explicitScheduledAt = String(scheduledAtByLead[String(leadId)] || '').trim();
+            const scheduledAt = explicitScheduledAt || (
+                hasValidStartAt
+                    ? new Date(nextScheduledAtMs).toISOString()
+                    : null
+            );
             
             const result = await this.add({
                 leadId,
@@ -175,7 +197,7 @@ class QueueService extends EventEmitter {
             
             results.push(result);
 
-            if (hasValidStartAt) {
+            if (!explicitScheduledAt && hasValidStartAt) {
                 nextScheduledAtMs += pickStepDelay();
             }
         }
@@ -210,6 +232,44 @@ class QueueService extends EventEmitter {
         if (!Number.isFinite(parsed)) return fallback;
         if (parsed < min) return fallback;
         return parsed;
+    }
+
+    normalizeSessionDispatchState(rawState = null) {
+        if (!rawState || typeof rawState !== 'object') {
+            return {
+                available: true,
+                status: 'connected',
+                retryAfterMs: null,
+                reason: ''
+            };
+        }
+
+        const available = rawState.available !== false;
+        const status = String(rawState.status || '').trim().toLowerCase() || (available ? 'connected' : 'disconnected');
+        const retryAfterMs = Number(rawState.retryAfterMs);
+        const reason = String(rawState.reason || '').trim();
+
+        return {
+            available,
+            status,
+            retryAfterMs: Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? Math.floor(retryAfterMs) : null,
+            reason
+        };
+    }
+
+    computeUnavailableSessionRetryMs(sessionState = null) {
+        const normalized = this.normalizeSessionDispatchState(sessionState);
+        if (normalized.retryAfterMs) return normalized.retryAfterMs;
+
+        if (normalized.status === 'warming_up') {
+            return this.sessionWarmingRetryMs;
+        }
+
+        if (normalized.status === 'reconnecting') {
+            return this.sessionReconnectingRetryMs;
+        }
+
+        return this.sessionDisconnectedRetryMs;
     }
 
     async resolveOwnerUserIdFromAssignee(assignedTo) {
@@ -488,11 +548,12 @@ class QueueService extends EventEmitter {
         if (this.isProcessing) return;
         if (!this.sendFunction) return;
         if (!this.workerEnabled) return;
+        if (this.leaderLock && !this.leaderLock.isHeld()) return;
 
         this.isProcessing = true;
 
         try {
-            const pendingMessages = await MessageQueue.getPending({ limit: 100 });
+            const pendingMessages = await MessageQueue.getPending({ limit: 100, ready_only: true });
             if (!pendingMessages || pendingMessages.length === 0) return;
 
             let selected = null;
@@ -501,12 +562,14 @@ class QueueService extends EventEmitter {
                 if (!lead) {
                     await MessageQueue.markProcessing(candidate.id);
                     await MessageQueue.markFailed(candidate.id, 'Lead nao encontrado');
+                    await this.maybeCompleteBroadcastCampaign(candidate.campaign_id || null);
                     continue;
                 }
 
                 if (Number(lead.is_blocked || 0) > 0) {
                     await MessageQueue.markProcessing(candidate.id);
                     await MessageQueue.markFailed(candidate.id, 'Lead bloqueado');
+                    await this.maybeCompleteBroadcastCampaign(candidate.campaign_id || null);
                     continue;
                 }
 
@@ -534,7 +597,6 @@ class QueueService extends EventEmitter {
             if (!selected) return;
 
             const { message, lead, ownerUserId, queueSettings } = selected;
-            await MessageQueue.markProcessing(message.id);
 
             let assignedSessionId = String(message.session_id || '').trim();
             if (!assignedSessionId && this.resolveSessionForMessage) {
@@ -557,8 +619,38 @@ class QueueService extends EventEmitter {
                 sendError.messageId = message.id;
                 sendError.leadId = message.lead_id;
                 sendError.conversationId = message.conversation_id;
+                sendError.campaignId = message.campaign_id || null;
                 throw sendError;
             }
+
+            if (this.getSessionDispatchState) {
+                const runtimeSessionState = this.normalizeSessionDispatchState(
+                    await this.getSessionDispatchState(assignedSessionId)
+                );
+                if (!runtimeSessionState.available) {
+                    const retryDelayMs = this.computeUnavailableSessionRetryMs(runtimeSessionState);
+                    const retryAt = new Date(Date.now() + retryDelayMs).toISOString();
+                    const reason = runtimeSessionState.reason || (
+                        runtimeSessionState.status === 'warming_up'
+                            ? 'Sessao em aquecimento apos reconexao'
+                            : runtimeSessionState.status === 'reconnecting'
+                                ? 'Sessao reconectando'
+                                : 'Sessao nao conectada'
+                    );
+                    console.log(`[QueueDebug][${assignedSessionId}] QUEUE_TRANSIENT_REQUEUE pre-send messageId=${message.id} leadId=${message.lead_id} sessionStatus=${runtimeSessionState.status || ''} retryAt=${retryAt} reason=${reason}`);
+                    await MessageQueue.requeueTransient(message.id, `[Q_REQUEUE_PRE] ${reason}`, retryAt);
+                    this.emit('message:deferred', {
+                        id: message.id,
+                        leadId: message.lead_id,
+                        sessionId: assignedSessionId,
+                        reason,
+                        retryAt
+                    });
+                    return;
+                }
+            }
+
+            await MessageQueue.markProcessing(message.id);
 
             try {
                 await this.sendFunction({
@@ -577,10 +669,13 @@ class QueueService extends EventEmitter {
                 sendError.messageId = message.id;
                 sendError.leadId = message.lead_id;
                 sendError.conversationId = message.conversation_id;
+                sendError.sessionId = assignedSessionId;
+                sendError.campaignId = message.campaign_id || null;
                 throw sendError;
             }
 
             await MessageQueue.markSent(message.id);
+            await this.maybeCompleteBroadcastCampaign(message.campaign_id || null);
             this.registerSentForOwner(ownerUserId || null, queueSettings.maxPerMinute);
             this.messagesSentThisMinute = this.getTotalMessagesSentThisMinute();
             this.defaultDelay = queueSettings.delay;
@@ -600,10 +695,75 @@ class QueueService extends EventEmitter {
             const messageId = Number(error?.messageId || 0);
             const leadId = Number(error?.leadId || 0);
             const conversationId = Number(error?.conversationId || 0);
-            console.error('Erro ao processar fila:', error.message);
+            const campaignId = Number(error?.campaignId || 0);
+            const failedSessionId = String(error?.sessionId || '').trim();
+            console.error(`[QueueDebug][${failedSessionId || 'unknown'}] Erro ao processar fila: ${error.message}`);
 
             if (messageId > 0) {
-                await MessageQueue.markFailed(messageId, error.message);
+                const errorText = String(error?.message || '');
+                const normalizedError = errorText
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase();
+                const errorCode = String(error?.code || '').trim().toUpperCase();
+                let isDisconnectedSessionError =
+                    errorCode === 'SESSION_DISCONNECTED' ||
+                    errorCode === 'SESSION_RECONNECTING' ||
+                    errorCode === 'SESSION_WARMING_UP' ||
+                    errorCode === 'SESSION_COOLDOWN' ||
+                    normalizedError.includes('not connected') ||
+                    normalizedError.includes('nao esta conectado') ||
+                    normalizedError.includes('nao esta conectada') ||
+                    normalizedError.includes('whatsapp nao esta conectado') ||
+                    normalizedError.includes('whatsapp nao esta conectada') ||
+                    normalizedError.includes('connection closed') ||
+                    normalizedError.includes('connection lost') ||
+                    normalizedError.includes('socket closed') ||
+                    normalizedError.includes('stream error') ||
+                    normalizedError.includes('stream errored') ||
+                    (
+                        normalizedError.includes('conect') &&
+                        (
+                            normalizedError.includes('sess') ||
+                            normalizedError.includes('whatsapp') ||
+                            normalizedError.includes('socket') ||
+                            normalizedError.includes('conexao') ||
+                            normalizedError.includes('desconect') ||
+                            normalizedError.includes('nao esta')
+                        )
+                    );
+
+                if (!isDisconnectedSessionError && failedSessionId && this.getSessionDispatchState) {
+                    try {
+                        const runtimeSessionState = this.normalizeSessionDispatchState(
+                            await this.getSessionDispatchState(failedSessionId)
+                        );
+                        console.log(`[QueueDebug][${failedSessionId}] RUNTIME_SESSION_STATE after send error messageId=${messageId} available=${runtimeSessionState.available} status=${runtimeSessionState.status || ''} reason=${runtimeSessionState.reason || ''}`);
+                        isDisconnectedSessionError = runtimeSessionState.available === false;
+                    } catch (_) {
+                        // noop: fallback para classificação por texto/código
+                    }
+                }
+
+                if (isDisconnectedSessionError) {
+                    const retryAfterMs = Number(error?.retryAfterMs);
+                    const retryDelayMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
+                        ? Math.floor(retryAfterMs)
+                        : this.computeUnavailableSessionRetryMs({
+                            status: errorCode === 'SESSION_WARMING_UP'
+                                ? 'warming_up'
+                                : errorCode === 'SESSION_RECONNECTING'
+                                    ? 'reconnecting'
+                                    : 'disconnected'
+                        });
+                    const retryAt = new Date(Date.now() + retryDelayMs).toISOString();
+                    console.log(`[QueueDebug][${failedSessionId || 'unknown'}] QUEUE_TRANSIENT_REQUEUE send-error messageId=${messageId} leadId=${leadId || ''} code=${errorCode || ''} retryAt=${retryAt} error=${error.message}`);
+                    await MessageQueue.requeueTransient(messageId, `[Q_REQUEUE] ${error.message}`, retryAt);
+                } else {
+                    console.log(`[QueueDebug][${failedSessionId || 'unknown'}] QUEUE_FINAL_FAIL send-error messageId=${messageId} leadId=${leadId || ''} code=${errorCode || ''} error=${error.message}`);
+                    await MessageQueue.markFailed(messageId, `[Q_FAIL] ${error.message}`);
+                }
+                await this.maybeCompleteBroadcastCampaign(campaignId || null);
                 if (conversationId > 0 && leadId > 0) {
                     try {
                         await run(
@@ -717,6 +877,39 @@ class QueueService extends EventEmitter {
         if (!ownerUserId) {
             this.defaultDelay = refreshed.delay;
             this.maxMessagesPerMinute = refreshed.maxPerMinute;
+        }
+    }
+
+    async maybeCompleteBroadcastCampaign(campaignId) {
+        const normalizedCampaignId = Number(campaignId || 0);
+        if (!Number.isInteger(normalizedCampaignId) || normalizedCampaignId <= 0) return;
+
+        try {
+            const campaign = await Campaign.findById(normalizedCampaignId);
+            if (!campaign) return;
+
+            const campaignType = String(campaign.type || '').trim().toLowerCase();
+            const campaignStatus = String(campaign.status || '').trim().toLowerCase();
+            if (campaignType !== 'broadcast' || campaignStatus !== 'active') {
+                return;
+            }
+
+            const progress = await MessageQueue.getCampaignProgress(normalizedCampaignId);
+            if (!progress.total) return;
+            if (progress.pending > 0 || progress.processing > 0) return;
+
+            await Campaign.refreshMetrics(normalizedCampaignId);
+            await Campaign.update(normalizedCampaignId, {
+                status: 'completed'
+            });
+
+            this.emit('campaign:completed', {
+                campaignId: normalizedCampaignId,
+                progress
+            });
+            console.log(`[QueueDebug][campaign:${normalizedCampaignId}] AUTO_COMPLETE broadcast total=${progress.total} sent=${progress.sent} failed=${progress.failed} cancelled=${progress.cancelled}`);
+        } catch (error) {
+            console.error(`[QueueDebug][campaign:${campaignId || 'unknown'}] Falha ao auto-concluir campanha: ${error.message}`);
         }
     }
 }

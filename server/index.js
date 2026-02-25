@@ -38,7 +38,7 @@ const qrcode = require('qrcode');
 
 // Database
 
-const { getDatabase, close: closeDatabase, query, run, generateUUID } = require('./database/connection');
+const { getDatabase, close: closeDatabase, query, run, generateUUID, USE_POSTGRES } = require('./database/connection');
 
 const { migrate } = require('./database/migrate');
 
@@ -69,6 +69,17 @@ const queueService = require('./services/queueService');
 
 const flowService = require('./services/flowService');
 const senderAllocatorService = require('./services/senderAllocatorService');
+const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
+const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
+const {
+    MailMktIntegrationError,
+    createEmailConfirmationTokenPayload,
+    hashEmailConfirmationToken,
+    isEmailConfirmed,
+    isEmailConfirmationExpired,
+    sendRegistrationConfirmationEmail,
+    tokenFingerprint
+} = require('./services/emailConfirmationService');
 const {
     DEFAULT_WHATSAPP_SESSION_ID,
     LEGACY_WHATSAPP_SESSION_ALIASES,
@@ -89,6 +100,11 @@ const connectionFixer = require('./utils/connectionFixer');
 // WhatsApp Service (engine Baileys modular)
 
 const whatsappService = require('./services/whatsapp');
+const {
+    createBaileysAuthState,
+    hasPersistedBaileysAuthState,
+    clearPersistedBaileysAuthState
+} = require('./services/whatsapp/baileysAuthStateStore');
 
 
 
@@ -131,8 +147,6 @@ const MAX_RECONNECT_ATTEMPTS = parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 5
 const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
-const QUEUE_WORKER_ENABLED = !['0', 'false', 'no', 'nao', 'não', 'off'].includes(String(process.env.QUEUE_WORKER_ENABLED || 'true').trim().toLowerCase());
-const SCHEDULED_AUTOMATIONS_WORKER_ENABLED = !['0', 'false', 'no', 'nao', 'não', 'off'].includes(String(process.env.SCHEDULED_AUTOMATIONS_WORKER_ENABLED || 'true').trim().toLowerCase());
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'self-protecao-veicular-key-2024';
 const APP_BRAND_NAME = 'ZapVender';
@@ -144,6 +158,140 @@ const DEFAULT_BUSINESS_HOURS_AUTO_REPLY = 'Ol\u00E1! Nosso atendimento est\u00E1
 const LEAD_AVATAR_SYNC_TTL_MS = parseInt(process.env.LEAD_AVATAR_SYNC_TTL_MS || '', 10) || (6 * 60 * 60 * 1000);
 const LEAD_AVATAR_SYNC_TIMEOUT_MS = parseInt(process.env.LEAD_AVATAR_SYNC_TIMEOUT_MS || '', 10) || 2500;
 const LEAD_AVATAR_CUSTOM_FIELD_KEY = 'avatar_url';
+const WHATSAPP_SYNC_FULL_HISTORY = parseBooleanEnv(process.env.WHATSAPP_SYNC_FULL_HISTORY, false);
+const WHATSAPP_USE_LATEST_BAILEYS_VERSION = parseBooleanEnv(process.env.WHATSAPP_USE_LATEST_BAILEYS_VERSION, false);
+const WHATSAPP_BAILEYS_VERSION_PIN = parseBaileysVersionFromEnv(process.env.WHATSAPP_BAILEYS_VERSION);
+const WHATSAPP_KEEPALIVE_INTERVAL_MS = parsePositiveIntEnv(process.env.WHATSAPP_KEEPALIVE_INTERVAL_MS, 15000);
+const WHATSAPP_CONNECT_TIMEOUT_MS = parsePositiveIntEnv(process.env.WHATSAPP_CONNECT_TIMEOUT_MS, 60000);
+const WHATSAPP_DEFAULT_QUERY_TIMEOUT_MS = parsePositiveIntEnv(process.env.WHATSAPP_DEFAULT_QUERY_TIMEOUT_MS, 60000);
+const WHATSAPP_RETRY_REQUEST_DELAY_MS = parsePositiveIntEnv(process.env.WHATSAPP_RETRY_REQUEST_DELAY_MS, 500);
+const WHATSAPP_SESSION_SEND_WARMUP_MS = parsePositiveIntEnv(process.env.WHATSAPP_SESSION_SEND_WARMUP_MS, 12000);
+const WHATSAPP_SESSION_DISPATCH_BACKOFF_MS = parsePositiveIntEnv(process.env.WHATSAPP_SESSION_DISPATCH_BACKOFF_MS, 60000);
+const WHATSAPP_AUTH_STATE_DRIVER = String(process.env.WHATSAPP_AUTH_STATE_DRIVER || 'multi_file').trim().toLowerCase();
+const WHATSAPP_AUTH_STATE_DB_FALLBACK_MULTI_FILE = parseBooleanEnv(process.env.WHATSAPP_AUTH_STATE_DB_FALLBACK_MULTI_FILE, true);
+let cachedBaileysSocketVersion = null;
+let cachedBaileysSocketVersionSource = null;
+
+function parseBooleanEnv(value, fallback = false) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const normalized = String(value).trim().toLowerCase();
+    if (['1', 'true', 'yes', 'sim', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'nao', 'não', 'off'].includes(normalized)) return false;
+    return fallback;
+}
+
+function parsePositiveIntEnv(value, fallback) {
+    const parsed = parseInt(String(value ?? ''), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const POSTGRES_WORKER_LEADER_LOCK_ENABLED = USE_POSTGRES && parseBooleanEnv(
+    process.env.POSTGRES_WORKER_LEADER_LOCK_ENABLED,
+    process.env.NODE_ENV === 'production'
+);
+const POSTGRES_WORKER_LEADER_LOCK_POLL_MS = parsePositiveIntEnv(
+    process.env.POSTGRES_WORKER_LEADER_LOCK_POLL_MS,
+    5000
+);
+const QUEUE_WORKER_ENABLED = parseBooleanEnv(
+    process.env.QUEUE_WORKER_ENABLED,
+    true
+);
+const SCHEDULED_AUTOMATIONS_WORKER_ENABLED = parseBooleanEnv(
+    process.env.SCHEDULED_AUTOMATIONS_WORKER_ENABLED,
+    true
+);
+const TENANT_INTEGRITY_AUDIT_WORKER_ENABLED = parseBooleanEnv(
+    process.env.TENANT_INTEGRITY_AUDIT_WORKER_ENABLED,
+    true
+);
+const TENANT_INTEGRITY_AUDIT_INTERVAL_MS = parsePositiveIntEnv(
+    process.env.TENANT_INTEGRITY_AUDIT_INTERVAL_MS,
+    6 * 60 * 60 * 1000
+);
+const TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT = parsePositiveIntEnv(
+    process.env.TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT,
+    10
+);
+const TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL = parseBooleanEnv(
+    process.env.TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL,
+    false
+);
+
+const queueWorkerLeaderLock = new PostgresAdvisoryLock({
+    name: 'queue-worker',
+    key1: 47321,
+    key2: 1,
+    pollMs: POSTGRES_WORKER_LEADER_LOCK_POLL_MS,
+    enabled: POSTGRES_WORKER_LEADER_LOCK_ENABLED && QUEUE_WORKER_ENABLED
+});
+
+const scheduledAutomationLeaderLock = new PostgresAdvisoryLock({
+    name: 'scheduled-automations',
+    key1: 47321,
+    key2: 2,
+    pollMs: POSTGRES_WORKER_LEADER_LOCK_POLL_MS,
+    enabled: POSTGRES_WORKER_LEADER_LOCK_ENABLED && SCHEDULED_AUTOMATIONS_WORKER_ENABLED
+});
+
+const tenantIntegrityAuditLeaderLock = new PostgresAdvisoryLock({
+    name: 'tenant-integrity-audit',
+    key1: 47321,
+    key2: 3,
+    pollMs: POSTGRES_WORKER_LEADER_LOCK_POLL_MS,
+    enabled: POSTGRES_WORKER_LEADER_LOCK_ENABLED && TENANT_INTEGRITY_AUDIT_WORKER_ENABLED
+});
+
+function parseBaileysVersionFromEnv(value) {
+    const normalized = String(value || '').trim();
+    if (!normalized) return null;
+    const parts = normalized
+        .split(/[.,]/)
+        .map((part) => parseInt(String(part).trim(), 10))
+        .filter((part) => Number.isFinite(part) && part >= 0);
+    if (parts.length < 3) return null;
+    return parts.slice(0, 3);
+}
+
+async function resolveBaileysSocketVersion(fetchLatestBaileysVersion, sessionId = '') {
+    if (WHATSAPP_BAILEYS_VERSION_PIN) {
+        cachedBaileysSocketVersion = [...WHATSAPP_BAILEYS_VERSION_PIN];
+        cachedBaileysSocketVersionSource = 'env-pin';
+        return [...cachedBaileysSocketVersion];
+    }
+
+    if (!WHATSAPP_USE_LATEST_BAILEYS_VERSION) {
+        cachedBaileysSocketVersion = null;
+        cachedBaileysSocketVersionSource = 'library-default';
+        return null;
+    }
+
+    if (cachedBaileysSocketVersion && Array.isArray(cachedBaileysSocketVersion)) {
+        return [...cachedBaileysSocketVersion];
+    }
+
+    if (typeof fetchLatestBaileysVersion !== 'function') {
+        cachedBaileysSocketVersion = null;
+        cachedBaileysSocketVersionSource = 'library-default';
+        return null;
+    }
+
+    try {
+        const latest = await fetchLatestBaileysVersion();
+        const version = Array.isArray(latest?.version) ? latest.version : null;
+        if (version && version.length >= 3) {
+            cachedBaileysSocketVersion = version.slice(0, 3);
+            cachedBaileysSocketVersionSource = 'latest';
+            return [...cachedBaileysSocketVersion];
+        }
+    } catch (error) {
+        console.warn(`[${sessionId || 'whatsapp'}] Falha ao resolver versao latest do Baileys, usando versao interna:`, error.message);
+    }
+
+    cachedBaileysSocketVersion = null;
+    cachedBaileysSocketVersionSource = 'library-default';
+    return null;
+}
 
 function buildWhatsAppBrowserName(companyName) {
     const cleanedCompany = String(companyName || '').replace(/\s+/g, ' ').trim();
@@ -210,6 +358,68 @@ async function canAccessAssignedRecordInOwnerScope(req, assignedTo, ownerScopeUs
 
     const assignedOwnerUserId = normalizeOwnerUserId(assignedUser.owner_user_id);
     return assignedOwnerUserId === effectiveOwnerUserId || Number(assignedUser.id || 0) === effectiveOwnerUserId;
+}
+
+async function canAccessLeadRecordInOwnerScope(req, lead, ownerScopeUserId = null) {
+    if (!lead) return false;
+    if (!canAccessAssignedRecord(req, lead.assigned_to)) return false;
+
+    const effectiveOwnerUserId = normalizeOwnerUserId(ownerScopeUserId) || await resolveRequesterOwnerUserId(req);
+    if (!effectiveOwnerUserId) return true;
+
+    const leadOwnerUserId = normalizeOwnerUserId(lead.owner_user_id);
+    if (leadOwnerUserId) {
+        return leadOwnerUserId === effectiveOwnerUserId;
+    }
+
+    return await canAccessAssignedRecordInOwnerScope(req, lead.assigned_to, effectiveOwnerUserId);
+}
+
+async function resolveOwnerScopeUserIdFromAssignees(...assignees) {
+    for (const assignee of assignees) {
+        const userId = Number(assignee || 0);
+        if (!Number.isInteger(userId) || userId <= 0) continue;
+        const user = await User.findById(userId);
+        if (!user) continue;
+        return normalizeOwnerUserId(user.owner_user_id) || Number(user.id || 0) || null;
+    }
+    return null;
+}
+
+async function resolveSessionOwnerUserId(sessionId) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return null;
+
+    const runtimeOwnerUserId = normalizeOwnerUserId(sessions.get(normalizedSessionId)?.ownerUserId);
+    if (runtimeOwnerUserId) return runtimeOwnerUserId;
+
+    const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId);
+    return normalizeOwnerUserId(storedSession?.created_by) || null;
+}
+
+async function canAccessSessionRecordInOwnerScope(req, sessionId, ownerScopeUserId = null) {
+    if (isScopedAgent(req)) return false;
+
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return false;
+
+    const effectiveOwnerUserId = normalizeOwnerUserId(ownerScopeUserId) || await resolveRequesterOwnerUserId(req);
+    if (!effectiveOwnerUserId) return true;
+
+    const session = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+        owner_user_id: effectiveOwnerUserId
+    });
+    return !!session;
+}
+
+async function canAccessConversationInOwnerScope(req, conversation, ownerScopeUserId = null) {
+    if (!conversation) return false;
+
+    if (await canAccessAssignedRecordInOwnerScope(req, conversation.assigned_to, ownerScopeUserId)) {
+        return true;
+    }
+
+    return await canAccessSessionRecordInOwnerScope(req, conversation.session_id, ownerScopeUserId);
 }
 
 function getScopedSettingsPrefix(userId) {
@@ -565,6 +775,56 @@ const io = new Server(server, {
 
 // Autenticação via JWT no handshake do Socket.IO
 
+function getOwnerScopeRoom(ownerUserId) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    return normalizedOwnerUserId > 0 ? `owner:${normalizedOwnerUserId}` : '';
+}
+
+function emitToOwnerScope(ownerUserId, eventName, payload, options = {}) {
+    const room = getOwnerScopeRoom(ownerUserId);
+    if (room) {
+        io.to(room).emit(eventName, payload);
+        return true;
+    }
+
+    if (options.allowGlobalFallback === true) {
+        io.emit(eventName, payload);
+        return true;
+    }
+
+    return false;
+}
+
+async function emitToSessionOwnerScope(sessionId, eventName, payload, options = {}) {
+    const explicitOwnerUserId = normalizeOwnerUserId(options.ownerUserId);
+    const ownerUserId = explicitOwnerUserId || await resolveSessionOwnerUserId(sessionId);
+    return emitToOwnerScope(ownerUserId, eventName, payload, options);
+}
+
+async function ensureSocketOwnerScopeRoom(socket) {
+    const ownerUserId = await resolveSocketOwnerUserId(socket);
+    const roomName = getOwnerScopeRoom(ownerUserId);
+    const socketData = socket && typeof socket === 'object'
+        ? (socket.data = socket.data || {})
+        : {};
+    const previousRoomName = String(socketData.ownerScopeRoom || '').trim();
+
+    if (previousRoomName && previousRoomName !== roomName) {
+        socket.leave(previousRoomName);
+    }
+    if (roomName && previousRoomName !== roomName) {
+        socket.join(roomName);
+    }
+
+    socketData.ownerScopeUserId = ownerUserId || null;
+    socketData.ownerScopeRoom = roomName || null;
+    return ownerUserId || null;
+}
+
+function buildSocketRequestLike(socket) {
+    return { user: socket?.user || null };
+}
+
 io.use((socket, next) => {
 
     try {
@@ -624,6 +884,8 @@ const sessionInitLocks = new Set();
 const pendingCiphertextRecoveries = new Map();
 const pendingLidResolutionRecoveries = new Map();
 const recoveredFlowMessageIds = new Map();
+const sessionReconnectCatchupTimers = new Map();
+const sessionReconnectCatchupInFlight = new Set();
 const reconnectInFlight = new Set();
 const FLOW_RECOVERY_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_DELAY_MS || '', 10) || 2500;
 const FLOW_RECOVERY_WINDOW_MS = parseInt(process.env.FLOW_RECOVERY_WINDOW_MS || '', 10) || (5 * 60 * 1000);
@@ -634,6 +896,11 @@ const LID_RESOLUTION_RECOVERY_MAX_ATTEMPTS = parseInt(process.env.LID_RESOLUTION
 const LID_RESOLUTION_RECOVERY_BASE_DELAY_MS = parseInt(process.env.LID_RESOLUTION_RECOVERY_BASE_DELAY_MS || '', 10) || 1200;
 const LID_RESOLUTION_RECOVERY_MAX_DELAY_MS = parseInt(process.env.LID_RESOLUTION_RECOVERY_MAX_DELAY_MS || '', 10) || 9000;
 const BAILEYS_CIPHERTEXT_STUB_TYPE = 1;
+const WHATSAPP_RECONNECT_CATCHUP_ENABLED = parseBooleanEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_ENABLED, true);
+const WHATSAPP_RECONNECT_CATCHUP_DELAY_MS = parsePositiveIntEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_DELAY_MS, 7000);
+const WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS = parsePositiveIntEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS, 40);
+const WHATSAPP_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION = parsePositiveIntEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION, 80);
+const WHATSAPP_RECONNECT_CATCHUP_MAX_RUNTIME_MS = parsePositiveIntEnv(process.env.WHATSAPP_RECONNECT_CATCHUP_MAX_RUNTIME_MS, 45000);
 
 senderAllocatorService.setRuntimeSessionsGetter(() => sessions);
 senderAllocatorService.setDefaultSessionId(DEFAULT_WHATSAPP_SESSION_ID);
@@ -653,6 +920,164 @@ function stopSessionHealthMonitor(session) {
 function isActiveSessionSocket(sessionId, sock) {
     const session = sessions.get(sessionId);
     return Boolean(session && session.socket === sock);
+}
+
+function normalizeSessionErrorText(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+}
+
+function isDisconnectedSessionRuntimeError(error) {
+    const code = String(error?.code || '').trim().toUpperCase();
+    if (code === 'SESSION_DISCONNECTED' || code === 'SESSION_RECONNECTING' || code === 'SESSION_COOLDOWN') {
+        return true;
+    }
+
+    const message = normalizeSessionErrorText(error?.message || error);
+    if (!message) return false;
+
+    return (
+        message.includes('not connected') ||
+        message.includes('connection closed') ||
+        message.includes('connection lost') ||
+        message.includes('stream errored') ||
+        message.includes('stream error') ||
+        message.includes('socket closed') ||
+        (message.includes('sess') && message.includes('conect'))
+    );
+}
+
+function setRuntimeSessionDispatchBackoff(session, backoffMs = WHATSAPP_SESSION_DISPATCH_BACKOFF_MS) {
+    if (!session) return 0;
+    const durationMs = Number(backoffMs);
+    const normalizedBackoffMs = Number.isFinite(durationMs) && durationMs > 0
+        ? Math.floor(durationMs)
+        : WHATSAPP_SESSION_DISPATCH_BACKOFF_MS;
+    const nextBlockedUntilMs = Date.now() + normalizedBackoffMs;
+    session.dispatchBlockedUntilMs = Math.max(Number(session.dispatchBlockedUntilMs || 0), nextBlockedUntilMs);
+    return session.dispatchBlockedUntilMs;
+}
+
+function clearRuntimeSessionDispatchBackoff(session) {
+    if (!session) return;
+    session.dispatchBlockedUntilMs = 0;
+}
+
+function getSessionDispatchState(sessionId) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const session = sessions.get(normalizedSessionId);
+    if (!session) {
+        const hasStoredSession = normalizedSessionId ? sessionExists(normalizedSessionId) : false;
+        return {
+            available: false,
+            status: hasStoredSession ? 'reconnecting' : 'disconnected',
+            retryAfterMs: hasStoredSession
+                ? Math.min(20000, Math.max(RECONNECT_DELAY, 3000))
+                : WHATSAPP_SESSION_DISPATCH_BACKOFF_MS,
+            reason: hasStoredSession
+                ? 'Sessao reidratando/reconectando no servidor'
+                : 'Sessao nao inicializada no runtime'
+        };
+    }
+
+    const nowMs = Date.now();
+    const blockedUntilMs = Number(session.dispatchBlockedUntilMs || 0);
+    if (blockedUntilMs > nowMs) {
+        const retryAfterMs = Math.max(1000, blockedUntilMs - nowMs);
+        return {
+            available: false,
+            status: session.isConnected ? 'warming_up' : (session.reconnecting ? 'reconnecting' : 'disconnected'),
+            retryAfterMs,
+            reason: session.isConnected
+                ? 'Sessao em aquecimento apos reconexao'
+                : (session.reconnecting ? 'Sessao reconectando' : 'Sessao temporariamente indisponivel')
+        };
+    }
+
+    if (!session.isConnected) {
+        return {
+            available: false,
+            status: session.reconnecting ? 'reconnecting' : 'disconnected',
+            retryAfterMs: session.reconnecting ? Math.min(20000, Math.max(RECONNECT_DELAY, 3000)) : WHATSAPP_SESSION_DISPATCH_BACKOFF_MS,
+            reason: session.reconnecting ? 'Sessao reconectando' : 'Sessao nao conectada'
+        };
+    }
+
+    const sendReadyAtMs = Number(session.sendReadyAtMs || 0);
+    if (sendReadyAtMs > nowMs) {
+        return {
+            available: false,
+            status: 'warming_up',
+            retryAfterMs: Math.max(1000, sendReadyAtMs - nowMs),
+            reason: 'Sessao em aquecimento apos reconexao'
+        };
+    }
+
+    return {
+        available: true,
+        status: 'connected',
+        retryAfterMs: null,
+        reason: ''
+    };
+}
+
+function buildSessionUnavailableError(sessionState, fallbackMessage = 'Sessao nao conectada') {
+    const status = String(sessionState?.status || '').trim().toLowerCase();
+    const retryAfterMs = Number(sessionState?.retryAfterMs);
+    let message = String(sessionState?.reason || '').trim();
+    let code = 'SESSION_DISCONNECTED';
+
+    if (status === 'warming_up') {
+        code = 'SESSION_WARMING_UP';
+        if (!message) message = 'Sessao em aquecimento apos reconexao';
+    } else if (status === 'reconnecting') {
+        code = 'SESSION_RECONNECTING';
+        if (!message) message = 'Sessao reconectando';
+    } else if (status === 'cooldown') {
+        code = 'SESSION_COOLDOWN';
+        if (!message) message = 'Sessao em cooldown temporario';
+    }
+
+    if (!message) message = fallbackMessage;
+
+    const error = new Error(message);
+    error.code = code;
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+        error.retryAfterMs = Math.floor(retryAfterMs);
+    }
+    return error;
+}
+
+function scheduleRuntimeSessionReconnect(sessionId, session = null) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return;
+
+    const runtimeSession = session || sessions.get(normalizedSessionId);
+    if (!runtimeSession) return;
+    if (runtimeSession.reconnecting) return;
+    if (sessionInitLocks.has(normalizedSessionId)) return;
+    if (reconnectInFlight.has(normalizedSessionId)) return;
+
+    runtimeSession.reconnecting = true;
+
+    setTimeout(() => {
+        const latestSession = sessions.get(normalizedSessionId);
+        if (!latestSession) return;
+        if (sessionInitLocks.has(normalizedSessionId)) return;
+        if (latestSession.isConnected) return;
+
+        const currentAttempt = reconnectAttempts.get(normalizedSessionId) || 0;
+        const clientSocket = latestSession.clientSocket || null;
+        const ownerUserId = Number(latestSession.ownerUserId || 0) > 0 ? Number(latestSession.ownerUserId) : undefined;
+
+        createSession(normalizedSessionId, clientSocket, currentAttempt, {
+            ownerUserId
+        }).catch((error) => {
+            console.error(`[${normalizedSessionId}] Falha ao reconectar apos erro de envio:`, error.message);
+        });
+    }, 50);
 }
 
 
@@ -1575,6 +2000,7 @@ function normalizeJid(jid) {
 
 async function registerContactAlias(contact, sessionId = '', sessionPhone = '') {
     if (!contact) return;
+    const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
 
     const candidates = [
 
@@ -1638,7 +2064,8 @@ async function registerContactAlias(contact, sessionId = '', sessionPhone = '') 
         for (const candidateJid of userJids) {
             const normalizedCandidateJid = normalizeJid(candidateJid) || candidateJid;
             const candidatePhone = extractNumber(normalizedCandidateJid);
-            const lead = await Lead.findByJid(normalizedCandidateJid) || await Lead.findByPhone(candidatePhone);
+            const lead = await Lead.findByJid(normalizedCandidateJid, { owner_user_id: sessionOwnerUserId || undefined })
+                || await Lead.findByPhone(candidatePhone, { owner_user_id: sessionOwnerUserId || undefined });
             if (!lead) continue;
 
             if (shouldAutoUpdateLeadName(lead, lead.phone || candidatePhone, sessionDisplayName)) {
@@ -1657,9 +2084,11 @@ async function registerContactAlias(contact, sessionId = '', sessionPhone = '') 
 
 
 
-        const primary = await Lead.findByJid(mappedUserJid) || await Lead.findByPhone(extractNumber(mappedUserJid));
+        const primary = await Lead.findByJid(mappedUserJid, { owner_user_id: sessionOwnerUserId || undefined })
+            || await Lead.findByPhone(extractNumber(mappedUserJid), { owner_user_id: sessionOwnerUserId || undefined });
 
-        const duplicate = await Lead.findByJid(lidJid) || await Lead.findByPhone(extractNumber(lidJid));
+        const duplicate = await Lead.findByJid(lidJid, { owner_user_id: sessionOwnerUserId || undefined })
+            || await Lead.findByPhone(extractNumber(lidJid), { owner_user_id: sessionOwnerUserId || undefined });
 
 
 
@@ -1833,6 +2262,18 @@ async function mergeConversationsForLeads(primaryLeadId, duplicateLeadId) {
 async function mergeLeads(primaryLead, duplicateLead) {
 
     if (!primaryLead || !duplicateLead || primaryLead.id === duplicateLead.id) return;
+    const primaryOwnerUserId = Number(primaryLead.owner_user_id || 0);
+    const duplicateOwnerUserId = Number(duplicateLead.owner_user_id || 0);
+    if (
+        Number.isInteger(primaryOwnerUserId) && primaryOwnerUserId > 0
+        && Number.isInteger(duplicateOwnerUserId) && duplicateOwnerUserId > 0
+        && primaryOwnerUserId !== duplicateOwnerUserId
+    ) {
+        console.warn(
+            `Ignorando merge entre leads de owners diferentes (${primaryLead.id}:${primaryOwnerUserId} vs ${duplicateLead.id}:${duplicateOwnerUserId})`
+        );
+        return;
+    }
 
     const mergedTags = Array.from(
         new Set([
@@ -2014,7 +2455,7 @@ async function cleanupInvalidPhones() {
 
         const candidates = await query(
 
-            "SELECT id, jid, phone FROM leads WHERE jid LIKE '%@s.whatsapp.net%'"
+            "SELECT id, jid, phone, owner_user_id FROM leads WHERE jid LIKE '%@s.whatsapp.net%'"
 
         );
 
@@ -2031,8 +2472,10 @@ async function cleanupInvalidPhones() {
             if (normalized === String(lead.phone || '')) continue;
 
 
-
-            const existing = await Lead.findByPhone(normalized);
+            const leadOwnerUserId = Number(lead?.owner_user_id || 0);
+            const existing = (Number.isInteger(leadOwnerUserId) && leadOwnerUserId > 0)
+                ? await Lead.findByPhone(normalized, { owner_user_id: leadOwnerUserId })
+                : null;
 
             if (existing && existing.id !== lead.id) {
 
@@ -2098,7 +2541,7 @@ async function cleanupDuplicatePhoneSuffixLeads() {
 
     try {
 
-        const leads = await query("SELECT id, phone, jid, name, source, custom_fields, last_message_at FROM leads WHERE phone IS NOT NULL");
+        const leads = await query("SELECT id, phone, jid, name, source, custom_fields, last_message_at, owner_user_id FROM leads WHERE phone IS NOT NULL");
 
         if (!leads || leads.length === 0) return;
 
@@ -2112,7 +2555,11 @@ async function cleanupDuplicatePhoneSuffixLeads() {
 
             if (digits.length < 11) continue;
 
-            const key = digits.slice(-11);
+            const ownerUserId = Number(lead?.owner_user_id || 0);
+            const ownerScopeKey = Number.isInteger(ownerUserId) && ownerUserId > 0
+                ? `owner:${ownerUserId}`
+                : `legacy:${lead.id}`;
+            const key = `${ownerScopeKey}:${digits.slice(-11)}`;
 
             if (!groups.has(key)) groups.set(key, []);
 
@@ -2247,21 +2694,28 @@ async function rehydrateSessions(ioInstance) {
 
     try {
 
-        const stored = await query(`SELECT session_id FROM whatsapp_sessions`);
+        const stored = await query(`SELECT session_id, created_by FROM whatsapp_sessions`);
 
         for (const row of stored) {
 
             const sessionId = row.session_id;
+            const ownerUserId = Number(row?.created_by || 0);
+            const hasLocalSession = sessionExists(sessionId);
+            const hasDbAuthState = !hasLocalSession && WHATSAPP_AUTH_STATE_DRIVER !== 'multi_file'
+                ? await hasPersistedBaileysAuthState(sessionId)
+                : false;
 
-            if (sessionExists(sessionId)) {
+            if (hasLocalSession || hasDbAuthState) {
 
                 console.log(`[${sessionId}] Reidratando sessão armazenada...`);
 
-                await createSession(sessionId, null);
+                await createSession(sessionId, null, 0, {
+                    ownerUserId: Number.isInteger(ownerUserId) && ownerUserId > 0 ? ownerUserId : undefined
+                });
 
             } else {
 
-                console.log(`[${sessionId}] Sessão no banco sem arquivos locais, ignorando.`);
+                console.log(`[${sessionId}] Sessão no banco sem auth state local/DB, ignorando.`);
 
             }
 
@@ -2331,10 +2785,12 @@ async function sendMessageToWhatsApp(options) {
 
     
 
-    if (!session || !session.isConnected) {
-
-        throw new Error('WhatsApp não está conectado');
-
+    const dispatchState = getSessionDispatchState(sid);
+    if (!session || !dispatchState.available) {
+        if (session && !session.isConnected && !session.reconnecting) {
+            scheduleRuntimeSessionReconnect(sid, session);
+        }
+        throw buildSessionUnavailableError(dispatchState, 'WhatsApp nao esta conectado');
     }
 
     
@@ -2345,80 +2801,96 @@ async function sendMessageToWhatsApp(options) {
 
     
 
-    if (mediaType === 'image' && mediaUrl) {
-
-        result = await session.socket.sendMessage(targetJid, {
-
-            image: { url: mediaUrl },
-
-            caption: content || ''
-
-        });
-
-    } else if (mediaType === 'video' && mediaUrl) {
-
-        result = await session.socket.sendMessage(targetJid, {
-
-            video: { url: mediaUrl },
-
-            caption: content || ''
-
-        });
-
-    } else if (mediaType === 'document' && mediaUrl) {
-
-        result = await session.socket.sendMessage(targetJid, {
-
-            document: { url: mediaUrl },
-
-            mimetype: options.mimetype || 'application/pdf',
-
-            fileName: options.fileName || 'documento'
-
-        });
-
-    } else if (mediaType === 'audio' && mediaUrl) {
-
-        try {
-
-            const audioOptions = await audioFixer.prepareAudioForSend(mediaUrl, {
-
-                mimetype: options.mimetype || 'audio/ogg; codecs=opus',
-
-                ptt: options.ptt !== undefined ? options.ptt : true,
-
-                duration: options.duration || null
-
-            });
+    try {
+        if (mediaType === 'image' && mediaUrl) {
 
             result = await session.socket.sendMessage(targetJid, {
 
-                audio: { url: audioOptions.path || mediaUrl },
+                image: { url: mediaUrl },
 
-                ...audioOptions.options
+                caption: content || ''
 
             });
 
-        } catch (error) {
-
-            console.error('[SendMessage] Erro ao preparar áudio, usando método padrão:', error.message);
+        } else if (mediaType === 'video' && mediaUrl) {
 
             result = await session.socket.sendMessage(targetJid, {
 
-                audio: { url: mediaUrl },
+                video: { url: mediaUrl },
 
-                mimetype: options.mimetype || 'audio/ogg; codecs=opus',
-
-                ptt: options.ptt !== undefined ? options.ptt : true
+                caption: content || ''
 
             });
+
+        } else if (mediaType === 'document' && mediaUrl) {
+
+            result = await session.socket.sendMessage(targetJid, {
+
+                document: { url: mediaUrl },
+
+                mimetype: options.mimetype || 'application/pdf',
+
+                fileName: options.fileName || 'documento'
+
+            });
+
+        } else if (mediaType === 'audio' && mediaUrl) {
+
+            try {
+
+                const audioOptions = await audioFixer.prepareAudioForSend(mediaUrl, {
+
+                    mimetype: options.mimetype || 'audio/ogg; codecs=opus',
+
+                    ptt: options.ptt !== undefined ? options.ptt : true,
+
+                    duration: options.duration || null
+
+                });
+
+                result = await session.socket.sendMessage(targetJid, {
+
+                    audio: { url: audioOptions.path || mediaUrl },
+
+                    ...audioOptions.options
+
+                });
+
+            } catch (error) {
+
+                console.error('[SendMessage] Erro ao preparar áudio, usando método padrão:', error.message);
+
+                result = await session.socket.sendMessage(targetJid, {
+
+                    audio: { url: mediaUrl },
+
+                    mimetype: options.mimetype || 'audio/ogg; codecs=opus',
+
+                    ptt: options.ptt !== undefined ? options.ptt : true
+
+                });
+
+            }
+
+        } else {
+
+            result = await session.socket.sendMessage(targetJid, { text: content });
 
         }
-
-    } else {
-
-        result = await session.socket.sendMessage(targetJid, { text: content });
-
+    } catch (sendError) {
+        if (isDisconnectedSessionRuntimeError(sendError)) {
+            session.isConnected = false;
+            session.reconnecting = true;
+            const blockedUntilMs = setRuntimeSessionDispatchBackoff(session);
+            scheduleRuntimeSessionReconnect(sid, session);
+            const connectionError = buildSessionUnavailableError({
+                status: 'disconnected',
+                retryAfterMs: blockedUntilMs > Date.now() ? Math.max(1000, blockedUntilMs - Date.now()) : null,
+                reason: 'WhatsApp nao esta conectado'
+            });
+            throw connectionError;
+        }
+        throw sendError;
     }
 
     
@@ -2553,9 +3025,11 @@ async function requestSessionPairingCode(sessionId, clientSocket, phoneNumber, o
                     phoneNumber: normalizedPhone,
                     code: pairingCode
                 });
-                io.emit('whatsapp-pairing-code', {
+                await emitToSessionOwnerScope(sessionId, 'whatsapp-pairing-code', {
                     sessionId,
                     phoneNumber: normalizedPhone
+                }, {
+                    ownerUserId: Number(session?.ownerUserId || 0) || null
                 });
 
                 console.log(`[${sessionId}] Codigo de pareamento gerado para ${normalizedPhone}`);
@@ -2622,6 +3096,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
     const sessionPath = path.join(SESSIONS_DIR, sessionId);
 
     const previousSession = sessions.get(sessionId);
+    clearSessionReconnectCatchupTimer(sessionId);
     if (previousSession?.socket) {
         stopSessionHealthMonitor(previousSession);
         try {
@@ -2658,8 +3133,6 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
             DisconnectReason,
 
-            useMultiFileAuthState,
-
             fetchLatestBaileysVersion,
 
             makeCacheableSignalKeyStore,
@@ -2680,31 +3153,41 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
         
 
-        // Validar e corrigir sessão se necessário
+        // Validar e corrigir sessÃ£o local somente quando o auth state principal for por arquivos.
+        if (WHATSAPP_AUTH_STATE_DRIVER === 'multi_file') {
 
-        const sessionValidation = await connectionFixer.validateSession(sessionPath);
+            const sessionValidation = await connectionFixer.validateSession(sessionPath);
 
-        if (!sessionValidation.valid && attempt === 0) {
+            if (!sessionValidation.valid && attempt === 0) {
 
-            console.log(`[${sessionId}] Problemas na sessão detectados, corrigindo...`);
+                console.log(`[${sessionId}] Problemas na sessão detectados, corrigindo...`);
 
-            await connectionFixer.fixSession(sessionPath);
+                await connectionFixer.fixSession(sessionPath);
 
+            }
         }
 
         
 
-        const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+        const { state, saveCreds, driver: authStateDriver } = await createBaileysAuthState({
+            sessionId,
+            sessionPath,
+            baileys,
+            preferredDriver: WHATSAPP_AUTH_STATE_DRIVER,
+            fallbackToMultiFile: WHATSAPP_AUTH_STATE_DB_FALLBACK_MULTI_FILE,
+            logPrefix: `[${sessionId}]`
+        });
+        console.log(`[${sessionId}] Auth state driver: ${authStateDriver}`);
 
-        const { version } = await fetchLatestBaileysVersion();
+        const socketVersion = await resolveBaileysSocketVersion(fetchLatestBaileysVersion, sessionId);
 
-        
+        if (socketVersion) {
+            console.log(`[${sessionId}] Usando Baileys versao (${cachedBaileysSocketVersionSource || 'custom'}): ${socketVersion.join('.')}`);
+        } else {
+            console.log(`[${sessionId}] Usando versao interna do pacote Baileys (sem latest no boot)`);
+        }
 
-        console.log(`[${sessionId}] Usando Baileys versão: ${version.join('.')}`);
-
-        
-
-        const syncFullHistory = process.env.WHATSAPP_SYNC_FULL_HISTORY !== 'false';
+        const syncFullHistory = WHATSAPP_SYNC_FULL_HISTORY;
         const browserName = await resolveWhatsAppBrowserName();
 
         const store = typeof makeInMemoryStore === 'function' ? makeInMemoryStore({ logger }) : null;
@@ -2713,7 +3196,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
         const sock = makeWASocket({
 
-            version,
+            ...(Array.isArray(socketVersion) ? { version: socketVersion } : {}),
 
             logger,
 
@@ -2732,6 +3215,14 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
             generateHighQualityLinkPreview: true,
 
             syncFullHistory,
+
+            connectTimeoutMs: WHATSAPP_CONNECT_TIMEOUT_MS,
+
+            keepAliveIntervalMs: WHATSAPP_KEEPALIVE_INTERVAL_MS,
+
+            defaultQueryTimeoutMs: WHATSAPP_DEFAULT_QUERY_TIMEOUT_MS,
+
+            retryRequestDelayMs: WHATSAPP_RETRY_REQUEST_DELAY_MS,
 
             markOnlineOnConnect: true,
 
@@ -2790,7 +3281,11 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
             pairingPhone: null,
 
             pairingRequestedAt: null,
-            ownerUserId
+            ownerUserId,
+            sendReadyAtMs: 0,
+            dispatchBlockedUntilMs: 0,
+            lastDisconnectReason: null,
+            lastDisconnectAt: null
 
         });
 
@@ -2836,13 +3331,17 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     activeClientSocket.emit('qr', { qr: qrDataUrl, sessionId, expiresIn: 30 });
 
-                    io.emit('whatsapp-qr', { qr: qrDataUrl, sessionId });
+                    await emitToSessionOwnerScope(sessionId, 'whatsapp-qr', { qr: qrDataUrl, sessionId }, {
+                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                    });
 
                     
 
                     // Webhook
 
-                    webhookService.trigger('whatsapp.qr_generated', { sessionId });
+                    webhookService.trigger('whatsapp.qr_generated', { sessionId }, {
+                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || undefined
+                    });
 
                     persistWhatsappSession(sessionId, 'qr_pending', {
                         qr_code: qrDataUrl,
@@ -2886,6 +3385,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
             
 
             if (connection === 'close') {
+                clearSessionReconnectCatchupTimer(sessionId);
 
                 if (qrTimeouts.has(sessionId)) {
 
@@ -2901,6 +3401,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
                 session.isConnected = false;
+                session.sendReadyAtMs = 0;
                 stopSessionHealthMonitor(session);
 
                 
@@ -2916,6 +3417,14 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                 // Detectar tipo de erro e aplicar correção
 
                 const errorInfo = connectionFixer.detectDisconnectReason(lastDisconnect?.error);
+                session.lastDisconnectAt = Date.now();
+                session.lastDisconnectReason = {
+                    statusCode: Number.isFinite(Number(statusCode)) ? Number(statusCode) : null,
+                    errorType: errorInfo.type || 'unknown',
+                    message: String(lastDisconnect?.error?.message || '').slice(0, 300) || null,
+                    at: new Date().toISOString()
+                };
+                setRuntimeSessionDispatchBackoff(session);
 
                 console.log(`[${sessionId}] Tipo de erro: ${errorInfo.type}, Ação: ${errorInfo.action}`);
 
@@ -2933,7 +3442,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 // Webhook
 
-                webhookService.trigger('whatsapp.disconnected', { sessionId, statusCode, errorType: errorInfo.type });
+                webhookService.trigger('whatsapp.disconnected', { sessionId, statusCode, errorType: errorInfo.type }, {
+                    ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || undefined
+                });
 
                 
 
@@ -2960,7 +3471,9 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                             }
 
                             activeClientSocket.emit('reconnecting', { sessionId, attempt: currentAttempt + 1 });
-                            io.emit('whatsapp-status', { sessionId, status: 'reconnecting' });
+                            await emitToSessionOwnerScope(sessionId, 'whatsapp-status', { sessionId, status: 'reconnecting' }, {
+                                ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                            });
 
                             await delay(RECONNECT_DELAY);
 
@@ -2989,6 +3502,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                         if (fs.existsSync(sessionPath)) {
                             fs.rmSync(sessionPath, { recursive: true, force: true });
                         }
+                        await clearPersistedBaileysAuthState(sessionId);
                     }
                 } finally {
                     reconnectInFlight.delete(sessionId);
@@ -2999,10 +3513,15 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
             
 
             if (connection === 'connecting') {
+                if (session) {
+                    session.reconnecting = true;
+                }
 
                 activeClientSocket.emit('connecting', { sessionId });
 
-                io.emit('whatsapp-status', { sessionId, status: 'connecting' });
+                await emitToSessionOwnerScope(sessionId, 'whatsapp-status', { sessionId, status: 'connecting' }, {
+                    ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                });
 
             }
 
@@ -3025,6 +3544,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                     session.isConnected = true;
 
                     session.reconnecting = false;
+                    session.lastDisconnectReason = null;
 
                     session.pairingMode = false;
 
@@ -3049,12 +3569,20 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                     
 
                     reconnectAttempts.set(sessionId, 0);
+                    clearRuntimeSessionDispatchBackoff(session);
+                    session.sendReadyAtMs = Date.now() + WHATSAPP_SESSION_SEND_WARMUP_MS;
+                    session.dispatchBlockedUntilMs = Math.max(
+                        Number(session.dispatchBlockedUntilMs || 0),
+                        session.sendReadyAtMs
+                    );
 
                     
 
                     activeClientSocket.emit('connected', { sessionId, user: session.user });
 
-                    io.emit('whatsapp-status', { sessionId, status: 'connected', user: session.user });
+                    await emitToSessionOwnerScope(sessionId, 'whatsapp-status', { sessionId, status: 'connected', user: session.user }, {
+                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
+                    });
 
                     persistWhatsappSession(sessionId, 'connected', {
                         last_connected_at: new Date().toISOString(),
@@ -3065,11 +3593,16 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     // Webhook
 
-                    webhookService.trigger('whatsapp.connected', { sessionId, user: session.user });
+                    webhookService.trigger('whatsapp.connected', { sessionId, user: session.user }, {
+                        ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || undefined
+                    });
 
                     
 
                     console.log(`[${sessionId}] ? WhatsApp conectado: ${session.user.name}`);
+                    if (WHATSAPP_SESSION_SEND_WARMUP_MS > 0) {
+                        console.log(`[${sessionId}] Aguardando ${WHATSAPP_SESSION_SEND_WARMUP_MS}ms de aquecimento antes de liberar disparos`);
+                    }
 
 
 
@@ -3080,6 +3613,10 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                         triggerChatSync(sessionId, sock, store);
 
                     }, 1500);
+                    scheduleSessionReconnectCatchup(sessionId, {
+                        trigger: attempt > 0 ? 'reconnect-open' : 'initial-open',
+                        expectedSocket: sock
+                    });
 
                     
 
@@ -3190,7 +3727,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     
 
-                    io.emit('message-status', {
+                    await emitToSessionOwnerScope(sessionId, 'message-status', {
 
                         sessionId,
 
@@ -3200,6 +3737,8 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                         status
 
+                    }, {
+                        ownerUserId: Number(sessions.get(sessionId)?.ownerUserId || 0) || null
                     });
 
                     
@@ -3208,11 +3747,15 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                     if (status === 'delivered') {
 
-                        webhookService.trigger('message.delivered', { messageId: update.key.id, status });
+                        webhookService.trigger('message.delivered', { messageId: update.key.id, status }, {
+                            ownerUserId: Number(sessions.get(sessionId)?.ownerUserId || 0) || undefined
+                        });
 
                     } else if (status === 'read') {
 
-                        webhookService.trigger('message.read', { messageId: update.key.id, status });
+                        webhookService.trigger('message.read', { messageId: update.key.id, status }, {
+                            ownerUserId: Number(sessions.get(sessionId)?.ownerUserId || 0) || undefined
+                        });
 
                     }
 
@@ -3274,8 +3817,10 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                 if (!normalizedLid) return;
 
                 const resolvedPhone = extractNumber(mappedUserJid);
-                const primary = await Lead.findByJid(mappedUserJid) || await Lead.findByPhone(resolvedPhone);
-                const duplicate = await Lead.findByJid(normalizedLid);
+                const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
+                const primary = await Lead.findByJid(mappedUserJid, { owner_user_id: sessionOwnerUserId || undefined })
+                    || await Lead.findByPhone(resolvedPhone, { owner_user_id: sessionOwnerUserId || undefined });
+                const duplicate = await Lead.findByJid(normalizedLid, { owner_user_id: sessionOwnerUserId || undefined });
 
                 if (primary && duplicate && primary.id !== duplicate.id) {
                     await mergeLeads(primary, duplicate);
@@ -3367,7 +3912,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
             
 
-            io.emit('typing-status', {
+            emitToOwnerScope(Number(sessions.get(sessionId)?.ownerUserId || 0) || null, 'typing-status', {
 
                 sessionId,
 
@@ -3458,11 +4003,33 @@ function extractAutomationKeywords(value = '') {
 
     return String(value)
 
-        .split(',')
+        .split(/[,\n;]+/)
 
         .map((keyword) => normalizeAutomationText(keyword))
 
         .filter(Boolean);
+
+}
+
+
+
+function escapeAutomationRegex(value = '') {
+
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+}
+
+
+
+function matchesAutomationKeyword(normalizedText = '', keyword = '') {
+
+    const text = String(normalizedText || '').trim();
+    const normalizedKeyword = normalizeAutomationText(keyword);
+    if (!text || !normalizedKeyword) return false;
+
+    const keywordPattern = escapeAutomationRegex(normalizedKeyword).replace(/\s+/g, '\\s+');
+    const regex = new RegExp(`(?:^|[^a-z0-9])${keywordPattern}(?:$|[^a-z0-9])`, 'i');
+    return regex.test(text);
 
 }
 
@@ -3487,6 +4054,93 @@ function buildAutomationVariables(lead, messageText = '') {
 }
 
 
+
+function normalizeTemplateVariableKey(value = '') {
+
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+}
+
+function buildLeadTemplateVariables(lead, extra = {}) {
+
+    const customFields = parseLeadCustomFields(lead?.custom_fields);
+    const variables = {
+        nome: lead?.name || 'Cliente',
+        name: lead?.name || 'Cliente',
+        telefone: lead?.phone || '',
+        phone: lead?.phone || '',
+        email: lead?.email || '',
+        veiculo: lead?.vehicle || '',
+        vehicle: lead?.vehicle || '',
+        placa: lead?.plate || '',
+        plate: lead?.plate || ''
+    };
+
+    for (const [rawKey, rawValue] of Object.entries(customFields || {})) {
+        if (rawKey === '__system') continue;
+
+        const normalizedKey = normalizeTemplateVariableKey(rawKey);
+        const value = rawValue === null || rawValue === undefined ? '' : String(rawValue);
+
+        if (normalizedKey) {
+            variables[normalizedKey] = value;
+        }
+
+        const directKey = String(rawKey || '').trim();
+        if (directKey) {
+            variables[directKey] = value;
+        }
+    }
+
+    for (const [rawKey, rawValue] of Object.entries(extra || {})) {
+        const normalizedKey = normalizeTemplateVariableKey(rawKey);
+        const value = rawValue === null || rawValue === undefined ? '' : String(rawValue);
+
+        if (normalizedKey) {
+            variables[normalizedKey] = value;
+        }
+
+        const directKey = String(rawKey || '').trim();
+        if (directKey) {
+            variables[directKey] = value;
+        }
+    }
+
+    return variables;
+
+}
+
+function applyLeadTemplate(template = '', lead, extraVariables = {}) {
+
+    const variables = buildLeadTemplateVariables(lead, extraVariables);
+
+    return String(template).replace(/\{\{\s*([\w-]+)\s*\}\}/gi, (match, key) => {
+
+        const normalizedKey = normalizeTemplateVariableKey(key);
+
+        if (normalizedKey && Object.prototype.hasOwnProperty.call(variables, normalizedKey)) {
+
+            return variables[normalizedKey] ?? '';
+
+        }
+
+        if (Object.prototype.hasOwnProperty.call(variables, key)) {
+
+            return variables[key] ?? '';
+
+        }
+
+        return '';
+
+    });
+
+}
 
 function applyAutomationTemplate(template = '', variables = {}) {
 
@@ -3536,6 +4190,14 @@ const inactivityAutomationTimers = new Map();
 const scheduleAutomationSlots = new Map();
 let scheduleAutomationIntervalId = null;
 let scheduleAutomationsTickRunning = false;
+let tenantIntegrityAuditIntervalId = null;
+let tenantIntegrityAuditTickRunning = false;
+let tenantIntegrityAuditLastRunAt = null;
+let tenantIntegrityAuditLastError = null;
+let tenantIntegrityAuditLastResultCompact = null;
+let tenantIntegrityAuditLastFingerprint = null;
+let tenantIntegrityAuditLastRunRecordId = null;
+let tenantIntegrityAuditLastPersistError = null;
 
 function isSupportedAutomationTriggerType(triggerType = '') {
     const normalized = String(triggerType || '').trim().toLowerCase();
@@ -3775,6 +4437,21 @@ function normalizeAutomationContext(context = {}) {
     };
 }
 
+async function resolveAutomationOwnerScopeUserId(context = {}) {
+    const normalizedContext = normalizeAutomationContext(context);
+
+    const rawSessionId = String(context?.sessionId || context?.session_id || '').trim();
+    if (rawSessionId) {
+        const sessionOwnerUserId = await resolveSessionOwnerUserId(normalizedContext.sessionId);
+        if (sessionOwnerUserId) return sessionOwnerUserId;
+    }
+
+    return await resolveOwnerScopeUserIdFromAssignees(
+        normalizedContext?.conversation?.assigned_to,
+        normalizedContext?.lead?.assigned_to
+    );
+}
+
 function parseAutomationSessionScope(value) {
     if (value === undefined || value === null || value === '') return [];
 
@@ -3878,7 +4555,7 @@ function shouldTriggerAutomation(automation, context, normalizedText) {
 
         const keywords = extractAutomationKeywords(automation.trigger_value || '');
         if (keywords.length === 0) return false;
-        return keywords.some((keyword) => normalizedText.includes(keyword));
+        return keywords.some((keyword) => matchesAutomationKeyword(normalizedText, keyword));
     }
 
     if (triggerType === 'message_received') {
@@ -3985,6 +4662,9 @@ async function armInactivityAutomation(automation, context) {
 }
 
 async function processScheduledAutomationsTick() {
+    if (SCHEDULED_AUTOMATIONS_WORKER_ENABLED && !scheduledAutomationLeaderLock.isHeld()) {
+        return;
+    }
     if (scheduleAutomationsTickRunning) return;
     scheduleAutomationsTickRunning = true;
 
@@ -4012,10 +4692,13 @@ async function processScheduledAutomationsTick() {
         if (dueAutomations.length === 0) return;
 
         const leads = await query(`
-            SELECT *
+            SELECT
+                l.*,
+                COALESCE(owner_scope.owner_user_id, owner_scope.id) AS owner_scope_user_id
             FROM leads
-            WHERE COALESCE(is_blocked, 0) = 0
-            ORDER BY updated_at DESC
+            LEFT JOIN users owner_scope ON owner_scope.id = l.assigned_to
+            WHERE COALESCE(l.is_blocked, 0) = 0
+            ORDER BY l.updated_at DESC
         `);
         const leadConversations = await query(`
             SELECT c.*
@@ -4035,11 +4718,19 @@ async function processScheduledAutomationsTick() {
         }
 
         for (const automation of dueAutomations) {
+            const automationOwnerScopeUserId = await resolveOwnerScopeUserIdFromAssignees(automation?.created_by);
+            if (!automationOwnerScopeUserId) {
+                continue;
+            }
             const scopedSessionIds = parseAutomationSessionScope(automation?.session_scope);
             const scopedSessionIdSet = scopedSessionIds.length ? new Set(scopedSessionIds) : null;
 
             for (const lead of leads) {
                 if (!lead?.id || !lead?.phone) continue;
+                const leadOwnerScopeUserId = normalizeOwnerUserId(lead?.owner_scope_user_id);
+                if (!leadOwnerScopeUserId || leadOwnerScopeUserId !== automationOwnerScopeUserId) {
+                    continue;
+                }
                 const candidateConversations = conversationsByLeadId.get(Number(lead.id)) || [];
                 const leadConversation = scopedSessionIdSet
                     ? (candidateConversations.find((conversation) => (
@@ -4075,9 +4766,13 @@ async function processScheduledAutomationsTick() {
 function startScheduledAutomationsWorker() {
     if (scheduleAutomationIntervalId) return;
     if (!SCHEDULED_AUTOMATIONS_WORKER_ENABLED) {
-        console.log('[ScheduledAutomationsWorker] desabilitado por SCHEDULED_AUTOMATIONS_WORKER_ENABLED=false');
+        console.log('[LeaderLock][scheduled-automations] worker desabilitado por configuracao');
         return;
     }
+
+    scheduledAutomationLeaderLock.start().catch((error) => {
+        console.error('[LeaderLock][scheduled-automations] falha ao iniciar lock:', error.message);
+    });
 
     scheduleAutomationIntervalId = setInterval(() => {
         processScheduledAutomationsTick().catch((error) => {
@@ -4087,6 +4782,136 @@ function startScheduledAutomationsWorker() {
 
     processScheduledAutomationsTick().catch((error) => {
         console.error('Falha no primeiro ciclo de automacoes agendadas:', error.message);
+    });
+}
+
+function buildTenantIntegrityAuditWorkerState() {
+    return {
+        enabled: TENANT_INTEGRITY_AUDIT_WORKER_ENABLED,
+        intervalMs: TENANT_INTEGRITY_AUDIT_INTERVAL_MS,
+        sampleLimit: TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT,
+        leaderLockEnabled: POSTGRES_WORKER_LEADER_LOCK_ENABLED && TENANT_INTEGRITY_AUDIT_WORKER_ENABLED,
+        leaderLockHeld: TENANT_INTEGRITY_AUDIT_WORKER_ENABLED ? tenantIntegrityAuditLeaderLock.isHeld() : false,
+        running: tenantIntegrityAuditTickRunning,
+        lastRunAt: tenantIntegrityAuditLastRunAt,
+        lastError: tenantIntegrityAuditLastError,
+        lastRunRecordId: tenantIntegrityAuditLastRunRecordId,
+        lastPersistError: tenantIntegrityAuditLastPersistError,
+        lastResult: tenantIntegrityAuditLastResultCompact
+    };
+}
+
+function logTenantIntegrityAuditSummary(result, context = {}) {
+    const compact = tenantIntegrityAuditService.compactResultForLog(result);
+    if (!compact) return;
+
+    const checksWithIssues = (compact.checks || []).filter((check) => Number(check.total || 0) > 0);
+    const issueSummary = checksWithIssues
+        .map((check) => `${check.code}=${check.total}`)
+        .join(', ');
+
+    const prefix = `[TenantIntegrityAudit][${String(context.trigger || 'manual')}]`;
+    if (compact.summary?.checksWithIssues > 0) {
+        console.warn(
+            `${prefix} inconsistencias=${compact.summary.totalIssueRows} checks=${compact.summary.checksWithIssues}/${compact.summary.totalChecks}` +
+            (issueSummary ? ` | ${issueSummary}` : '')
+        );
+    } else {
+        console.log(`${prefix} sem inconsistencias (${compact.summary?.totalChecks || 0} checks)`);
+    }
+}
+
+async function runTenantIntegrityAudit(options = {}) {
+    const trigger = String(options.trigger || 'manual').trim() || 'manual';
+    const ownerUserId = normalizeOwnerUserId(options.ownerUserId);
+    const sampleLimit = parsePositiveIntEnv(options.sampleLimit, TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT);
+    const shouldCacheAsWorkerResult = options.cacheAsWorker === true;
+    const shouldPersistHistory = options.persistHistory !== false;
+
+    const result = await tenantIntegrityAuditService.runAudit({
+        ownerUserId: ownerUserId || undefined,
+        sampleLimit
+    });
+
+    if (shouldPersistHistory) {
+        try {
+            const persistedRun = await tenantIntegrityAuditService.storeAuditRun(result, {
+                triggerSource: trigger
+            });
+            if (persistedRun?.id) {
+                tenantIntegrityAuditLastRunRecordId = Number(persistedRun.id);
+                result.historyRunId = Number(persistedRun.id);
+            }
+            tenantIntegrityAuditLastPersistError = null;
+        } catch (persistError) {
+            tenantIntegrityAuditLastPersistError = String(persistError?.message || persistError || 'Falha ao persistir auditoria');
+            console.warn(`[TenantIntegrityAudit][${trigger}] falha ao persistir historico:`, persistError.message);
+            result.historyPersistError = tenantIntegrityAuditLastPersistError;
+        }
+    }
+
+    if (shouldCacheAsWorkerResult) {
+        tenantIntegrityAuditLastRunAt = new Date().toISOString();
+        tenantIntegrityAuditLastError = null;
+        tenantIntegrityAuditLastResultCompact = tenantIntegrityAuditService.compactResultForLog(result);
+
+        const fingerprint = String(result?.fingerprint || '');
+        const hasIssues = Number(result?.summary?.checksWithIssues || 0) > 0;
+        const fingerprintChanged = fingerprint && fingerprint !== tenantIntegrityAuditLastFingerprint;
+        const shouldLog = trigger !== 'interval' || hasIssues || fingerprintChanged || !tenantIntegrityAuditLastFingerprint;
+
+        if (shouldLog) {
+            logTenantIntegrityAuditSummary(result, { trigger });
+        }
+
+        tenantIntegrityAuditLastFingerprint = fingerprint || tenantIntegrityAuditLastFingerprint;
+    }
+
+    return result;
+}
+
+async function processTenantIntegrityAuditTick(trigger = 'interval') {
+    if (TENANT_INTEGRITY_AUDIT_WORKER_ENABLED && !tenantIntegrityAuditLeaderLock.isHeld()) {
+        return null;
+    }
+    if (tenantIntegrityAuditTickRunning) return null;
+    tenantIntegrityAuditTickRunning = true;
+
+    try {
+        return await runTenantIntegrityAudit({
+            trigger,
+            cacheAsWorker: true,
+            sampleLimit: TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT
+        });
+    } catch (error) {
+        tenantIntegrityAuditLastRunAt = new Date().toISOString();
+        tenantIntegrityAuditLastError = String(error?.message || error || 'Erro desconhecido');
+        console.error(`[TenantIntegrityAudit][${trigger}] falha:`, error.message);
+        throw error;
+    } finally {
+        tenantIntegrityAuditTickRunning = false;
+    }
+}
+
+function startTenantIntegrityAuditWorker() {
+    if (tenantIntegrityAuditIntervalId) return;
+    if (!TENANT_INTEGRITY_AUDIT_WORKER_ENABLED) {
+        console.log('[LeaderLock][tenant-integrity-audit] worker desabilitado por configuracao');
+        return;
+    }
+
+    tenantIntegrityAuditLeaderLock.start().catch((error) => {
+        console.error('[LeaderLock][tenant-integrity-audit] falha ao iniciar lock:', error.message);
+    });
+
+    tenantIntegrityAuditIntervalId = setInterval(() => {
+        processTenantIntegrityAuditTick('interval').catch((error) => {
+            console.error('[TenantIntegrityAudit] falha no ciclo periodico:', error.message);
+        });
+    }, TENANT_INTEGRITY_AUDIT_INTERVAL_MS);
+
+    processTenantIntegrityAuditTick('startup').catch((error) => {
+        console.error('[TenantIntegrityAudit] falha no primeiro ciclo:', error.message);
     });
 }
 
@@ -4189,6 +5014,8 @@ async function executeAutomationAction(automation, context) {
                 automationId: automation.id,
                 message,
                 lead: { id: lead.id, name: lead.name, phone: lead.phone }
+            }, {
+                ownerUserId: Number(lead?.owner_user_id || 0) || undefined
             });
             break;
         }
@@ -4205,7 +5032,18 @@ async function executeAutomationAction(automation, context) {
 
 async function scheduleAutomations(context) {
     const normalizedContext = normalizeAutomationContext(context);
-    const automations = await Automation.list({ is_active: 1 });
+    const ownerScopeUserId = await resolveAutomationOwnerScopeUserId(normalizedContext);
+    if (!ownerScopeUserId) {
+        if (normalizedContext.event === AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED) {
+            console.warn(`[Automation] Ignorando automacoes sem owner resolvido para sessao ${normalizedContext.sessionId || 'n/a'}`);
+        }
+        return;
+    }
+
+    const automations = await Automation.list({
+        is_active: 1,
+        owner_user_id: ownerScopeUserId
+    });
     if (!automations || automations.length === 0) return;
 
     const normalizedText = normalizeAutomationText(normalizedContext?.text || '');
@@ -4287,6 +5125,7 @@ async function syncChatsToDatabase(sessionId, payload) {
     const sessionDisplayName = getSessionDisplayName(sessionId);
 
     const sessionPhone = getSessionPhone(sessionId);
+    const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
 
 
 
@@ -4324,14 +5163,16 @@ async function syncChatsToDatabase(sessionId, payload) {
 
 
 
-        let lead = await Lead.findByJid(jid) || await Lead.findByPhone(phone);
+        let lead = await Lead.findByJid(jid, { owner_user_id: sessionOwnerUserId || undefined })
+            || await Lead.findByPhone(phone, { owner_user_id: sessionOwnerUserId || undefined });
 
         const rawPhoneDigits = normalizePhoneDigits(extractNumber(rawJid));
         const isRawSelfChat = isSelfPhone(rawPhoneDigits, sessionDigits);
 
         if (rawJid && rawJid !== jid && !isSelfChat && !isRawSelfChat) {
 
-            const aliasLead = await Lead.findByJid(rawJid) || await Lead.findByPhone(extractNumber(rawJid));
+            const aliasLead = await Lead.findByJid(rawJid, { owner_user_id: sessionOwnerUserId || undefined })
+                || await Lead.findByPhone(extractNumber(rawJid), { owner_user_id: sessionOwnerUserId || undefined });
 
             if (aliasLead && lead && aliasLead.id !== lead.id) {
 
@@ -4365,7 +5206,9 @@ async function syncChatsToDatabase(sessionId, payload) {
 
                 name: displayName,
 
-                source: 'whatsapp'
+                source: 'whatsapp',
+                assigned_to: sessionOwnerUserId || undefined,
+                owner_user_id: sessionOwnerUserId || undefined
 
             });
             lead = leadResult.lead;
@@ -4385,7 +5228,8 @@ async function syncChatsToDatabase(sessionId, payload) {
 
             lead_id: lead.id,
 
-            session_id: sessionId
+            session_id: sessionId,
+            assigned_to: sessionOwnerUserId || undefined
 
         });
 
@@ -4718,6 +5562,216 @@ async function backfillConversationMessagesFromStore(options = {}) {
     return createStoreBackfillResult(inserted, hydratedMedia);
 }
 
+function clearSessionReconnectCatchupTimer(sessionId) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return;
+
+    const scheduled = sessionReconnectCatchupTimers.get(normalizedSessionId);
+    if (scheduled?.timer) {
+        clearTimeout(scheduled.timer);
+    }
+    sessionReconnectCatchupTimers.delete(normalizedSessionId);
+}
+
+async function listRecentConversationsForSessionCatchup(sessionId, limit = WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return [];
+
+    const safeLimit = Math.max(1, Math.min(Number(limit) || WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS, 200));
+    return await query(`
+        SELECT
+            c.id AS conversation_id,
+            c.lead_id AS conversation_lead_id,
+            c.session_id AS conversation_session_id,
+            c.unread_count AS conversation_unread_count,
+            c.metadata AS conversation_metadata,
+            c.assigned_to AS conversation_assigned_to,
+            c.created_at AS conversation_created_at,
+            c.updated_at AS conversation_updated_at,
+            l.id AS lead_id,
+            l.phone AS lead_phone,
+            l.jid AS lead_jid,
+            l.name AS lead_name,
+            l.owner_user_id AS lead_owner_user_id
+        FROM conversations c
+        INNER JOIN leads l ON l.id = c.lead_id
+        WHERE c.session_id = ?
+        ORDER BY
+            CASE WHEN COALESCE(c.unread_count, 0) > 0 THEN 0 ELSE 1 END ASC,
+            COALESCE(c.updated_at, c.created_at) DESC,
+            c.id DESC
+        LIMIT ${safeLimit}
+    `, [normalizedSessionId]);
+}
+
+function mapCatchupConversationRow(row) {
+    if (!row) return { conversation: null, lead: null };
+
+    return {
+        conversation: {
+            id: Number(row.conversation_id || 0) || null,
+            lead_id: Number(row.conversation_lead_id || 0) || null,
+            session_id: row.conversation_session_id || null,
+            unread_count: Number(row.conversation_unread_count || 0) || 0,
+            metadata: row.conversation_metadata || null,
+            assigned_to: row.conversation_assigned_to || null,
+            created_at: row.conversation_created_at || null,
+            updated_at: row.conversation_updated_at || null
+        },
+        lead: {
+            id: Number(row.lead_id || 0) || null,
+            phone: row.lead_phone || null,
+            jid: row.lead_jid || null,
+            name: row.lead_name || null,
+            owner_user_id: Number(row.lead_owner_user_id || 0) || null
+        }
+    };
+}
+
+async function runSessionReconnectCatchup(sessionId, options = {}) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const trigger = String(options.trigger || 'reconnect-open').trim() || 'reconnect-open';
+    const expectedSocket = options.expectedSocket || null;
+
+    if (!WHATSAPP_RECONNECT_CATCHUP_ENABLED) return { skipped: 'disabled' };
+    if (!normalizedSessionId) return { skipped: 'invalid_session' };
+    if (sessionReconnectCatchupInFlight.has(normalizedSessionId)) return { skipped: 'in_flight' };
+
+    sessionReconnectCatchupInFlight.add(normalizedSessionId);
+    const startedAtMs = Date.now();
+    const summary = {
+        sessionId: normalizedSessionId,
+        trigger,
+        conversationsScanned: 0,
+        conversationsUpdated: 0,
+        messagesInserted: 0,
+        mediaHydrated: 0,
+        skipped: null,
+        elapsedMs: 0
+    };
+
+    try {
+        const runtimeSession = sessions.get(normalizedSessionId);
+        if (!runtimeSession) {
+            summary.skipped = 'session_not_found';
+            return summary;
+        }
+        if (expectedSocket && runtimeSession.socket !== expectedSocket) {
+            summary.skipped = 'stale_socket';
+            return summary;
+        }
+        if (!runtimeSession.isConnected) {
+            summary.skipped = 'session_not_connected';
+            return summary;
+        }
+        if (!runtimeSession.store || typeof runtimeSession.store.loadMessages !== 'function') {
+            summary.skipped = 'store_unavailable';
+            return summary;
+        }
+
+        try {
+            await triggerChatSync(normalizedSessionId, runtimeSession.socket, runtimeSession.store, 0);
+        } catch (syncError) {
+            console.warn(`[${normalizedSessionId}] Falha no sync preliminar do catch-up:`, syncError.message);
+        }
+
+        const rows = await listRecentConversationsForSessionCatchup(
+            normalizedSessionId,
+            WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS
+        );
+        if (!Array.isArray(rows) || rows.length === 0) {
+            summary.skipped = 'no_conversations';
+            return summary;
+        }
+
+        for (const row of rows) {
+            summary.conversationsScanned += 1;
+
+            if ((Date.now() - startedAtMs) > WHATSAPP_RECONNECT_CATCHUP_MAX_RUNTIME_MS) {
+                summary.skipped = 'runtime_limit_reached';
+                break;
+            }
+
+            const latestRuntimeSession = sessions.get(normalizedSessionId);
+            if (!latestRuntimeSession || !latestRuntimeSession.isConnected) {
+                summary.skipped = 'session_disconnected';
+                break;
+            }
+            if (expectedSocket && latestRuntimeSession.socket !== expectedSocket) {
+                summary.skipped = 'stale_socket';
+                break;
+            }
+
+            const { conversation, lead } = mapCatchupConversationRow(row);
+            if (!conversation?.id || !lead?.id) continue;
+
+            const backfillResult = await backfillConversationMessagesFromStore({
+                sessionId: normalizedSessionId,
+                conversation,
+                lead,
+                contactJid: lead.jid || '',
+                limit: WHATSAPP_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION
+            });
+
+            const inserted = Number(backfillResult?.inserted || 0);
+            const hydratedMedia = Number(backfillResult?.hydratedMedia || 0);
+            if (inserted > 0 || hydratedMedia > 0) {
+                summary.conversationsUpdated += 1;
+                summary.messagesInserted += Math.max(0, inserted);
+                summary.mediaHydrated += Math.max(0, hydratedMedia);
+            }
+        }
+
+        summary.elapsedMs = Math.max(0, Date.now() - startedAtMs);
+        console.log(
+            `[${normalizedSessionId}] Catch-up pos-reconexao (${trigger}) ` +
+            `conversas=${summary.conversationsScanned}/${WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS}, ` +
+            `atualizadas=${summary.conversationsUpdated}, mensagens=${summary.messagesInserted}, ` +
+            `midias=${summary.mediaHydrated}, skipped=${summary.skipped || 'none'}, ${summary.elapsedMs}ms`
+        );
+        return summary;
+    } catch (error) {
+        summary.elapsedMs = Math.max(0, Date.now() - startedAtMs);
+        console.error(`[${normalizedSessionId}] Falha no catch-up pos-reconexao:`, error.message);
+        throw error;
+    } finally {
+        sessionReconnectCatchupInFlight.delete(normalizedSessionId);
+    }
+}
+
+function scheduleSessionReconnectCatchup(sessionId, options = {}) {
+    if (!WHATSAPP_RECONNECT_CATCHUP_ENABLED) return;
+
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return;
+
+    clearSessionReconnectCatchupTimer(normalizedSessionId);
+
+    const delayMs = Math.max(
+        300,
+        Number(options.delayMs || WHATSAPP_RECONNECT_CATCHUP_DELAY_MS) || WHATSAPP_RECONNECT_CATCHUP_DELAY_MS
+    );
+    const expectedSocket = options.expectedSocket || null;
+    const trigger = String(options.trigger || 'reconnect-open').trim() || 'reconnect-open';
+
+    const timer = setTimeout(() => {
+        sessionReconnectCatchupTimers.delete(normalizedSessionId);
+        runSessionReconnectCatchup(normalizedSessionId, {
+            trigger,
+            expectedSocket
+        }).catch((error) => {
+            console.error(`[${normalizedSessionId}] Falha no catch-up agendado pos-reconexao:`, error.message);
+        });
+    }, delayMs);
+
+    sessionReconnectCatchupTimers.set(normalizedSessionId, {
+        timer,
+        scheduledAtMs: Date.now(),
+        trigger,
+        expectedSocket
+    });
+}
+
 function parseJsonSafe(value, fallback = null) {
     if (value === undefined || value === null || value === '') return fallback;
     if (typeof value === 'object') return value;
@@ -4919,9 +5973,10 @@ async function runCiphertextRecovery(sessionId, rawMessage = {}, attempt = 1) {
     }
 
     const remotePhone = extractNumber(remoteJid);
-    let lead = await Lead.findByJid(remoteJid);
+    const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
+    let lead = await Lead.findByJid(remoteJid, { owner_user_id: sessionOwnerUserId || undefined });
     if (!lead && remotePhone) {
-        lead = await Lead.findByPhone(remotePhone);
+        lead = await Lead.findByPhone(remotePhone, { owner_user_id: sessionOwnerUserId || undefined });
     }
     if (!lead?.id) return false;
 
@@ -5126,6 +6181,7 @@ async function processIncomingMessage(sessionId, msg) {
     if (!msg?.message) return;
     const sessionDisplayName = getSessionDisplayName(sessionId);
     const sessionPhone = getSessionPhone(sessionId);
+    const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
     registerMessageJidAliases(msg, sessionPhone);
 
     const fromRaw = msg.key.remoteJid;
@@ -5276,9 +6332,11 @@ async function processIncomingMessage(sessionId, msg) {
 
         const resolvedPhone = isUserJid(from) ? extractNumber(from) : null;
 
-        const primary = await Lead.findByJid(from) || (resolvedPhone ? await Lead.findByPhone(resolvedPhone) : null);
+        const primary = await Lead.findByJid(from, { owner_user_id: sessionOwnerUserId || undefined })
+            || (resolvedPhone ? await Lead.findByPhone(resolvedPhone, { owner_user_id: sessionOwnerUserId || undefined }) : null);
 
-        const duplicate = await Lead.findByJid(fromRaw) || await Lead.findByPhone(extractNumber(fromRaw));
+        const duplicate = await Lead.findByJid(fromRaw, { owner_user_id: sessionOwnerUserId || undefined })
+            || await Lead.findByPhone(extractNumber(fromRaw), { owner_user_id: sessionOwnerUserId || undefined });
 
         if (primary && duplicate && primary.id !== duplicate.id) {
 
@@ -5328,7 +6386,9 @@ async function processIncomingMessage(sessionId, msg) {
 
         name: isSelfChat ? selfName : (!isFromMe ? (pushName || phone) : undefined),
 
-        source: 'whatsapp'
+        source: 'whatsapp',
+        assigned_to: sessionOwnerUserId || undefined,
+        owner_user_id: sessionOwnerUserId || undefined
 
     });
     let lead = leadResult.lead;
@@ -5379,7 +6439,8 @@ async function processIncomingMessage(sessionId, msg) {
 
         lead_id: lead.id,
 
-        session_id: sessionId
+        session_id: sessionId,
+        assigned_to: sessionOwnerUserId || undefined
 
     });
 
@@ -5509,7 +6570,7 @@ async function processIncomingMessage(sessionId, msg) {
 
     
 
-    io.emit('new-message', messageForClient);
+    emitToOwnerScope(sessionOwnerUserId || null, 'new-message', messageForClient);
 
     
 
@@ -5523,6 +6584,8 @@ async function processIncomingMessage(sessionId, msg) {
 
             lead: { id: lead.id, name: lead.name, phone: lead.phone }
 
+        }, {
+            ownerUserId: Number(sessionOwnerUserId || lead?.owner_user_id || 0) || undefined
         });
 
         
@@ -5611,10 +6674,12 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     
 
-    if (!session || !session.isConnected) {
-
-        throw new Error('Sessão não está conectada');
-
+    const dispatchState = getSessionDispatchState(sessionId);
+    if (!session || !dispatchState.available) {
+        if (session && !session.isConnected && !session.reconnecting) {
+            scheduleRuntimeSessionReconnect(sessionId, session);
+        }
+        throw buildSessionUnavailableError(dispatchState, 'Sessao nao esta conectada');
     }
 
     
@@ -5623,9 +6688,10 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     const normalizedPhone = extractNumber(jid);
     const requestedAssignee = Number(options?.assigned_to);
+    const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
     const assignedTo = Number.isInteger(requestedAssignee) && requestedAssignee > 0
         ? requestedAssignee
-        : null;
+        : (sessionOwnerUserId || null);
 
     
 
@@ -5638,7 +6704,8 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
         jid,
 
         source: 'manual',
-        assigned_to: assignedTo
+        assigned_to: assignedTo,
+        owner_user_id: sessionOwnerUserId || undefined
 
     });
 
@@ -5650,6 +6717,13 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     if (options.conversationId) {
         const existingConversation = await Conversation.findById(options.conversationId);
         if (existingConversation && Number(existingConversation.lead_id) === Number(lead.id)) {
+            const existingConversationSessionId = sanitizeSessionId(existingConversation.session_id);
+            if (existingConversationSessionId && existingConversationSessionId !== sessionId) {
+                throw new Error('Conversa informada pertence a outra conta WhatsApp');
+            }
+            if (sessionOwnerUserId && lead?.owner_user_id && Number(lead.owner_user_id) !== Number(sessionOwnerUserId)) {
+                throw new Error('Lead nao pertence ao mesmo owner da sessao informada');
+            }
             if (assignedTo && existingConversation.assigned_to && Number(existingConversation.assigned_to) !== assignedTo) {
                 throw new Error('Sem permissao para enviar nesta conversa');
             }
@@ -5671,60 +6745,81 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
         conversation = await Conversation.findById(conversation.id);
     }
 
+    const renderedTextMessage = type === 'text'
+        ? applyLeadTemplate(message, lead, { mensagem: message || '' })
+        : message;
+    const renderedCaption = type !== 'text' && String(options.caption || '').trim()
+        ? applyLeadTemplate(options.caption || '', lead, { mensagem: options.caption || '' })
+        : (options.caption || '');
+
     
 
     let result;
 
-    
+    try {
+        if (type === 'text') {
 
-    if (type === 'text') {
+            result = await session.socket.sendMessage(jid, { text: renderedTextMessage });
 
-        result = await session.socket.sendMessage(jid, { text: message });
+        } else if (type === 'image') {
 
-    } else if (type === 'image') {
+            result = await session.socket.sendMessage(jid, {
 
-        result = await session.socket.sendMessage(jid, {
+                image: { url: options.url || message },
 
-            image: { url: options.url || message },
+                caption: renderedCaption || ''
 
-            caption: options.caption || ''
+            });
 
-        });
+        } else if (type === 'video') {
 
-    } else if (type === 'video') {
+            result = await session.socket.sendMessage(jid, {
 
-        result = await session.socket.sendMessage(jid, {
+                video: { url: options.url || message },
 
-            video: { url: options.url || message },
+                caption: renderedCaption || ''
 
-            caption: options.caption || ''
+            });
 
-        });
+        } else if (type === 'document') {
 
-    } else if (type === 'document') {
+            result = await session.socket.sendMessage(jid, {
 
-        result = await session.socket.sendMessage(jid, {
+                document: { url: options.url || message },
 
-            document: { url: options.url || message },
+                mimetype: options.mimetype || 'application/pdf',
 
-            mimetype: options.mimetype || 'application/pdf',
+                fileName: options.fileName || 'documento'
 
-            fileName: options.fileName || 'documento'
+            });
 
-        });
+        } else if (type === 'audio') {
 
-    } else if (type === 'audio') {
+            result = await session.socket.sendMessage(jid, {
 
-        result = await session.socket.sendMessage(jid, {
+                audio: { url: options.url || message },
 
-            audio: { url: options.url || message },
+                mimetype: options.mimetype || 'audio/ogg; codecs=opus',
 
-            mimetype: options.mimetype || 'audio/ogg; codecs=opus',
+                ptt: options.ptt === true
 
-            ptt: options.ptt === true
+            });
 
-        });
-
+        }
+    } catch (sendError) {
+        if (isDisconnectedSessionRuntimeError(sendError)) {
+            session.isConnected = false;
+            session.reconnecting = true;
+            const blockedUntilMs = setRuntimeSessionDispatchBackoff(session);
+            scheduleRuntimeSessionReconnect(sessionId, session);
+            const connectionError = new Error('Sessao nao esta conectada');
+            connectionError.code = 'SESSION_DISCONNECTED';
+            if (blockedUntilMs > Date.now()) {
+                connectionError.retryAfterMs = Math.max(1000, blockedUntilMs - Date.now());
+            }
+            throw connectionError;
+        }
+        throw sendError;
     }
 
     
@@ -5767,9 +6862,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             sender_type: 'agent',
 
-            content: type === 'text' ? message : (options.caption || ''),
+            content: type === 'text' ? renderedTextMessage : (renderedCaption || ''),
 
-            content_encrypted: encryptMessage(type === 'text' ? message : (options.caption || '')),
+            content_encrypted: encryptMessage(type === 'text' ? renderedTextMessage : (renderedCaption || '')),
 
             media_type: type,
 
@@ -5817,10 +6912,12 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         to,
 
-        content: message,
+        content: type === 'text' ? renderedTextMessage : (renderedCaption || ''),
 
         type
 
+    }, {
+        ownerUserId: Number(sessionOwnerUserId || lead?.owner_user_id || 0) || undefined
     });
 
     
@@ -5886,6 +6983,8 @@ function sessionExists(sessionId) {
             }
         );
     }, {
+        workerEnabled: QUEUE_WORKER_ENABLED,
+        leaderLock: queueWorkerLeaderLock,
         resolveSessionForMessage: async ({ message, lead }) => {
             const allocation = await senderAllocatorService.allocateForSingleLead({
                 leadId: lead?.id,
@@ -5898,7 +6997,8 @@ function sessionExists(sessionId) {
                 sessionId: allocation?.sessionId || null,
                 assignmentMeta: allocation?.assignmentMeta || null
             };
-        }
+        },
+        getSessionDispatchState
     });
 
     flowService.init(async (options = {}) => {
@@ -5929,6 +7029,7 @@ function sessionExists(sessionId) {
 
     await rehydrateSessions(io);
     startScheduledAutomationsWorker();
+    startTenantIntegrityAuditWorker();
 })().catch((error) => {
     console.error('Erro ao inicializar servicos apos migracao:', error.message);
 });
@@ -5946,6 +7047,9 @@ function sessionExists(sessionId) {
 io.on('connection', (socket) => {
 
     console.log('?? Cliente conectado:', socket.id);
+    ensureSocketOwnerScopeRoom(socket).catch((error) => {
+        console.warn(`[socket:${socket.id}] Falha ao resolver escopo inicial:`, error.message);
+    });
 
     
 
@@ -5957,7 +7061,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         if (ownerScopeUserId) {
             const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
                 owner_user_id: ownerScopeUserId
@@ -5981,7 +7085,12 @@ io.on('connection', (socket) => {
             return;
         }
 
-        if (sessionExists(normalizedSessionId)) {
+        const hasLocalSession = sessionExists(normalizedSessionId);
+        const hasDbAuthState = !hasLocalSession && WHATSAPP_AUTH_STATE_DRIVER !== 'multi_file'
+            ? await hasPersistedBaileysAuthState(normalizedSessionId)
+            : false;
+
+        if (hasLocalSession || hasDbAuthState) {
             socket.emit('session-status', { status: 'reconnecting', sessionId: normalizedSessionId });
             await createSession(normalizedSessionId, socket, 0, {
                 ownerUserId: ownerScopeUserId || undefined
@@ -6004,7 +7113,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const storedSession = await WhatsAppSession.findBySessionId(sessionId);
         if (ownerScopeUserId && storedSession) {
             const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
@@ -6065,7 +7174,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const storedSession = await WhatsAppSession.findBySessionId(sessionId);
         if (ownerScopeUserId && storedSession) {
             const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
@@ -6109,12 +7218,42 @@ io.on('connection', (socket) => {
     socket.on('send-message', async ({ sessionId, to, message, type, options }) => {
 
         try {
+            const normalizedSessionId = sanitizeSessionId(sessionId);
+            if (!normalizedSessionId) {
+                socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
+                return;
+            }
 
-            const result = await sendMessage(sessionId, to, message, type, options);
+            const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+            if (ownerScopeUserId) {
+                const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                    owner_user_id: ownerScopeUserId
+                });
+                if (!allowedSession) {
+                    socket.emit('error', { message: 'Sem permissao para usar esta conta WhatsApp', code: 'SESSION_FORBIDDEN' });
+                    return;
+                }
+            }
+
+            const safeOptions = options && typeof options === 'object' ? { ...options } : {};
+            const normalizedConversationId = Number(safeOptions.conversationId);
+            if (Number.isInteger(normalizedConversationId) && normalizedConversationId > 0) {
+                const socketReq = buildSocketRequestLike(socket);
+                const conversation = await Conversation.findById(normalizedConversationId);
+                const hasConversationAccess = conversation
+                    ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
+                    : false;
+                if (!conversation || !hasConversationAccess) {
+                    socket.emit('error', { message: 'Sem permissao para enviar nesta conversa', code: 'CONVERSATION_FORBIDDEN' });
+                    return;
+                }
+            }
+
+            const result = await sendMessage(normalizedSessionId, to, message, type, safeOptions);
 
             socket.emit('message-sent', {
 
-                sessionId,
+                sessionId: normalizedSessionId,
 
                 to,
 
@@ -6138,12 +7277,24 @@ io.on('connection', (socket) => {
 
     socket.on('get-messages', async ({ sessionId, contactJid, leadId, conversationId }) => {
         let messages = [];
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const normalizedSessionId = sanitizeSessionId(sessionId);
         const normalizedContactJid = normalizeJid(contactJid);
         const normalizedConversationId = Number(conversationId);
         const hasConversationId = Number.isFinite(normalizedConversationId) && normalizedConversationId > 0;
         let resolvedConversation = null;
         let resolvedLead = null;
+
+        if (ownerScopeUserId && normalizedSessionId) {
+            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!allowedSession) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                return;
+            }
+        }
 
         if (hasConversationId) {
             const conversation = await Conversation.findById(normalizedConversationId);
@@ -6168,7 +7319,8 @@ io.on('connection', (socket) => {
                 }
             }
         } else if (!resolvedConversation && normalizedContactJid) {
-            const lead = await Lead.findByJid(normalizedContactJid);
+            const sessionOwnerUserId = await resolveSessionOwnerUserId(normalizedSessionId);
+            const lead = await Lead.findByJid(normalizedContactJid, { owner_user_id: sessionOwnerUserId || undefined });
             if (lead) {
                 resolvedLead = lead;
                 const conversation = await Conversation.findByLeadId(lead.id, normalizedSessionId || null);
@@ -6182,6 +7334,23 @@ io.on('connection', (socket) => {
         const backfillSessionId = sanitizeSessionId(
             normalizedSessionId || resolvedConversation?.session_id
         );
+        const hasConversationAccess = resolvedConversation
+            ? await canAccessConversationInOwnerScope(socketReq, resolvedConversation, ownerScopeUserId)
+            : false;
+
+        if (resolvedLead && !hasConversationAccess) {
+            const hasLeadAccess = await canAccessLeadRecordInOwnerScope(socketReq, resolvedLead, ownerScopeUserId);
+            if (!hasLeadAccess) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+                return;
+            }
+        }
+
+        if (!resolvedLead && resolvedConversation && !hasConversationAccess) {
+            socket.emit('error', { message: 'Sem permissao para acessar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+            return;
+        }
+
         const hasMissingMedia = messages.some((item) => {
             const mediaType = String(item?.media_type || '').trim().toLowerCase();
             if (!mediaType || mediaType === 'text') return false;
@@ -6227,10 +7396,24 @@ io.on('connection', (socket) => {
     
 
     socket.on('get-contacts', async ({ sessionId }) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const scopedUserId = getScopedUserId(socketReq);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const normalizedSessionId = sanitizeSessionId(sessionId);
+        if (ownerScopeUserId && normalizedSessionId) {
+            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!allowedSession) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                return;
+            }
+        }
         const leads = await Lead.list({
             limit: 200,
-            session_id: normalizedSessionId || undefined
+            session_id: normalizedSessionId || undefined,
+            assigned_to: scopedUserId || undefined,
+            owner_user_id: ownerScopeUserId || undefined
         });
         const sessionPhone = getSessionPhone(normalizedSessionId);
         const sessionDisplayName = normalizeText(getSessionDisplayName(normalizedSessionId) || 'Usuário');
@@ -6275,10 +7458,23 @@ io.on('connection', (socket) => {
     
 
     socket.on('get-leads', async (options = {}) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const scopedUserId = getScopedUserId(socketReq);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const normalizedOptions = options && typeof options === 'object' ? options : {};
+        const requestedAssignedTo = Number(normalizedOptions.assigned_to ?? normalizedOptions.assignedTo);
+        const resolvedAssignedTo = scopedUserId || (Number.isInteger(requestedAssignedTo) && requestedAssignedTo > 0 ? requestedAssignedTo : undefined);
+        const normalizedSessionId = sanitizeSessionId(normalizedOptions.session_id || normalizedOptions.sessionId);
+        const queryOptions = {
+            ...normalizedOptions,
+            assigned_to: resolvedAssignedTo,
+            owner_user_id: ownerScopeUserId || undefined,
+            session_id: normalizedSessionId || undefined
+        };
 
-        const leads = await Lead.list(options);
+        const leads = await Lead.list(queryOptions);
 
-        const total = await Lead.count(options);
+        const total = await Lead.count(queryOptions);
 
         socket.emit('leads-list', { leads, total });
 
@@ -6287,16 +7483,38 @@ io.on('connection', (socket) => {
     
 
     socket.on('mark-read', async ({ sessionId, contactJid, conversationId }) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const normalizedSessionId = sanitizeSessionId(sessionId);
         const normalizedContactJid = normalizeJid(contactJid);
 
-        if (conversationId) {
+        if (ownerScopeUserId && normalizedSessionId) {
+            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!allowedSession) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                return;
+            }
+        }
 
-            await Conversation.markAsRead(conversationId);
+        if (conversationId) {
+            const normalizedConversationId = Number(conversationId);
+            const conversation = await Conversation.findById(normalizedConversationId);
+            const hasAccess = conversation
+                ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
+                : false;
+            if (!conversation || !hasAccess) {
+                socket.emit('error', { message: 'Sem permissao para acessar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+                return;
+            }
+
+            await Conversation.markAsRead(normalizedConversationId);
 
         } else if (normalizedContactJid && normalizedSessionId) {
 
-            const lead = await Lead.findByJid(normalizedContactJid);
+            const sessionOwnerUserId = await resolveSessionOwnerUserId(normalizedSessionId);
+            const lead = await Lead.findByJid(normalizedContactJid, { owner_user_id: sessionOwnerUserId || undefined });
 
             if (lead) {
 
@@ -6313,8 +7531,13 @@ io.on('connection', (socket) => {
     
 
     socket.on('get-templates', async () => {
-
-        const templates = await Template.list();
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const scopedUserId = getScopedUserId(socketReq);
+        const templates = await Template.list({
+            owner_user_id: ownerScopeUserId || undefined,
+            created_by: scopedUserId || undefined
+        });
 
         socket.emit('templates-list', { templates });
 
@@ -6324,7 +7547,7 @@ io.on('connection', (socket) => {
 
     socket.on('get-flows', async () => {
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const flows = ownerScopeUserId
             ? await Flow.list({ owner_user_id: ownerScopeUserId })
             : [];
@@ -6336,24 +7559,60 @@ io.on('connection', (socket) => {
     
 
     socket.on('toggle-bot', async ({ conversationId, active }) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const normalizedConversationId = Number(conversationId);
+        const conversation = await Conversation.findById(normalizedConversationId);
+        const hasAccess = conversation
+            ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
+            : false;
+        if (!conversation || !hasAccess) {
+            socket.emit('error', { message: 'Sem permissao para atualizar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+            return;
+        }
 
-        await Conversation.update(conversationId, { is_bot_active: active ? 1 : 0 });
+        await Conversation.update(normalizedConversationId, { is_bot_active: active ? 1 : 0 });
 
-        socket.emit('bot-toggled', { conversationId, active });
+        socket.emit('bot-toggled', { conversationId: normalizedConversationId, active });
 
     });
 
     
 
     socket.on('assign-conversation', async ({ conversationId, userId }) => {
+        const socketReq = buildSocketRequestLike(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const normalizedConversationId = Number(conversationId);
+        const conversation = await Conversation.findById(normalizedConversationId);
+        const hasConversationAccess = conversation
+            ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
+            : false;
+        if (!conversation || !hasConversationAccess) {
+            socket.emit('error', { message: 'Sem permissao para atualizar esta conversa', code: 'CONVERSATION_FORBIDDEN' });
+            return;
+        }
 
-        await Conversation.update(conversationId, { assigned_to: userId });
+        const normalizedUserId = Number(userId);
+        const nextAssignedUserId = Number.isInteger(normalizedUserId) && normalizedUserId > 0
+            ? normalizedUserId
+            : null;
+        if (nextAssignedUserId) {
+            const canAssignToUser = await canAccessAssignedRecordInOwnerScope(socketReq, nextAssignedUserId, ownerScopeUserId);
+            if (!canAssignToUser) {
+                socket.emit('error', { message: 'Sem permissao para atribuir para este usuario', code: 'ASSIGNEE_FORBIDDEN' });
+                return;
+            }
+        }
 
-        socket.emit('conversation-assigned', { conversationId, userId });
+        await Conversation.update(normalizedConversationId, { assigned_to: nextAssignedUserId });
+
+        socket.emit('conversation-assigned', { conversationId: normalizedConversationId, userId: nextAssignedUserId });
 
         
 
-        webhookService.trigger('conversation.assigned', { conversationId, userId });
+        webhookService.trigger('conversation.assigned', { conversationId: normalizedConversationId, userId: nextAssignedUserId }, {
+            ownerUserId: Number(ownerScopeUserId || 0) || undefined
+        });
 
     });
 
@@ -6367,7 +7626,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await resolveSocketOwnerUserId(socket);
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         if (ownerScopeUserId) {
             const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
                 owner_user_id: ownerScopeUserId
@@ -6418,14 +7677,15 @@ io.on('connection', (socket) => {
                 fs.rmSync(sessionPath, { recursive: true, force: true });
 
             }
-
         }
+
+        await clearPersistedBaileysAuthState(normalizedSessionId);
 
         
 
         socket.emit('disconnected', { sessionId: normalizedSessionId });
 
-        io.emit('whatsapp-status', { sessionId: normalizedSessionId, status: 'disconnected' });
+        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId: normalizedSessionId, status: 'disconnected' });
 
     });
 
@@ -6458,6 +7718,7 @@ app.get('/api/whatsapp/status', optionalAuth, (req, res) => {
     const session = sessions.get(sessionId);
 
     const connected = !!(session && session.isConnected);
+    const dispatchState = getSessionDispatchState(sessionId);
 
     let phone = null;
 
@@ -6469,7 +7730,17 @@ app.get('/api/whatsapp/status', optionalAuth, (req, res) => {
 
     }
 
-    res.json({ connected, phone });
+    res.json({
+        connected,
+        phone,
+        status: dispatchState.status || (connected ? 'connected' : 'disconnected'),
+        reconnecting: Boolean(session?.reconnecting),
+        sendReadyAt: Number(session?.sendReadyAtMs || 0) > 0 ? new Date(Number(session.sendReadyAtMs)).toISOString() : null,
+        dispatchBlockedUntil: Number(session?.dispatchBlockedUntilMs || 0) > Date.now()
+            ? new Date(Number(session.dispatchBlockedUntilMs)).toISOString()
+            : null,
+        lastDisconnectReason: session?.lastDisconnectReason || null
+    });
 
 });
 
@@ -6542,12 +7813,13 @@ app.delete('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) =
         }
 
         await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
+        await clearPersistedBaileysAuthState(sessionId);
         await WhatsAppSession.deleteBySessionId(sessionId, {
             owner_user_id: ownerScopeUserId || undefined,
             created_by: ownerScopeUserId || undefined
         });
 
-        io.emit('whatsapp-status', { sessionId, status: 'disconnected' });
+        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId, status: 'disconnected' });
         res.json({ success: true, session_id: sessionId });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -6572,8 +7844,9 @@ app.post('/api/whatsapp/disconnect', authenticate, async (req, res) => {
         }
 
         await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
+        await clearPersistedBaileysAuthState(sessionId);
 
-        io.emit('whatsapp-status', { sessionId, status: 'disconnected' });
+        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId, status: 'disconnected' });
 
         res.json({ success: true });
 
@@ -6707,6 +7980,15 @@ app.post('/api/auth/login', async (req, res) => {
 
         }
 
+        if (!isEmailConfirmed(user)) {
+
+            return res.status(403).json({
+                error: 'Confirme seu email antes de entrar',
+                code: 'EMAIL_NOT_CONFIRMED'
+            });
+
+        }
+
         // Recupera ambientes legados: se nao houver admin ativo, promove
         // automaticamente o usuario autenticado para admin.
         const allUsers = await User.listAll();
@@ -6792,7 +8074,7 @@ app.post('/api/auth/register', async (req, res) => {
 
         if (!name || !email || !password) {
 
-            return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
+            return res.status(400).json({ error: 'Nome, email e senha sao obrigatorios' });
 
         }
 
@@ -6806,81 +8088,197 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 
-        const { User } = require('./database/models');
+        const { hashPassword } = require('./middleware/auth');
 
-        const { generateToken, generateRefreshToken, hashPassword } = require('./middleware/auth');
-
-
-
+        const normalizedName = String(name || '').trim();
         const normalizedEmail = String(email || '').trim().toLowerCase();
-
         const existing = await User.findActiveByEmail(normalizedEmail);
+        const registrationPasswordHash = hashPassword(String(password));
+        const confirmationTokenPayload = createEmailConfirmationTokenPayload();
 
-        if (existing) {
+        let user = null;
+        let createdNewUser = false;
+        let resentForPendingUser = false;
 
-            return res.status(409).json({ error: 'Email já cadastrado' });
+        if (existing && isEmailConfirmed(existing)) {
+
+            return res.status(409).json({ error: 'Email ja cadastrado' });
 
         }
 
+        if (existing && !isEmailConfirmed(existing)) {
+            resentForPendingUser = true;
+
+            await User.update(existing.id, {
+                name: normalizedName,
+                email: normalizedEmail,
+                email_confirmed: 0,
+                email_confirmed_at: null,
+                email_confirmation_token_hash: confirmationTokenPayload.tokenHash,
+                email_confirmation_expires_at: confirmationTokenPayload.expiresAt
+            });
+            await User.updatePassword(existing.id, registrationPasswordHash);
+
+            const existingOwnerUserId = Number(existing?.owner_user_id || 0);
+            if (!Number.isInteger(existingOwnerUserId) || existingOwnerUserId <= 0) {
+                await User.update(existing.id, { owner_user_id: existing.id });
+            }
+
+            user = await User.findByIdWithPassword(existing.id);
+        } else {
+            createdNewUser = true;
+
+            const created = await User.create({
+
+                name: normalizedName,
+
+                email: normalizedEmail,
+
+                password_hash: registrationPasswordHash,
+                email_confirmed: 0,
+                email_confirmed_at: null,
+                email_confirmation_token_hash: confirmationTokenPayload.tokenHash,
+                email_confirmation_expires_at: confirmationTokenPayload.expiresAt,
+
+                role: 'admin'
+
+            });
 
 
-        const created = await User.create({
 
-            name: String(name || '').trim(),
+            if (Number(created?.id) > 0) {
+                await User.update(Number(created.id), { owner_user_id: Number(created.id) });
+            }
 
-            email: normalizedEmail,
-
-            password_hash: hashPassword(String(password)),
-
-            role: 'admin'
-
-        });
-
-
-
-        if (Number(created?.id) > 0) {
-            await User.update(Number(created.id), { owner_user_id: Number(created.id) });
+            user = await User.findByIdWithPassword(Number(created?.id || 0));
         }
-
-        const user = await User.findById(Number(created?.id || 0));
 
         if (!user) {
 
-            return res.status(500).json({ error: 'Falha ao criar usuário' });
+            return res.status(500).json({ error: 'Falha ao preparar cadastro do usuario' });
 
         }
 
-
-
-        const token = generateToken(user);
-
-        const refreshToken = generateRefreshToken(user);
-
-
-
-        res.json({
-
-            success: true,
-
-            token,
-
-            refreshToken,
-
-            user: {
-
-                id: user.id,
-
-                uuid: user.uuid,
-
-                name: user.name,
-
-                email: user.email,
-
-                role: user.role,
-                owner_user_id: user.owner_user_id
-
+        try {
+            await sendRegistrationConfirmationEmail(req, user, confirmationTokenPayload);
+        } catch (error) {
+            if (error instanceof MailMktIntegrationError) {
+                return res.status(error.statusCode || 502).json({
+                    error: createdNewUser
+                        ? 'Conta criada, mas nao foi possivel enviar o email de confirmacao agora'
+                        : 'Nao foi possivel reenviar o email de confirmacao agora',
+                    code: 'EMAIL_CONFIRMATION_SEND_FAILED',
+                    retryable: error.retryable !== false,
+                    requiresEmailConfirmation: true,
+                    accountCreated: createdNewUser
+                });
             }
+            throw error;
+        }
 
+        return res.status(createdNewUser ? 201 : 200).json({
+            success: true,
+            requiresEmailConfirmation: true,
+            message: resentForPendingUser
+                ? 'Sua conta ainda nao foi confirmada. Enviamos um novo link de confirmacao para o seu email.'
+                : 'Conta criada com sucesso. Verifique seu email para confirmar o cadastro antes de entrar.',
+            email: user.email,
+            expiresInText: confirmationTokenPayload.expiresInText
+        });
+
+    } catch (error) {
+
+        res.status(500).json({ error: error.message });
+
+    }
+
+});
+
+
+
+app.get('/api/auth/confirm-email', async (req, res) => {
+
+    try {
+
+        const rawToken = String(req.query?.token || '').trim();
+
+        if (!rawToken) {
+            return res.status(400).json({
+                error: 'Token de confirmacao e obrigatorio',
+                code: 'EMAIL_CONFIRMATION_TOKEN_REQUIRED'
+            });
+        }
+
+        const confirmationTokenHash = hashEmailConfirmationToken(rawToken);
+        const confirmationTokenFingerprint = tokenFingerprint(rawToken);
+        const user = await User.findByEmailConfirmationTokenHash(confirmationTokenHash);
+
+        if (!user) {
+            console.warn('[auth/confirm-email] Token invalido', JSON.stringify({
+                tokenFingerprint: confirmationTokenFingerprint
+            }));
+            return res.status(400).json({
+                error: 'Link de confirmacao invalido ou ja utilizado',
+                code: 'EMAIL_CONFIRMATION_INVALID'
+            });
+        }
+
+        if (isEmailConfirmed(user)) {
+            await User.update(user.id, {
+                email_confirmation_token_hash: null,
+                email_confirmation_expires_at: null
+            });
+            console.warn('[auth/confirm-email] Token reutilizado para email ja confirmado', JSON.stringify({
+                userId: Number(user?.id || 0) || null,
+                tokenFingerprint: confirmationTokenFingerprint
+            }));
+            return res.status(400).json({
+                error: 'Link de confirmacao invalido ou ja utilizado',
+                code: 'EMAIL_CONFIRMATION_INVALID'
+            });
+        }
+
+        if (isEmailConfirmationExpired(user)) {
+            await User.update(user.id, {
+                email_confirmation_token_hash: null,
+                email_confirmation_expires_at: null
+            });
+            console.warn('[auth/confirm-email] Token expirado', JSON.stringify({
+                userId: Number(user?.id || 0) || null,
+                tokenFingerprint: confirmationTokenFingerprint
+            }));
+            return res.status(400).json({
+                error: 'Link de confirmacao expirado. Faca um novo cadastro para reenviar o email.',
+                code: 'EMAIL_CONFIRMATION_EXPIRED'
+            });
+        }
+
+        const confirmedUser = await User.consumeEmailConfirmationToken(confirmationTokenHash);
+
+        if (!confirmedUser) {
+            console.warn('[auth/confirm-email] Token invalido apos validacao (concorrencia/reuso)', JSON.stringify({
+                userId: Number(user?.id || 0) || null,
+                tokenFingerprint: confirmationTokenFingerprint
+            }));
+            return res.status(400).json({
+                error: 'Link de confirmacao invalido ou ja utilizado',
+                code: 'EMAIL_CONFIRMATION_INVALID'
+            });
+        }
+
+        console.log('[auth/confirm-email] Email confirmado com sucesso', JSON.stringify({
+            userId: Number(confirmedUser?.id || 0) || null,
+            email: confirmedUser?.email || null
+        }));
+
+        return res.json({
+            success: true,
+            message: 'Email confirmado com sucesso. Voce ja pode entrar no ZapVender.',
+            user: {
+                id: confirmedUser.id,
+                email: confirmedUser.email,
+                name: confirmedUser.name
+            }
         });
 
     } catch (error) {
@@ -7482,7 +8880,7 @@ function resolveCustomEventPeriodRange(periodInput) {
     };
 }
 
-app.get('/api/dashboard/stats-period', optionalAuth, async (req, res) => {
+app.get('/api/dashboard/stats-period', authenticate, async (req, res) => {
     try {
         const metric = String(req.query.metric || 'novos_contatos')
             .trim()
@@ -7880,7 +9278,7 @@ app.get('/api/leads/:id', authenticate, async (req, res) => {
 
     }
 
-    if (!(await canAccessAssignedRecordInOwnerScope(req, lead.assigned_to, ownerScopeUserId))) {
+    if (!await canAccessLeadRecordInOwnerScope(req, lead)) {
         return res.status(404).json({ error: 'Lead não encontrado' });
     }
 
@@ -7894,11 +9292,15 @@ app.post('/api/leads', authenticate, async (req, res) => {
 
     try {
         const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
         const payload = {
             ...req.body
         };
         if (scopedUserId) {
             payload.assigned_to = scopedUserId;
+        }
+        if (ownerScopeUserId) {
+            payload.owner_user_id = ownerScopeUserId;
         }
 
         const result = await Lead.create(payload);
@@ -7907,7 +9309,9 @@ app.post('/api/leads', authenticate, async (req, res) => {
 
         
 
-        webhookService.trigger('lead.created', { lead });
+        webhookService.trigger('lead.created', { lead }, {
+            ownerUserId: Number(lead?.owner_user_id || ownerScopeUserId || 0) || undefined
+        });
 
         
 
@@ -7941,6 +9345,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
 
         const scopedUserId = getScopedUserId(req);
         const requesterUserId = getRequesterUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
         const fallbackAssignedTo = scopedUserId || requesterUserId || null;
 
         let imported = 0;
@@ -7990,16 +9395,35 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                 tags: parseLeadTagsForMerge(payload.tags),
                 custom_fields: parseLeadCustomFields(payload.custom_fields),
                 source: String(payload.source || 'import').trim() || 'import',
-                assigned_to: Number.isInteger(assignedTo) && assignedTo > 0 ? assignedTo : null
+                assigned_to: Number.isInteger(assignedTo) && assignedTo > 0 ? assignedTo : null,
+                owner_user_id: ownerScopeUserId || null
             });
         }
 
         if (normalizedRows.length > 0) {
             const uniquePhones = Array.from(new Set(normalizedRows.map((row) => row.phone)));
-            const existingRows = await query(
-                'SELECT id, phone, name, email, tags, custom_fields FROM leads WHERE phone = ANY(?::text[])',
-                [uniquePhones]
-            );
+            const existingRows = ownerScopeUserId
+                ? await query(`
+                    SELECT id, phone, name, email, tags, custom_fields
+                    FROM leads
+                    WHERE phone = ANY(?::text[])
+                      AND (
+                          owner_user_id = ?
+                          OR (
+                              owner_user_id IS NULL
+                              AND EXISTS (
+                                  SELECT 1
+                                  FROM users owner_scope
+                                  WHERE owner_scope.id = leads.assigned_to
+                                    AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                              )
+                          )
+                      )
+                `, [uniquePhones, ownerScopeUserId, ownerScopeUserId, ownerScopeUserId])
+                : await query(
+                    'SELECT id, phone, name, email, tags, custom_fields FROM leads WHERE phone = ANY(?::text[])',
+                    [uniquePhones]
+                );
 
             const stateByPhone = new Map();
             for (const row of existingRows || []) {
@@ -8123,13 +9547,16 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                     source: String(item.source || 'import').trim() || 'import',
                     assigned_to: Number.isInteger(Number(item.assigned_to)) && Number(item.assigned_to) > 0
                         ? Number(item.assigned_to)
+                        : null,
+                    owner_user_id: Number.isInteger(Number(item.owner_user_id)) && Number(item.owner_user_id) > 0
+                        ? Number(item.owner_user_id)
                         : null
                 }));
 
                 const insertedRows = await query(`
                     INSERT INTO leads (
                         uuid, phone, phone_formatted, jid, name, email, vehicle, plate,
-                        status, tags, custom_fields, source, assigned_to
+                        status, tags, custom_fields, source, assigned_to, owner_user_id
                     )
                     SELECT
                         data.uuid,
@@ -8144,7 +9571,8 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                         data.tags,
                         data.custom_fields,
                         COALESCE(NULLIF(TRIM(data.source), ''), 'import'),
-                        data.assigned_to
+                        data.assigned_to,
+                        data.owner_user_id
                     FROM jsonb_to_recordset(?::jsonb) AS data(
                         uuid text,
                         phone text,
@@ -8158,9 +9586,10 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                         tags text,
                         custom_fields text,
                         source text,
-                        assigned_to integer
+                        assigned_to integer,
+                        owner_user_id integer
                     )
-                    ON CONFLICT (phone) DO NOTHING
+                    ON CONFLICT (owner_user_id, phone) WHERE owner_user_id IS NOT NULL DO NOTHING
                     RETURNING phone
                 `, [JSON.stringify(insertPayload)]);
 
@@ -8260,9 +9689,10 @@ app.post('/api/leads/bulk-delete', authenticate, async (req, res) => {
         let skipped = 0;
         let failed = 0;
         const errors = [];
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
         const existingLeads = await query(
-            'SELECT id, assigned_to FROM leads WHERE id = ANY(?::int[])',
+            'SELECT id, assigned_to, owner_user_id FROM leads WHERE id = ANY(?::int[])',
             [leadIds]
         );
         const leadById = new Map(
@@ -8277,7 +9707,7 @@ app.post('/api/leads/bulk-delete', authenticate, async (req, res) => {
                 continue;
             }
 
-            if (!canAccessAssignedRecord(req, lead.assigned_to)) {
+            if (!await canAccessLeadRecordInOwnerScope(req, lead, ownerScopeUserId || null)) {
                 skipped += 1;
                 continue;
             }
@@ -8319,6 +9749,203 @@ app.post('/api/leads/bulk-delete', authenticate, async (req, res) => {
     }
 });
 
+app.post('/api/leads/bulk-update', authenticate, async (req, res) => {
+    try {
+        const rawLeadIds = Array.isArray(req.body?.leadIds) ? req.body.leadIds : [];
+        const leadIds = Array.from(
+            new Set(
+                rawLeadIds
+                    .map((value) => parseInt(value, 10))
+                    .filter((value) => Number.isInteger(value) && value > 0)
+            )
+        );
+
+        if (leadIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Lista de IDs inválida'
+            });
+        }
+
+        const MAX_BULK_UPDATE_LEADS = 2000;
+        if (leadIds.length > MAX_BULK_UPDATE_LEADS) {
+            return res.status(400).json({
+                success: false,
+                error: `Quantidade maxima por lote: ${MAX_BULK_UPDATE_LEADS}`
+            });
+        }
+
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const hasStatusField = Object.prototype.hasOwnProperty.call(body, 'status');
+        const requestedStatus = hasStatusField ? parseInt(String(body.status || ''), 10) : null;
+
+        if (hasStatusField && ![1, 2, 3, 4].includes(Number(requestedStatus))) {
+            return res.status(400).json({
+                success: false,
+                error: 'Status inválido. Use 1, 2, 3 ou 4.'
+            });
+        }
+
+        const addTagsInput = Object.prototype.hasOwnProperty.call(body, 'addTags')
+            ? body.addTags
+            : body.tags;
+        const tagsToAdd = Array.from(new Set(parseLeadTagsForMerge(addTagsInput)));
+
+        if (!hasStatusField && tagsToAdd.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Nenhuma alteração informada (status ou addTags)'
+            });
+        }
+
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const existingLeads = await query(
+            'SELECT id, assigned_to, owner_user_id, status, tags FROM leads WHERE id = ANY(?::int[])',
+            [leadIds]
+        );
+        const leadById = new Map(
+            (existingLeads || []).map((lead) => [Number(lead.id), lead])
+        );
+
+        const canAccessLeadCache = new Map();
+        const canAccessLeadScoped = async (leadRecord) => {
+            const cacheKey = `${Number(leadRecord?.owner_user_id || 0)}:${Number(leadRecord?.assigned_to || 0)}`;
+            if (canAccessLeadCache.has(cacheKey)) {
+                return canAccessLeadCache.get(cacheKey) === true;
+            }
+
+            const allowed = await canAccessLeadRecordInOwnerScope(req, leadRecord, ownerScopeUserId || null);
+            canAccessLeadCache.set(cacheKey, allowed === true);
+            return allowed === true;
+        };
+
+        let updated = 0;
+        let skipped = 0;
+        let failed = 0;
+        let statusChanged = 0;
+        let tagsUpdated = 0;
+        const errors = [];
+
+        for (const leadId of leadIds) {
+            const lead = leadById.get(leadId);
+            if (!lead) {
+                skipped += 1;
+                continue;
+            }
+
+            if (!await canAccessLeadScoped(lead)) {
+                skipped += 1;
+                continue;
+            }
+
+            try {
+                const updateData = {};
+                let tagsWereUpdated = false;
+
+                if (hasStatusField && Number(lead.status) !== Number(requestedStatus)) {
+                    updateData.status = Number(requestedStatus);
+                }
+
+                if (tagsToAdd.length > 0) {
+                    const currentTags = parseLeadTagsForMerge(lead.tags);
+                    const mergedTags = Array.from(new Set([...currentTags, ...tagsToAdd]));
+                    const tagsChanged = mergedTags.length !== currentTags.length
+                        || mergedTags.some((tag, index) => tag !== currentTags[index]);
+
+                    if (tagsChanged) {
+                        updateData.tags = mergedTags;
+                        tagsWereUpdated = true;
+                    }
+                }
+
+                if (Object.keys(updateData).length === 0) {
+                    skipped += 1;
+                    continue;
+                }
+
+                const oldStatus = normalizeAutomationStatus(lead.status);
+                await Lead.update(leadId, updateData);
+
+                const updatedLead = await Lead.findById(leadId);
+                if (!updatedLead) {
+                    failed += 1;
+                    if (errors.length < 25) {
+                        errors.push({ id: leadId, error: 'Lead não encontrado após atualização' });
+                    }
+                    continue;
+                }
+
+                updated += 1;
+                if (tagsWereUpdated) {
+                    tagsUpdated += 1;
+                }
+
+                webhookService.trigger('lead.updated', { lead: updatedLead }, {
+                    ownerUserId: Number(updatedLead?.owner_user_id || ownerScopeUserId || 0) || undefined
+                });
+
+                const hasStatusInPayload = Object.prototype.hasOwnProperty.call(updateData, 'status');
+                const newStatus = hasStatusInPayload
+                    ? normalizeAutomationStatus(updateData.status)
+                    : oldStatus;
+                const didChangeStatus = oldStatus !== null && newStatus !== null && oldStatus !== newStatus;
+
+                if (didChangeStatus) {
+                    statusChanged += 1;
+
+                    webhookService.trigger('lead.status_changed', {
+                        lead: updatedLead,
+                        oldStatus,
+                        newStatus
+                    }, {
+                        ownerUserId: Number(updatedLead?.owner_user_id || ownerScopeUserId || 0) || undefined
+                    });
+
+                    try {
+                        const statusConversation = await Conversation.findByLeadId(updatedLead.id, null);
+                        await scheduleAutomations({
+                            event: AUTOMATION_EVENT_TYPES.STATUS_CHANGE,
+                            sessionId: statusConversation?.session_id || DEFAULT_AUTOMATION_SESSION_ID,
+                            lead: updatedLead,
+                            conversation: statusConversation || null,
+                            oldStatus,
+                            newStatus,
+                            text: ''
+                        });
+                    } catch (automationError) {
+                        console.error(`Falha ao agendar automacoes para lead ${leadId} em bulk status:`, automationError);
+                    }
+                }
+            } catch (error) {
+                failed += 1;
+                if (errors.length < 25) {
+                    errors.push({
+                        id: leadId,
+                        error: String(error?.message || 'Erro ao atualizar lead em lote')
+                    });
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            total: leadIds.length,
+            updated,
+            skipped,
+            failed,
+            statusChanged,
+            tagsUpdated,
+            errors
+        });
+    } catch (error) {
+        console.error('Falha ao atualizar leads em lote:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao atualizar leads em lote'
+        });
+    }
+});
+
 
 
 app.put('/api/leads/:id', authenticate, async (req, res) => {
@@ -8331,7 +9958,7 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
     }
 
-    if (!canAccessAssignedRecord(req, lead.assigned_to)) {
+    if (!await canAccessLeadRecordInOwnerScope(req, lead)) {
         return res.status(404).json({ error: 'Lead não encontrado' });
     }
 
@@ -8355,7 +9982,9 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
 
     
 
-    webhookService.trigger('lead.updated', { lead: updatedLead });
+    webhookService.trigger('lead.updated', { lead: updatedLead }, {
+        ownerUserId: Number(updatedLead?.owner_user_id || 0) || undefined
+    });
 
     
 
@@ -8370,6 +9999,8 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
             lead: updatedLead,
             oldStatus,
             newStatus
+        }, {
+            ownerUserId: Number(updatedLead?.owner_user_id || 0) || undefined
         });
 
         const statusSessionId = sanitizeSessionId(
@@ -8413,7 +10044,7 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
             });
         }
 
-        if (!canAccessAssignedRecord(req, lead.assigned_to)) {
+        if (!await canAccessLeadRecordInOwnerScope(req, lead)) {
             return res.status(404).json({
                 success: false,
                 error: 'Lead nao encontrado'
@@ -8440,10 +10071,15 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
 
 // ============================================
 
-app.get('/api/tags', optionalAuth, async (req, res) => {
+app.get('/api/tags', authenticate, async (req, res) => {
     try {
-        await Tag.syncFromLeads();
-        const tags = await Tag.list();
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const tagScope = {
+            owner_user_id: ownerScopeUserId || undefined
+        };
+
+        await Tag.syncFromLeads(tagScope);
+        const tags = await Tag.list(tagScope);
         res.json({ success: true, tags });
     } catch (error) {
         console.error('Falha ao listar tags:', error);
@@ -8453,6 +10089,11 @@ app.get('/api/tags', optionalAuth, async (req, res) => {
 
 app.post('/api/tags', authenticate, async (req, res) => {
     try {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const requesterUserId = getRequesterUserId(req);
+        const tagScope = {
+            owner_user_id: ownerScopeUserId || undefined
+        };
         const name = normalizeTagNameInput(req.body?.name);
         const color = normalizeTagColorInput(req.body?.color);
         const description = normalizeTagDescriptionInput(req.body?.description);
@@ -8461,12 +10102,15 @@ app.post('/api/tags', authenticate, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Nome da tag é obrigatório' });
         }
 
-        const existing = await Tag.findByName(name);
+        const existing = await Tag.findByName(name, tagScope);
         if (existing) {
             return res.status(409).json({ success: false, error: 'Já existe uma tag com este nome' });
         }
 
-        const tag = await Tag.create({ name, color, description });
+        const tag = await Tag.create(
+            { name, color, description, created_by: requesterUserId || undefined },
+            { ...tagScope, created_by: requesterUserId || undefined }
+        );
         res.status(201).json({ success: true, tag });
     } catch (error) {
         console.error('Falha ao criar tag:', error);
@@ -8476,12 +10120,16 @@ app.post('/api/tags', authenticate, async (req, res) => {
 
 app.put('/api/tags/:id', authenticate, async (req, res) => {
     try {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const tagScope = {
+            owner_user_id: ownerScopeUserId || undefined
+        };
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
             return res.status(400).json({ success: false, error: 'ID de tag inválido' });
         }
 
-        const currentTag = await Tag.findById(tagId);
+        const currentTag = await Tag.findById(tagId, tagScope);
         if (!currentTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
@@ -8493,7 +10141,7 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Nome da tag é obrigatório' });
             }
 
-            const duplicate = await Tag.findByName(nextName);
+            const duplicate = await Tag.findByName(nextName, tagScope);
             if (duplicate && Number(duplicate.id) !== tagId) {
                 return res.status(409).json({ success: false, error: 'Já existe uma tag com este nome' });
             }
@@ -8506,7 +10154,7 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
             payload.description = normalizeTagDescriptionInput(req.body.description);
         }
 
-        const updatedTag = await Tag.update(tagId, payload);
+        const updatedTag = await Tag.update(tagId, payload, tagScope);
         if (!updatedTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
@@ -8515,11 +10163,28 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
             payload.name &&
             normalizeTagNameInput(currentTag.name).toLowerCase() !== normalizeTagNameInput(updatedTag.name).toLowerCase()
         ) {
-            await Tag.renameInLeads(currentTag.name, updatedTag.name);
-            await run(
-                'UPDATE campaigns SET tag_filter = ? WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-                [updatedTag.name, currentTag.name]
-            );
+            await Tag.renameInLeads(currentTag.name, updatedTag.name, tagScope);
+            if (ownerScopeUserId) {
+                await run(`
+                    UPDATE campaigns
+                    SET tag_filter = ?
+                    WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))
+                      AND (
+                          created_by = ?
+                          OR EXISTS (
+                              SELECT 1
+                              FROM users owner_scope
+                              WHERE owner_scope.id = campaigns.created_by
+                                AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                          )
+                      )
+                `, [updatedTag.name, currentTag.name, ownerScopeUserId, ownerScopeUserId, ownerScopeUserId]);
+            } else {
+                await run(
+                    'UPDATE campaigns SET tag_filter = ? WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
+                    [updatedTag.name, currentTag.name]
+                );
+            }
         }
 
         res.json({ success: true, tag: updatedTag });
@@ -8531,22 +10196,47 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
 
 app.delete('/api/tags/:id', authenticate, async (req, res) => {
     try {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const tagScope = {
+            owner_user_id: ownerScopeUserId || undefined
+        };
         const tagId = parseInt(req.params.id, 10);
         if (!Number.isInteger(tagId) || tagId <= 0) {
             return res.status(400).json({ success: false, error: 'ID de tag inválido' });
         }
 
-        const currentTag = await Tag.findById(tagId);
+        const currentTag = await Tag.findById(tagId, tagScope);
         if (!currentTag) {
             return res.status(404).json({ success: false, error: 'Tag não encontrada' });
         }
 
-        await Tag.delete(tagId);
-        await Tag.removeFromLeads(currentTag.name);
-        await run(
-            'UPDATE campaigns SET tag_filter = NULL WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-            [currentTag.name]
-        );
+        const deleted = await Tag.delete(tagId, tagScope);
+        if (!deleted) {
+            return res.status(404).json({ success: false, error: 'Tag nao encontrada' });
+        }
+
+        await Tag.removeFromLeads(currentTag.name, tagScope);
+        if (ownerScopeUserId) {
+            await run(`
+                UPDATE campaigns
+                SET tag_filter = NULL
+                WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))
+                  AND (
+                      created_by = ?
+                      OR EXISTS (
+                          SELECT 1
+                          FROM users owner_scope
+                          WHERE owner_scope.id = campaigns.created_by
+                            AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                      )
+                  )
+            `, [currentTag.name, ownerScopeUserId, ownerScopeUserId, ownerScopeUserId]);
+        } else {
+            await run(
+                'UPDATE campaigns SET tag_filter = NULL WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
+                [currentTag.name]
+            );
+        }
 
         res.json({ success: true });
     } catch (error) {
@@ -8708,7 +10398,7 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
     try {
         const conversation = await Conversation.findById(conversationId);
         const hasAccess = conversation
-            ? await canAccessAssignedRecordInOwnerScope(req, conversation.assigned_to, ownerScopeUserId)
+            ? await canAccessConversationInOwnerScope(req, conversation, ownerScopeUserId)
             : false;
         if (!conversation || !hasAccess) {
             return res.status(404).json({ error: 'Conversa nao encontrada' });
@@ -8730,6 +10420,7 @@ app.post('/api/send', authenticate, async (req, res) => {
 
     const { sessionId, to, message, type, options } = req.body;
     const scopedUserId = getScopedUserId(req);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
     
 
@@ -8742,6 +10433,15 @@ app.post('/api/send', authenticate, async (req, res) => {
     
 
     try {
+        const normalizedSessionId = sanitizeSessionId(sessionId);
+        if (ownerScopeUserId && normalizedSessionId) {
+            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!allowedSession) {
+                return res.status(403).json({ error: 'Sem permissao para usar esta conta WhatsApp' });
+            }
+        }
 
         const sendOptions = {
             ...(options || {}),
@@ -8784,7 +10484,7 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
 
         const lead = await Lead.findById(leadId);
         const hasAccess = lead
-            ? await canAccessAssignedRecordInOwnerScope(req, lead.assigned_to, ownerScopeUserId)
+            ? await canAccessLeadRecordInOwnerScope(req, lead, ownerScopeUserId)
             : false;
         if (!lead || !hasAccess) {
             return res.status(404).json({ error: 'Lead nao encontrado' });
@@ -8807,6 +10507,14 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
     try {
 
         const resolvedSessionId = resolveSessionIdOrDefault(sessionId);
+        if (ownerScopeUserId && resolvedSessionId) {
+            const allowedSession = await WhatsAppSession.findBySessionId(resolvedSessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!allowedSession) {
+                return res.status(403).json({ error: 'Sem permissao para usar esta conta WhatsApp' });
+            }
+        }
         const sendOptions = {
             ...(options || {}),
             ...(scopedUserId ? { assigned_to: scopedUserId } : {})
@@ -8867,10 +10575,14 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
         }
     }
 
-    if (resolvedLead && !(await canAccessAssignedRecordInOwnerScope(req, resolvedLead.assigned_to, ownerScopeUserId))) {
+    const hasConversationAccess = resolvedConversation
+        ? await canAccessConversationInOwnerScope(req, resolvedConversation, ownerScopeUserId)
+        : false;
+
+    if (resolvedLead && !hasConversationAccess && !(await canAccessAssignedRecordInOwnerScope(req, resolvedLead.assigned_to, ownerScopeUserId))) {
         return res.status(404).json({ success: false, error: 'Lead nao encontrado' });
     }
-    if (!resolvedLead && resolvedConversation && !(await canAccessAssignedRecordInOwnerScope(req, resolvedConversation.assigned_to, ownerScopeUserId))) {
+    if (!resolvedLead && resolvedConversation && !hasConversationAccess) {
         return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
     }
 
@@ -8949,12 +10661,12 @@ app.post('/api/queue/add', authenticate, async (req, res) => {
 
     let resolvedSessionId = sanitizeSessionId(sessionId);
     if (!resolvedSessionId) {
-        const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
         const allocation = await senderAllocatorService.allocateForSingleLead({
             leadId,
             campaignId,
             strategy: 'round_robin',
-            ownerUserId: scopedUserId || undefined
+            ownerUserId: ownerScopeUserId || undefined
         });
         resolvedSessionId = sanitizeSessionId(allocation?.sessionId);
     }
@@ -9034,14 +10746,14 @@ app.post('/api/queue/bulk', authenticate, async (req, res) => {
 
     let distribution = { strategyUsed: fixedSessionId ? 'single' : distributionStrategy, summary: {} };
     if (!hasSessionAssignments) {
-        const scopedUserId = getScopedUserId(req);
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
         const allocationPlan = await senderAllocatorService.buildDistributionPlan({
             leadIds: normalizedLeadIds,
             campaignId: options.campaignId || req.body?.campaignId || null,
             senderAccounts,
             strategy: distributionStrategy,
             sessionId: fixedSessionId || null,
-            ownerUserId: scopedUserId || undefined
+            ownerUserId: ownerScopeUserId || undefined
         });
         options.sessionAssignments = allocationPlan.assignmentsByLead;
         options.assignmentMetaByLead = allocationPlan.assignmentMetaByLead;
@@ -9098,11 +10810,13 @@ app.delete('/api/queue', authenticate, async (req, res) => {
 
 
 
-app.get('/api/templates', optionalAuth, async (req, res) => {
+app.get('/api/templates', authenticate, async (req, res) => {
 
     const scopedUserId = getScopedUserId(req);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
     const templates = await Template.list({
         ...req.query,
+        owner_user_id: ownerScopeUserId || undefined,
         created_by: scopedUserId || undefined
     });
 
@@ -9129,8 +10843,11 @@ app.post('/api/templates', authenticate, async (req, res) => {
 
 
 app.put('/api/templates/:id', authenticate, async (req, res) => {
-
-    const existing = await Template.findById(req.params.id);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const existing = await Template.findById(req.params.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: getScopedUserId(req) || undefined
+    });
     if (!existing) {
         return res.status(404).json({ error: 'Template nao encontrado' });
     }
@@ -9140,7 +10857,10 @@ app.put('/api/templates/:id', authenticate, async (req, res) => {
 
     await Template.update(req.params.id, req.body);
 
-    const template = await Template.findById(req.params.id);
+    const template = await Template.findById(req.params.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: getScopedUserId(req) || undefined
+    });
 
     res.json({ success: true, template });
 
@@ -9149,8 +10869,11 @@ app.put('/api/templates/:id', authenticate, async (req, res) => {
 
 
 app.delete('/api/templates/:id', authenticate, async (req, res) => {
-
-    const existing = await Template.findById(req.params.id);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const existing = await Template.findById(req.params.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: getScopedUserId(req) || undefined
+    });
     if (!existing) {
         return res.status(404).json({ error: 'Template nao encontrado' });
     }
@@ -9311,6 +11034,29 @@ function randomIntBetween(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function buildCampaignScheduledAtByLead(leadIds = [], assignmentMetaByLead = {}, baseStartMs = Date.now(), delayMinMs = 0, delayMaxMs = 0) {
+    const scheduledAtByLead = {};
+    const nextMsByDayOffset = new Map();
+
+    for (const leadId of leadIds) {
+        const key = String(leadId);
+        const meta = assignmentMetaByLead && typeof assignmentMetaByLead === 'object'
+            ? assignmentMetaByLead[key]
+            : null;
+        const dayOffsetRaw = Number(meta?.day_offset);
+        const dayOffset = Number.isFinite(dayOffsetRaw) && dayOffsetRaw > 0 ? Math.floor(dayOffsetRaw) : 0;
+        const bucketStartMs = baseStartMs + (dayOffset * 24 * 60 * 60 * 1000);
+        const nextMs = nextMsByDayOffset.has(dayOffset)
+            ? Number(nextMsByDayOffset.get(dayOffset))
+            : bucketStartMs;
+
+        scheduledAtByLead[key] = new Date(nextMs).toISOString();
+        nextMsByDayOffset.set(dayOffset, nextMs + randomIntBetween(delayMinMs, delayMaxMs));
+    }
+
+    return scheduledAtByLead;
+}
+
 function parseCampaignSteps(campaign) {
 
     const raw = String(campaign?.message || '').replace(/\r\n/g, '\n').trim();
@@ -9419,7 +11165,7 @@ async function resolveCampaignLeadIds(options = {}) {
     const segment = typeof options === 'string' ? options : options.segment;
     const tagFilter = typeof options === 'string' ? '' : options.tagFilter;
     const assignedTo = Number(typeof options === 'string' ? 0 : options.assignedTo);
-    const ownerUserId = Number(typeof options === 'string' ? 0 : options.ownerUserId);
+    const ownerUserId = normalizeOwnerUserId(typeof options === 'string' ? null : (options.ownerUserId ?? options.owner_user_id));
     const segmentStatus = resolveCampaignSegmentStatus(segment);
 
     let sql = 'SELECT id, tags FROM leads WHERE is_blocked = 0';
@@ -9437,7 +11183,7 @@ async function resolveCampaignLeadIds(options = {}) {
         params.push(assignedTo);
     }
 
-    if (Number.isInteger(ownerUserId) && ownerUserId > 0) {
+    if (ownerUserId) {
         sql += `
             AND EXISTS (
                 SELECT 1
@@ -9653,13 +11399,22 @@ async function queueCampaignMessages(campaign, options = {}) {
         campaign?.distribution_strategy,
         senderAccounts.length ? 'round_robin' : 'single'
     );
-    const distributionPlan = await senderAllocatorService.buildDistributionPlan({
-        leadIds,
-        campaignId: campaign.id,
-        senderAccounts,
-        strategy: distributionStrategy,
-        ownerUserId: options.ownerUserId
-    });
+    let distributionPlan;
+    try {
+        distributionPlan = await senderAllocatorService.buildDistributionPlan({
+            leadIds,
+            campaignId: campaign.id,
+            senderAccounts,
+            strategy: distributionStrategy,
+            ownerUserId: options.ownerUserId
+        });
+    } catch (error) {
+        const reason = String(error?.message || 'Falha ao alocar contas de envio');
+        throw new Error(
+            `${reason}. Destinatarios filtrados: ${leadIds.length}. ` +
+            'Revise contas de envio conectadas e o limite diario (por exemplo, 0 = sem limite).'
+        );
+    }
     const sessionAssignments = distributionPlan.assignmentsByLead || {};
     const assignmentMetaByLead = distributionPlan.assignmentMetaByLead || {};
 
@@ -9670,6 +11425,13 @@ async function queueCampaignMessages(campaign, options = {}) {
     const { minMs: delayMinMsRaw, maxMs: delayMaxMsRaw } = resolveCampaignDelayRange(campaign, 5000);
     const delayMinMs = Math.max(250, delayMinMsRaw || 0);
     const delayMaxMs = Math.max(delayMinMs, delayMaxMsRaw || 0);
+    const scheduledAtByLead = buildCampaignScheduledAtByLead(
+        leadIds,
+        assignmentMetaByLead,
+        baseStartMs,
+        delayMinMs,
+        delayMaxMs
+    );
 
     let queuedCount = 0;
 
@@ -9679,12 +11441,19 @@ async function queueCampaignMessages(campaign, options = {}) {
 
             const content = steps[stepIndex];
             const stepBaseMs = baseStartMs + (stepIndex * delayMaxMs);
-            let nextLeadAtMs = stepBaseMs;
+            const nextLeadAtMsByDayOffset = new Map([[0, stepBaseMs]]);
 
             for (let leadIndex = 0; leadIndex < leadIds.length; leadIndex++) {
 
                 const leadId = leadIds[leadIndex];
-
+                const assignmentMeta = assignmentMetaByLead[String(leadId)] || null;
+                const leadDayOffsetRaw = Number(assignmentMeta?.day_offset);
+                const leadDayOffset = Number.isFinite(leadDayOffsetRaw) && leadDayOffsetRaw > 0
+                    ? Math.floor(leadDayOffsetRaw)
+                    : 0;
+                const nextLeadAtMs = nextLeadAtMsByDayOffset.has(leadDayOffset)
+                    ? Number(nextLeadAtMsByDayOffset.get(leadDayOffset))
+                    : (stepBaseMs + (leadDayOffset * 24 * 60 * 60 * 1000));
                 const scheduledAt = new Date(nextLeadAtMs).toISOString();
 
                 await queueService.add({
@@ -9697,7 +11466,7 @@ async function queueCampaignMessages(campaign, options = {}) {
 
                     isFirstContact: stepIndex === 0,
 
-                    assignmentMeta: assignmentMetaByLead[String(leadId)] || null,
+                    assignmentMeta,
 
                     content,
 
@@ -9711,7 +11480,10 @@ async function queueCampaignMessages(campaign, options = {}) {
 
                 queuedCount += 1;
 
-                nextLeadAtMs += randomIntBetween(delayMinMs, delayMaxMs);
+                nextLeadAtMsByDayOffset.set(
+                    leadDayOffset,
+                    nextLeadAtMs + randomIntBetween(delayMinMs, delayMaxMs)
+                );
 
             }
 
@@ -9734,6 +11506,8 @@ async function queueCampaignMessages(campaign, options = {}) {
             sessionAssignments,
 
             assignmentMetaByLead,
+
+            scheduledAtByLead,
 
             isFirstContact: true
 
@@ -9869,12 +11643,63 @@ app.get('/api/campaigns/:id/recipients', authenticate, async (req, res) => {
         limitedIds
     );
 
+    const messageStatusRows = await query(
+        `SELECT
+            lead_id,
+            MAX(CASE WHEN status IN ('sent', 'delivered', 'read') THEN 1 ELSE 0 END) AS campaign_sent,
+            MAX(CASE WHEN status IN ('delivered', 'read') THEN 1 ELSE 0 END) AS campaign_delivered,
+            MAX(CASE WHEN status = 'read' THEN 1 ELSE 0 END) AS campaign_read,
+            MAX(COALESCE(sent_at, created_at)) AS campaign_sent_at
+         FROM messages
+         WHERE campaign_id = ?
+           AND is_from_me = 1
+           AND lead_id IN (${placeholders})
+         GROUP BY lead_id`,
+        [campaign.id, ...limitedIds]
+    );
+
+    const latestQueueRows = await query(
+        `SELECT q.lead_id, q.status AS campaign_queue_status, q.error_message AS campaign_queue_error
+         FROM message_queue q
+         INNER JOIN (
+             SELECT lead_id, MAX(id) AS latest_id
+             FROM message_queue
+             WHERE campaign_id = ?
+               AND lead_id IN (${placeholders})
+             GROUP BY lead_id
+         ) latest ON latest.latest_id = q.id`,
+        [campaign.id, ...limitedIds]
+    );
+
+    const messageStatusByLeadId = new Map(
+        (messageStatusRows || []).map((row) => [Number(row.lead_id || 0), row])
+    );
+    const queueStatusByLeadId = new Map(
+        (latestQueueRows || []).map((row) => [Number(row.lead_id || 0), row])
+    );
+
+    const recipientsWithCampaignStatus = (recipients || []).map((lead) => {
+        const leadId = Number(lead?.id || 0);
+        const messageStatus = messageStatusByLeadId.get(leadId) || null;
+        const queueStatus = queueStatusByLeadId.get(leadId) || null;
+
+        return {
+            ...lead,
+            campaign_sent: Number(messageStatus?.campaign_sent || 0) > 0,
+            campaign_delivered: Number(messageStatus?.campaign_delivered || 0) > 0,
+            campaign_read: Number(messageStatus?.campaign_read || 0) > 0,
+            campaign_sent_at: messageStatus?.campaign_sent_at || null,
+            campaign_queue_status: queueStatus?.campaign_queue_status || null,
+            campaign_queue_error: queueStatus?.campaign_queue_error || null
+        };
+    });
+
     res.json({
         success: true,
         total: leadIds.length,
         segment: campaign.segment || 'all',
         tag_filter: campaign.tag_filter || null,
-        recipients
+        recipients: recipientsWithCampaignStatus
     });
 
 });
@@ -9898,7 +11723,14 @@ app.post('/api/campaigns', authenticate, async (req, res) => {
 
         }, { applyDefaultType: true });
 
-        const result = await Campaign.create(payload);
+        const requestedStatus = String(payload?.status || '').trim().toLowerCase();
+        const createPayload = { ...payload };
+        if (requestedStatus === 'active') {
+            // So marca como ativa apos o enfileiramento ocorrer com sucesso.
+            createPayload.status = 'draft';
+        }
+
+        const result = await Campaign.create(createPayload);
         await CampaignSenderAccount.replaceForCampaign(result.id, senderAccountsPayload);
 
         let campaign = await attachCampaignSenderAccounts(await Campaign.findById(result.id, {
@@ -9907,7 +11739,7 @@ app.post('/api/campaigns', authenticate, async (req, res) => {
         }));
         let queueResult = { queued: 0, recipients: 0 };
 
-        if (campaign?.status === 'active') {
+        if (requestedStatus === 'active' && campaign) {
             queueResult = await queueCampaignMessages(campaign, {
                 assignedTo: scopedUserId || undefined,
                 ownerUserId: ownerScopeUserId || undefined
@@ -9958,9 +11790,15 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
             ? normalizeSenderAccountsPayload(req.body?.sender_accounts ?? req.body?.senderAccounts)
             : null;
         const payload = sanitizeCampaignPayload(req.body, { applyDefaultType: false });
-        const shouldQueue = campaign.status !== 'active' && payload.status === 'active';
+        const requestedStatus = String(payload?.status || '').trim().toLowerCase();
+        const shouldQueue = campaign.status !== 'active' && requestedStatus === 'active';
+        const payloadBeforeQueue = { ...payload };
+        if (shouldQueue) {
+            // Evita deixar campanha "ativa" quando o enfileiramento falha.
+            delete payloadBeforeQueue.status;
+        }
 
-        await Campaign.update(req.params.id, payload);
+        await Campaign.update(req.params.id, payloadBeforeQueue);
         if (senderAccountsProvided) {
             await CampaignSenderAccount.replaceForCampaign(req.params.id, senderAccountsPayload || []);
         }
@@ -10311,7 +12149,12 @@ app.get('/api/webhooks', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    const webhooks = await Webhook.list();
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const scopedUserId = getScopedUserId(req);
+    const webhooks = await Webhook.list({
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: scopedUserId || undefined
+    });
 
     res.json({ success: true, webhooks });
 
@@ -10323,9 +12166,18 @@ app.post('/api/webhooks', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    const result = await Webhook.create(req.body);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const scopedUserId = getScopedUserId(req);
+    const requesterUserId = getRequesterUserId(req);
+    const result = await Webhook.create({
+        ...(req.body && typeof req.body === 'object' ? req.body : {}),
+        created_by: requesterUserId || undefined
+    });
 
-    const webhook = await Webhook.findById(result.id);
+    const webhook = await Webhook.findById(result.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: scopedUserId || undefined
+    });
 
     res.json({ success: true, webhook });
 
@@ -10337,9 +12189,16 @@ app.put('/api/webhooks/:id', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    await Webhook.update(req.params.id, req.body);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const scopedUserId = getScopedUserId(req);
+    const webhook = await Webhook.update(req.params.id, req.body, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: scopedUserId || undefined
+    });
 
-    const webhook = await Webhook.findById(req.params.id);
+    if (!webhook) {
+        return res.status(404).json({ error: 'Webhook nao encontrado' });
+    }
 
     res.json({ success: true, webhook });
 
@@ -10351,10 +12210,144 @@ app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
 
     const { Webhook } = require('./database/models');
 
-    await Webhook.delete(req.params.id);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const scopedUserId = getScopedUserId(req);
+    const deleted = await Webhook.delete(req.params.id, {
+        owner_user_id: ownerScopeUserId || undefined,
+        created_by: scopedUserId || undefined
+    });
+
+    if (!deleted) {
+        return res.status(404).json({ error: 'Webhook nao encontrado' });
+    }
 
     res.json({ success: true });
 
+});
+
+
+
+// ============================================
+
+// API ADMIN - AUDITORIA DE INTEGRIDADE MULTI-TENANT
+
+// ============================================
+
+app.get('/api/admin/audits/tenant-integrity', authenticate, async (req, res) => {
+    const requesterRole = getRequesterRole(req);
+    if (!isUserAdminRole(requesterRole)) {
+        return res.status(403).json({ error: 'Sem permissao para acessar auditoria de integridade' });
+    }
+
+    const workerState = buildTenantIntegrityAuditWorkerState();
+    const response = {
+        success: true,
+        worker: {
+            enabled: workerState.enabled,
+            intervalMs: workerState.intervalMs,
+            sampleLimit: workerState.sampleLimit,
+            leaderLockEnabled: workerState.leaderLockEnabled,
+            leaderLockHeld: workerState.leaderLockHeld,
+            running: workerState.running,
+            lastRunAt: workerState.lastRunAt,
+            lastError: workerState.lastError,
+            lastRunRecordId: workerState.lastRunRecordId,
+            lastPersistError: workerState.lastPersistError,
+            hasLastResult: !!workerState.lastResult
+        },
+        manualRun: {
+            defaultScope: 'owner',
+            allowGlobal: TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL
+        }
+    };
+
+    if (TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL && workerState.lastResult) {
+        response.worker.lastResult = workerState.lastResult;
+    }
+
+    res.json(response);
+});
+
+app.get('/api/admin/audits/tenant-integrity/history', authenticate, async (req, res) => {
+    const requesterRole = getRequesterRole(req);
+    if (!isUserAdminRole(requesterRole)) {
+        return res.status(403).json({ error: 'Sem permissao para acessar historico da auditoria' });
+    }
+
+    try {
+        const requestedScope = String(req.query?.scope || 'owner').trim().toLowerCase();
+        const requestedLimit = req.query?.limit || 20;
+        const includeResult = ['1', 'true', 'sim', 'yes', 'on'].includes(String(req.query?.includeResult || '').trim().toLowerCase());
+        const onlyIssues = ['1', 'true', 'sim', 'yes', 'on'].includes(String(req.query?.onlyIssues || '').trim().toLowerCase());
+
+        let ownerScopeUserId = null;
+        if (requestedScope !== 'global') {
+            ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+            if (!ownerScopeUserId) {
+                return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
+            }
+        } else if (!TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL) {
+            return res.status(403).json({ error: 'Consulta global do historico desabilitada' });
+        }
+
+        const runs = await tenantIntegrityAuditService.listAuditRuns({
+            scope: requestedScope === 'global' ? 'global' : 'owner',
+            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
+            limit: requestedLimit,
+            includeResult,
+            onlyIssues
+        });
+
+        res.json({
+            success: true,
+            scope: requestedScope === 'global' ? 'global' : 'owner',
+            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
+            count: Array.isArray(runs) ? runs.length : 0,
+            runs
+        });
+    } catch (error) {
+        console.error('[TenantIntegrityAudit][history-endpoint] falha:', error);
+        res.status(500).json({ error: 'Falha ao consultar historico da auditoria', details: error.message });
+    }
+});
+
+app.post('/api/admin/audits/tenant-integrity/run', authenticate, async (req, res) => {
+    const requesterRole = getRequesterRole(req);
+    if (!isUserAdminRole(requesterRole)) {
+        return res.status(403).json({ error: 'Sem permissao para executar auditoria de integridade' });
+    }
+
+    try {
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const requestedScope = String(body.scope || req.query?.scope || 'owner').trim().toLowerCase();
+        const requestedSampleLimit = body.sampleLimit || req.query?.sampleLimit || TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT;
+
+        let ownerScopeUserId = null;
+        if (requestedScope !== 'global') {
+            ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+            if (!ownerScopeUserId) {
+                return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
+            }
+        } else if (!TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL) {
+            return res.status(403).json({ error: 'Execucao manual global de auditoria desabilitada' });
+        }
+
+        const audit = await runTenantIntegrityAudit({
+            trigger: 'manual-endpoint',
+            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
+            sampleLimit: requestedSampleLimit,
+            cacheAsWorker: false
+        });
+
+        res.json({
+            success: true,
+            audit,
+            worker: buildTenantIntegrityAuditWorkerState()
+        });
+    } catch (error) {
+        console.error('[TenantIntegrityAudit][manual-endpoint] falha:', error);
+        res.status(500).json({ error: 'Falha ao executar auditoria de integridade', details: error.message });
+    }
 });
 
 
@@ -10532,6 +12525,17 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
 // ROTAS DE PÁGINAS
 
 // ============================================
+
+
+
+app.get('/confirm-email', (req, res) => {
+    const rawToken = String(req.query?.token || '').trim();
+    if (!rawToken) {
+        return res.redirect('/#/login?emailConfirmError=token_required');
+    }
+
+    return res.redirect(`/#/login?confirmEmailToken=${encodeURIComponent(rawToken)}`);
+});
 
 
 

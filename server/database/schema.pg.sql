@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT NOT NULL,
     password_hash TEXT NOT NULL,
+    email_confirmed INTEGER DEFAULT 1,
+    email_confirmed_at TIMESTAMPTZ,
+    email_confirmation_token_hash TEXT,
+    email_confirmation_expires_at TIMESTAMPTZ,
     role TEXT DEFAULT 'agent' CHECK(role IN ('admin', 'supervisor', 'agent')),
     avatar_url TEXT,
     is_active INTEGER DEFAULT 1,
@@ -22,7 +26,7 @@ CREATE TABLE IF NOT EXISTS leads (
     uuid TEXT UNIQUE NOT NULL,
     phone TEXT NOT NULL,
     phone_formatted TEXT,
-    jid TEXT UNIQUE,
+    jid TEXT,
     name TEXT,
     email TEXT,
     vehicle TEXT,
@@ -32,6 +36,7 @@ CREATE TABLE IF NOT EXISTS leads (
     custom_fields TEXT,
     source TEXT DEFAULT 'manual',
     assigned_to INTEGER REFERENCES users(id),
+    owner_user_id INTEGER REFERENCES users(id),
     is_blocked INTEGER DEFAULT 0,
     last_message_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -292,6 +297,17 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS whatsapp_auth_state (
+    id SERIAL PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    state_type TEXT NOT NULL,
+    state_key TEXT NOT NULL,
+    data_json TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (session_id, state_type, state_key)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     id SERIAL PRIMARY KEY,
     key TEXT UNIQUE NOT NULL,
@@ -311,6 +327,23 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     new_values TEXT,
     ip_address TEXT,
     user_agent TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tenant_integrity_audit_runs (
+    id SERIAL PRIMARY KEY,
+    scope TEXT NOT NULL DEFAULT 'global',
+    owner_user_id INTEGER REFERENCES users(id),
+    trigger_source TEXT NOT NULL DEFAULT 'manual',
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    total_checks INTEGER NOT NULL DEFAULT 0,
+    checks_with_issues INTEGER NOT NULL DEFAULT 0,
+    total_issue_rows INTEGER NOT NULL DEFAULT 0,
+    is_healthy INTEGER NOT NULL DEFAULT 1,
+    fingerprint TEXT,
+    summary_json TEXT,
+    checks_json TEXT,
+    result_json TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -347,10 +380,43 @@ ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS hourly_limit INTEGER DEFA
 ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS cooldown_until TIMESTAMPTZ;
 ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);
 ALTER TABLE tags ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS owner_user_id INTEGER REFERENCES users(id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_user_id INTEGER REFERENCES users(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmed INTEGER DEFAULT 1;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmed_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmation_token_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_confirmation_expires_at TIMESTAMPTZ;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
 DROP INDEX IF EXISTS users_email_key;
 ALTER TABLE tags DROP CONSTRAINT IF EXISTS tags_name_key;
+
+UPDATE users
+SET email_confirmed = 1
+WHERE email_confirmed IS NULL;
+
+UPDATE leads
+SET owner_user_id = owner_map.owner_user_id
+FROM (
+    SELECT u.id AS user_id, COALESCE(u.owner_user_id, u.id) AS owner_user_id
+    FROM users u
+) AS owner_map
+WHERE leads.owner_user_id IS NULL
+  AND leads.assigned_to = owner_map.user_id;
+
+UPDATE leads
+SET owner_user_id = latest_owner.owner_user_id
+FROM (
+    SELECT DISTINCT ON (c.lead_id)
+        c.lead_id,
+        COALESCE(u.owner_user_id, u.id) AS owner_user_id
+    FROM conversations c
+    JOIN whatsapp_sessions ws ON ws.session_id = c.session_id
+    JOIN users u ON u.id = ws.created_by
+    WHERE ws.created_by IS NOT NULL
+    ORDER BY c.lead_id, COALESCE(c.updated_at, c.created_at) DESC, c.id DESC
+) AS latest_owner
+WHERE leads.id = latest_owner.lead_id
+  AND leads.owner_user_id IS NULL;
 
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_lead_id_fkey;
 ALTER TABLE messages ADD CONSTRAINT messages_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
@@ -359,16 +425,25 @@ ALTER TABLE flow_executions ADD CONSTRAINT flow_executions_lead_id_fkey FOREIGN 
 ALTER TABLE message_queue DROP CONSTRAINT IF EXISTS message_queue_lead_id_fkey;
 ALTER TABLE message_queue ADD CONSTRAINT message_queue_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
 
+ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_jid_key;
+DROP INDEX IF EXISTS leads_jid_key;
+DROP INDEX IF EXISTS leads_phone_unique;
+
 CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
 CREATE INDEX IF NOT EXISTS idx_leads_jid ON leads(jid);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_leads_updated_at ON leads(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_assigned_updated ON leads(assigned_to, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leads_owner ON leads(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_users_owner ON users(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_email_confirmation_token_hash ON users(email_confirmation_token_hash);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_auth_state_session ON whatsapp_auth_state(session_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_auth_state_lookup ON whatsapp_auth_state(session_id, state_type);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_active_unique ON users(email) WHERE is_active = 1;
-CREATE UNIQUE INDEX IF NOT EXISTS leads_phone_unique ON leads(phone);
+CREATE UNIQUE INDEX IF NOT EXISTS leads_owner_phone_unique ON leads(owner_user_id, phone) WHERE owner_user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS leads_owner_jid_unique ON leads(owner_user_id, jid) WHERE owner_user_id IS NOT NULL AND jid IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_lead_updated ON conversations(lead_id, updated_at DESC, id DESC);
@@ -407,6 +482,10 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_sessions_created_by ON whatsapp_sessions
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_tenant_integrity_audit_runs_created ON tenant_integrity_audit_runs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tenant_integrity_audit_runs_scope_owner_created ON tenant_integrity_audit_runs(scope, owner_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tenant_integrity_audit_runs_issues_created ON tenant_integrity_audit_runs(checks_with_issues, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tenant_integrity_audit_runs_fingerprint ON tenant_integrity_audit_runs(fingerprint);
 
 DROP VIEW IF EXISTS v_conversations;
 CREATE VIEW v_conversations AS

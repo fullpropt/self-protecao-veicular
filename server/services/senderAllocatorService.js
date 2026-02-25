@@ -149,16 +149,38 @@ class SenderAllocatorService {
 
             const runtime = runtimeSessions.get(sessionId);
             const connected = Boolean(runtime?.isConnected);
+            const reconnecting = Boolean(runtime?.reconnecting);
+            const nowMs = Date.now();
+            const sendReadyAtMs = Number(runtime?.sendReadyAtMs || 0);
+            const dispatchBlockedUntilMs = Number(runtime?.dispatchBlockedUntilMs || 0);
+            const runtimeStatus = connected
+                ? (sendReadyAtMs > nowMs ? 'warming_up' : 'connected')
+                : (reconnecting ? 'reconnecting' : (runtime ? 'disconnected' : String(row.status || 'disconnected')));
+            const runtimeCooldownUntil = dispatchBlockedUntilMs > nowMs
+                ? new Date(dispatchBlockedUntilMs).toISOString()
+                : null;
+            const storedCooldownMs = Date.parse(String(row?.cooldown_until || ''));
+            const effectiveCooldownUntil = runtimeCooldownUntil && (
+                !Number.isFinite(storedCooldownMs) || dispatchBlockedUntilMs > storedCooldownMs
+            )
+                ? runtimeCooldownUntil
+                : (row?.cooldown_until || null);
 
             merged.push({
                 ...row,
                 session_id: sessionId,
                 connected,
-                status: connected ? 'connected' : String(row.status || 'disconnected'),
+                reconnecting,
+                status: runtimeStatus,
+                runtime_status: runtimeStatus,
+                send_ready_at: sendReadyAtMs > 0 ? new Date(sendReadyAtMs).toISOString() : null,
+                dispatch_blocked_until: runtimeCooldownUntil,
+                last_disconnect_reason: runtime?.lastDisconnectReason || null,
                 campaign_enabled: this.toBoolean(row.campaign_enabled, true),
                 daily_limit: this.toNonNegativeInt(row.daily_limit, 0),
                 dispatch_weight: Math.max(1, this.toNonNegativeInt(row.dispatch_weight, 1)),
-                hourly_limit: this.toNonNegativeInt(row.hourly_limit, 0)
+                hourly_limit: this.toNonNegativeInt(row.hourly_limit, 0),
+                cooldown_until: effectiveCooldownUntil
             });
         }
 
@@ -166,18 +188,31 @@ class SenderAllocatorService {
             const normalizedSessionId = this.sanitizeSessionId(sessionId);
             if (!normalizedSessionId || seen.has(normalizedSessionId)) continue;
             if (hasOwnerScope) continue;
+            const connected = Boolean(runtime?.isConnected);
+            const reconnecting = Boolean(runtime?.reconnecting);
+            const nowMs = Date.now();
+            const sendReadyAtMs = Number(runtime?.sendReadyAtMs || 0);
+            const dispatchBlockedUntilMs = Number(runtime?.dispatchBlockedUntilMs || 0);
+            const runtimeStatus = connected
+                ? (sendReadyAtMs > nowMs ? 'warming_up' : 'connected')
+                : (reconnecting ? 'reconnecting' : 'disconnected');
             merged.push({
                 id: null,
                 session_id: normalizedSessionId,
                 phone: runtime?.user?.phone || null,
                 name: runtime?.user?.name || runtime?.user?.pushName || null,
-                status: runtime?.isConnected ? 'connected' : 'disconnected',
-                connected: Boolean(runtime?.isConnected),
+                status: runtimeStatus,
+                runtime_status: runtimeStatus,
+                connected,
+                reconnecting,
                 campaign_enabled: true,
                 daily_limit: 0,
                 dispatch_weight: 1,
                 hourly_limit: 0,
-                cooldown_until: null,
+                cooldown_until: dispatchBlockedUntilMs > nowMs ? new Date(dispatchBlockedUntilMs).toISOString() : null,
+                dispatch_blocked_until: dispatchBlockedUntilMs > nowMs ? new Date(dispatchBlockedUntilMs).toISOString() : null,
+                send_ready_at: sendReadyAtMs > 0 ? new Date(sendReadyAtMs).toISOString() : null,
+                last_disconnect_reason: runtime?.lastDisconnectReason || null,
                 qr_code: null,
                 last_connected_at: null,
                 created_by: null,
@@ -278,7 +313,46 @@ class SenderAllocatorService {
         this.cursorByScope.set(scope, next % modulo);
     }
 
-    pickAvailableStateIndex(order, states, scope) {
+    normalizeStateCapacityWindow(state) {
+        if (!state) return;
+        if (!Number.isFinite(Number(state.remaining))) {
+            state.day_offset = 0;
+            return;
+        }
+
+        const effectiveDailyLimit = this.toNonNegativeInt(state.effective_daily_limit, 0);
+        if (effectiveDailyLimit <= 0) {
+            state.remaining = Number.POSITIVE_INFINITY;
+            state.day_offset = 0;
+            return;
+        }
+
+        let remaining = Number(state.remaining);
+        let dayOffset = this.toNonNegativeInt(state.day_offset, 0);
+        while (remaining <= 0) {
+            dayOffset += 1;
+            remaining = effectiveDailyLimit;
+        }
+
+        state.remaining = remaining;
+        state.day_offset = dayOffset;
+    }
+
+    getMinAvailableDayOffset(states = []) {
+        let minDayOffset = null;
+        for (const state of states) {
+            if (!state) continue;
+            this.normalizeStateCapacityWindow(state);
+            if (!(Number(state.remaining) > 0)) continue;
+            const dayOffset = this.toNonNegativeInt(state.day_offset, 0);
+            if (minDayOffset === null || dayOffset < minDayOffset) {
+                minDayOffset = dayOffset;
+            }
+        }
+        return minDayOffset;
+    }
+
+    pickAvailableStateIndex(order, states, scope, targetDayOffset = null) {
         if (!order.length) return -1;
 
         const startCursor = this.getCursor(scope, order.length);
@@ -287,7 +361,9 @@ class SenderAllocatorService {
             const stateIndex = order[ringIndex];
             const state = states[stateIndex];
             if (!state) continue;
+            this.normalizeStateCapacityWindow(state);
             if (state.remaining <= 0) continue;
+            if (targetDayOffset !== null && this.toNonNegativeInt(state.day_offset, 0) !== targetDayOffset) continue;
 
             this.setCursor(scope, ringIndex + 1, order.length);
             return stateIndex;
@@ -296,12 +372,14 @@ class SenderAllocatorService {
         return -1;
     }
 
-    pickRandomAvailableStateIndex(states) {
+    pickRandomAvailableStateIndex(states, targetDayOffset = null) {
         const availableIndexes = [];
         for (let index = 0; index < states.length; index++) {
             const state = states[index];
             if (!state) continue;
+            this.normalizeStateCapacityWindow(state);
             if (state.remaining <= 0) continue;
+            if (targetDayOffset !== null && this.toNonNegativeInt(state.day_offset, 0) !== targetDayOffset) continue;
             availableIndexes.push(index);
         }
 
@@ -468,9 +546,10 @@ class SenderAllocatorService {
                 ...entry,
                 effective_daily_limit: effectiveLimit,
                 used,
-                remaining
+                remaining,
+                day_offset: 0
             };
-        }).filter((entry) => entry.remaining > 0);
+        });
 
         if (!states.length) {
             throw new Error('Todas as contas de envio atingiram o limite diário configurado');
@@ -489,14 +568,17 @@ class SenderAllocatorService {
 
         const assignLead = (leadId, state) => {
             if (!state) return;
+            this.normalizeStateCapacityWindow(state);
             const key = String(leadId);
+            const dayOffset = this.toNonNegativeInt(state.day_offset, 0);
             assignmentsByLead[key] = state.session_id;
             assignmentMetaByLead[key] = {
                 strategy: strategyUsed,
                 session_id: state.session_id,
                 campaign_id: Number(options.campaignId) || null,
                 assigned_at: new Date().toISOString(),
-                daily_limit: state.effective_daily_limit || 0
+                daily_limit: state.effective_daily_limit || 0,
+                day_offset: dayOffset
             };
             summary[state.session_id] = (summary[state.session_id] || 0) + 1;
             if (Number.isFinite(state.remaining)) {
@@ -507,9 +589,6 @@ class SenderAllocatorService {
         if (strategyUsed === 'single') {
             const state = states[0];
             for (const leadId of uniqueLeadIds) {
-                if (state.remaining <= 0) {
-                    throw new Error('Limite diário da conta de envio foi atingido durante a alocação');
-                }
                 assignLead(leadId, state);
             }
             return { strategyUsed, assignmentsByLead, assignmentMetaByLead, summary };
@@ -517,7 +596,8 @@ class SenderAllocatorService {
 
         if (strategyUsed === 'random') {
             for (const leadId of uniqueLeadIds) {
-                const selectedIndex = this.pickRandomAvailableStateIndex(states);
+                const targetDayOffset = this.getMinAvailableDayOffset(states);
+                const selectedIndex = this.pickRandomAvailableStateIndex(states, targetDayOffset);
                 if (selectedIndex < 0) {
                     throw new Error('Capacidade diária de envio esgotada para as contas selecionadas');
                 }
@@ -528,7 +608,8 @@ class SenderAllocatorService {
 
         const order = this.buildRoundRobinOrder(strategyUsed, states);
         for (const leadId of uniqueLeadIds) {
-            const selectedIndex = this.pickAvailableStateIndex(order, states, scope);
+            const targetDayOffset = this.getMinAvailableDayOffset(states);
+            const selectedIndex = this.pickAvailableStateIndex(order, states, scope, targetDayOffset);
             if (selectedIndex < 0) {
                 throw new Error('Capacidade diária de envio esgotada para as contas selecionadas');
             }

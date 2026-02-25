@@ -58,6 +58,16 @@ type BulkLeadsDeleteResponse = {
     failed?: number;
     errors?: Array<{ id?: number; error?: string }>;
 };
+type BulkLeadsUpdateResponse = {
+    success?: boolean;
+    total?: number;
+    updated?: number;
+    skipped?: number;
+    failed?: number;
+    statusChanged?: number;
+    tagsUpdated?: number;
+    errors?: Array<{ id?: number; error?: string }>;
+};
 
 type ContactsCachePayload = {
     savedAt: number;
@@ -1237,6 +1247,220 @@ function bulkAddTag() {
     showToast('info', 'Info', 'Função em desenvolvimento');
 }
 
+function hasSelectedContactsForBulkAction() {
+    const uniqueLeadIds = Array.from(
+        new Set(
+            selectedContacts
+                .map((value) => parseInt(String(value), 10))
+                .filter((value) => Number.isInteger(value) && value > 0)
+        )
+    );
+
+    if (uniqueLeadIds.length === 0) {
+        showToast('warning', 'Atencao', 'Nenhum contato selecionado');
+        return false;
+    }
+
+    return true;
+}
+
+function setBulkRecipientsText(elementId: string) {
+    const target = document.getElementById(elementId) as HTMLElement | null;
+    if (target) target.textContent = String(selectedContacts.length);
+}
+
+function openBulkChangeStatusModal() {
+    if (!hasSelectedContactsForBulkAction()) return;
+    setBulkRecipientsText('bulkStatusRecipients');
+    const statusSelect = document.getElementById('bulkStatusValue') as HTMLSelectElement | null;
+    if (statusSelect && !statusSelect.value) {
+        statusSelect.value = '1';
+    }
+    openModal('bulkStatusModal');
+}
+
+function openBulkAddTagModal() {
+    if (!hasSelectedContactsForBulkAction()) return;
+    setBulkRecipientsText('bulkTagRecipients');
+    const input = document.getElementById('bulkTagInput') as HTMLInputElement | null;
+    if (input) {
+        input.value = '';
+        setTimeout(() => input.focus(), 0);
+    }
+    openModal('bulkTagModal');
+}
+
+async function submitBulkChangeStatus() {
+    const statusSelect = document.getElementById('bulkStatusValue') as HTMLSelectElement | null;
+    const parsed = parseInt(String(statusSelect?.value || '').trim(), 10);
+    if (![1, 2, 3, 4].includes(parsed)) {
+        showToast('warning', 'Atencao', 'Selecione um status valido');
+        return;
+    }
+
+    const success = await bulkChangeStatusSelection();
+    if (success !== false) {
+        closeModal('bulkStatusModal');
+    }
+}
+
+async function submitBulkAddTag() {
+    const input = document.getElementById('bulkTagInput') as HTMLInputElement | null;
+    const raw = String(input?.value || '').trim();
+    if (!raw) {
+        showToast('warning', 'Atencao', 'Informe pelo menos uma tag');
+        return;
+    }
+
+    const success = await bulkAddTagSelection();
+    if (success !== false) {
+        const nextInput = document.getElementById('bulkTagInput') as HTMLInputElement | null;
+        if (nextInput) nextInput.value = '';
+        closeModal('bulkTagModal');
+    }
+}
+
+async function bulkChangeStatusSelection() {
+    const uniqueLeadIds = Array.from(
+        new Set(
+            selectedContacts
+                .map((value) => parseInt(String(value), 10))
+                .filter((value) => Number.isInteger(value) && value > 0)
+        )
+    );
+
+    if (uniqueLeadIds.length === 0) {
+        showToast('warning', 'Atencao', 'Nenhum contato selecionado');
+        return;
+    }
+
+    const modalStatusValue = (document.getElementById('bulkStatusValue') as HTMLSelectElement | null)?.value;
+    const statusInput = (modalStatusValue && String(modalStatusValue).trim())
+        ? modalStatusValue
+        : prompt('Novo status (1=Novo, 2=Em Andamento, 3=Concluido, 4=Perdido):');
+    if (statusInput === null) return;
+
+    const normalizedStatusInput = String(statusInput || '').trim().toLowerCase();
+    const statusMap: Record<string, LeadStatus> = {
+        '1': 1,
+        'novo': 1,
+        '2': 2,
+        'em andamento': 2,
+        'em_andamento': 2,
+        'andamento': 2,
+        '3': 3,
+        'concluido': 3,
+        'concluído': 3,
+        '4': 4,
+        'perdido': 4
+    };
+
+    const status = statusMap[normalizedStatusInput];
+    if (!status) {
+        showToast('warning', 'Atencao', 'Status invalido. Use 1, 2, 3 ou 4.');
+        return;
+    }
+
+    try {
+        showLoading(`Alterando status de ${uniqueLeadIds.length} contato(s)...`);
+
+        const response: BulkLeadsUpdateResponse = await api.post('/api/leads/bulk-update', {
+            leadIds: uniqueLeadIds,
+            status
+        });
+
+        clearSelection();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
+
+        const updated = Number(response?.updated || 0);
+        const skipped = Number(response?.skipped || 0);
+        const failed = Number(response?.failed || 0);
+        const changed = Number(response?.statusChanged || 0);
+        const summary = [`${updated} atualizados`];
+        if (changed > 0) summary.push(`${changed} com status alterado`);
+        if (skipped > 0) summary.push(`${skipped} ignorados`);
+        if (failed > 0) summary.push(`${failed} com erro`);
+
+        showToast(
+            failed > 0 ? 'warning' : 'success',
+            failed > 0 ? 'Concluido com alertas' : 'Sucesso',
+            `Atualizacao de status concluida: ${summary.join(', ')}`
+        );
+        return true;
+    } catch (error) {
+        hideLoading();
+        showToast('error', 'Erro', error instanceof Error ? error.message : 'Erro ao alterar status em lote');
+        return false;
+    }
+}
+
+async function bulkAddTagSelection() {
+    const uniqueLeadIds = Array.from(
+        new Set(
+            selectedContacts
+                .map((value) => parseInt(String(value), 10))
+                .filter((value) => Number.isInteger(value) && value > 0)
+        )
+    );
+
+    if (uniqueLeadIds.length === 0) {
+        showToast('warning', 'Atencao', 'Nenhum contato selecionado');
+        return;
+    }
+
+    const modalTagsValue = (document.getElementById('bulkTagInput') as HTMLInputElement | null)?.value;
+    const rawInput = (modalTagsValue && String(modalTagsValue).trim())
+        ? modalTagsValue
+        : prompt('Digite a(s) tag(s) para adicionar (separadas por virgula):');
+    if (rawInput === null) return;
+
+    const tagsToAdd = Array.from(new Set(
+        String(rawInput || '')
+            .split(/[,;|]/)
+            .map((tag) => String(tag || '').trim())
+            .filter(Boolean)
+    ));
+
+    if (tagsToAdd.length === 0) {
+        showToast('warning', 'Atencao', 'Informe pelo menos uma tag');
+        return;
+    }
+
+    try {
+        showLoading(`Adicionando tag em ${uniqueLeadIds.length} contato(s)...`);
+
+        const response: BulkLeadsUpdateResponse = await api.post('/api/leads/bulk-update', {
+            leadIds: uniqueLeadIds,
+            addTags: tagsToAdd
+        });
+
+        clearSelection();
+        clearLeadViewCaches();
+        await loadContacts({ forceRefresh: true, silent: true });
+
+        const updated = Number(response?.updated || 0);
+        const skipped = Number(response?.skipped || 0);
+        const failed = Number(response?.failed || 0);
+        const tagsUpdated = Number(response?.tagsUpdated || 0);
+        const summary = [`${updated} atualizados`];
+        if (tagsUpdated > 0) summary.push(`${tagsUpdated} com tags adicionadas`);
+        if (skipped > 0) summary.push(`${skipped} ignorados`);
+        if (failed > 0) summary.push(`${failed} com erro`);
+
+        showToast(
+            failed > 0 ? 'warning' : 'success',
+            failed > 0 ? 'Concluido com alertas' : 'Sucesso',
+            `Adicao de tags concluida: ${summary.join(', ')}`
+        );
+        return true;
+    } catch (error) {
+        hideLoading();
+        showToast('error', 'Erro', error instanceof Error ? error.message : 'Erro ao adicionar tag em lote');
+        return false;
+    }
+}
+
 async function importContacts() {
     if (!contactFieldsCache.length) {
         await loadContactFields();
@@ -1388,6 +1612,8 @@ const windowAny = window as Window & {
     bulkDelete?: () => Promise<void>;
     bulkChangeStatus?: () => void;
     bulkAddTag?: () => void;
+    submitBulkChangeStatus?: () => Promise<void>;
+    submitBulkAddTag?: () => Promise<void>;
     importContacts?: () => Promise<void>;
     exportContacts?: () => void;
     switchTab?: (tab: string) => void;
@@ -1410,8 +1636,10 @@ windowAny.openWhatsApp = openWhatsApp;
 windowAny.bulkSendMessage = bulkSendMessage;
 windowAny.sendBulkMessage = sendBulkMessage;
 windowAny.bulkDelete = bulkDelete;
-windowAny.bulkChangeStatus = bulkChangeStatus;
-windowAny.bulkAddTag = bulkAddTag;
+windowAny.bulkChangeStatus = openBulkChangeStatusModal;
+windowAny.bulkAddTag = openBulkAddTagModal;
+windowAny.submitBulkChangeStatus = submitBulkChangeStatus;
+windowAny.submitBulkAddTag = submitBulkAddTag;
 windowAny.importContacts = importContacts;
 windowAny.exportContacts = exportContacts;
 windowAny.switchTab = switchTab;

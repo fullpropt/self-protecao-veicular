@@ -752,13 +752,42 @@ async function deleteContactField(key: string) {
     const normalizedKey = normalizeContactFieldKey(key);
     if (!normalizedKey) return;
 
+    const field = customContactFieldsCache.find((item) => item.key === normalizedKey);
+    const fieldLabel = String(field?.label || normalizedKey || 'este campo');
+    const confirmDeleteContactFieldKey = document.getElementById('confirmDeleteContactFieldKey') as HTMLInputElement | null;
+    const confirmDeleteContactFieldName = document.getElementById('confirmDeleteContactFieldName') as HTMLElement | null;
+
+    if (confirmDeleteContactFieldKey) confirmDeleteContactFieldKey.value = normalizedKey;
+    if (confirmDeleteContactFieldName) confirmDeleteContactFieldName.textContent = fieldLabel;
+
+    openModal('confirmDeleteContactFieldModal');
+}
+
+async function confirmDeleteContactField() {
+    const confirmDeleteContactFieldKey = document.getElementById('confirmDeleteContactFieldKey') as HTMLInputElement | null;
+    const normalizedKey = normalizeContactFieldKey(confirmDeleteContactFieldKey?.value || '');
+    if (!normalizedKey) {
+        showToast('error', 'Erro', 'Campo invalido');
+        cancelDeleteContactField();
+        return;
+    }
+
     customContactFieldsCache = customContactFieldsCache.filter((field) => field.key !== normalizedKey);
 
     try {
         await persistContactFields(true);
+        cancelDeleteContactField();
     } catch (error) {
         showToast('error', 'Erro', 'N\u00E3o foi poss\u00EDvel remover o campo');
     }
+}
+
+function cancelDeleteContactField() {
+    const confirmDeleteContactFieldKey = document.getElementById('confirmDeleteContactFieldKey') as HTMLInputElement | null;
+    const confirmDeleteContactFieldName = document.getElementById('confirmDeleteContactFieldName') as HTMLElement | null;
+    if (confirmDeleteContactFieldKey) confirmDeleteContactFieldKey.value = '';
+    if (confirmDeleteContactFieldName) confirmDeleteContactFieldName.textContent = 'campo';
+    closeModal('confirmDeleteContactFieldModal');
 }
 
 function getQuickReplyVariableKeys() {
@@ -1695,6 +1724,8 @@ const windowAny = window as Window & {
     createContactField?: () => Promise<void>;
     updateContactField?: (key: string) => Promise<void>;
     deleteContactField?: (key: string) => Promise<void>;
+    confirmDeleteContactField?: () => Promise<void>;
+    cancelDeleteContactField?: () => void;
     createSettingsTag?: () => Promise<void>;
     updateSettingsTag?: (id: number) => Promise<void>;
     deleteSettingsTag?: (id: number) => Promise<void>;
@@ -1736,6 +1767,8 @@ windowAny.saveNotificationSettings = saveNotificationSettings;
 windowAny.createContactField = createContactField;
 windowAny.updateContactField = updateContactField;
 windowAny.deleteContactField = deleteContactField;
+windowAny.confirmDeleteContactField = confirmDeleteContactField;
+windowAny.cancelDeleteContactField = cancelDeleteContactField;
 windowAny.createSettingsTag = createSettingsTag;
 windowAny.updateSettingsTag = updateSettingsTag;
 windowAny.deleteSettingsTag = deleteSettingsTag;
