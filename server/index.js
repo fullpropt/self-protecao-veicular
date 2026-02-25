@@ -4183,6 +4183,8 @@ let tenantIntegrityAuditLastRunAt = null;
 let tenantIntegrityAuditLastError = null;
 let tenantIntegrityAuditLastResultCompact = null;
 let tenantIntegrityAuditLastFingerprint = null;
+let tenantIntegrityAuditLastRunRecordId = null;
+let tenantIntegrityAuditLastPersistError = null;
 
 function isSupportedAutomationTriggerType(triggerType = '') {
     const normalized = String(triggerType || '').trim().toLowerCase();
@@ -4780,6 +4782,8 @@ function buildTenantIntegrityAuditWorkerState() {
         running: tenantIntegrityAuditTickRunning,
         lastRunAt: tenantIntegrityAuditLastRunAt,
         lastError: tenantIntegrityAuditLastError,
+        lastRunRecordId: tenantIntegrityAuditLastRunRecordId,
+        lastPersistError: tenantIntegrityAuditLastPersistError,
         lastResult: tenantIntegrityAuditLastResultCompact
     };
 }
@@ -4809,11 +4813,29 @@ async function runTenantIntegrityAudit(options = {}) {
     const ownerUserId = normalizeOwnerUserId(options.ownerUserId);
     const sampleLimit = parsePositiveIntEnv(options.sampleLimit, TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT);
     const shouldCacheAsWorkerResult = options.cacheAsWorker === true;
+    const shouldPersistHistory = options.persistHistory !== false;
 
     const result = await tenantIntegrityAuditService.runAudit({
         ownerUserId: ownerUserId || undefined,
         sampleLimit
     });
+
+    if (shouldPersistHistory) {
+        try {
+            const persistedRun = await tenantIntegrityAuditService.storeAuditRun(result, {
+                triggerSource: trigger
+            });
+            if (persistedRun?.id) {
+                tenantIntegrityAuditLastRunRecordId = Number(persistedRun.id);
+                result.historyRunId = Number(persistedRun.id);
+            }
+            tenantIntegrityAuditLastPersistError = null;
+        } catch (persistError) {
+            tenantIntegrityAuditLastPersistError = String(persistError?.message || persistError || 'Falha ao persistir auditoria');
+            console.warn(`[TenantIntegrityAudit][${trigger}] falha ao persistir historico:`, persistError.message);
+            result.historyPersistError = tenantIntegrityAuditLastPersistError;
+        }
+    }
 
     if (shouldCacheAsWorkerResult) {
         tenantIntegrityAuditLastRunAt = new Date().toISOString();
@@ -11991,6 +12013,8 @@ app.get('/api/admin/audits/tenant-integrity', authenticate, async (req, res) => 
             running: workerState.running,
             lastRunAt: workerState.lastRunAt,
             lastError: workerState.lastError,
+            lastRunRecordId: workerState.lastRunRecordId,
+            lastPersistError: workerState.lastPersistError,
             hasLastResult: !!workerState.lastResult
         },
         manualRun: {
@@ -12004,6 +12028,49 @@ app.get('/api/admin/audits/tenant-integrity', authenticate, async (req, res) => 
     }
 
     res.json(response);
+});
+
+app.get('/api/admin/audits/tenant-integrity/history', authenticate, async (req, res) => {
+    const requesterRole = getRequesterRole(req);
+    if (!isUserAdminRole(requesterRole)) {
+        return res.status(403).json({ error: 'Sem permissao para acessar historico da auditoria' });
+    }
+
+    try {
+        const requestedScope = String(req.query?.scope || 'owner').trim().toLowerCase();
+        const requestedLimit = req.query?.limit || 20;
+        const includeResult = ['1', 'true', 'sim', 'yes', 'on'].includes(String(req.query?.includeResult || '').trim().toLowerCase());
+        const onlyIssues = ['1', 'true', 'sim', 'yes', 'on'].includes(String(req.query?.onlyIssues || '').trim().toLowerCase());
+
+        let ownerScopeUserId = null;
+        if (requestedScope !== 'global') {
+            ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+            if (!ownerScopeUserId) {
+                return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
+            }
+        } else if (!TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL) {
+            return res.status(403).json({ error: 'Consulta global do historico desabilitada' });
+        }
+
+        const runs = await tenantIntegrityAuditService.listAuditRuns({
+            scope: requestedScope === 'global' ? 'global' : 'owner',
+            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
+            limit: requestedLimit,
+            includeResult,
+            onlyIssues
+        });
+
+        res.json({
+            success: true,
+            scope: requestedScope === 'global' ? 'global' : 'owner',
+            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
+            count: Array.isArray(runs) ? runs.length : 0,
+            runs
+        });
+    } catch (error) {
+        console.error('[TenantIntegrityAudit][history-endpoint] falha:', error);
+        res.status(500).json({ error: 'Falha ao consultar historico da auditoria', details: error.message });
+    }
 });
 
 app.post('/api/admin/audits/tenant-integrity/run', authenticate, async (req, res) => {

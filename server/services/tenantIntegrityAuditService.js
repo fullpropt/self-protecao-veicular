@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { queryOne, query } = require('../database/connection');
+const { queryOne, query, run } = require('../database/connection');
 
 function parsePositiveInteger(value, fallback = null) {
     const num = Number(value);
@@ -16,6 +16,46 @@ function normalizeCount(value) {
 function normalizeSampleLimit(value, fallback = 10) {
     const parsed = parsePositiveInteger(value, fallback);
     return Math.min(Math.max(parsed || fallback, 1), 100);
+}
+
+function normalizeHistoryLimit(value, fallback = 20) {
+    const parsed = parsePositiveInteger(value, fallback);
+    return Math.min(Math.max(parsed || fallback, 1), 200);
+}
+
+function normalizeScope(value, fallback = 'global') {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'owner') return 'owner';
+    if (normalized === 'global') return 'global';
+    return fallback;
+}
+
+function normalizeBooleanInput(value, fallback = false) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value > 0;
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['1', 'true', 'yes', 'sim', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'nao', 'off'].includes(normalized)) return false;
+    return fallback;
+}
+
+function safeJsonStringify(value, fallback = '{}') {
+    try {
+        return JSON.stringify(value ?? null);
+    } catch (_) {
+        return fallback;
+    }
+}
+
+function safeJsonParse(value, fallback = null) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'object') return value;
+    try {
+        return JSON.parse(String(value));
+    } catch (_) {
+        return fallback;
+    }
 }
 
 function buildFingerprint(checks = []) {
@@ -634,8 +674,166 @@ function compactResultForLog(result) {
     };
 }
 
+function mapAuditRunRow(row, options = {}) {
+    if (!row) return null;
+    const includeResult = normalizeBooleanInput(options.includeResult, false);
+
+    const item = {
+        id: Number(row.id || 0) || null,
+        scope: normalizeScope(row.scope, 'global'),
+        ownerUserId: parsePositiveInteger(row.owner_user_id, null),
+        triggerSource: String(row.trigger_source || '').trim() || null,
+        generatedAt: row.generated_at || null,
+        createdAt: row.created_at || null,
+        totalChecks: normalizeCount(row.total_checks),
+        checksWithIssues: normalizeCount(row.checks_with_issues),
+        totalIssueRows: normalizeCount(row.total_issue_rows),
+        isHealthy: Number(row.is_healthy) > 0,
+        fingerprint: String(row.fingerprint || '').trim() || null
+    };
+
+    const summary = safeJsonParse(row.summary_json, null);
+    const checks = safeJsonParse(row.checks_json, null);
+    item.summary = summary && typeof summary === 'object'
+        ? summary
+        : {
+            totalChecks: item.totalChecks,
+            checksWithIssues: item.checksWithIssues,
+            totalIssueRows: item.totalIssueRows,
+            isHealthy: item.isHealthy
+        };
+    item.checks = Array.isArray(checks) ? checks : [];
+
+    if (includeResult) {
+        const result = safeJsonParse(row.result_json, null);
+        item.result = result && typeof result === 'object' ? result : null;
+    }
+
+    return item;
+}
+
+async function storeAuditRun(result, options = {}) {
+    if (!result || typeof result !== 'object') {
+        throw new Error('Resultado de auditoria invalido para persistencia');
+    }
+
+    const scope = normalizeScope(result.scope || options.scope, parsePositiveInteger(result.ownerUserId ?? options.ownerUserId, null) ? 'owner' : 'global');
+    const ownerUserId = scope === 'owner'
+        ? parsePositiveInteger(result.ownerUserId ?? options.ownerUserId, null)
+        : null;
+    const triggerSource = String(options.triggerSource || options.trigger || 'manual')
+        .trim()
+        .toLowerCase()
+        .slice(0, 60) || 'manual';
+
+    const summary = result.summary && typeof result.summary === 'object'
+        ? result.summary
+        : buildSummary(Array.isArray(result.checks) ? result.checks : []);
+    const checks = Array.isArray(result.checks) ? result.checks : [];
+
+    const rowResult = await run(`
+        INSERT INTO tenant_integrity_audit_runs (
+            scope,
+            owner_user_id,
+            trigger_source,
+            generated_at,
+            total_checks,
+            checks_with_issues,
+            total_issue_rows,
+            is_healthy,
+            fingerprint,
+            summary_json,
+            checks_json,
+            result_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+        scope,
+        ownerUserId || null,
+        triggerSource,
+        result.generatedAt || new Date().toISOString(),
+        normalizeCount(summary.totalChecks),
+        normalizeCount(summary.checksWithIssues),
+        normalizeCount(summary.totalIssueRows),
+        summary.isHealthy === true ? 1 : 0,
+        String(result.fingerprint || '').trim() || null,
+        safeJsonStringify(summary, '{}'),
+        safeJsonStringify(checks, '[]'),
+        safeJsonStringify(result, '{}')
+    ]);
+
+    const insertedId = parsePositiveInteger(rowResult?.lastInsertRowid, null);
+    if (!insertedId) return null;
+    return await getAuditRunById(insertedId, { includeResult: false });
+}
+
+async function getAuditRunById(id, options = {}) {
+    const auditRunId = parsePositiveInteger(id, null);
+    if (!auditRunId) return null;
+
+    const ownerUserId = parsePositiveInteger(options.ownerUserId ?? options.owner_user_id, null);
+    const includeResult = normalizeBooleanInput(options.includeResult, false);
+    const scope = normalizeScope(options.scope, ownerUserId ? 'owner' : 'global');
+
+    let sql = `
+        SELECT *
+        FROM tenant_integrity_audit_runs
+        WHERE id = ?
+    `;
+    const params = [auditRunId];
+
+    if (scope === 'owner') {
+        sql += ' AND scope = ? AND owner_user_id = ?';
+        params.push('owner', ownerUserId || 0);
+    } else if (ownerUserId) {
+        sql += ' AND owner_user_id = ?';
+        params.push(ownerUserId);
+    }
+
+    sql += ' LIMIT 1';
+
+    const row = await queryOne(sql, params);
+    return mapAuditRunRow(row, { includeResult });
+}
+
+async function listAuditRuns(options = {}) {
+    const ownerUserId = parsePositiveInteger(options.ownerUserId ?? options.owner_user_id, null);
+    const scope = normalizeScope(options.scope, ownerUserId ? 'owner' : 'global');
+    const limit = normalizeHistoryLimit(options.limit, 20);
+    const includeResult = normalizeBooleanInput(options.includeResult, false);
+    const onlyIssues = normalizeBooleanInput(options.onlyIssues ?? options.only_issues, false);
+
+    let sql = `
+        SELECT *
+        FROM tenant_integrity_audit_runs
+        WHERE 1=1
+    `;
+    const params = [];
+
+    if (scope === 'owner') {
+        sql += ' AND scope = ? AND owner_user_id = ?';
+        params.push('owner', ownerUserId || 0);
+    } else if (ownerUserId) {
+        sql += ' AND owner_user_id = ?';
+        params.push(ownerUserId);
+    }
+
+    if (onlyIssues) {
+        sql += ' AND checks_with_issues > 0';
+    }
+
+    sql += ' ORDER BY created_at DESC, id DESC';
+    sql += ` LIMIT ${limit}`;
+
+    const rows = await query(sql, params);
+    return (rows || []).map((row) => mapAuditRunRow(row, { includeResult }));
+}
+
 module.exports = {
     runAudit,
     buildSummary,
-    compactResultForLog
+    compactResultForLog,
+    storeAuditRun,
+    getAuditRunById,
+    listAuditRuns
 };

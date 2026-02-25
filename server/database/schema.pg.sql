@@ -330,6 +330,23 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS tenant_integrity_audit_runs (
+    id SERIAL PRIMARY KEY,
+    scope TEXT NOT NULL DEFAULT 'global',
+    owner_user_id INTEGER REFERENCES users(id),
+    trigger_source TEXT NOT NULL DEFAULT 'manual',
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    total_checks INTEGER NOT NULL DEFAULT 0,
+    checks_with_issues INTEGER NOT NULL DEFAULT 0,
+    total_issue_rows INTEGER NOT NULL DEFAULT 0,
+    is_healthy INTEGER NOT NULL DEFAULT 1,
+    fingerprint TEXT,
+    summary_json TEXT,
+    checks_json TEXT,
+    result_json TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS tags (
     id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
@@ -461,6 +478,10 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_sessions_created_by ON whatsapp_sessions
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_tenant_integrity_audit_runs_created ON tenant_integrity_audit_runs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tenant_integrity_audit_runs_scope_owner_created ON tenant_integrity_audit_runs(scope, owner_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tenant_integrity_audit_runs_issues_created ON tenant_integrity_audit_runs(checks_with_issues, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tenant_integrity_audit_runs_fingerprint ON tenant_integrity_audit_runs(fingerprint);
 
 DROP VIEW IF EXISTS v_conversations;
 CREATE VIEW v_conversations AS
