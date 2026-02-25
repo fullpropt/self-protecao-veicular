@@ -553,10 +553,6 @@ function renderPlanStatus() {
                     <label class="form-label">Plano</label>
                     <input type="text" class="form-input" value="${escapeHtml(data.planName)}" readonly />
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Fornecedor</label>
-                    <input type="text" class="form-input" value="${escapeHtml(data.provider)}" readonly />
-                </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
@@ -567,12 +563,6 @@ function renderPlanStatus() {
                     <label class="form-label">Ultima confirmacao</label>
                     <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.lastVerifiedAt))}" readonly />
                 </div>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-                <small class="text-muted">Fonte: ${escapeHtml(data.source)}</small>
-                <button class="btn btn-outline" onclick="refreshPlanStatus()">
-                    <span class="icon icon-refresh icon-sm"></span> Atualizar via API
-                </button>
             </div>
         </div>
     `;
@@ -2042,7 +2032,6 @@ const windowAny = window as Window & {
     testWebhook?: () => void;
     saveApiSettings?: () => void;
     loadPlanStatus?: (options?: { silent?: boolean }) => Promise<void>;
-    refreshPlanStatus?: () => Promise<void>;
 };
 windowAny.initConfiguracoes = initConfiguracoes;
 windowAny.showPanel = showPanel;
@@ -2087,6 +2076,5 @@ windowAny.regenerateApiKey = regenerateApiKey;
 windowAny.testWebhook = testWebhook;
 windowAny.saveApiSettings = saveApiSettings;
 windowAny.loadPlanStatus = loadPlanStatus;
-windowAny.refreshPlanStatus = refreshPlanStatus;
 
 export { initConfiguracoes };

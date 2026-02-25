@@ -45,7 +45,6 @@ type ConfiguracoesGlobals = {
   testWebhook?: () => void;
   saveApiSettings?: () => void;
   loadPlanStatus?: (options?: { silent?: boolean }) => Promise<void>;
-  refreshPlanStatus?: () => Promise<void>;
   openModal?: (id: string) => void;
   closeModal?: (id: string) => void;
   logout?: () => void;
