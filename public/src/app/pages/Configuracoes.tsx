@@ -807,15 +807,15 @@ export default function Configuracoes() {
           <div className="modal-overlay" id="confirmDeleteContactFieldModal">
               <div className="modal">
                   <div className="modal-header">
-                      <h3 className="modal-title"><span className="icon icon-delete icon-sm"></span> VocÃª tem certeza?</h3>
+                      <h3 className="modal-title"><span className="icon icon-delete icon-sm"></span> Você tem certeza?</h3>
                       <button className="modal-close" onClick={() => globals.cancelDeleteContactField?.()}>{'\u00D7'}</button>
                   </div>
                   <div className="modal-body">
                       <input type="hidden" id="confirmDeleteContactFieldKey" />
                       <p className="text-muted mb-4">
-                          Esta aÃ§Ã£o removerÃ¡ o campo <strong id="confirmDeleteContactFieldName">campo</strong> dos Campos DinÃ¢micos.
+                          Esta ação removerá o campo <strong id="confirmDeleteContactFieldName">campo</strong> dos Campos Dinâmicos.
                       </p>
-                      <p className="text-muted">Essa aÃ§Ã£o nÃ£o pode ser desfeita.</p>
+                      <p className="text-muted">Essa ação não pode ser desfeita.</p>
                   </div>
                   <div className="modal-footer">
                       <button className="btn btn-outline" onClick={() => globals.cancelDeleteContactField?.()}>Cancelar</button>

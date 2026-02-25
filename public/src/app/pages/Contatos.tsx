@@ -51,7 +51,7 @@ export default function Contatos() {
           (mod as { initContacts?: () => void }).initContacts?.();
           return;
         }
-        throw new Error('initContacts nÃ£o estÃ¡ disponÃ­vel');
+        throw new Error('initContacts não está disponível');
       } catch (error) {
         if (cancelled) return;
         console.error('Falha ao iniciar Contatos:', error);
@@ -106,11 +106,11 @@ export default function Contatos() {
             </ul>
           </div>
           <div className="nav-section">
-            <div className="nav-section-title">AutomaÃ§Ã£o</div>
+            <div className="nav-section-title">Automação</div>
             <ul className="nav-menu">
               <li className="nav-item">
                 <Link to="/automacao" className="nav-link">
-                  <span className="icon icon-automation"></span>AutomaÃ§Ã£o
+                  <span className="icon icon-automation"></span>Automação
                 </Link>
               </li>
               <li className="nav-item">
@@ -135,7 +135,7 @@ export default function Contatos() {
               </li>
               <li className="nav-item">
                 <Link to="/configuracoes" className="nav-link">
-                  <span className="icon icon-settings"></span>ConfiguraÃ§Ãµes
+                  <span className="icon icon-settings"></span>Configurações
                 </Link>
               </li>
             </ul>
@@ -154,7 +154,7 @@ export default function Contatos() {
         {bootError && (
           <div className="card mb-4" style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}>
             <div className="card-body">
-              NÃ£o foi possÃ­vel inicializar os contatos. Abra o console para ver o erro.
+              Não foi possível inicializar os contatos. Abra o console para ver o erro.
             </div>
           </div>
         )}
@@ -226,7 +226,7 @@ export default function Contatos() {
               <span className="icon icon-delete icon-sm"></span> Excluir
             </button>
             <button className="btn btn-sm btn-outline" onClick={() => globals.clearSelection?.()}>
-              <span className="icon icon-close icon-sm"></span> Limpar SeleÃ§Ã£o
+              <span className="icon icon-close icon-sm"></span> Limpar Seleção
             </button>
           </div>
         </div>
@@ -243,7 +243,7 @@ export default function Contatos() {
                 <option value="">Todos os Status</option>
                 <option value="1">Novo</option>
                 <option value="2">Em Andamento</option>
-                <option value="3">ConcluÃ­do</option>
+                <option value="3">Concluído</option>
                 <option value="4">Perdido</option>
               </select>
               <select className="form-select contacts-filter-select" id="filterTag" onChange={() => globals.filterContacts?.()}>
@@ -272,8 +272,8 @@ export default function Contatos() {
                   <th>WhatsApp</th>
                   <th>Status</th>
                   <th>Tags</th>
-                  <th>Ãšltima InteraÃ§Ã£o</th>
-                  <th>AÃ§Ãµes</th>
+                  <th>Última Interação</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody id="contactsTableBody">
@@ -304,7 +304,7 @@ export default function Contatos() {
         <div className="modal">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-add icon-sm"></span> Novo Contato</h3>
-            <button className="modal-close" onClick={() => globals.closeModal?.('addContactModal')}>Ã—</button>
+            <button className="modal-close" onClick={() => globals.closeModal?.('addContactModal')}>×</button>
           </div>
           <div className="modal-body">
             <form id="addContactForm">
@@ -315,7 +315,7 @@ export default function Contatos() {
               <div className="form-group">
                 <label className="form-label required">WhatsApp</label>
                 <input type="tel" className="form-input" id="contactPhone" required placeholder="27999999999" />
-                <p className="form-help">Apenas nÃºmeros com DDD</p>
+                <p className="form-help">Apenas números com DDD</p>
               </div>
               <div className="form-group">
                 <label className="form-label">Email</label>
@@ -328,7 +328,7 @@ export default function Contatos() {
                   <select className="form-select" id="contactStatus">
                     <option value="1">Novo</option>
                     <option value="2">Em Andamento</option>
-                    <option value="3">ConcluÃ­do</option>
+                    <option value="3">Concluído</option>
                     <option value="4">Perdido</option>
                   </select>
                 </div>
@@ -338,14 +338,14 @@ export default function Contatos() {
                     <option value="manual">Manual</option>
                     <option value="whatsapp">WhatsApp</option>
                     <option value="site">Site</option>
-                    <option value="indicacao">IndicaÃ§Ã£o</option>
+                    <option value="indicacao">Indicação</option>
                     <option value="outro">Outro</option>
                   </select>
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">ObservaÃ§Ãµes</label>
-                <textarea className="form-textarea" id="contactNotes" rows={3} placeholder="AnotaÃ§Ãµes sobre o contato..."></textarea>
+                <label className="form-label">Observações</label>
+                <textarea className="form-textarea" id="contactNotes" rows={3} placeholder="Anotações sobre o contato..."></textarea>
               </div>
             </form>
           </div>
@@ -360,15 +360,15 @@ export default function Contatos() {
         <div className="modal modal-lg">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-edit icon-sm"></span> Editar Contato</h3>
-            <button className="modal-close" onClick={() => globals.closeModal?.('editContactModal')}>Ã—</button>
+            <button className="modal-close" onClick={() => globals.closeModal?.('editContactModal')}>×</button>
           </div>
           <div className="modal-body">
             <div className="tabs">
               <button className="tab active" data-tab="info" onClick={() => globals.switchTab?.('info')}>
-                <span className="icon icon-info icon-sm"></span> InformaÃ§Ãµes
+                <span className="icon icon-info icon-sm"></span> Informações
               </button>
               <button className="tab" data-tab="history" onClick={() => globals.switchTab?.('history')}>
-                <span className="icon icon-clock icon-sm"></span> HistÃ³rico
+                <span className="icon icon-clock icon-sm"></span> Histórico
               </button>
               <button className="tab" data-tab="messages" onClick={() => globals.switchTab?.('messages')}>
                 <span className="icon icon-message icon-sm"></span> Mensagens
@@ -398,14 +398,14 @@ export default function Contatos() {
                     <select className="form-select" id="editContactStatus">
                       <option value="1">Novo</option>
                       <option value="2">Em Andamento</option>
-                      <option value="3">ConcluÃ­do</option>
+                      <option value="3">Concluído</option>
                       <option value="4">Perdido</option>
                     </select>
                   </div>
                 </div>
                 <div className="form-row" id="editContactCustomFields"></div>
                 <div className="form-group">
-                  <label className="form-label">ObservaÃ§Ãµes</label>
+                  <label className="form-label">Observações</label>
                   <textarea className="form-textarea" id="editContactNotes" rows={3}></textarea>
                 </div>
               </form>
@@ -414,7 +414,7 @@ export default function Contatos() {
             <div className="tab-content" id="tab-history" data-tab-content="history">
               <div id="contactHistory" className="empty-state">
                 <div className="empty-state-icon icon icon-clock icon-lg"></div>
-                <p>Nenhum histÃ³rico disponÃ­vel</p>
+                <p>Nenhum histórico disponível</p>
               </div>
             </div>
 
@@ -430,7 +430,7 @@ export default function Contatos() {
             <button className="btn btn-whatsapp" onClick={() => globals.openWhatsApp?.()}>
               <span className="icon icon-whatsapp icon-sm"></span> WhatsApp
             </button>
-            <button className="btn btn-primary" onClick={() => globals.updateContact?.()}>Salvar AlteraÃ§Ãµes</button>
+            <button className="btn btn-primary" onClick={() => globals.updateContact?.()}>Salvar Alterações</button>
           </div>
         </div>
       </div>
@@ -439,13 +439,13 @@ export default function Contatos() {
         <div className="modal modal-lg">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-import icon-sm"></span> Importar Contatos</h3>
-            <button className="modal-close" onClick={() => globals.closeModal?.('importModal')}>Ã—</button>
+            <button className="modal-close" onClick={() => globals.closeModal?.('importModal')}>×</button>
           </div>
           <div className="modal-body">
             <div className="form-group">
               <label className="form-label">Arquivo CSV</label>
               <input type="file" className="form-input" id="importFile" accept=".csv,.txt" />
-              <p className="form-help">Colunas: nome, telefone, email. Campos dinÃ¢micos: use o nome da variÃ¡vel ou o rÃ³tulo da coluna.</p>
+              <p className="form-help">Colunas: nome, telefone, email. Campos dinâmicos: use o nome da variável ou o rótulo da coluna.</p>
             </div>
             <div className="form-group">
               <label className="form-label">Ou cole os dados</label>
@@ -454,7 +454,7 @@ export default function Contatos() {
                 id="importText"
                 rows={8}
                 placeholder={`nome,telefone,email
-JoÃ£o Silva,27999999999,joao@email.com`}
+João Silva,27999999999,joao@email.com`}
               ></textarea>
             </div>
             <div className="form-group">
@@ -465,7 +465,7 @@ JoÃ£o Silva,27999999999,joao@email.com`}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Tag para importaÃ§Ã£o (opcional)</label>
+              <label className="form-label">Tag para importação (opcional)</label>
               <select className="form-select" id="importTag" defaultValue="">
                 <option value="">Sem etiqueta</option>
               </select>
@@ -483,11 +483,11 @@ JoÃ£o Silva,27999999999,joao@email.com`}
         <div className="modal modal-lg">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-whatsapp icon-sm"></span> Enviar Mensagem em Lote</h3>
-            <button className="modal-close" onClick={() => globals.closeModal?.('bulkMessageModal')}>Ã—</button>
+            <button className="modal-close" onClick={() => globals.closeModal?.('bulkMessageModal')}>×</button>
           </div>
           <div className="modal-body">
             <div className="form-group">
-              <label className="form-label">DestinatÃ¡rios</label>
+              <label className="form-label">Destinatários</label>
               <p className="text-muted"><span id="bulkRecipients">0</span> contatos selecionados</p>
             </div>
             <div className="form-group">
@@ -505,7 +505,7 @@ JoÃ£o Silva,27999999999,joao@email.com`}
                 placeholder={`Digite a mensagem...
 Use {{nome}} para personalizar`}
               ></textarea>
-              <p className="form-help">{'VariÃ¡veis: {{nome}}, {{telefone}}, {{email}} e campos personalizados'}</p>
+              <p className="form-help">{'Variáveis: {{nome}}, {{telefone}}, {{email}} e campos personalizados'}</p>
             </div>
             <div className="form-row">
               <div className="form-group">
@@ -519,7 +519,7 @@ Use {{nome}} para personalizar`}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">InÃ­cio</label>
+                <label className="form-label">Início</label>
                 <select className="form-select" id="bulkStart">
                   <option value="now">Imediatamente</option>
                   <option value="scheduled">Agendar</option>
