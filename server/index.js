@@ -7078,6 +7078,57 @@ function sessionExists(sessionId) {
 
 
 
+const WHATSAPP_ACTIVE_PLAN_STATUSES = new Set(['active', 'trialing']);
+
+async function resolveOwnerPlanStatus(ownerScopeUserId) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerScopeUserId);
+    if (!normalizedOwnerUserId) return 'unknown';
+    const rawStatus = await Settings.get(buildScopedSettingsKey('plan_status', normalizedOwnerUserId));
+    const normalizedStatus = String(rawStatus || '').trim().toLowerCase();
+    return normalizedStatus || 'unknown';
+}
+
+async function hasOwnerActiveWhatsAppPlan(ownerScopeUserId) {
+    const status = await resolveOwnerPlanStatus(ownerScopeUserId);
+    return WHATSAPP_ACTIVE_PLAN_STATUSES.has(status);
+}
+
+async function requireActiveWhatsAppPlan(req, res, next) {
+    try {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const hasActivePlan = await hasOwnerActiveWhatsAppPlan(ownerScopeUserId);
+        if (!hasActivePlan) {
+            return res.status(402).json({
+                success: false,
+                error: 'Sua assinatura nao esta ativa. Reative para poder usar a aplicacao.',
+                code: 'PLAN_INACTIVE'
+            });
+        }
+        req.ownerScopeUserId = ownerScopeUserId;
+        next();
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Erro ao validar assinatura do WhatsApp' });
+    }
+}
+
+async function ensureSocketActiveWhatsAppPlan(socket, sessionId = null) {
+    const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+    const hasActivePlan = await hasOwnerActiveWhatsAppPlan(ownerScopeUserId);
+    if (!hasActivePlan) {
+        const normalizedSessionId = sanitizeSessionId(sessionId);
+        socket.emit('error', {
+            message: 'Sua assinatura nao esta ativa. Reative para poder usar a aplicacao.',
+            code: 'PLAN_INACTIVE'
+        });
+        socket.emit('session-status', {
+            status: 'disconnected',
+            sessionId: normalizedSessionId || null
+        });
+        return { allowed: false, ownerScopeUserId };
+    }
+    return { allowed: true, ownerScopeUserId };
+}
+
 io.on('connection', (socket) => {
 
     console.log('?? Cliente conectado:', socket.id);
@@ -7095,7 +7146,9 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
+        if (!planAccess.allowed) return;
+        const ownerScopeUserId = planAccess.ownerScopeUserId;
         if (ownerScopeUserId) {
             const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
                 owner_user_id: ownerScopeUserId
@@ -7147,7 +7200,9 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, sessionId);
+        if (!planAccess.allowed) return;
+        const ownerScopeUserId = planAccess.ownerScopeUserId;
         const storedSession = await WhatsAppSession.findBySessionId(sessionId);
         if (ownerScopeUserId && storedSession) {
             const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
@@ -7208,7 +7263,9 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, sessionId);
+        if (!planAccess.allowed) return;
+        const ownerScopeUserId = planAccess.ownerScopeUserId;
         const storedSession = await WhatsAppSession.findBySessionId(sessionId);
         if (ownerScopeUserId && storedSession) {
             const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
@@ -7660,7 +7717,9 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
+        if (!planAccess.allowed) return;
+        const ownerScopeUserId = planAccess.ownerScopeUserId;
         if (ownerScopeUserId) {
             const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
                 owner_user_id: ownerScopeUserId
@@ -7778,10 +7837,10 @@ app.get('/api/whatsapp/status', optionalAuth, (req, res) => {
 
 });
 
-app.get('/api/whatsapp/sessions', authenticate, async (req, res) => {
+app.get('/api/whatsapp/sessions', authenticate, requireActiveWhatsAppPlan, async (req, res) => {
     try {
         const includeDisabled = String(req.query?.includeDisabled ?? 'true').toLowerCase() !== 'false';
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const ownerScopeUserId = req.ownerScopeUserId || await resolveRequesterOwnerUserId(req);
         const sessionsList = await senderAllocatorService.listDispatchSessions({
             includeDisabled,
             ownerUserId: ownerScopeUserId || undefined
@@ -7792,14 +7851,14 @@ app.get('/api/whatsapp/sessions', authenticate, async (req, res) => {
     }
 });
 
-app.put('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) => {
+app.put('/api/whatsapp/sessions/:sessionId', authenticate, requireActiveWhatsAppPlan, async (req, res) => {
     try {
         const sessionId = sanitizeSessionId(req.params.sessionId);
         if (!sessionId) {
             return res.status(400).json({ error: 'sessionId invalido' });
         }
 
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const ownerScopeUserId = req.ownerScopeUserId || await resolveRequesterOwnerUserId(req);
         if (ownerScopeUserId) {
             const existingSession = await WhatsAppSession.findBySessionId(sessionId);
             if (existingSession) {
@@ -7829,14 +7888,14 @@ app.put('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) => {
     }
 });
 
-app.delete('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) => {
+app.delete('/api/whatsapp/sessions/:sessionId', authenticate, requireActiveWhatsAppPlan, async (req, res) => {
     try {
         const sessionId = sanitizeSessionId(req.params.sessionId);
         if (!sessionId) {
             return res.status(400).json({ error: 'sessionId invalido' });
         }
 
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const ownerScopeUserId = req.ownerScopeUserId || await resolveRequesterOwnerUserId(req);
         if (ownerScopeUserId) {
             const existingSession = await WhatsAppSession.findBySessionId(sessionId, {
                 owner_user_id: ownerScopeUserId
@@ -7862,12 +7921,12 @@ app.delete('/api/whatsapp/sessions/:sessionId', authenticate, async (req, res) =
 
 
 
-app.post('/api/whatsapp/disconnect', authenticate, async (req, res) => {
+app.post('/api/whatsapp/disconnect', authenticate, requireActiveWhatsAppPlan, async (req, res) => {
 
     try {
 
         const sessionId = resolveSessionIdOrDefault(req.body?.sessionId || req.query?.sessionId);
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const ownerScopeUserId = req.ownerScopeUserId || await resolveRequesterOwnerUserId(req);
         if (ownerScopeUserId) {
             const existingSession = await WhatsAppSession.findBySessionId(sessionId, {
                 owner_user_id: ownerScopeUserId

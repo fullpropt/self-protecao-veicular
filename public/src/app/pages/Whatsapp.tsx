@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
 type WhatsappGlobals = {
   initWhatsapp?: () => void;
@@ -11,19 +11,50 @@ type WhatsappGlobals = {
   createSessionPrompt?: () => void;
   toggleSidebar?: () => void;
   logout?: () => void;
+  api?: {
+    get?: (endpoint: string) => Promise<any>;
+  };
+  showToast?: (type: 'success' | 'error' | 'warning' | 'info', title: string, message: string, duration?: number) => void;
 };
 
 export default function Whatsapp() {
+  const navigate = useNavigate();
+
   useEffect(() => {
     let cancelled = false;
 
     const boot = async () => {
+      const token = sessionStorage.getItem('selfDashboardToken');
+      const expiry = Number(sessionStorage.getItem('selfDashboardExpiry') || 0);
+      if (!token || !expiry || Date.now() > expiry) {
+        navigate('/login', { replace: true });
+        return;
+      }
+
       await import('../../core/app');
-      const mod = await import('../../pages/whatsapp');
 
       if (cancelled) return;
 
       const win = window as Window & WhatsappGlobals;
+      const allowedStatuses = new Set(['active', 'trialing']);
+      try {
+        const response = await win.api?.get?.('/api/plan/status');
+        const status = String(response?.plan?.status || '').trim().toLowerCase();
+        if (!allowedStatuses.has(status)) {
+          win.showToast?.('warning', 'Assinatura inativa', 'Sua assinatura nao esta ativa. Reative para poder usar a aplicacao.');
+          navigate('/configuracoes?panel=plan', { replace: true });
+          return;
+        }
+      } catch (_) {
+        win.showToast?.('warning', 'Assinatura inativa', 'Nao foi possivel validar a assinatura. Reative seu plano para usar a aplicacao.');
+        navigate('/configuracoes?panel=plan', { replace: true });
+        return;
+      }
+
+      const mod = await import('../../pages/whatsapp');
+
+      if (cancelled) return;
+
       if (typeof win.initWhatsapp === 'function') {
         win.initWhatsapp();
       } else if (typeof (mod as { initWhatsapp?: () => void }).initWhatsapp === 'function') {
@@ -36,7 +67,7 @@ export default function Whatsapp() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [navigate]);
 
   const globals = window as Window & WhatsappGlobals;
   const toggleSidebar = () => {

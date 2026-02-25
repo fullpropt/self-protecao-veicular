@@ -611,6 +611,26 @@ async function apiRequest(endpoint: string, options: ApiRequestOptions = {}) {
         }
 
         if (!response.ok) {
+            const responseCode =
+                data && typeof data.code === 'string'
+                    ? data.code.trim().toUpperCase()
+                    : '';
+            if (responseCode === 'PLAN_INACTIVE') {
+                const planInactiveMessage =
+                    (data && typeof data.error === 'string' && data.error.trim())
+                        ? data.error
+                        : 'Sua assinatura nao esta ativa. Reative para poder usar a aplicacao.';
+
+                if (!isLoginRoute()) {
+                    showToast('warning', 'Assinatura inativa', planInactiveMessage);
+                    const currentHash = window.location.hash || '#/dashboard';
+                    if (!currentHash.startsWith('#/configuracoes?panel=plan')) {
+                        window.location.hash = '#/configuracoes?panel=plan';
+                    }
+                }
+                throw new Error(planInactiveMessage);
+            }
+
             const responseMessage =
                 (data && typeof data.error === 'string' && data.error.trim())
                     ? data.error
