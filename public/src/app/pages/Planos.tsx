@@ -244,11 +244,11 @@ export default function Planos() {
           color: var(--text);
           min-height: 100vh;
           background:
-            radial-gradient(1100px 540px at 50% -6%, rgba(8, 30, 24, 0.2) 0%, rgba(8, 30, 24, 0) 72%),
-            radial-gradient(980px 520px at 88% 8%, rgba(35, 198, 111, 0.2) 0%, rgba(35, 198, 111, 0) 62%),
-            radial-gradient(820px 500px at 8% 92%, rgba(246, 184, 78, 0.12) 0%, rgba(246, 184, 78, 0) 64%),
-            radial-gradient(620px 320px at 50% 0%, rgba(94, 217, 255, 0.07) 0%, rgba(94, 217, 255, 0) 72%),
-            linear-gradient(180deg, #f3fbf8 0%, #eef8f3 18%, var(--bg) 52%, var(--bg-2) 100%);
+            radial-gradient(1280px 620px at 50% -8%, rgba(8, 30, 24, 0.28) 0%, rgba(8, 30, 24, 0) 72%),
+            radial-gradient(1060px 560px at 88% 10%, rgba(35, 198, 111, 0.24) 0%, rgba(35, 198, 111, 0) 62%),
+            radial-gradient(920px 540px at 8% 92%, rgba(246, 184, 78, 0.14) 0%, rgba(246, 184, 78, 0) 66%),
+            radial-gradient(720px 340px at 50% 0%, rgba(94, 217, 255, 0.1) 0%, rgba(94, 217, 255, 0) 72%),
+            linear-gradient(180deg, #ecf8f2 0%, #eef8f3 16%, var(--bg) 52%, var(--bg-2) 100%);
           position: relative;
           overflow-x: hidden;
         }
@@ -264,31 +264,31 @@ export default function Planos() {
           inset: auto;
           pointer-events: none;
           z-index: -1;
-          opacity: 0.38;
+          opacity: 0.48;
         }
 
         .sales-page::before {
-          width: 420px;
-          height: 420px;
-          top: -110px;
-          right: -90px;
+          width: 520px;
+          height: 520px;
+          top: -140px;
+          right: -110px;
           border-radius: 999px;
           border: 1px solid rgba(35, 198, 111, 0.1);
           transform: rotate(14deg);
-          background: radial-gradient(circle at 35% 35%, rgba(35, 198, 111, 0.2), rgba(35, 198, 111, 0));
-          filter: blur(4px);
+          background: radial-gradient(circle at 35% 35%, rgba(35, 198, 111, 0.28), rgba(35, 198, 111, 0));
+          filter: blur(8px);
         }
 
         .sales-page::after {
-          width: 360px;
-          height: 360px;
+          width: 460px;
+          height: 460px;
           bottom: 10px;
-          left: -100px;
+          left: -130px;
           border-radius: 30px;
           border: 1px solid rgba(246, 184, 78, 0.12);
-          background: linear-gradient(135deg, rgba(246, 184, 78, 0.15), rgba(246, 184, 78, 0));
+          background: linear-gradient(135deg, rgba(246, 184, 78, 0.2), rgba(246, 184, 78, 0));
           transform: rotate(-14deg);
-          filter: blur(2px);
+          filter: blur(6px);
         }
 
         .sales-shell {
@@ -1083,33 +1083,37 @@ export default function Planos() {
         .section-variant-left,
         .section-variant-right,
         .section-variant-frame {
-          width: min(1220px, 100%);
+          width: 100%;
         }
 
         .section-variant-left {
-          margin-right: auto;
           background:
             radial-gradient(560px 220px at 8% 0%, rgba(35, 198, 111, 0.1), rgba(35, 198, 111, 0) 72%),
             linear-gradient(180deg, rgba(7, 21, 24, 0.9), rgba(5, 16, 18, 0.96));
         }
 
         .section-variant-right {
-          margin-left: auto;
           background:
-            radial-gradient(560px 220px at 92% 0%, rgba(94, 217, 255, 0.08), rgba(94, 217, 255, 0) 72%),
-            radial-gradient(460px 200px at 20% 100%, rgba(246, 184, 78, 0.07), rgba(246, 184, 78, 0) 70%),
+            radial-gradient(560px 220px at 92% 0%, rgba(94, 217, 255, 0.1), rgba(94, 217, 255, 0) 72%),
+            radial-gradient(460px 200px at 20% 100%, rgba(246, 184, 78, 0.09), rgba(246, 184, 78, 0) 70%),
             linear-gradient(180deg, rgba(7, 21, 24, 0.9), rgba(5, 16, 18, 0.96));
         }
 
         .section-variant-frame {
-          margin-inline: auto;
+          border-color: rgba(35, 198, 111, 0.14);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.02),
+            0 18px 30px rgba(0, 0, 0, 0.14);
+          background:
+            radial-gradient(620px 260px at 84% 2%, rgba(35, 198, 111, 0.12), rgba(35, 198, 111, 0) 72%),
+            linear-gradient(180deg, rgba(7, 21, 24, 0.92), rgba(5, 16, 18, 0.97));
         }
 
         .section-variant-plain {
           border: none;
           background: transparent;
           box-shadow: none;
-          padding: 2px 0;
+          padding: 10px 0 6px;
         }
 
         .section-variant-plain::before {
@@ -1118,6 +1122,28 @@ export default function Planos() {
 
         .section-variant-plain .section-head {
           margin-bottom: 14px;
+        }
+
+        .resources-section.section-variant-plain {
+          position: relative;
+        }
+
+        .resources-section.section-variant-plain::after {
+          content: '';
+          position: absolute;
+          inset: 12px 0 0;
+          border-radius: 24px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          background:
+            radial-gradient(560px 180px at 50% 0%, rgba(35, 198, 111, 0.11), rgba(35, 198, 111, 0) 72%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0.006));
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .resources-section.section-variant-plain > * {
+          position: relative;
+          z-index: 1;
         }
 
         .resources-section.section-variant-plain .resource-grid {
@@ -1369,37 +1395,82 @@ export default function Planos() {
         }
 
         .section-head.is-right {
-          justify-content: flex-end;
+          justify-content: flex-start;
         }
 
         .section-head.is-right > div {
-          margin-left: auto;
-          text-align: right;
+          margin-left: 0;
+          text-align: left;
         }
 
-        .journey-section.section-variant-right .hero-cta-row {
-          justify-content: flex-end;
+        .journey-layout {
+          display: grid;
+          grid-template-columns: 0.95fr 1.05fr;
+          gap: 14px;
+          align-items: start;
         }
 
-        .journey-section.section-variant-right .journey-step {
-          margin-left: auto;
+        .journey-copy-pane {
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background:
+            radial-gradient(240px 120px at 0% 0%, rgba(246, 184, 78, 0.08), rgba(246, 184, 78, 0)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.01));
+          padding: 14px;
         }
 
-        .journey-section.section-variant-right .journey-card {
-          text-align: right;
-        }
-
-        .journey-section.section-variant-right .journey-grid {
+        .journey-track {
           position: relative;
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background:
+            radial-gradient(280px 120px at 100% 0%, rgba(94, 217, 255, 0.07), rgba(94, 217, 255, 0)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.01));
+          padding: 12px;
+          overflow: hidden;
         }
 
-        .journey-section.section-variant-right .journey-grid::before {
+        .journey-track::before {
           content: '';
           position: absolute;
-          inset: 18px 0 auto;
-          height: 1px;
-          background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0));
+          left: 26px;
+          top: 22px;
+          bottom: 22px;
+          width: 1px;
+          background: linear-gradient(180deg, rgba(246, 184, 78, 0.3), rgba(255, 255, 255, 0.04));
           pointer-events: none;
+          z-index: 0;
+        }
+
+        .journey-grid.journey-grid-timeline {
+          grid-template-columns: 1fr;
+          gap: 10px;
+          position: relative;
+          z-index: 1;
+        }
+
+        .journey-grid.journey-grid-timeline .journey-card {
+          position: relative;
+          padding-left: 42px;
+          min-height: 88px;
+        }
+
+        .journey-grid.journey-grid-timeline .journey-card::before {
+          content: '';
+          position: absolute;
+          left: 14px;
+          top: 20px;
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          background: #f6b84e;
+          box-shadow:
+            0 0 0 4px rgba(246, 184, 78, 0.12),
+            0 0 18px rgba(246, 184, 78, 0.2);
+        }
+
+        .journey-grid.journey-grid-timeline .journey-step {
+          margin-bottom: 2px;
         }
 
         .section-title {
@@ -1929,7 +2000,6 @@ export default function Planos() {
           .section-variant-right,
           .section-variant-frame {
             width: 100%;
-            margin-inline: 0;
           }
 
           .section-variant-plain {
@@ -1998,25 +2068,32 @@ export default function Planos() {
             grid-template-columns: 1fr;
           }
 
-          .section-head.is-right > div {
-            text-align: left;
-            margin-left: 0;
+          .journey-layout {
+            grid-template-columns: 1fr;
           }
 
-          .journey-section.section-variant-right .journey-card {
-            text-align: left;
+          .journey-copy-pane {
+            padding: 12px;
           }
 
-          .journey-section.section-variant-right .journey-step {
-            margin-left: 0;
+          .journey-track {
+            padding: 10px;
           }
 
-          .journey-section.section-variant-right .hero-cta-row {
-            justify-content: center;
+          .journey-track::before {
+            left: 22px;
+            top: 18px;
+            bottom: 18px;
           }
 
-          .journey-section.section-variant-right .journey-grid::before {
-            display: none;
+          .journey-grid.journey-grid-timeline .journey-card {
+            min-height: 0;
+            padding-left: 38px;
+          }
+
+          .journey-grid.journey-grid-timeline .journey-card::before {
+            left: 12px;
+            top: 18px;
           }
         }
 
@@ -2113,6 +2190,11 @@ export default function Planos() {
 
           .resources-section.section-variant-plain .resource-grid {
             grid-template-columns: 1fr;
+          }
+
+          .resources-section.section-variant-plain::after {
+            inset: 8px 0 0;
+            border-radius: 16px;
           }
 
           .hero-title {
@@ -2456,35 +2538,41 @@ export default function Planos() {
           </section>
 
           <section className="journey-section section-variant-right" aria-labelledby="titulo-jornada">
-            <div className="section-head is-right">
-              <div>
-                <div className="section-tag">Fluxo de uso</div>
-                <h2 className="section-title" id="titulo-jornada">Como o ZapVender entra na rotina comercial</h2>
-                <p className="section-subtitle">
-                  Uma narrativa curta para conectar solucao, recursos e operacao antes de mostrar os planos.
-                </p>
+            <div className="journey-layout">
+              <div className="journey-copy-pane">
+                <div className="section-head">
+                  <div>
+                    <div className="section-tag">Fluxo de uso</div>
+                    <h2 className="section-title" id="titulo-jornada">Como o ZapVender entra na rotina comercial</h2>
+                    <p className="section-subtitle">
+                      Uma narrativa curta para conectar solucao, recursos e operacao antes de mostrar os planos.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="hero-cta-row" style={{ marginTop: '6px', justifyContent: 'flex-start' }}>
+                  <button
+                    type="button"
+                    className="sales-btn sales-btn-outline"
+                    onClick={() => scrollToSection('planos-lista')}
+                  >
+                    Agora ver planos
+                  </button>
+                  <Link to="/login" className="sales-btn sales-btn-primary">Quero testar</Link>
+                </div>
               </div>
-            </div>
 
-            <div className="journey-grid" aria-label="Jornada de uso">
-              {journeySteps.map((step) => (
-                <article className="journey-card" key={step.step}>
-                  <span className="journey-step">{step.step}</span>
-                  <h3 className="journey-title">{step.title}</h3>
-                  <p className="journey-text">{step.text}</p>
-                </article>
-              ))}
-            </div>
-
-            <div className="hero-cta-row" style={{ marginTop: '14px' }}>
-              <button
-                type="button"
-                className="sales-btn sales-btn-outline"
-                onClick={() => scrollToSection('planos-lista')}
-              >
-                Agora ver planos
-              </button>
-              <Link to="/login" className="sales-btn sales-btn-primary">Quero testar</Link>
+              <div className="journey-track">
+                <div className="journey-grid journey-grid-timeline" aria-label="Jornada de uso">
+                  {journeySteps.map((step) => (
+                    <article className="journey-card" key={step.step}>
+                      <span className="journey-step">{step.step}</span>
+                      <h3 className="journey-title">{step.title}</h3>
+                      <p className="journey-text">{step.text}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
 
