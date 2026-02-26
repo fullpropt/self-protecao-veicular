@@ -128,6 +128,75 @@ const comparisonRows = [
   }
 ];
 
+const solutionPillars = [
+  {
+    title: 'Atendimento centralizado',
+    description: 'Concentre conversas, contatos e historico em um unico painel para tirar o time do improviso.',
+    stat: 'WhatsApp + CRM'
+  },
+  {
+    title: 'Processo comercial visivel',
+    description: 'Organize leads por etapa e acompanhe o funil com contexto real de atendimento.',
+    stat: 'Funil + inbox'
+  },
+  {
+    title: 'Escala com controle',
+    description: 'Use campanhas, filas e automacoes para crescer sem perder previsibilidade operacional.',
+    stat: 'Fila + automacao'
+  }
+];
+
+const resourceHighlights = [
+  {
+    title: 'Inbox operacional',
+    subtitle: 'Atenda com contexto',
+    description: 'Visualize mensagens, midias e historico do lead em um fluxo unico de atendimento.'
+  },
+  {
+    title: 'CRM e contatos',
+    subtitle: 'Relacao comercial organizada',
+    description: 'Cadastre, segmente e acompanhe leads com informacoes centralizadas e filtros por sessao.'
+  },
+  {
+    title: 'Campanhas e fila',
+    subtitle: 'Envio com controle',
+    description: 'Dispare mensagens com fila, reenvio e controle de throughput para reduzir risco operacional.'
+  },
+  {
+    title: 'Automacoes e fluxos',
+    subtitle: 'Menos trabalho manual',
+    description: 'Crie jornadas e respostas para acelerar atendimento, follow-up e qualificacao.'
+  },
+  {
+    title: 'Gestao de contas WhatsApp',
+    subtitle: 'Operacao multi-sessao',
+    description: 'Gerencie sessoes, status de conexao e distribuicao de envios a partir do painel.'
+  },
+  {
+    title: 'Funil comercial',
+    subtitle: 'Visao de pipeline',
+    description: 'Acompanhe andamento das oportunidades e tome decisoes com base no progresso real.'
+  }
+];
+
+const journeySteps = [
+  {
+    step: '01',
+    title: 'Captar e organizar',
+    text: 'Entradas de contato e atendimento chegam ao painel, com visao de conversa e cadastro do lead.'
+  },
+  {
+    step: '02',
+    title: 'Atender e qualificar',
+    text: 'Equipe responde no inbox, registra contexto e move oportunidades no funil.'
+  },
+  {
+    step: '03',
+    title: 'Automatizar e escalar',
+    text: 'Fluxos, campanhas e fila de envio ajudam a manter constancia sem sobrecarregar o time.'
+  }
+];
+
 export default function Planos() {
   useEffect(() => {
     const previousTitle = document.title;
@@ -136,6 +205,17 @@ export default function Planos() {
       document.title = previousTitle;
     };
   }, []);
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (!element) return;
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollIntoView({
+      behavior: reducedMotion ? 'auto' : 'smooth',
+      block: 'start'
+    });
+  };
 
   return (
     <div className="sales-page">
@@ -199,9 +279,9 @@ export default function Planos() {
         .sales-shell {
           position: relative;
           z-index: 1;
-          width: min(1180px, calc(100% - 32px));
+          width: min(1320px, calc(100% - 28px));
           margin: 0 auto;
-          padding: 22px 0 44px;
+          padding: 16px 0 44px;
           animation: page-enter 420ms ease-out;
         }
 
@@ -210,12 +290,17 @@ export default function Planos() {
           align-items: center;
           justify-content: space-between;
           gap: 16px;
+          flex-wrap: wrap;
           padding: 12px 14px;
           border-radius: 18px;
           border: 1px solid var(--line);
-          background: rgba(7, 19, 23, 0.68);
-          backdrop-filter: blur(8px);
+          background: rgba(7, 19, 23, 0.72);
+          backdrop-filter: blur(12px);
           margin-bottom: 22px;
+          position: sticky;
+          top: 10px;
+          z-index: 5;
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
         }
 
         .sales-brand {
@@ -242,6 +327,36 @@ export default function Planos() {
           gap: 10px;
           flex-wrap: wrap;
           justify-content: flex-end;
+        }
+
+        .sales-nav-links {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: center;
+          padding: 4px;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.02);
+        }
+
+        .sales-nav-link {
+          border: 1px solid transparent;
+          background: transparent;
+          color: #d4e8e8;
+          border-radius: 10px;
+          padding: 8px 11px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+        }
+
+        .sales-nav-link:hover {
+          background: rgba(255, 255, 255, 0.03);
+          border-color: rgba(255, 255, 255, 0.08);
+          color: #eff9f9;
         }
 
         .sales-btn {
@@ -506,11 +621,211 @@ export default function Planos() {
           line-height: 1.45;
         }
 
+        .solution-section,
+        .resources-section,
+        .journey-section,
         .plans-section {
           border-radius: 22px;
           border: 1px solid var(--line);
           background: linear-gradient(180deg, rgba(7, 22, 25, 0.84), rgba(7, 20, 23, 0.94));
           padding: 20px;
+        }
+
+        .solution-section,
+        .resources-section,
+        .journey-section {
+          margin-bottom: 16px;
+        }
+
+        .section-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border-radius: 999px;
+          padding: 7px 10px;
+          border: 1px solid rgba(35, 198, 111, 0.2);
+          background: rgba(35, 198, 111, 0.06);
+          color: #c4f8da;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          margin-bottom: 10px;
+        }
+
+        .section-tag::before {
+          content: '';
+          width: 7px;
+          height: 7px;
+          border-radius: 999px;
+          background: #35e084;
+          box-shadow: 0 0 0 4px rgba(53, 224, 132, 0.15);
+        }
+
+        .section-grid {
+          display: grid;
+          grid-template-columns: 1.05fr 0.95fr;
+          gap: 14px;
+        }
+
+        .section-panel {
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.02);
+          padding: 14px;
+        }
+
+        .section-panel p {
+          margin: 0;
+          color: #aac1c1;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+
+        .pillar-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 12px;
+        }
+
+        .pillar-card {
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: rgba(255, 255, 255, 0.02);
+          padding: 12px;
+          display: grid;
+          gap: 8px;
+          align-content: start;
+        }
+
+        .pillar-stat {
+          display: inline-flex;
+          width: fit-content;
+          border-radius: 999px;
+          padding: 5px 8px;
+          font-size: 11px;
+          font-weight: 700;
+          color: #d5fbe4;
+          border: 1px solid rgba(35, 198, 111, 0.18);
+          background: rgba(35, 198, 111, 0.06);
+        }
+
+        .pillar-title {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.2;
+        }
+
+        .pillar-text {
+          margin: 0;
+          color: #a9c0c0;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        .problem-list,
+        .resource-list {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 8px;
+        }
+
+        .problem-list li,
+        .resource-list li {
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(255, 255, 255, 0.02);
+          padding: 10px 12px;
+          color: #d8ecec;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .resource-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 10px;
+        }
+
+        .resource-card {
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background:
+            linear-gradient(165deg, rgba(13, 33, 37, 0.9), rgba(8, 22, 25, 0.92));
+          padding: 12px;
+          display: grid;
+          gap: 8px;
+          min-height: 150px;
+          align-content: start;
+        }
+
+        .resource-kicker {
+          color: #9ec2b4;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+
+        .resource-title {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.2;
+        }
+
+        .resource-desc {
+          margin: 0;
+          color: #a7c0c0;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        .journey-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .journey-card {
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: rgba(255, 255, 255, 0.02);
+          padding: 12px;
+          display: grid;
+          gap: 8px;
+        }
+
+        .journey-step {
+          width: fit-content;
+          border-radius: 999px;
+          border: 1px solid rgba(246, 184, 78, 0.2);
+          background: rgba(246, 184, 78, 0.07);
+          color: #ffe6b8;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          padding: 5px 8px;
+        }
+
+        .journey-title {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.2;
+        }
+
+        .journey-text {
+          margin: 0;
+          color: #a9c0c0;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        .plans-section {
+          margin-top: 2px;
         }
 
         .section-head {
@@ -911,8 +1226,21 @@ export default function Planos() {
             grid-template-columns: 1fr;
           }
 
+          .section-grid {
+            grid-template-columns: 1fr;
+          }
+
           .plan-card {
             grid-template-columns: 1fr;
+          }
+
+          .pillar-grid,
+          .journey-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .resource-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .testimonial-grid,
@@ -936,10 +1264,25 @@ export default function Planos() {
             padding: 10px;
             border-radius: 14px;
             margin-bottom: 14px;
+            top: 6px;
           }
 
           .sales-brand img {
             width: 108px;
+          }
+
+          .sales-nav-links {
+            width: 100%;
+            justify-content: space-between;
+            padding: 4px;
+          }
+
+          .sales-nav-link {
+            flex: 1 1 0;
+            min-width: 0;
+            text-align: center;
+            padding: 8px 6px;
+            font-size: 12px;
           }
 
           .sales-nav-actions {
@@ -954,6 +1297,9 @@ export default function Planos() {
 
           .hero-copy,
           .hero-card,
+          .solution-section,
+          .resources-section,
+          .journey-section,
           .plans-section {
             border-radius: 16px;
           }
@@ -963,6 +1309,9 @@ export default function Planos() {
           }
 
           .hero-points,
+          .pillar-grid,
+          .resource-grid,
+          .journey-grid,
           .plan-feature-grid {
             grid-template-columns: 1fr;
           }
@@ -978,6 +1327,10 @@ export default function Planos() {
           .plan-card {
             padding: 14px;
             border-radius: 14px;
+          }
+
+          .section-panel {
+            padding: 12px;
           }
 
           .testimonials-section,
@@ -1000,6 +1353,21 @@ export default function Planos() {
             <img src={brandFullLogoUrl} alt={brandName} />
           </Link>
 
+          <div className="sales-nav-links" aria-label="Atalhos de secao">
+            <button type="button" className="sales-nav-link" onClick={() => scrollToSection('solucao')}>
+              Solucao
+            </button>
+            <button type="button" className="sales-nav-link" onClick={() => scrollToSection('recursos')}>
+              Recursos
+            </button>
+            <button type="button" className="sales-nav-link" onClick={() => scrollToSection('planos-lista')}>
+              Planos
+            </button>
+            <button type="button" className="sales-nav-link" onClick={() => scrollToSection('faq-comercial')}>
+              FAQ
+            </button>
+          </div>
+
           <div className="sales-nav-actions">
             <Link to="/login" className="sales-btn sales-btn-outline">Entrar</Link>
             <Link to="/login" className="sales-btn sales-btn-primary">Assinar agora</Link>
@@ -1007,7 +1375,7 @@ export default function Planos() {
         </header>
 
         <main>
-          <section className="sales-hero" aria-labelledby="planos-hero-title">
+          <section className="sales-hero" id="visao-geral" aria-labelledby="planos-hero-title">
             <div className="hero-copy">
               <div className="hero-badge">Plano ativo de lançamento</div>
               <h1 className="hero-title" id="planos-hero-title">
@@ -1027,7 +1395,13 @@ export default function Planos() {
 
               <div className="hero-cta-row">
                 <Link to="/login" className="sales-btn sales-btn-primary">Quero começar</Link>
-                <a href="#planos-lista" className="sales-btn sales-btn-outline">Ver detalhes do plano</a>
+                <button
+                  type="button"
+                  className="sales-btn sales-btn-outline"
+                  onClick={() => scrollToSection('solucao')}
+                >
+                  Entender a solucao
+                </button>
               </div>
 
               <p className="hero-note">
@@ -1063,6 +1437,109 @@ export default function Planos() {
                 Valor de lançamento exibido em recorrência mensal. Ajuste termos comerciais, meios de pagamento e regras de cancelamento conforme sua operação.
               </div>
             </aside>
+          </section>
+
+          <section className="solution-section" id="solucao" aria-labelledby="titulo-solucao">
+            <div className="section-head">
+              <div>
+                <div className="section-tag">O que o ZapVender resolve</div>
+                <h2 className="section-title" id="titulo-solucao">Primeiro a solucao, depois o preco</h2>
+                <p className="section-subtitle">
+                  Estrutura inspirada em paginas de produto que explicam valor antes do plano: problema, proposta e recursos.
+                </p>
+              </div>
+            </div>
+
+            <div className="section-grid">
+              <div className="section-panel">
+                <p>
+                  O ZapVender foi posicionado para resolver um problema operacional comum: atendimento, acompanhamento comercial e automacoes
+                  espalhados em processos diferentes. A ideia da pagina e mostrar que a plataforma organiza a operacao antes de falar de plano.
+                </p>
+
+                <div className="pillar-grid" aria-label="Pilares da solucao">
+                  {solutionPillars.map((pillar) => (
+                    <article className="pillar-card" key={pillar.title}>
+                      <span className="pillar-stat">{pillar.stat}</span>
+                      <h3 className="pillar-title">{pillar.title}</h3>
+                      <p className="pillar-text">{pillar.description}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <div className="section-panel">
+                <div className="section-tag">Problemas que a pagina comunica</div>
+                <ul className="problem-list">
+                  <li>Leads se perdem quando atendimento e CRM nao conversam.</li>
+                  <li>Equipe atende sem contexto quando historico fica espalhado.</li>
+                  <li>Escala de envio sem fila e automacao gera risco operacional.</li>
+                  <li>Decisao comercial piora quando nao existe visao clara de funil.</li>
+                </ul>
+
+                <div className="section-tag" style={{ marginTop: '12px' }}>Resultado esperado</div>
+                <ul className="resource-list">
+                  <li>Atendimento com contexto + operacao organizada em um painel.</li>
+                  <li>Mais clareza para a equipe comercial sobre status e proximos passos.</li>
+                  <li>Base pronta para crescer com campanhas, fluxos e novos planos.</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section className="resources-section" id="recursos" aria-labelledby="titulo-recursos">
+            <div className="section-head">
+              <div>
+                <div className="section-tag">Recursos principais</div>
+                <h2 className="section-title" id="titulo-recursos">O que existe dentro da plataforma</h2>
+                <p className="section-subtitle">
+                  Bloco de recursos para o visitante entender rapidamente o que ele ganha antes de olhar planos.
+                </p>
+              </div>
+            </div>
+
+            <div className="resource-grid" aria-label="Lista de recursos do ZapVender">
+              {resourceHighlights.map((resource) => (
+                <article className="resource-card" key={resource.title}>
+                  <div className="resource-kicker">{resource.subtitle}</div>
+                  <h3 className="resource-title">{resource.title}</h3>
+                  <p className="resource-desc">{resource.description}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="journey-section" aria-labelledby="titulo-jornada">
+            <div className="section-head">
+              <div>
+                <div className="section-tag">Fluxo de uso</div>
+                <h2 className="section-title" id="titulo-jornada">Como o ZapVender entra na rotina comercial</h2>
+                <p className="section-subtitle">
+                  Uma narrativa curta para conectar solucao, recursos e operacao antes de mostrar os planos.
+                </p>
+              </div>
+            </div>
+
+            <div className="journey-grid" aria-label="Jornada de uso">
+              {journeySteps.map((step) => (
+                <article className="journey-card" key={step.step}>
+                  <span className="journey-step">{step.step}</span>
+                  <h3 className="journey-title">{step.title}</h3>
+                  <p className="journey-text">{step.text}</p>
+                </article>
+              ))}
+            </div>
+
+            <div className="hero-cta-row" style={{ marginTop: '14px' }}>
+              <button
+                type="button"
+                className="sales-btn sales-btn-outline"
+                onClick={() => scrollToSection('planos-lista')}
+              >
+                Agora ver planos
+              </button>
+              <Link to="/login" className="sales-btn sales-btn-primary">Quero testar</Link>
+            </div>
           </section>
 
           <section className="plans-section" id="planos-lista" aria-labelledby="titulo-planos">
@@ -1186,7 +1663,7 @@ export default function Planos() {
               </div>
             </section>
 
-            <div className="faq-grid" aria-label="Duvidas frequentes">
+            <div className="faq-grid" id="faq-comercial" aria-label="Duvidas frequentes">
               {faqItems.map((item) => (
                 <article className="faq-item" key={item.question}>
                   <h3>{item.question}</h3>
