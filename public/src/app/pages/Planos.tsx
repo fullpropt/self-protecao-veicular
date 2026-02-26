@@ -217,12 +217,14 @@ export default function Planos() {
     });
   };
 
+  const currentYear = new Date().getFullYear();
+
   return (
     <div className="sales-page">
       <style>{`
         .sales-page {
-          --bg: #08161a;
-          --bg-2: #0c1f24;
+          --bg: #f7fbfa;
+          --bg-2: #eef6f3;
           --panel: rgba(9, 27, 31, 0.88);
           --panel-strong: rgba(8, 24, 27, 0.96);
           --line: rgba(146, 174, 180, 0.2);
@@ -234,9 +236,10 @@ export default function Planos() {
           color: var(--text);
           min-height: 100vh;
           background:
-            radial-gradient(820px 420px at 90% 8%, rgba(35, 198, 111, 0.18) 0%, rgba(35, 198, 111, 0) 66%),
-            radial-gradient(780px 460px at 8% 92%, rgba(246, 184, 78, 0.12) 0%, rgba(246, 184, 78, 0) 65%),
-            linear-gradient(150deg, var(--bg) 0%, #071115 45%, var(--bg-2) 100%);
+            radial-gradient(780px 420px at 92% 6%, rgba(35, 198, 111, 0.14) 0%, rgba(35, 198, 111, 0) 62%),
+            radial-gradient(720px 420px at 6% 90%, rgba(246, 184, 78, 0.12) 0%, rgba(246, 184, 78, 0) 62%),
+            radial-gradient(560px 300px at 50% 0%, rgba(94, 217, 255, 0.08) 0%, rgba(94, 217, 255, 0) 70%),
+            linear-gradient(180deg, var(--bg) 0%, #f5faf8 45%, var(--bg-2) 100%);
           position: relative;
           overflow-x: hidden;
         }
@@ -251,8 +254,8 @@ export default function Planos() {
           position: fixed;
           inset: auto;
           pointer-events: none;
-          z-index: 0;
-          opacity: 0.45;
+          z-index: -1;
+          opacity: 0.36;
         }
 
         .sales-page::before {
@@ -261,9 +264,9 @@ export default function Planos() {
           top: -80px;
           right: -60px;
           border-radius: 34px;
-          border: 1px solid rgba(35, 198, 111, 0.2);
+          border: 1px solid rgba(35, 198, 111, 0.14);
           transform: rotate(14deg);
-          background: linear-gradient(135deg, rgba(35, 198, 111, 0.08), rgba(35, 198, 111, 0));
+          background: linear-gradient(135deg, rgba(35, 198, 111, 0.07), rgba(35, 198, 111, 0));
         }
 
         .sales-page::after {
@@ -272,7 +275,7 @@ export default function Planos() {
           bottom: 20px;
           left: -80px;
           border-radius: 999px;
-          border: 1px solid rgba(246, 184, 78, 0.16);
+          border: 1px solid rgba(246, 184, 78, 0.12);
           background: radial-gradient(circle at 35% 35%, rgba(246, 184, 78, 0.14), rgba(246, 184, 78, 0));
         }
 
@@ -283,6 +286,26 @@ export default function Planos() {
           margin: 0 auto;
           padding: 16px 0 44px;
           animation: page-enter 420ms ease-out;
+        }
+
+        .sales-shell::before {
+          content: '';
+          position: absolute;
+          inset: 10px -6px auto;
+          height: 96px;
+          border-radius: 22px;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.4));
+          border: 1px solid rgba(12, 31, 35, 0.04);
+          box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+          z-index: 0;
+          pointer-events: none;
+        }
+
+        .sales-nav-sticky {
+          position: sticky;
+          top: 10px;
+          z-index: 20;
+          margin-bottom: 22px;
         }
 
         .sales-nav {
@@ -296,11 +319,20 @@ export default function Planos() {
           border: 1px solid var(--line);
           background: rgba(7, 19, 23, 0.72);
           backdrop-filter: blur(12px);
-          margin-bottom: 22px;
-          position: sticky;
-          top: 10px;
-          z-index: 5;
+          margin-bottom: 0;
+          position: relative;
+          z-index: 1;
           box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+        }
+
+        .sales-nav::after {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          border-radius: inherit;
+          pointer-events: none;
+          border: 1px solid rgba(255, 255, 255, 0.03);
+          opacity: 0.6;
         }
 
         .sales-brand {
@@ -395,6 +427,15 @@ export default function Planos() {
 
         .sales-btn-primary:hover {
           box-shadow: 0 18px 32px rgba(21, 163, 74, 0.3);
+        }
+
+        .sales-hero,
+        .solution-section,
+        .resources-section,
+        .journey-section,
+        .plans-section,
+        #faq-comercial {
+          scroll-margin-top: 108px;
         }
 
         .sales-hero {
@@ -591,6 +632,82 @@ export default function Planos() {
           font-size: 11px;
           font-weight: 700;
           padding: 6px 9px;
+        }
+
+        .hero-illustration-wrap {
+          display: grid;
+          gap: 10px;
+        }
+
+        .hero-illustration {
+          display: block;
+          width: 100%;
+          height: auto;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(0, 0, 0, 0.12);
+        }
+
+        .hero-illustration-caption {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: 10px;
+          align-items: center;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(255, 255, 255, 0.015);
+          padding: 10px;
+          text-align: left;
+        }
+
+        .hero-legend {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .hero-legend-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.02);
+          color: #d6e9e9;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 6px 8px;
+          white-space: nowrap;
+        }
+
+        .hero-legend-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 999px;
+          display: inline-block;
+          box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04);
+        }
+
+        .hero-legend-dot.is-green {
+          background: #35e084;
+          box-shadow: 0 0 0 4px rgba(53, 224, 132, 0.12);
+        }
+
+        .hero-legend-dot.is-amber {
+          background: #f6b84e;
+          box-shadow: 0 0 0 4px rgba(246, 184, 78, 0.12);
+        }
+
+        .hero-legend-dot.is-cyan {
+          background: #5ed9ff;
+          box-shadow: 0 0 0 4px rgba(94, 217, 255, 0.12);
+        }
+
+        .hero-illustration-copy {
+          margin: 0;
+          color: #abc5c5;
+          font-size: 12px;
+          line-height: 1.5;
         }
 
         .hero-ui-layout {
@@ -1397,6 +1514,136 @@ export default function Planos() {
           font-size: 13px;
         }
 
+        .sales-footer {
+          margin-top: 18px;
+          border-radius: 18px;
+          border: 1px solid rgba(12, 31, 35, 0.08);
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.72));
+          box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+          color: #11262b;
+          overflow: hidden;
+        }
+
+        .sales-footer-grid {
+          display: grid;
+          grid-template-columns: 1.1fr 0.9fr 0.9fr;
+          gap: 12px;
+          padding: 14px;
+        }
+
+        .sales-footer-card {
+          border-radius: 14px;
+          border: 1px solid rgba(12, 31, 35, 0.06);
+          background: rgba(255, 255, 255, 0.62);
+          padding: 12px;
+        }
+
+        .sales-footer-brand {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          color: #0f2428;
+          text-decoration: none;
+          font-weight: 800;
+          font-size: 15px;
+          margin-bottom: 8px;
+        }
+
+        .sales-footer-brand img {
+          width: 28px;
+          height: 28px;
+          display: block;
+        }
+
+        .sales-footer-copy {
+          margin: 0;
+          color: #4b676d;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        .sales-footer-title {
+          margin: 0 0 8px;
+          color: #0f2529;
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+        }
+
+        .sales-footer-links {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 6px;
+        }
+
+        .sales-footer-links a,
+        .sales-footer-links button {
+          width: fit-content;
+          max-width: 100%;
+          border: none;
+          background: transparent;
+          padding: 0;
+          text-decoration: none;
+          color: #315b63;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          text-align: left;
+        }
+
+        .sales-footer-links a:hover,
+        .sales-footer-links button:hover {
+          color: #11714a;
+          text-decoration: underline;
+        }
+
+        .sales-footer-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 8px;
+        }
+
+        .sales-footer-tag {
+          border-radius: 999px;
+          border: 1px solid rgba(12, 31, 35, 0.08);
+          background: rgba(255, 255, 255, 0.74);
+          color: #2f545b;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 6px 8px;
+          line-height: 1;
+        }
+
+        .sales-footer-bottom {
+          border-top: 1px solid rgba(12, 31, 35, 0.06);
+          padding: 10px 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+          color: #5a7379;
+          font-size: 11px;
+        }
+
+        .sales-footer-cta {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .sales-footer-cta .sales-btn {
+          min-height: 38px;
+          padding: 8px 12px;
+          font-size: 12px;
+          border-radius: 10px;
+        }
+
         @keyframes page-enter {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
@@ -1413,8 +1660,13 @@ export default function Planos() {
             grid-template-columns: 1fr;
           }
 
-          .hero-ui-layout {
+          .hero-illustration-caption {
             grid-template-columns: 1fr;
+            text-align: center;
+          }
+
+          .hero-legend {
+            justify-content: center;
           }
 
           .plan-card {
@@ -1435,6 +1687,10 @@ export default function Planos() {
             grid-template-columns: 1fr;
           }
 
+          .sales-footer-grid {
+            grid-template-columns: 1fr;
+          }
+
           .faq-grid {
             grid-template-columns: 1fr;
           }
@@ -1451,7 +1707,11 @@ export default function Planos() {
             padding: 10px;
             border-radius: 14px;
             margin-bottom: 14px;
+          }
+
+          .sales-nav-sticky {
             top: 6px;
+            margin-bottom: 14px;
           }
 
           .sales-brand img {
@@ -1493,6 +1753,23 @@ export default function Planos() {
 
           .hero-copy {
             padding: 18px;
+          }
+
+          .hero-visual {
+            margin-top: 14px;
+            padding: 10px;
+          }
+
+          .hero-screen {
+            padding: 10px;
+          }
+
+          .hero-screen-tabs {
+            display: none;
+          }
+
+          .hero-illustration-caption {
+            padding: 9px;
           }
 
           .pillar-grid,
@@ -1542,35 +1819,55 @@ export default function Planos() {
             padding: 14px;
             border-radius: 14px;
           }
+
+          .sales-footer {
+            margin-top: 14px;
+            border-radius: 14px;
+          }
+
+          .sales-footer-grid {
+            padding: 12px;
+          }
+
+          .sales-footer-card {
+            border-radius: 12px;
+            padding: 10px;
+          }
+
+          .sales-footer-bottom {
+            padding: 10px 12px;
+          }
         }
       `}</style>
 
       <div className="sales-shell">
-        <header className="sales-nav" aria-label="Navegacao da pagina de planos">
-          <Link to="/planos" className="sales-brand" aria-label={`${brandName} planos`}>
-            <img src={brandFullLogoUrl} alt={brandName} />
-          </Link>
+        <div className="sales-nav-sticky">
+          <header className="sales-nav" aria-label="Navegacao da pagina de planos">
+            <Link to="/planos" className="sales-brand" aria-label={`${brandName} planos`}>
+              <img src={brandFullLogoUrl} alt={brandName} />
+            </Link>
 
-          <div className="sales-nav-links" aria-label="Atalhos de secao">
-            <button type="button" className="sales-nav-link" onClick={() => scrollToSection('solucao')}>
-              Solucao
-            </button>
-            <button type="button" className="sales-nav-link" onClick={() => scrollToSection('recursos')}>
-              Recursos
-            </button>
-            <button type="button" className="sales-nav-link" onClick={() => scrollToSection('planos-lista')}>
-              Planos
-            </button>
-            <button type="button" className="sales-nav-link" onClick={() => scrollToSection('faq-comercial')}>
-              FAQ
-            </button>
-          </div>
+            <div className="sales-nav-links" aria-label="Atalhos de secao">
+              <button type="button" className="sales-nav-link" onClick={() => scrollToSection('solucao')}>
+                Solucao
+              </button>
+              <button type="button" className="sales-nav-link" onClick={() => scrollToSection('recursos')}>
+                Recursos
+              </button>
+              <button type="button" className="sales-nav-link" onClick={() => scrollToSection('planos-lista')}>
+                Planos
+              </button>
+              <button type="button" className="sales-nav-link" onClick={() => scrollToSection('faq-comercial')}>
+                FAQ
+              </button>
+            </div>
 
-          <div className="sales-nav-actions">
-            <Link to="/login" className="sales-btn sales-btn-outline">Entrar</Link>
-            <Link to="/login" className="sales-btn sales-btn-primary">Assinar agora</Link>
-          </div>
-        </header>
+            <div className="sales-nav-actions">
+              <Link to="/login" className="sales-btn sales-btn-outline">Entrar</Link>
+              <Link to="/login" className="sales-btn sales-btn-primary">Assinar agora</Link>
+            </div>
+          </header>
+        </div>
 
         <main>
           <section className="sales-hero" id="visao-geral" aria-labelledby="planos-hero-title">
@@ -1621,41 +1918,119 @@ export default function Planos() {
                     </div>
                   </div>
 
-                  <div className="hero-ui-layout">
-                    <div className="hero-ui-card">
-                      <h4>Operacao comercial</h4>
-                      <div className="hero-ui-stack">
-                        <div className="hero-ui-chip">
-                          <strong>Leads em atendimento</strong>
-                          Inbox com contexto e historico centralizado
-                        </div>
-                        <div className="hero-ui-chip">
-                          <strong>Qualificacao e follow-up</strong>
-                          Funil e status por etapa para o time
-                        </div>
-                        <div className="hero-ui-chip">
-                          <strong>Escala com controle</strong>
-                          Fila de envio, campanhas e automacoes
-                        </div>
-                      </div>
-                    </div>
+                  <div className="hero-illustration-wrap">
+                    <svg
+                      className="hero-illustration"
+                      viewBox="0 0 960 420"
+                      role="img"
+                      aria-label="Ilustracao vetorial do painel ZapVender com inbox, CRM e funil"
+                    >
+                      <defs>
+                        <linearGradient id="zvHeroBg" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#07161a" />
+                          <stop offset="100%" stopColor="#0b2127" />
+                        </linearGradient>
+                        <linearGradient id="zvHeroCard" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="rgba(255,255,255,0.06)" />
+                          <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
+                        </linearGradient>
+                        <linearGradient id="zvHeroAccent" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#25d77d" />
+                          <stop offset="100%" stopColor="#17b861" />
+                        </linearGradient>
+                        <linearGradient id="zvHeroAmber" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#f8c463" />
+                          <stop offset="100%" stopColor="#eea932" />
+                        </linearGradient>
+                        <linearGradient id="zvHeroCyan" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#7ee8ff" />
+                          <stop offset="100%" stopColor="#46c7f3" />
+                        </linearGradient>
+                      </defs>
 
-                    <div className="hero-ui-card">
-                      <h4>Exemplo de fluxo no painel</h4>
-                      <div className="hero-chat-list">
-                        <div className="hero-chat-item">
-                          <div className="hero-chat-head"><strong>Inbox</strong><span>Atendimento</span></div>
-                          <p>Equipe responde com contexto e registra andamento sem sair da conversa.</p>
-                        </div>
-                        <div className="hero-chat-item">
-                          <div className="hero-chat-head"><strong>CRM + Funil</strong><span>Processo</span></div>
-                          <p>Lead e movido de etapa com historico visivel para tomada de decisao.</p>
-                        </div>
-                        <div className="hero-chat-item">
-                          <div className="hero-chat-head"><strong>Campanhas</strong><span>Escala</span></div>
-                          <p>Mensagens e automacoes ajudam a manter constancia sem poluir a operacao.</p>
-                        </div>
+                      <rect x="8" y="8" width="944" height="404" rx="22" fill="url(#zvHeroBg)" stroke="rgba(255,255,255,0.06)" />
+
+                      <rect x="24" y="22" width="164" height="376" rx="14" fill="rgba(255,255,255,0.018)" stroke="rgba(255,255,255,0.06)" />
+                      <rect x="40" y="38" width="132" height="34" rx="10" fill="rgba(37,215,125,0.08)" stroke="rgba(37,215,125,0.22)" />
+                      <circle cx="54" cy="55" r="6" fill="#2fe085" />
+                      <rect x="66" y="50" width="78" height="10" rx="5" fill="rgba(222,247,236,0.8)" />
+                      <rect x="40" y="92" width="132" height="28" rx="9" fill="rgba(255,255,255,0.018)" />
+                      <rect x="40" y="130" width="132" height="28" rx="9" fill="rgba(255,255,255,0.018)" />
+                      <rect x="40" y="168" width="132" height="28" rx="9" fill="rgba(255,255,255,0.018)" />
+                      <rect x="40" y="206" width="132" height="28" rx="9" fill="rgba(255,255,255,0.018)" />
+                      <rect x="40" y="262" width="132" height="120" rx="10" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.04)" />
+                      <rect x="52" y="280" width="108" height="8" rx="4" fill="rgba(255,255,255,0.12)" />
+                      <rect x="52" y="298" width="84" height="7" rx="4" fill="rgba(255,255,255,0.08)" />
+                      <rect x="52" y="323" width="108" height="46" rx="8" fill="rgba(37,215,125,0.06)" stroke="rgba(37,215,125,0.14)" />
+
+                      <rect x="204" y="22" width="732" height="60" rx="14" fill="rgba(255,255,255,0.018)" stroke="rgba(255,255,255,0.06)" />
+                      <rect x="220" y="39" width="180" height="12" rx="6" fill="rgba(235,250,246,0.72)" />
+                      <rect x="220" y="58" width="120" height="8" rx="4" fill="rgba(255,255,255,0.18)" />
+                      <rect x="635" y="34" width="92" height="18" rx="9" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" />
+                      <rect x="735" y="34" width="92" height="18" rx="9" fill="rgba(37,215,125,0.1)" stroke="rgba(37,215,125,0.22)" />
+                      <rect x="835" y="34" width="85" height="18" rx="9" fill="rgba(246,184,78,0.08)" stroke="rgba(246,184,78,0.18)" />
+
+                      <rect x="204" y="98" width="732" height="88" rx="14" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.05)" />
+                      <rect x="220" y="114" width="225" height="56" rx="12" fill="url(#zvHeroCard)" stroke="rgba(255,255,255,0.05)" />
+                      <rect x="461" y="114" width="225" height="56" rx="12" fill="url(#zvHeroCard)" stroke="rgba(255,255,255,0.05)" />
+                      <rect x="702" y="114" width="218" height="56" rx="12" fill="url(#zvHeroCard)" stroke="rgba(255,255,255,0.05)" />
+                      <rect x="236" y="126" width="76" height="8" rx="4" fill="rgba(255,255,255,0.16)" />
+                      <rect x="236" y="142" width="104" height="16" rx="8" fill="url(#zvHeroAccent)" />
+                      <rect x="477" y="126" width="82" height="8" rx="4" fill="rgba(255,255,255,0.16)" />
+                      <rect x="477" y="142" width="118" height="16" rx="8" fill="url(#zvHeroCyan)" />
+                      <rect x="718" y="126" width="94" height="8" rx="4" fill="rgba(255,255,255,0.16)" />
+                      <rect x="718" y="142" width="126" height="16" rx="8" fill="url(#zvHeroAmber)" />
+
+                      <rect x="204" y="202" width="432" height="196" rx="14" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.05)" />
+                      <rect x="652" y="202" width="284" height="196" rx="14" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.05)" />
+
+                      <rect x="220" y="218" width="400" height="28" rx="10" fill="rgba(255,255,255,0.02)" />
+                      <circle cx="238" cy="232" r="6" fill="#2fe085" />
+                      <rect x="252" y="227" width="112" height="9" rx="4" fill="rgba(239,252,247,0.82)" />
+                      <rect x="575" y="226" width="29" height="11" rx="5" fill="rgba(37,215,125,0.12)" />
+
+                      <rect x="220" y="256" width="260" height="40" rx="12" fill="rgba(255,255,255,0.016)" stroke="rgba(255,255,255,0.05)" />
+                      <rect x="234" y="268" width="138" height="8" rx="4" fill="rgba(255,255,255,0.14)" />
+                      <rect x="234" y="282" width="112" height="6" rx="3" fill="rgba(255,255,255,0.08)" />
+
+                      <rect x="360" y="306" width="260" height="40" rx="12" fill="rgba(37,215,125,0.07)" stroke="rgba(37,215,125,0.16)" />
+                      <rect x="374" y="318" width="148" height="8" rx="4" fill="rgba(232,255,243,0.86)" />
+                      <rect x="374" y="332" width="126" height="6" rx="3" fill="rgba(255,255,255,0.12)" />
+
+                      <rect x="220" y="356" width="260" height="26" rx="10" fill="rgba(255,255,255,0.016)" />
+                      <rect x="234" y="365" width="196" height="8" rx="4" fill="rgba(255,255,255,0.08)" />
+
+                      <rect x="668" y="218" width="252" height="166" rx="12" fill="rgba(255,255,255,0.016)" stroke="rgba(255,255,255,0.04)" />
+                      <rect x="684" y="234" width="94" height="8" rx="4" fill="rgba(255,255,255,0.14)" />
+                      <rect x="684" y="248" width="132" height="6" rx="3" fill="rgba(255,255,255,0.08)" />
+
+                      <path d="M704 339 C745 316 758 332 787 300 C814 270 843 286 873 247" fill="none" stroke="url(#zvHeroAccent)" strokeWidth="3" strokeLinecap="round" />
+                      <circle cx="704" cy="339" r="5" fill="#25d77d" />
+                      <circle cx="787" cy="300" r="5" fill="#25d77d" />
+                      <circle cx="873" cy="247" r="6" fill="#25d77d" />
+                      <circle cx="873" cy="247" r="12" fill="none" stroke="rgba(37,215,125,0.18)" />
+
+                      <path d="M692 304 L724 304" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
+                      <path d="M692 320 L744 320" stroke="rgba(255,255,255,0.08)" strokeWidth="2" />
+                      <path d="M692 336 L764 336" stroke="rgba(255,255,255,0.06)" strokeWidth="2" />
+
+                      <rect x="790" y="322" width="114" height="44" rx="10" fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,0.05)" />
+                      <rect x="802" y="334" width="88" height="8" rx="4" fill="rgba(255,255,255,0.12)" />
+                      <rect x="802" y="348" width="64" height="6" rx="3" fill="rgba(255,255,255,0.08)" />
+
+                      <path d="M484 326 C565 326 604 320 668 282" fill="none" stroke="rgba(94,217,255,0.28)" strokeWidth="2" strokeDasharray="6 6" />
+                      <circle cx="668" cy="282" r="4" fill="#5ed9ff" />
+                    </svg>
+
+                    <div className="hero-illustration-caption">
+                      <div className="hero-legend" aria-hidden="true">
+                        <span className="hero-legend-item"><i className="hero-legend-dot is-green" /> Atendimento</span>
+                        <span className="hero-legend-item"><i className="hero-legend-dot is-cyan" /> CRM / Funil</span>
+                        <span className="hero-legend-item"><i className="hero-legend-dot is-amber" /> Campanhas</span>
                       </div>
+                      <p className="hero-illustration-copy">
+                        Ilustracao vetorial da operacao no ZapVender: atendimento, controle comercial e escala em um fluxo visual unico.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1912,6 +2287,59 @@ export default function Planos() {
             </div>
           </section>
         </main>
+
+        <footer className="sales-footer" aria-label="Rodape da pagina de vendas">
+          <div className="sales-footer-grid">
+            <div className="sales-footer-card">
+              <Link to="/planos" className="sales-footer-brand" aria-label={`${brandName} pagina de planos`}>
+                <img src={brandLogoUrl} alt="" aria-hidden="true" />
+                <span>{brandName}</span>
+              </Link>
+              <p className="sales-footer-copy">
+                Plataforma para organizar atendimento e operacao comercial no WhatsApp com CRM, funil, campanhas e automacoes em um unico painel.
+              </p>
+              <div className="sales-footer-tags" aria-hidden="true">
+                <span className="sales-footer-tag">Inbox</span>
+                <span className="sales-footer-tag">CRM</span>
+                <span className="sales-footer-tag">Campanhas</span>
+                <span className="sales-footer-tag">Automacao</span>
+                <span className="sales-footer-tag">Funil</span>
+              </div>
+            </div>
+
+            <div className="sales-footer-card">
+              <h3 className="sales-footer-title">Navegacao rapida</h3>
+              <ul className="sales-footer-links">
+                <li><button type="button" onClick={() => scrollToSection('visao-geral')}>Visao geral</button></li>
+                <li><button type="button" onClick={() => scrollToSection('solucao')}>Solucao</button></li>
+                <li><button type="button" onClick={() => scrollToSection('recursos')}>Recursos</button></li>
+                <li><button type="button" onClick={() => scrollToSection('planos-lista')}>Planos</button></li>
+                <li><button type="button" onClick={() => scrollToSection('faq-comercial')}>FAQ</button></li>
+              </ul>
+            </div>
+
+            <div className="sales-footer-card">
+              <h3 className="sales-footer-title">Comercial</h3>
+              <ul className="sales-footer-links">
+                <li><Link to="/login">Entrar no painel</Link></li>
+                <li><Link to="/login">Assinar / solicitar acesso</Link></li>
+                <li><button type="button" onClick={() => scrollToSection('planos-lista')}>Ver plano atual</button></li>
+              </ul>
+              <p className="sales-footer-copy" style={{ marginTop: '8px' }}>
+                Rodape pronto para evoluir com links reais de contato, termos, politica de privacidade e checkout.
+              </p>
+            </div>
+          </div>
+
+          <div className="sales-footer-bottom">
+            <span>{`© ${currentYear} ${brandName}. Todos os direitos reservados.`}</span>
+            <div className="sales-footer-cta">
+              <span>Pronto para continuar?</span>
+              <Link to="/login" className="sales-btn sales-btn-outline">Entrar</Link>
+              <Link to="/login" className="sales-btn sales-btn-primary">Assinar agora</Link>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );
