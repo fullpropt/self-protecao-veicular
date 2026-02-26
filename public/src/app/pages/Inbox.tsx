@@ -445,9 +445,9 @@ export default function Inbox() {
         .chat-messages .message.sent {
             background:
                 linear-gradient(
-                    180deg,
-                    rgba(var(--primary-rgb), 0.22) 0%,
-                    rgba(var(--primary-rgb), 0.16) 62%,
+                    90deg,
+                    rgba(var(--primary-rgb), 0.26) 0%,
+                    rgba(var(--primary-rgb), 0.19) 56%,
                     rgba(10, 28, 24, 0.2) 100%
                 );
             border-color: rgba(var(--primary-rgb), 0.22);
