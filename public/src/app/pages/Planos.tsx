@@ -398,9 +398,7 @@ export default function Planos() {
         }
 
         .sales-hero {
-          display: grid;
-          grid-template-columns: 1.08fr 0.92fr;
-          gap: 18px;
+          display: block;
           margin-bottom: 20px;
         }
 
@@ -412,7 +410,7 @@ export default function Planos() {
         }
 
         .hero-copy {
-          padding: 26px;
+          padding: clamp(20px, 3vw, 30px);
           position: relative;
           overflow: hidden;
         }
@@ -457,10 +455,10 @@ export default function Planos() {
         .hero-title {
           margin: 0;
           font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
-          font-size: clamp(30px, 4vw, 50px);
-          line-height: 1.03;
+          font-size: clamp(30px, 4.2vw, 56px);
+          line-height: 1.02;
           letter-spacing: -0.03em;
-          max-width: 12ch;
+          max-width: 16ch;
         }
 
         .hero-title strong {
@@ -471,40 +469,145 @@ export default function Planos() {
         .hero-subtitle {
           margin: 14px 0 0;
           color: var(--muted);
-          font-size: 15px;
-          line-height: 1.6;
-          max-width: 56ch;
+          font-size: 16px;
+          line-height: 1.65;
+          max-width: 74ch;
         }
 
         .hero-points {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 10px;
-          margin: 18px 0 0;
+          gap: 8px;
+          margin: 16px 0 0;
           padding: 0;
           list-style: none;
         }
 
         .hero-points li {
-          border-radius: 14px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
           background: rgba(255, 255, 255, 0.02);
-          padding: 11px 12px;
+          padding: 10px 12px 10px 34px;
           font-size: 13px;
           color: #d7eaea;
+          line-height: 1.45;
+          position: relative;
+        }
+
+        .hero-points li::before {
+          content: '•';
+          position: absolute;
+          left: 12px;
+          top: 8px;
+          color: #4ae48f;
+          font-size: 18px;
+          line-height: 1;
         }
 
         .hero-cta-row {
           display: flex;
           flex-wrap: wrap;
           gap: 10px;
-          margin-top: 18px;
+          margin-top: 16px;
         }
 
         .hero-note {
           margin-top: 12px;
           color: #9bb5b5;
           font-size: 12px;
+        }
+
+        .hero-stack {
+          display: grid;
+          gap: 14px;
+          margin-top: 14px;
+        }
+
+        .hero-block {
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background:
+            linear-gradient(160deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.015));
+          padding: 14px;
+        }
+
+        .hero-block-title {
+          margin: 0 0 8px;
+          font-size: 14px;
+          letter-spacing: -0.01em;
+        }
+
+        .hero-block-text {
+          margin: 0;
+          color: #a9c0c0;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+
+        .hero-metric-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 10px;
+        }
+
+        .hero-metric {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border-radius: 999px;
+          border: 1px solid rgba(35, 198, 111, 0.18);
+          background: rgba(35, 198, 111, 0.06);
+          color: #c6f9dc;
+          padding: 7px 10px;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1;
+        }
+
+        .hero-metric::before {
+          content: '';
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: #38e386;
+          box-shadow: 0 0 0 4px rgba(56, 227, 134, 0.14);
+        }
+
+        .hero-module-list {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .hero-module-list li {
+          border-radius: 10px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: rgba(255, 255, 255, 0.02);
+          color: #d7ecec;
+          padding: 8px 10px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .hero-proof-list {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 8px;
+        }
+
+        .hero-proof-list li {
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(255, 255, 255, 0.015);
+          padding: 10px 12px;
+          color: #dcefee;
+          font-size: 13px;
+          line-height: 1.5;
         }
 
         .hero-card {
@@ -1377,68 +1480,81 @@ export default function Planos() {
         <main>
           <section className="sales-hero" id="visao-geral" aria-labelledby="planos-hero-title">
             <div className="hero-copy">
-              <div className="hero-badge">Plano ativo de lançamento</div>
+              <div className="hero-badge">Plataforma de vendas e atendimento no WhatsApp</div>
               <h1 className="hero-title" id="planos-hero-title">
-                Centralize <strong>vendas e atendimento</strong> no WhatsApp com o ZapVender
+                Transforme o WhatsApp em uma <strong>operacao comercial organizada</strong> com o ZapVender
               </h1>
               <p className="hero-subtitle">
-                Uma página para vender seu serviço com proposta clara: CRM, inbox, automações, campanhas e funil em um único painel.
-                Hoje com um plano simples para acelerar implantação e validação.
+                O ZapVender centraliza atendimento, CRM, campanhas, automacoes e funil em um unico painel. Em vez de vender preco na primeira dobra,
+                esta pagina mostra primeiro a solucao e os recursos para o lead entender o valor da plataforma.
               </p>
 
-              <ul className="hero-points" aria-label="Pontos principais do plano">
-                <li>Implantação em plano único, sem confusão de tiers</li>
-                <li>Operação centralizada com WhatsApp + CRM</li>
-                <li>Fluxos e automações para ganhar escala</li>
-                <li>Painel web para equipe acompanhar leads</li>
+              <ul className="hero-points" aria-label="Resumo da proposta de valor">
+                <li>Atenda com contexto e historico do lead no mesmo lugar.</li>
+                <li>Organize o processo comercial com funil e acompanhamento por etapa.</li>
+                <li>Ganhe escala com campanhas, filas de envio e automacoes.</li>
+                <li>Padronize a rotina da equipe sem depender de planilhas paralelas.</li>
               </ul>
 
               <div className="hero-cta-row">
-                <Link to="/login" className="sales-btn sales-btn-primary">Quero começar</Link>
+                <Link to="/login" className="sales-btn sales-btn-primary">Quero conhecer o ZapVender</Link>
                 <button
                   type="button"
                   className="sales-btn sales-btn-outline"
-                  onClick={() => scrollToSection('solucao')}
+                  onClick={() => scrollToSection('recursos')}
                 >
-                  Entender a solucao
+                  Ver recursos
+                </button>
+                <button
+                  type="button"
+                  className="sales-btn sales-btn-outline"
+                  onClick={() => scrollToSection('planos-lista')}
+                >
+                  Ver planos
                 </button>
               </div>
 
+              <div className="hero-stack" aria-label="Resumo da proposta de valor">
+                <div className="hero-block">
+                  <h3 className="hero-block-title">O que muda quando voce usa o ZapVender</h3>
+                  <p className="hero-block-text">
+                    O atendimento deixa de ser apenas troca de mensagem e vira processo comercial: o time atende, registra contexto,
+                    acompanha o status do lead e executa follow-up com mais consistencia.
+                  </p>
+                  <div className="hero-metric-row">
+                    <span className="hero-metric">Atendimento + CRM</span>
+                    <span className="hero-metric">Funil + equipe</span>
+                    <span className="hero-metric">Automacao + campanhas</span>
+                  </div>
+                </div>
+
+                <div className="hero-block">
+                  <h3 className="hero-block-title">Modulos que sustentam a operacao</h3>
+                  <ul className="hero-module-list">
+                    <li>Inbox operacional</li>
+                    <li>CRM de contatos</li>
+                    <li>Campanhas e fila</li>
+                    <li>Automacoes e fluxos</li>
+                    <li>Gestao de sessoes WhatsApp</li>
+                    <li>Funil comercial</li>
+                  </ul>
+                </div>
+
+                <div className="hero-block">
+                  <h3 className="hero-block-title">Estrutura pensada para vender valor antes do plano</h3>
+                  <ul className="hero-proof-list">
+                    <li>Primeiro mostramos o problema e a transformacao que a plataforma entrega.</li>
+                    <li>Depois o lead entende os recursos que explicam essa transformacao.</li>
+                    <li>So entao a pagina apresenta o plano e a condicao comercial.</li>
+                  </ul>
+                </div>
+              </div>
+
               <p className="hero-note">
-                Página pronta para publicar agora e evoluir depois com checkout, cupom e planos adicionais.
+                Role para ver a solucao, os recursos e depois os planos. O preco fica abaixo, depois da proposta de valor.
               </p>
             </div>
-
-            <aside className="hero-card" aria-labelledby="plano-principal">
-              <div className="price-kicker">Plano disponível</div>
-              <h2 className="price-name" id="plano-principal">ZapVender Pro</h2>
-
-              <div className="price-row" aria-label={`Preco ${monthlyPrice} por mes`}>
-                <div className="price-value">{monthlyPrice}</div>
-                <div className="price-cycle">/mês</div>
-              </div>
-
-              <div className="price-highlight">
-                Ideal para iniciar com uma oferta única, validar aquisição e depois expandir a grade de planos.
-              </div>
-
-              <ul className="price-list">
-                <li>Plano mensal com acesso ao painel completo</li>
-                <li>Recursos principais de CRM, automação e campanhas</li>
-                <li>Base pronta para evoluir checkout e upsell</li>
-              </ul>
-
-              <div className="price-actions">
-                <Link to="/login" className="sales-btn sales-btn-primary">Assinar / Solicitar acesso</Link>
-                <Link to="/login" className="sales-btn sales-btn-outline">Falar com suporte comercial</Link>
-              </div>
-
-              <div className="price-footnote">
-                Valor de lançamento exibido em recorrência mensal. Ajuste termos comerciais, meios de pagamento e regras de cancelamento conforme sua operação.
-              </div>
-            </aside>
           </section>
-
           <section className="solution-section" id="solucao" aria-labelledby="titulo-solucao">
             <div className="section-head">
               <div>
