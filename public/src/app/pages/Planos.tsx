@@ -1,70 +1,39 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import FooterPremium from '../components/FooterPremium';
+import PlatformMock from '../components/PlatformMock';
 import { brandFullLogoUrl, brandLogoUrl, brandName } from '../lib/brand';
 
-const monthlyPrice = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-  maximumFractionDigits: 0
-}).format(297);
-
-const planFeatures = [
-  'CRM com contatos, histórico de conversas e lead tracking',
-  'Inbox para atendimento com mensagens e mídias',
-  'Campanhas e disparos com fila e controle de envio',
-  'Automações e fluxos para atendimento e follow-up',
-  'Funil visual para acompanhar oportunidades',
-  'Gestão de sessões WhatsApp direto no painel'
-];
-
-const faqItems = [
+const pricingPlans = [
   {
-    question: 'Como funciona a cobranca do plano?',
-    answer: 'O plano e mensal, com recorrencia de R$297. Voce pode adaptar a pagina para o gateway escolhido e incluir termos de renovacao, vencimento e inadimplencia.'
+    name: 'Starter',
+    subtitle: 'Plano essencial para quem esta iniciando a operacao.',
+    monthlyPrice: 'R$ 99',
+    billing: 'Cobranca trimestral de R$ 297.',
+    whatsappIncluded: 1,
+    featuresState: 'Recursos avan\u00E7ados: N\u00E3o inclusos',
+    ctaLabel: 'Escolher Starter',
+    featured: false
   },
   {
-    question: 'Tem fidelidade ou contrato minimo?',
-    answer: 'Nesta versao da pagina, a comunicacao foi preparada para plano mensal simples. Se houver fidelidade, acrescente essa regra no FAQ e no checkout.'
+    name: 'Premium',
+    subtitle: 'Melhor equilibrio para escalar atendimento e vendas.',
+    monthlyPrice: 'R$ 199',
+    billing: 'Cobranca trimestral de R$ 597.',
+    whatsappIncluded: 3,
+    featuresState: 'Todos os recursos liberados',
+    ctaLabel: 'Escolher Premium',
+    featured: true
   },
   {
-    question: 'O que esta incluso no plano de R$297?',
-    answer: 'A proposta atual destaca os modulos principais: CRM, inbox, campanhas, automacoes, funil e gestao de sessoes WhatsApp. Ajuste a lista conforme sua operacao comercial.'
-  },
-  {
-    question: 'Como fica a implantacao e onboarding?',
-    answer: 'Voce pode incluir onboarding padrao (ex.: configuracao inicial e treinamento) ou vender implantacao separada. A estrutura da pagina suporta essa evolucao.'
-  },
-  {
-    question: 'Posso trocar o CTA por checkout direto?',
-    answer: 'Sim. Os botoes hoje apontam para login, mas podem ser conectados a checkout (Asaas, Stripe, Mercado Pago) ou WhatsApp comercial em poucos pontos do componente.'
-  },
-  {
-    question: 'Posso criar planos Lite e Enterprise depois?',
-    answer: 'Sim. A pagina ja inclui comparacao de planos futuros para facilitar esse upgrade sem refazer o layout completo.'
-  }
-];
-
-const planRoadmap = [
-  {
-    name: 'ZapVender Pro',
-    status: 'Atual',
-    badgeClass: 'is-live',
-    price: `${monthlyPrice}/mes`,
-    description: 'Plano unico para vender agora com proposta clara e onboarding comercial simplificado.'
-  },
-  {
-    name: 'ZapVender Equipe',
-    status: 'Em breve',
-    badgeClass: 'is-coming',
-    price: 'Planejado',
-    description: 'Versao para times maiores, com regras de equipe, permissoes e mais capacidade operacional.'
-  },
-  {
-    name: 'ZapVender Enterprise',
-    status: 'Em breve',
-    badgeClass: 'is-coming',
-    price: 'Sob consulta',
-    description: 'Camada para operacoes com SLA, processos customizados e integracoes mais profundas.'
+    name: 'Business',
+    subtitle: 'Camada para times com mais volume e mais operacao.',
+    monthlyPrice: 'R$ 349',
+    billing: 'Cobranca trimestral de R$ 1.047.',
+    whatsappIncluded: 5,
+    featuresState: 'Todos os recursos liberados',
+    ctaLabel: 'Escolher Business',
+    featured: false
   }
 ];
 
@@ -104,24 +73,6 @@ const comparisonRows = [
     pro: 'Sob avaliacao',
     equipe: 'Opcional',
     enterprise: 'Prioritario'
-  }
-];
-
-const solutionPillars = [
-  {
-    title: 'Atendimento centralizado',
-    description: 'Concentre conversas, contatos e historico em um unico painel para tirar o time do improviso.',
-    stat: 'WhatsApp + CRM'
-  },
-  {
-    title: 'Processo comercial visivel',
-    description: 'Organize leads por etapa e acompanhe o funil com contexto real de atendimento.',
-    stat: 'Funil + inbox'
-  },
-  {
-    title: 'Escala com controle',
-    description: 'Use campanhas, filas e automacoes para crescer sem perder previsibilidade operacional.',
-    stat: 'Fila + automacao'
   }
 ];
 
@@ -184,6 +135,239 @@ const heroAudienceChips = [
   'Inside sales'
 ];
 
+const strategyPillars = [
+  {
+    tag: 'WhatsApp + CRM',
+    title: 'Atendimento centralizado',
+    text: 'Concentre conversas, contatos e historico em um unico painel para tirar o time do improviso.'
+  },
+  {
+    tag: 'Funil + Inbox',
+    title: 'Processo comercial visivel',
+    text: 'Organize leads por etapa e acompanhe o funil com contexto real de atendimento.'
+  },
+  {
+    tag: 'Fila + automacao',
+    title: 'Escala com controle',
+    text: 'Use campanhas, filas e automacoes para crescer sem perder previsibilidade operacional.'
+  }
+];
+
+const strategyProblems = [
+  'Leads se perdem quando atendimento e CRM nao conversam.',
+  'Equipe atende sem contexto quando o historico fica espalhado.',
+  'Escala de envio sem fila e automacao gera risco operacional.',
+  'Decisao comercial piora quando nao existe visao clara de funil.'
+];
+
+const strategyOutcomes = [
+  'Atendimento com contexto + operacao organizada em um painel.',
+  'Mais clareza para a equipe comercial sobre status e proximos passos.',
+  'Base pronta para crescer com campanhas, fluxos e novos planos.'
+];
+
+type HighlightTabId = 'dashboard' | 'chatInterno' | 'integracao' | 'meta';
+
+type HighlightResourceItem = {
+  subtitle: string;
+  title: string;
+  description: string;
+  wide?: boolean;
+};
+
+type HighlightView = {
+  id: HighlightTabId;
+  navLabel: string;
+  badge: string;
+  title: string;
+  subtitle: string;
+  primaryText: string;
+  secondaryText: string;
+  stats: [{ value: string; label: string }, { value: string; label: string }];
+  previewLeft: string[];
+  previewRight: string[];
+  resourceHeading: string;
+  resourceSubtitle: string;
+  resourceItems: HighlightResourceItem[];
+};
+
+const highlightViews: HighlightView[] = [
+  {
+    id: 'dashboard',
+    navLabel: 'Dashboard',
+    badge: 'Certificada pela Meta',
+    title: 'Dashboard completo',
+    subtitle: 'em tempo real.',
+    primaryText: 'Acompanhe atendimentos, contatos, setores, agendamentos e campanhas em um painel unico e organizado.',
+    secondaryText: 'Tudo atualizado em tempo real para decisoes mais rapidas e operacao previsivel.',
+    stats: [
+      { value: '674', label: 'Conversas no bot' },
+      { value: '25', label: 'Atendentes online' }
+    ],
+    previewLeft: resourceHighlights.slice(0, 3).map((resource) => resource.title),
+    previewRight: journeySteps.map((step) => step.title),
+    resourceHeading: 'O que existe dentro da plataforma',
+    resourceSubtitle: 'Resumo enxuto dos recursos para mostrar valor antes de entrar em detalhes de planos.',
+    resourceItems: resourceHighlights.map((resource, index) => ({
+      ...resource,
+      wide: index === 0 || index === 3
+    }))
+  },
+  {
+    id: 'chatInterno',
+    navLabel: 'Recursos',
+    badge: 'Recursos principais',
+    title: 'O que existe dentro',
+    subtitle: 'da plataforma.',
+    primaryText: 'Veja rapidamente os modulos que sua operacao ganha antes de entrar na comparacao de planos.',
+    secondaryText: 'Tudo pensado para atendimento, CRM, campanhas e funil no mesmo fluxo de trabalho.',
+    stats: [
+      { value: '6', label: 'Modulos principais' },
+      { value: '1', label: 'Painel unificado' }
+    ],
+    previewLeft: resourceHighlights.slice(0, 3).map((resource) => resource.title),
+    previewRight: resourceHighlights.slice(3, 6).map((resource) => resource.title),
+    resourceHeading: 'Colaboracao em tempo real',
+    resourceSubtitle: 'Estruture atendimento multi-time sem perder contexto comercial.',
+    resourceItems: [
+      {
+        subtitle: 'Atendimento compartilhado',
+        title: 'Fila por setor',
+        description: 'Direcione cada conversa para o time certo e evite duplicidade de resposta.',
+        wide: true
+      },
+      {
+        subtitle: 'Contexto interno',
+        title: 'Notas e repasses',
+        description: 'Registre informacoes internas antes de transferir o atendimento.'
+      },
+      {
+        subtitle: 'Controle de dono',
+        title: 'Responsavel ativo',
+        description: 'Defina quem esta conduzindo cada lead no momento.'
+      },
+      {
+        subtitle: 'SLA comercial',
+        title: 'Prioridades por etapa',
+        description: 'Priorize conversas criticas para manter resposta no tempo esperado.',
+        wide: true
+      },
+      {
+        subtitle: 'Historico unico',
+        title: 'Linha do tempo',
+        description: 'Veja toda a jornada do lead no mesmo painel.'
+      },
+      {
+        subtitle: 'Produtividade',
+        title: 'Atalhos de resposta',
+        description: 'Padronize respostas sem perder personalizacao.'
+      }
+    ]
+  },
+  {
+    id: 'integracao',
+    navLabel: 'Operacao',
+    badge: 'Operacao conectada',
+    title: 'Operacao',
+    subtitle: 'sem friccao.',
+    primaryText: 'Conecte CRM, Inbox, campanhas e automacoes para manter dados sincronizados e operacao escalavel.',
+    secondaryText: 'A equipe trabalha em um fluxo unico enquanto os modulos trocam contexto em tempo real.',
+    stats: [
+      { value: '14', label: 'Integracoes ativas' },
+      { value: '99.8%', label: 'Entrega de eventos' }
+    ],
+    previewLeft: ['Webhook de eventos', 'Conexao com CRM', 'Sincronizacao de contatos'],
+    previewRight: ['Fila de envio', 'Status por sessao', 'Logs de entrega'],
+    resourceHeading: 'Base conectada para crescer',
+    resourceSubtitle: 'Integre sistemas sem quebrar o fluxo de atendimento e vendas.',
+    resourceItems: [
+      {
+        subtitle: 'API e webhook',
+        title: 'Eventos em tempo real',
+        description: 'Dispare automacoes e sincronizacoes conforme a interacao acontece.',
+        wide: true
+      },
+      {
+        subtitle: 'Dados consistentes',
+        title: 'Sync de contatos',
+        description: 'Mantenha cadastro e status alinhados entre sistemas.'
+      },
+      {
+        subtitle: 'Campanhas',
+        title: 'Orquestracao de envios',
+        description: 'Ative campanhas com regras e filas por prioridade.'
+      },
+      {
+        subtitle: 'Visibilidade',
+        title: 'Log operacional',
+        description: 'Rastreie erros, tentativas e sucesso de cada entrega.',
+        wide: true
+      },
+      {
+        subtitle: 'Seguranca',
+        title: 'Controle de credenciais',
+        description: 'Gerencie acessos e tokens por equipe.'
+      },
+      {
+        subtitle: 'Escalabilidade',
+        title: 'Arquitetura pronta',
+        description: 'Cresca volume sem refazer a operacao.'
+      }
+    ]
+  },
+  {
+    id: 'meta',
+    navLabel: 'Estrategia',
+    badge: 'Confianca de canal',
+    title: 'Operacao',
+    subtitle: 'certificada.',
+    primaryText: 'Com boas praticas de canal, sua equipe reduz risco de bloqueio e ganha previsibilidade no atendimento.',
+    secondaryText: 'Padronize mensagens, acompanhe qualidade e mantenha governanca da operacao WhatsApp.',
+    stats: [
+      { value: '100%', label: 'Governanca de conta' },
+      { value: '24/7', label: 'Monitoramento ativo' }
+    ],
+    previewLeft: ['Templates aprovados', 'Qualidade de sessao', 'Historico de conformidade'],
+    previewRight: ['Alertas de risco', 'Politicas de uso', 'Auditoria de operacao'],
+    resourceHeading: 'Confianca para operar em escala',
+    resourceSubtitle: 'Proteja a conta e mantenha consistencia no canal comercial.',
+    resourceItems: [
+      {
+        subtitle: 'Conformidade',
+        title: 'Politicas do canal',
+        description: 'Mantenha equipe alinhada ao uso correto do WhatsApp.',
+        wide: true
+      },
+      {
+        subtitle: 'Qualidade',
+        title: 'Monitoramento continuo',
+        description: 'Acompanhe indicadores para agir antes de incidentes.'
+      },
+      {
+        subtitle: 'Governanca',
+        title: 'Permissoes por perfil',
+        description: 'Defina acesso por papel e responsabilidade.'
+      },
+      {
+        subtitle: 'Previsibilidade',
+        title: 'Historico auditavel',
+        description: 'Tenha registro completo de alteracoes e eventos.',
+        wide: true
+      },
+      {
+        subtitle: 'Escalacao',
+        title: 'Alertas operacionais',
+        description: 'Notifique rapidamente riscos de interrupcao.'
+      },
+      {
+        subtitle: 'Padrao',
+        title: 'Biblioteca de mensagens',
+        description: 'Centralize modelos para manter consistencia.'
+      }
+    ]
+  }
+];
+
 export default function Planos() {
   useEffect(() => {
     const previousTitle = document.title;
@@ -204,7 +388,8 @@ export default function Planos() {
     });
   };
 
-  const currentYear = new Date().getFullYear();
+  const [activeHighlightTab, setActiveHighlightTab] = useState<HighlightTabId>('dashboard');
+  const activeHighlightView = highlightViews.find((view) => view.id === activeHighlightTab) ?? highlightViews[0];
 
   return (
     <div className="sales-page">
@@ -571,13 +756,13 @@ export default function Planos() {
           text-shadow: 0 0 24px rgba(35, 198, 111, 0.08);
         }
 
-        .hero-subtitle {
-          margin: 14px auto 0;
-          color: #b8d0d0;
-          font-size: 16px;
-          line-height: 1.6;
-          max-width: 58ch;
-          text-wrap: balance;
+        .hero-brand-name {
+          display: inline-block;
+          margin-left: 0.16em;
+          color: #e9fff3;
+          font-weight: 900;
+          letter-spacing: -0.02em;
+          text-shadow: 0 0 22px rgba(35, 198, 111, 0.18);
         }
 
         .hero-benefit-list {
@@ -613,52 +798,54 @@ export default function Planos() {
 
         .hero-proof-row {
           margin: 16px auto 0;
-          max-width: 920px;
-          border-radius: 16px;
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.012));
-          padding: 10px 12px;
-          display: grid;
-          grid-template-columns: auto 1fr;
-          gap: 10px;
+          max-width: 980px;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          background: rgba(255, 255, 255, 0.01);
+          padding: 8px 10px;
+          display: flex;
+          flex-wrap: wrap;
           align-items: center;
-          text-align: left;
+          justify-content: center;
+          gap: 8px;
+          text-align: center;
         }
 
         .hero-proof-label {
-          color: #b8d4d4;
-          font-size: 12px;
-          font-weight: 700;
+          color: #aac3c3;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.01em;
           white-space: nowrap;
         }
 
         .hero-proof-chips {
           display: flex;
           flex-wrap: wrap;
-          gap: 6px;
+          justify-content: center;
+          gap: 5px;
         }
 
         .hero-proof-chip {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap: 5px;
           border-radius: 999px;
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          background: rgba(255, 255, 255, 0.015);
-          padding: 6px 8px;
-          color: #d6ebeb;
-          font-size: 11px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: rgba(255, 255, 255, 0.012);
+          padding: 5px 9px;
+          color: #cfe2e2;
+          font-size: 12px;
+          font-weight: 500;
           line-height: 1;
         }
 
         .hero-proof-chip::before {
           content: '';
-          width: 5px;
-          height: 5px;
+          width: 4px;
+          height: 4px;
           border-radius: 999px;
           background: rgba(107, 246, 171, 0.95);
-          box-shadow: 0 0 0 4px rgba(53, 224, 132, 0.08);
         }
 
         .hero-note {
@@ -669,51 +856,32 @@ export default function Planos() {
 
         .hero-visual {
           margin: 18px auto 0;
-          max-width: 980px;
+          max-width: 920px;
           border-radius: 22px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          background:
-            radial-gradient(620px 280px at 78% 6%, rgba(35, 198, 111, 0.16), rgba(35, 198, 111, 0)),
-            radial-gradient(300px 200px at 14% 90%, rgba(246, 184, 78, 0.08), rgba(246, 184, 78, 0)),
-            linear-gradient(165deg, rgba(7, 22, 25, 0.94), rgba(5, 15, 18, 0.98));
+          border: 1px solid rgba(72, 128, 112, 0.3);
+          background: linear-gradient(170deg, rgba(7, 22, 25, 0.96), rgba(5, 16, 19, 0.98));
           padding: 14px;
           position: relative;
           overflow: hidden;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+          box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
         }
 
         .hero-visual::before {
-          content: '';
-          position: absolute;
-          inset: auto auto -120px -80px;
-          width: 320px;
-          height: 320px;
-          border-radius: 999px;
-          background: radial-gradient(circle at 35% 35%, rgba(246, 184, 78, 0.12), rgba(246, 184, 78, 0));
+          content: none;
         }
 
         .hero-visual::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background:
-            linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-          background-size: 100% 28px, 28px 100%;
-          opacity: 0.14;
+          content: none;
         }
 
         .hero-screen {
           position: relative;
           z-index: 1;
-          border-radius: 18px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          background:
-            radial-gradient(440px 200px at 60% 0%, rgba(35, 198, 111, 0.08), rgba(35, 198, 111, 0)),
-            linear-gradient(180deg, rgba(4, 15, 17, 0.9), rgba(6, 18, 21, 0.98));
-          padding: 12px;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+          border-radius: 0;
+          border: none;
+          background: transparent;
+          padding: 0;
+          box-shadow: none;
         }
 
         .hero-screen-top {
@@ -721,8 +889,9 @@ export default function Planos() {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          margin-bottom: 10px;
+          margin-bottom: 8px;
           flex-wrap: wrap;
+          padding: 0 4px;
         }
 
         .hero-screen-brand {
@@ -760,17 +929,530 @@ export default function Planos() {
 
         .hero-illustration-wrap {
           display: grid;
-          gap: 10px;
+          gap: 0;
+          max-width: 860px;
+          margin: 0 auto;
+          width: 100%;
         }
 
         .hero-illustration {
           display: block;
           width: 100%;
           height: auto;
+          border-radius: 12px;
+          border: none;
+          background: transparent;
+          box-shadow: none;
+        }
+
+        .hero-real-mock {
+          display: grid;
+          grid-template-columns: 186px 1fr;
+          gap: 9px;
+          padding: 9px;
+          min-height: 404px;
           border-radius: 14px;
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          background: rgba(0, 0, 0, 0.12);
-          box-shadow: 0 16px 30px rgba(0, 0, 0, 0.12);
+          border: 1px solid rgba(70, 125, 110, 0.3);
+          background:
+            radial-gradient(420px 180px at 84% 0%, rgba(35, 198, 111, 0.11), rgba(35, 198, 111, 0)),
+            linear-gradient(180deg, rgba(5, 18, 22, 0.98), rgba(4, 13, 17, 1));
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
+        }
+
+        .hero-real-sidebar {
+          border-radius: 13px;
+          border: 1px solid rgba(66, 118, 104, 0.24);
+          background: rgba(8, 27, 30, 0.88);
+          padding: 9px;
+          display: grid;
+          align-content: space-between;
+          gap: 8px;
+        }
+
+        .hero-real-sidebar-main {
+          display: grid;
+          gap: 8px;
+          align-items: stretch;
+        }
+
+        .hero-real-sidebar-brand {
+          display: inline-flex;
+          align-items: center;
+          justify-content: flex-start;
+          padding: 1px 2px 6px;
+        }
+
+        .hero-real-sidebar-brand img {
+          width: 108px;
+          height: auto;
+          display: block;
+          filter: drop-shadow(0 8px 18px rgba(35, 198, 111, 0.2));
+        }
+
+        .hero-real-sidebar-groups {
+          display: grid;
+          gap: 8px;
+        }
+
+        .hero-real-sidebar-group {
+          display: grid;
+          gap: 4px;
+        }
+
+        .hero-real-sidebar-label {
+          color: #8ab3a5;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          padding-left: 3px;
+          text-align: left;
+        }
+
+        .hero-real-nav-item {
+          border-radius: 10px;
+          border: 1px solid rgba(77, 128, 112, 0.2);
+          background: rgba(12, 34, 37, 0.58);
+          min-height: 28px;
+          padding: 5px 7px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          justify-content: flex-start;
+          text-align: left;
+          color: #bfdacb;
+          font-size: 10px;
+          font-weight: 600;
+        }
+
+        .hero-real-nav-item.is-active {
+          border-color: rgba(58, 214, 130, 0.36);
+          background: linear-gradient(90deg, rgba(30, 117, 83, 0.46), rgba(22, 60, 72, 0.32));
+          color: #edfff6;
+          box-shadow: none;
+        }
+
+        .hero-real-nav-icon-box {
+          width: 15px;
+          height: 15px;
+          border-radius: 4px;
+          border: 1px solid rgba(122, 171, 156, 0.3);
+          background: rgba(20, 45, 47, 0.74);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+        }
+
+        .hero-real-nav-icon {
+          width: 10px;
+          height: 10px;
+          color: currentColor;
+          opacity: 0.92;
+          display: inline-block;
+          flex: 0 0 auto;
+        }
+
+        .hero-real-nav-item.is-active .hero-real-nav-icon-box {
+          border-color: rgba(107, 248, 175, 0.58);
+          background: rgba(30, 95, 72, 0.42);
+          box-shadow: 0 0 0 2px rgba(53, 224, 132, 0.14);
+        }
+
+        .hero-real-nav-text {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .hero-real-sidebar-footer {
+          border-top: 1px solid rgba(74, 121, 109, 0.24);
+          padding-top: 7px;
+        }
+
+        .hero-real-exit {
+          border-radius: 10px;
+          border: 1px solid rgba(198, 126, 140, 0.34);
+          background: linear-gradient(180deg, rgba(87, 40, 56, 0.64), rgba(68, 33, 44, 0.74));
+          min-height: 31px;
+          padding: 6px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #f2d4dc;
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .hero-real-main {
+          border-radius: 13px;
+          border: 1px solid rgba(62, 112, 98, 0.24);
+          background: rgba(8, 26, 30, 0.88);
+          padding: 9px;
+          display: grid;
+          align-content: start;
+          gap: 8px;
+        }
+
+        .hero-real-header h3 {
+          margin: 0;
+          color: #e8f7f0;
+          font-size: 15px;
+          line-height: 1.1;
+          letter-spacing: -0.01em;
+        }
+
+        .hero-real-header p {
+          margin: 4px 0 0;
+          color: #95b6ab;
+          font-size: 9px;
+          line-height: 1.35;
+        }
+
+        .hero-real-top-grid {
+          display: grid;
+          grid-template-columns: 1.5fr 0.9fr;
+          gap: 8px;
+        }
+
+        .hero-real-card {
+          border-radius: 11px;
+          border: 1px solid rgba(67, 123, 107, 0.22);
+          background: rgba(11, 31, 35, 0.52);
+          padding: 8px;
+        }
+
+        .hero-real-card-title {
+          margin: 0;
+          color: #e4f4ee;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.2;
+          letter-spacing: 0.01em;
+        }
+
+        .hero-real-period-form {
+          margin-top: 8px;
+          display: grid;
+          gap: 6px;
+        }
+
+        .hero-real-field {
+          border-radius: 8px;
+          border: 1px solid rgba(70, 124, 108, 0.3);
+          background: rgba(19, 42, 46, 0.7);
+          min-height: 24px;
+          padding: 5px 8px;
+          color: #d2e9df;
+          font-size: 9px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .hero-real-field::after {
+          content: '';
+          width: 7px;
+          height: 7px;
+          border-radius: 2px;
+          border: 1px solid rgba(149, 210, 187, 0.4);
+          background: rgba(12, 33, 37, 0.7);
+          flex: 0 0 auto;
+        }
+
+        .hero-real-chart-meta {
+          margin-top: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .hero-real-chip {
+          border-radius: 8px;
+          border: 1px solid rgba(71, 126, 110, 0.3);
+          background: rgba(17, 39, 43, 0.72);
+          color: #d1e9dd;
+          font-size: 9px;
+          font-weight: 700;
+          line-height: 1;
+          padding: 6px 8px;
+          white-space: nowrap;
+        }
+
+        .hero-real-chip.is-current {
+          border-color: rgba(64, 234, 148, 0.5);
+          background: rgba(40, 154, 108, 0.34);
+          color: #dfffee;
+        }
+
+        .hero-real-toggle-group {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .hero-real-toggle {
+          width: 24px;
+          height: 24px;
+          border-radius: 8px;
+          border: 1px solid rgba(69, 122, 107, 0.3);
+          background: rgba(17, 39, 43, 0.72);
+          color: #8eb5a6;
+          font-size: 9px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .hero-real-toggle.is-active {
+          border-color: rgba(64, 234, 148, 0.5);
+          background: rgba(37, 134, 102, 0.34);
+          color: #e1fff0;
+        }
+
+        .hero-real-chart {
+          margin-top: 8px;
+          border-radius: 10px;
+          border: 1px solid rgba(69, 121, 107, 0.2);
+          background:
+            linear-gradient(rgba(109, 160, 143, 0.07) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(109, 160, 143, 0.05) 1px, transparent 1px),
+            rgba(11, 31, 35, 0.46);
+          background-size: 100% 24px, 34px 100%, auto;
+          padding: 7px 7px 5px;
+          display: grid;
+          gap: 5px;
+        }
+
+        .hero-real-chart-svg {
+          width: 100%;
+          height: 76px;
+          display: block;
+        }
+
+        .hero-real-chart-axis {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 6px;
+          color: #7ea99c;
+          font-size: 8px;
+          font-weight: 600;
+        }
+
+        .hero-real-general-list {
+          margin: 8px 0 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 6px;
+        }
+
+        .hero-real-general-list li {
+          border-bottom: 1px solid rgba(70, 124, 109, 0.28);
+          padding-bottom: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 7px;
+          color: #a4c7ba;
+          font-size: 9px;
+        }
+
+        .hero-real-general-list li:last-child {
+          border-bottom: none;
+          padding-bottom: 0;
+        }
+
+        .hero-real-general-list strong {
+          color: #e8f6ef;
+          font-size: 15px;
+          line-height: 1;
+        }
+
+        .hero-real-events {
+          margin-top: 1px;
+          display: grid;
+          gap: 8px;
+        }
+
+        .hero-real-events-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .hero-real-events-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .hero-real-event-empty {
+          min-height: 62px;
+          border-radius: 9px;
+          border: 1px dashed rgba(70, 124, 109, 0.28);
+          background: rgba(12, 35, 39, 0.44);
+          padding: 8px;
+          display: grid;
+          align-content: center;
+          justify-items: center;
+          gap: 5px;
+          text-align: center;
+        }
+
+        .hero-real-event-empty strong {
+          color: #d8efe6;
+          font-size: 10px;
+          line-height: 1.2;
+        }
+
+        .hero-real-event-empty span {
+          color: #93b7aa;
+          font-size: 9px;
+          line-height: 1.3;
+          max-width: 90%;
+        }
+
+        .hero-real-metrics {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 6px;
+        }
+
+        .hero-real-metric-card {
+          border-radius: 10px;
+          border: 1px solid rgba(67, 121, 107, 0.22);
+          background: rgba(11, 31, 35, 0.52);
+          padding: 7px;
+          display: grid;
+          gap: 6px;
+        }
+
+        .hero-real-metric-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .hero-real-metric-icon {
+          width: 22px;
+          height: 22px;
+          border-radius: 7px;
+          border: 1px solid rgba(92, 150, 130, 0.32);
+          background: rgba(18, 49, 42, 0.76);
+        }
+
+        .hero-real-metric-icon.is-green {
+          border-color: rgba(63, 227, 145, 0.44);
+          background: rgba(30, 120, 87, 0.45);
+        }
+
+        .hero-real-metric-icon.is-amber {
+          border-color: rgba(250, 187, 83, 0.42);
+          background: rgba(141, 93, 27, 0.42);
+        }
+
+        .hero-real-metric-icon.is-cyan {
+          border-color: rgba(88, 210, 193, 0.46);
+          background: rgba(24, 108, 97, 0.44);
+        }
+
+        .hero-real-metric-card strong {
+          color: #e8f6ef;
+          font-size: 16px;
+          line-height: 1;
+        }
+
+        .hero-real-metric-delta {
+          border-radius: 999px;
+          border: 1px solid transparent;
+          padding: 3px 6px;
+          font-size: 9px;
+          font-weight: 700;
+          line-height: 1;
+        }
+
+        .hero-real-metric-delta.is-positive {
+          border-color: rgba(64, 234, 148, 0.4);
+          background: rgba(40, 152, 108, 0.25);
+          color: #caf9df;
+        }
+
+        .hero-real-metric-delta.is-negative {
+          border-color: rgba(232, 95, 116, 0.42);
+          background: rgba(153, 50, 68, 0.25);
+          color: #ffd4dc;
+        }
+
+        .hero-real-metric-card span {
+          color: #95b8ab;
+          font-size: 9px;
+          line-height: 1.3;
+        }
+
+        .hero-real-funnel {
+          margin-top: 1px;
+        }
+
+        .hero-real-funnel-grid {
+          margin-top: 8px;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .hero-real-funnel-stage {
+          border-radius: 9px;
+          border: 1px solid rgba(67, 121, 107, 0.22);
+          background: rgba(14, 35, 39, 0.5);
+          min-height: 58px;
+          padding: 7px;
+          display: grid;
+          align-content: center;
+          gap: 4px;
+          position: relative;
+          text-align: center;
+        }
+        .hero-real-funnel-stage:not(:first-child)::before {
+          content: '->';
+          position: absolute;
+          left: -11px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #7fa99c;
+          font-size: 11px;
+          line-height: 1;
+        }
+
+        .hero-real-funnel-stage strong {
+          color: #47de93;
+          font-size: 19px;
+          line-height: 1;
+        }
+
+        .hero-real-funnel-stage span {
+          color: #9ec4b7;
+          font-size: 9px;
+          line-height: 1.2;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+
+        .hero-real-funnel-stage i {
+          font-style: normal;
+          color: #92b4a7;
+          font-size: 9px;
+          line-height: 1;
         }
 
         .hero-illustration-caption {
@@ -1014,7 +1696,7 @@ export default function Planos() {
         }
 
         .price-list li::before {
-          content: '✓';
+          content: '+';
           position: absolute;
           left: 11px;
           top: 9px;
@@ -1412,6 +2094,1406 @@ export default function Planos() {
           text-align: left;
         }
 
+        .feature-highlight-section {
+          scroll-margin-top: 92px;
+          --hl-green: #35d989;
+          --hl-cyan: #53d1ff;
+          --hl-amber: #f3c164;
+          --hl-coral: #ff9b78;
+          --hl-ink: #113127;
+        }
+
+        .section-anchor {
+          display: block;
+          position: relative;
+          top: -92px;
+          visibility: hidden;
+          pointer-events: none;
+        }
+
+        .highlight-model-shell {
+          --hl-shell-border: rgba(151, 188, 172, 0.34);
+          --hl-shell-a: rgba(83, 209, 255, 0.2);
+          --hl-shell-b: rgba(243, 193, 100, 0.19);
+          --hl-shell-c: rgba(53, 217, 137, 0.15);
+          --hl-shell-start: rgba(237, 244, 242, 0.97);
+          --hl-shell-end: rgba(223, 232, 228, 0.93);
+
+          --hl-badge-border: rgba(70, 142, 130, 0.34);
+          --hl-badge-bg: linear-gradient(90deg, rgba(159, 225, 183, 0.62), rgba(176, 230, 248, 0.58), rgba(246, 217, 157, 0.52));
+          --hl-badge-text: #173d32;
+
+          --hl-preview-border: rgba(58, 108, 96, 0.22);
+          --hl-preview-a: rgba(92, 214, 255, 0.2);
+          --hl-preview-b: rgba(246, 197, 101, 0.2);
+          --hl-preview-c: rgba(62, 181, 126, 0.14);
+          --hl-preview-start: rgba(251, 255, 254, 0.97);
+          --hl-preview-end: rgba(236, 244, 241, 0.95);
+
+          --hl-brand-border: rgba(34, 89, 76, 0.2);
+          --hl-brand-bg: linear-gradient(135deg, rgba(196, 235, 213, 0.68), rgba(210, 241, 252, 0.64));
+          --hl-dot-a: #24c877;
+          --hl-dot-b: #4fc9ff;
+          --hl-search-line: linear-gradient(90deg, rgba(38, 122, 99, 0.36), rgba(67, 177, 214, 0.28));
+
+          --hl-stat-1-border: rgba(62, 166, 196, 0.26);
+          --hl-stat-1-bg: linear-gradient(180deg, rgba(214, 244, 255, 0.78), rgba(255, 255, 255, 0.86));
+          --hl-stat-2-border: rgba(184, 141, 62, 0.28);
+          --hl-stat-2-bg: linear-gradient(180deg, rgba(255, 243, 215, 0.76), rgba(255, 255, 255, 0.86));
+
+          --hl-row-left-border: rgba(67, 168, 203, 0.22);
+          --hl-row-left-bg: rgba(236, 248, 255, 0.9);
+          --hl-row-right-border: rgba(191, 149, 73, 0.22);
+          --hl-row-right-bg: rgba(255, 247, 231, 0.9);
+
+          display: grid;
+          grid-template-columns: 252px minmax(280px, 420px) minmax(360px, 1fr);
+          gap: 18px;
+          align-items: start;
+          border-radius: 22px;
+          border: 1px solid var(--hl-shell-border);
+          background:
+            radial-gradient(560px 230px at 12% 0%, var(--hl-shell-a), rgba(83, 209, 255, 0)),
+            radial-gradient(540px 220px at 84% 8%, var(--hl-shell-b), rgba(243, 193, 100, 0)),
+            radial-gradient(620px 260px at 50% 100%, var(--hl-shell-c), rgba(53, 217, 137, 0)),
+            linear-gradient(180deg, var(--hl-shell-start), var(--hl-shell-end));
+          padding: 18px;
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.64),
+            0 24px 44px rgba(0, 0, 0, 0.24);
+        }
+
+        .highlight-model-shell.is-dashboard {
+          --hl-shell-border: rgba(110, 148, 111, 0.36);
+          --hl-shell-a: rgba(96, 135, 91, 0.34);
+          --hl-shell-b: rgba(78, 124, 95, 0.2);
+          --hl-shell-c: rgba(63, 107, 83, 0.2);
+          --hl-shell-start: rgba(6, 25, 22, 0.98);
+          --hl-shell-end: rgba(3, 16, 14, 0.98);
+
+          --hl-badge-border: rgba(112, 162, 120, 0.42);
+          --hl-badge-bg: linear-gradient(90deg, rgba(43, 84, 59, 0.78), rgba(65, 108, 71, 0.72), rgba(34, 66, 50, 0.78));
+          --hl-badge-text: #f2fff7;
+
+          --hl-preview-border: rgba(73, 124, 104, 0.32);
+          --hl-preview-a: rgba(66, 131, 101, 0.2);
+          --hl-preview-b: rgba(85, 121, 82, 0.16);
+          --hl-preview-c: rgba(58, 103, 83, 0.14);
+          --hl-preview-start: rgba(6, 24, 21, 0.98);
+          --hl-preview-end: rgba(4, 18, 16, 0.96);
+        }
+
+        .highlight-model-shell.is-chatinterno {
+          --hl-shell-border: rgba(131, 178, 145, 0.36);
+          --hl-shell-a: rgba(126, 187, 149, 0.32);
+          --hl-shell-b: rgba(81, 156, 117, 0.24);
+          --hl-shell-c: rgba(60, 126, 95, 0.2);
+          --hl-shell-start: rgba(10, 35, 29, 0.98);
+          --hl-shell-end: rgba(6, 24, 20, 0.98);
+
+          --hl-badge-border: rgba(132, 197, 151, 0.44);
+          --hl-badge-bg: linear-gradient(90deg, rgba(52, 108, 78, 0.76), rgba(83, 146, 103, 0.7), rgba(44, 86, 65, 0.78));
+          --hl-badge-text: #f2fff8;
+
+          --hl-preview-border: rgba(92, 155, 125, 0.32);
+          --hl-preview-a: rgba(96, 172, 130, 0.26);
+          --hl-preview-b: rgba(128, 183, 131, 0.2);
+          --hl-preview-c: rgba(66, 127, 100, 0.18);
+          --hl-preview-start: rgba(10, 36, 30, 0.96);
+          --hl-preview-end: rgba(7, 27, 22, 0.95);
+
+          --hl-brand-border: rgba(112, 172, 140, 0.38);
+          --hl-brand-bg: linear-gradient(135deg, rgba(41, 86, 62, 0.84), rgba(60, 112, 79, 0.8));
+          --hl-dot-a: #6ce2a7;
+          --hl-dot-b: #b5f4c4;
+          --hl-search-line: linear-gradient(90deg, rgba(113, 201, 150, 0.58), rgba(134, 214, 156, 0.4));
+
+          --hl-stat-1-border: rgba(112, 186, 147, 0.34);
+          --hl-stat-1-bg: linear-gradient(180deg, rgba(20, 55, 44, 0.92), rgba(13, 40, 33, 0.9));
+          --hl-stat-2-border: rgba(116, 180, 132, 0.34);
+          --hl-stat-2-bg: linear-gradient(180deg, rgba(21, 57, 43, 0.92), rgba(13, 39, 31, 0.9));
+
+          --hl-row-left-border: rgba(110, 180, 141, 0.32);
+          --hl-row-left-bg: rgba(15, 48, 39, 0.9);
+          --hl-row-right-border: rgba(126, 187, 141, 0.32);
+          --hl-row-right-bg: rgba(16, 50, 40, 0.9);
+        }
+
+        .highlight-model-shell.is-integracao {
+          --hl-shell-border: rgba(129, 206, 120, 0.38);
+          --hl-shell-a: rgba(156, 253, 132, 0.24);
+          --hl-shell-b: rgba(116, 194, 102, 0.2);
+          --hl-shell-c: rgba(83, 154, 84, 0.2);
+          --hl-shell-start: rgba(7, 25, 16, 0.98);
+          --hl-shell-end: rgba(4, 16, 11, 0.98);
+
+          --hl-badge-border: rgba(146, 233, 126, 0.44);
+          --hl-badge-bg: linear-gradient(90deg, rgba(37, 90, 43, 0.78), rgba(57, 125, 63, 0.72), rgba(28, 70, 35, 0.78));
+          --hl-badge-text: #f2fff2;
+
+          --hl-preview-border: rgba(113, 181, 109, 0.34);
+          --hl-preview-a: rgba(156, 253, 132, 0.22);
+          --hl-preview-b: rgba(118, 197, 105, 0.16);
+          --hl-preview-c: rgba(90, 153, 82, 0.16);
+          --hl-preview-start: rgba(7, 25, 16, 0.96);
+          --hl-preview-end: rgba(4, 17, 11, 0.95);
+        }
+
+        .highlight-model-shell.is-meta {
+          --hl-shell-border: rgba(193, 150, 131, 0.36);
+          --hl-shell-a: rgba(255, 181, 155, 0.24);
+          --hl-shell-b: rgba(247, 206, 129, 0.2);
+          --hl-shell-c: rgba(114, 214, 248, 0.14);
+          --hl-shell-start: rgba(248, 239, 236, 0.97);
+          --hl-shell-end: rgba(237, 227, 223, 0.93);
+
+          --hl-badge-border: rgba(190, 118, 93, 0.34);
+          --hl-badge-bg: linear-gradient(90deg, rgba(255, 206, 188, 0.66), rgba(255, 225, 167, 0.6), rgba(196, 236, 252, 0.52));
+          --hl-badge-text: #5b2f25;
+
+          --hl-preview-border: rgba(174, 126, 103, 0.24);
+          --hl-preview-a: rgba(255, 188, 164, 0.24);
+          --hl-preview-b: rgba(248, 208, 129, 0.2);
+          --hl-preview-c: rgba(107, 206, 243, 0.16);
+          --hl-preview-start: rgba(255, 250, 247, 0.97);
+          --hl-preview-end: rgba(245, 236, 231, 0.95);
+
+          --hl-brand-border: rgba(186, 117, 94, 0.28);
+          --hl-brand-bg: linear-gradient(135deg, rgba(255, 219, 205, 0.72), rgba(255, 238, 195, 0.66));
+          --hl-dot-a: #ff9d7c;
+          --hl-dot-b: #f3bf59;
+          --hl-search-line: linear-gradient(90deg, rgba(193, 113, 84, 0.42), rgba(183, 140, 52, 0.32));
+
+          --hl-stat-1-border: rgba(201, 122, 94, 0.3);
+          --hl-stat-1-bg: linear-gradient(180deg, rgba(255, 233, 224, 0.8), rgba(255, 255, 255, 0.88));
+          --hl-stat-2-border: rgba(186, 141, 62, 0.3);
+          --hl-stat-2-bg: linear-gradient(180deg, rgba(255, 245, 216, 0.8), rgba(255, 255, 255, 0.88));
+
+          --hl-row-left-border: rgba(201, 124, 95, 0.24);
+          --hl-row-left-bg: rgba(255, 241, 234, 0.9);
+          --hl-row-right-border: rgba(188, 142, 63, 0.24);
+          --hl-row-right-bg: rgba(255, 249, 232, 0.9);
+        }
+
+        .highlight-model-nav {
+          border-right: 1px solid rgba(16, 42, 36, 0.12);
+          padding-right: 14px;
+          min-height: 100%;
+        }
+
+        .highlight-model-nav-list {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 9px;
+        }
+
+        .highlight-model-nav-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          border-radius: 12px;
+          width: 100%;
+          padding: 10px 12px;
+          color: #5b6e67;
+          font-size: 14px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          background: transparent;
+          border: 1px solid transparent;
+          appearance: none;
+          text-align: left;
+          cursor: pointer;
+          font-family: inherit;
+          transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+        }
+
+        .highlight-model-nav-item:not(.is-active):hover {
+          color: #243f37;
+          background: rgba(255, 255, 255, 0.45);
+          border-color: rgba(18, 48, 40, 0.16);
+          transform: translateY(-1px);
+        }
+
+        .highlight-model-nav-item:focus-visible {
+          outline: 2px solid rgba(35, 198, 111, 0.5);
+          outline-offset: 2px;
+        }
+
+        .highlight-model-nav-item.is-active {
+          color: #14392f;
+          border-color: rgba(52, 145, 88, 0.22);
+          box-shadow: 0 10px 18px rgba(27, 103, 69, 0.16);
+        }
+
+        .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-item.is-active {
+          color: #effff6;
+          background: linear-gradient(120deg, rgba(77, 127, 88, 0.64), rgba(35, 66, 52, 0.76));
+          border-color: rgba(122, 179, 124, 0.5);
+          box-shadow: 0 10px 18px rgba(5, 21, 16, 0.42);
+        }
+
+        .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-item.is-active {
+          color: #f1fff8;
+          background: linear-gradient(120deg, rgba(95, 158, 113, 0.66), rgba(39, 79, 58, 0.78));
+          border-color: rgba(142, 202, 149, 0.5);
+          box-shadow: 0 10px 18px rgba(7, 25, 18, 0.38);
+        }
+
+        .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-item.is-active {
+          color: #f4fff1;
+          background: linear-gradient(120deg, rgba(90, 162, 82, 0.68), rgba(40, 86, 45, 0.78));
+          border-color: rgba(156, 253, 132, 0.56);
+          box-shadow: 0 10px 18px rgba(7, 25, 11, 0.42);
+        }
+
+        .highlight-model-nav-list li:nth-child(4) .highlight-model-nav-item.is-active {
+          color: #4a2c23;
+          background: rgba(255, 193, 169, 0.42);
+          border-color: rgba(190, 118, 93, 0.32);
+          box-shadow: 0 10px 18px rgba(156, 96, 76, 0.16);
+        }
+
+        .highlight-model-nav-icon {
+          width: 24px;
+          height: 24px;
+          border-radius: 8px;
+          border: 1px solid rgba(18, 50, 41, 0.24);
+          background: rgba(255, 255, 255, 0.52);
+          position: relative;
+        }
+
+        .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-icon {
+          border-color: rgba(123, 180, 128, 0.5);
+          background: rgba(27, 70, 51, 0.82);
+        }
+
+        .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-icon::before,
+        .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-icon::after {
+          background: rgba(239, 255, 246, 0.94);
+        }
+
+        .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-icon::before,
+        .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-icon::after {
+          background: rgba(239, 255, 246, 0.94);
+        }
+
+        .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-icon {
+          border-color: rgba(139, 202, 152, 0.5);
+          background: rgba(26, 70, 50, 0.82);
+        }
+
+        .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon {
+          border-color: rgba(156, 253, 132, 0.52);
+          background: rgba(34, 79, 40, 0.82);
+        }
+
+        .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon::before,
+        .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon::after {
+          background: rgba(242, 255, 241, 0.95);
+        }
+
+        .highlight-model-nav-list li:nth-child(4) .highlight-model-nav-icon {
+          border-color: rgba(180, 110, 86, 0.36);
+          background: rgba(255, 224, 211, 0.66);
+        }
+
+        .highlight-model-nav-icon::before,
+        .highlight-model-nav-icon::after {
+          content: '';
+          position: absolute;
+          background: rgba(23, 65, 53, 0.88);
+          border-radius: 1px;
+        }
+
+        .highlight-model-nav-icon::before {
+          width: 10px;
+          height: 2px;
+          left: 6px;
+          top: 8px;
+        }
+
+        .highlight-model-nav-icon::after {
+          width: 6px;
+          height: 2px;
+          left: 6px;
+          top: 13px;
+        }
+
+        .highlight-model-copy {
+          display: grid;
+          align-content: start;
+          gap: 14px;
+          color: #102f27;
+          padding-top: 8px;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-copy {
+          color: #e6f6ef;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-copy {
+          color: #ebfbf3;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-copy {
+          color: #ecfbe7;
+        }
+
+        .highlight-model-brand {
+          display: inline-flex;
+          align-items: center;
+          width: 58px;
+          opacity: 0.84;
+        }
+
+        .highlight-model-brand img {
+          width: 100%;
+          height: auto;
+          display: block;
+        }
+
+        .highlight-model-badge {
+          width: fit-content;
+          border-radius: 10px;
+          border: 1px solid var(--hl-badge-border);
+          background: var(--hl-badge-bg);
+          color: var(--hl-badge-text);
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1;
+          padding: 8px 10px;
+        }
+
+        .highlight-model-title {
+          margin: 0;
+          font-size: 45px;
+          line-height: 0.97;
+          letter-spacing: -0.03em;
+          color: #113227;
+          max-width: 10ch;
+          text-wrap: balance;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-title {
+          color: #f5fff9;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-title {
+          color: #f5fff9;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-title {
+          color: #f6fff3;
+        }
+
+        .highlight-model-subtitle {
+          margin: 0;
+          color: #5d746d;
+          font-size: 33px;
+          line-height: 1.2;
+          letter-spacing: -0.03em;
+          max-width: 12ch;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-subtitle {
+          color: #cde3d9;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-subtitle {
+          color: #d4e9de;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-subtitle {
+          color: #d0e9cc;
+        }
+
+        .highlight-model-copy p {
+          margin: 0;
+          color: #5f756e;
+          font-size: 15px;
+          line-height: 1.55;
+          max-width: 34ch;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-copy p {
+          color: #a9c6ba;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-copy p {
+          color: #b5d1c3;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-copy p {
+          color: #b4ccb0;
+        }
+
+        .highlight-model-cta {
+          justify-content: flex-start;
+          margin-top: 2px;
+        }
+
+        .highlight-integration-tab {
+          grid-column: 2 / -1;
+          display: grid;
+          grid-template-columns: 0.96fr 1.04fr;
+          gap: 12px;
+          align-items: start;
+        }
+
+        .highlight-integration-copy {
+          border-radius: 16px;
+          border: 1px solid var(--hl-preview-border);
+          background:
+            radial-gradient(260px 120px at 0% 0%, var(--hl-preview-a), rgba(95, 204, 160, 0)),
+            linear-gradient(180deg, rgba(9, 31, 20, 0.92), rgba(6, 20, 13, 0.9));
+          padding: 16px;
+          box-shadow:
+            inset 0 1px 0 rgba(184, 252, 165, 0.12),
+            0 14px 28px rgba(5, 17, 10, 0.36);
+        }
+
+        .highlight-integration-copy .section-tag {
+          margin-bottom: 12px;
+        }
+
+        .highlight-integration-title {
+          margin: 0;
+          font-size: 38px;
+          line-height: 1.08;
+          letter-spacing: -0.03em;
+          color: #f4fff1;
+          max-width: 15ch;
+        }
+
+        .highlight-integration-subtitle {
+          margin: 10px 0 0;
+          color: #b7cfb3;
+          font-size: 14px;
+          line-height: 1.6;
+          max-width: 44ch;
+        }
+
+        .highlight-integration-track {
+          border-radius: 16px;
+          border: 1px solid var(--hl-preview-border);
+          background:
+            radial-gradient(360px 160px at 100% 0%, var(--hl-preview-b), rgba(95, 204, 160, 0)),
+            radial-gradient(320px 140px at 0% 100%, var(--hl-preview-c), rgba(95, 204, 160, 0)),
+            linear-gradient(180deg, rgba(8, 28, 18, 0.95), rgba(4, 17, 11, 0.94));
+          padding: 12px;
+          overflow: hidden;
+          box-shadow:
+            inset 0 1px 0 rgba(185, 253, 167, 0.08),
+            0 14px 28px rgba(5, 18, 10, 0.38);
+        }
+
+        .highlight-operation-mock {
+          display: grid;
+          gap: 10px;
+          min-height: 340px;
+        }
+
+        .highlight-operation-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
+        .highlight-operation-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border-radius: 999px;
+          border: 1px solid rgba(156, 253, 132, 0.48);
+          background: rgba(156, 253, 132, 0.14);
+          color: #dfffd7;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1;
+          letter-spacing: 0.03em;
+          padding: 7px 11px;
+        }
+
+        .highlight-operation-pill::before {
+          content: '';
+          width: 7px;
+          height: 7px;
+          border-radius: 999px;
+          background: #9cfd84;
+          box-shadow: 0 0 0 5px rgba(156, 253, 132, 0.16);
+        }
+
+        .highlight-operation-status {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          flex-wrap: wrap;
+        }
+
+        .highlight-operation-status span {
+          border-radius: 999px;
+          border: 1px solid rgba(138, 222, 126, 0.42);
+          background: rgba(47, 92, 46, 0.52);
+          color: #ddffd3;
+          font-size: 10px;
+          font-weight: 700;
+          padding: 6px 9px;
+          line-height: 1;
+        }
+
+        .highlight-operation-layout {
+          display: grid;
+          grid-template-columns: 186px 1fr;
+          gap: 10px;
+          flex: 1;
+          min-height: 0;
+        }
+
+        .highlight-operation-sidebar {
+          border-radius: 13px;
+          border: 1px solid rgba(108, 176, 103, 0.3);
+          background: rgba(8, 30, 19, 0.72);
+          padding: 10px;
+          display: grid;
+          align-content: start;
+          gap: 7px;
+        }
+
+        .highlight-operation-sidebar-head {
+          color: #cce8c5;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.09em;
+          text-transform: uppercase;
+          padding: 2px 4px 5px;
+        }
+
+        .highlight-operation-nav-item {
+          border-radius: 10px;
+          border: 1px solid rgba(94, 156, 93, 0.28);
+          background: rgba(16, 43, 28, 0.72);
+          min-height: 31px;
+          padding: 7px 8px;
+          color: #bedab8;
+          font-size: 11px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 7px;
+        }
+
+        .highlight-operation-nav-item .icon {
+          width: 13px;
+          height: 13px;
+          color: currentColor;
+          opacity: 0.9;
+          flex: 0 0 auto;
+        }
+
+        .highlight-operation-nav-item.is-active {
+          color: #f4fff1;
+          border-color: rgba(156, 253, 132, 0.56);
+          background: linear-gradient(90deg, rgba(55, 120, 58, 0.68), rgba(30, 66, 35, 0.8));
+          box-shadow: 0 0 0 1px rgba(156, 253, 132, 0.12);
+        }
+
+        .highlight-operation-main {
+          border-radius: 13px;
+          border: 1px solid rgba(104, 170, 102, 0.3);
+          background: rgba(8, 30, 20, 0.72);
+          padding: 10px;
+          display: grid;
+          gap: 9px;
+          align-content: start;
+        }
+
+        .highlight-operation-main-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 9px;
+        }
+
+        .highlight-operation-main-head h4 {
+          margin: 0;
+          color: #f4fff1;
+          font-size: 15px;
+          line-height: 1.1;
+          letter-spacing: -0.01em;
+        }
+
+        .highlight-operation-main-head p {
+          margin: 0;
+          color: #aec9ab;
+          font-size: 11px;
+          line-height: 1.3;
+        }
+
+        .highlight-operation-kpis {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 7px;
+        }
+
+        .highlight-operation-kpi {
+          border-radius: 10px;
+          border: 1px solid rgba(100, 163, 97, 0.28);
+          background: rgba(15, 43, 29, 0.78);
+          padding: 7px;
+          display: grid;
+          gap: 2px;
+        }
+
+        .highlight-operation-kpi strong {
+          color: #f3fff0;
+          font-size: 17px;
+          line-height: 1;
+        }
+
+        .highlight-operation-kpi span {
+          color: #a9c5a6;
+          font-size: 10px;
+          line-height: 1.2;
+        }
+
+        .highlight-operation-modules {
+          display: grid;
+          grid-template-columns: 1.18fr 0.82fr;
+          gap: 8px;
+        }
+
+        .highlight-operation-module {
+          border-radius: 11px;
+          border: 1px solid rgba(99, 164, 96, 0.28);
+          background: rgba(14, 40, 27, 0.8);
+          padding: 8px;
+          display: grid;
+          gap: 7px;
+          align-content: start;
+        }
+
+        .highlight-operation-module.is-inbox {
+          border-color: rgba(156, 253, 132, 0.5);
+          background: linear-gradient(180deg, rgba(22, 56, 35, 0.84), rgba(13, 36, 24, 0.82));
+        }
+
+        .highlight-operation-module-tag {
+          width: fit-content;
+          border-radius: 999px;
+          border: 1px solid rgba(156, 253, 132, 0.44);
+          background: rgba(156, 253, 132, 0.14);
+          color: #e4ffd9;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1;
+          padding: 6px 9px;
+        }
+
+        .highlight-operation-module h5 {
+          margin: 0;
+          color: #efffec;
+          font-size: 13px;
+          line-height: 1.2;
+        }
+
+        .highlight-operation-list {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 6px;
+        }
+
+        .highlight-operation-list li {
+          border-radius: 8px;
+          border: 1px solid rgba(103, 171, 100, 0.28);
+          background: rgba(19, 49, 33, 0.72);
+          padding: 6px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          color: #b9d4b5;
+          font-size: 10px;
+          line-height: 1.2;
+        }
+
+        .highlight-operation-list li strong {
+          color: #efffec;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .highlight-operation-stage-list {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 6px;
+        }
+
+        .highlight-operation-stage-list li {
+          display: grid;
+          gap: 4px;
+        }
+
+        .highlight-operation-stage-list span {
+          color: #b5d1b2;
+          font-size: 10px;
+          line-height: 1.2;
+        }
+
+        .highlight-operation-stage-list i {
+          font-style: normal;
+          color: #defed5;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .highlight-operation-stage-bar {
+          height: 6px;
+          border-radius: 999px;
+          background: rgba(156, 253, 132, 0.2);
+          overflow: hidden;
+        }
+
+        .highlight-operation-stage-bar > span {
+          display: block;
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, rgba(126, 222, 109, 0.9), rgba(156, 253, 132, 0.98));
+        }
+
+        .highlight-strategy-tab {
+          grid-column: 2 / -1;
+          display: grid;
+          grid-template-columns: 1.08fr 0.92fr;
+          gap: 12px;
+          align-items: stretch;
+        }
+
+        .highlight-strategy-panel {
+          border-radius: 16px;
+          border: 1px solid var(--hl-preview-border);
+          background:
+            radial-gradient(260px 120px at 0% 0%, var(--hl-preview-a), rgba(95, 204, 160, 0)),
+            radial-gradient(320px 140px at 100% 0%, var(--hl-preview-b), rgba(95, 204, 160, 0)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(249, 245, 238, 0.84));
+          padding: 16px;
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.7),
+            0 12px 22px rgba(20, 32, 27, 0.08);
+        }
+
+        .highlight-strategy-left .section-tag,
+        .highlight-strategy-right .section-tag {
+          margin-bottom: 12px;
+        }
+
+        .highlight-strategy-title {
+          margin: 0;
+          font-size: 38px;
+          line-height: 1.08;
+          letter-spacing: -0.03em;
+          color: #183d31;
+          max-width: 16ch;
+          text-wrap: balance;
+        }
+
+        .highlight-strategy-subtitle {
+          margin: 10px 0 0;
+          color: #58716a;
+          font-size: 15px;
+          line-height: 1.6;
+          max-width: 56ch;
+        }
+
+        .highlight-strategy-intro {
+          margin: 14px 0 0;
+          border-radius: 14px;
+          border: 1px solid var(--hl-preview-border);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(249, 245, 238, 0.82));
+          padding: 14px;
+          color: #5f7770;
+          font-size: 16px;
+          line-height: 1.55;
+        }
+
+        .highlight-strategy-pillar-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 12px;
+        }
+
+        .highlight-strategy-pillar {
+          border-radius: 14px;
+          border: 1px solid var(--hl-row-left-border);
+          background: linear-gradient(180deg, var(--hl-row-left-bg), rgba(255, 255, 255, 0.88));
+          padding: 12px;
+          display: grid;
+          gap: 9px;
+          align-content: start;
+        }
+
+        .highlight-strategy-pill {
+          width: fit-content;
+          border-radius: 999px;
+          border: 1px solid rgba(53, 217, 137, 0.34);
+          background: rgba(53, 217, 137, 0.12);
+          color: #225842;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1;
+          padding: 6px 10px;
+        }
+
+        .highlight-strategy-pillar h4 {
+          margin: 0;
+          color: #1c4739;
+          font-size: 19px;
+          line-height: 1.15;
+          letter-spacing: -0.02em;
+          text-wrap: balance;
+        }
+
+        .highlight-strategy-pillar p {
+          margin: 0;
+          color: #5f7770;
+          font-size: 15px;
+          line-height: 1.45;
+        }
+
+        .highlight-strategy-right {
+          display: grid;
+          align-content: start;
+        }
+
+        .highlight-strategy-list {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 10px;
+        }
+
+        .highlight-strategy-list li {
+          border-radius: 13px;
+          border: 1px solid var(--hl-row-right-border);
+          background: linear-gradient(180deg, var(--hl-row-right-bg), rgba(255, 255, 255, 0.88));
+          padding: 11px 14px;
+          color: #28433b;
+          font-size: 16px;
+          line-height: 1.45;
+        }
+
+        .highlight-strategy-divider {
+          margin-top: 14px;
+        }
+
+        .highlight-strategy-divider .section-tag {
+          margin-bottom: 10px;
+        }
+
+        .highlight-model-preview {
+          border-radius: 16px;
+          border: none;
+          background: transparent;
+          padding: 0;
+          min-height: 0;
+          box-shadow: none;
+        }
+
+        .highlight-model-preview.is-dashboard-preview .hero-screen-top {
+          margin-bottom: 6px;
+          padding: 0 2px;
+        }
+
+        .highlight-model-preview.is-dashboard-preview .hero-screen-brand {
+          font-size: 12px;
+        }
+
+        .highlight-model-preview.is-dashboard-preview .hero-screen-brand img {
+          width: 22px;
+          height: 22px;
+        }
+
+        .highlight-model-preview.is-dashboard-preview .hero-real-mock {
+          min-height: 360px;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav {
+          border-right-color: rgba(110, 155, 129, 0.22);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-item {
+          color: #a8c3b7;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-item:not(.is-active):hover {
+          color: #eefdf5;
+          background: rgba(61, 99, 77, 0.34);
+          border-color: rgba(108, 157, 121, 0.34);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-icon {
+          border-color: rgba(102, 149, 126, 0.3);
+          background: rgba(18, 49, 40, 0.72);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-icon::before,
+        .highlight-model-shell.is-dashboard .highlight-model-nav-icon::after {
+          background: rgba(198, 224, 211, 0.92);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-screen-brand {
+          color: #ecfbf3;
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-mock {
+          border-color: rgba(76, 134, 109, 0.38);
+          background:
+            radial-gradient(420px 180px at 84% 0%, rgba(71, 153, 102, 0.2), rgba(35, 198, 111, 0)),
+            linear-gradient(180deg, rgba(5, 23, 21, 0.98), rgba(3, 15, 13, 0.98));
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-sidebar,
+        .highlight-model-shell.is-dashboard .hero-real-main {
+          border-color: rgba(77, 131, 108, 0.34);
+          background: rgba(8, 29, 26, 0.9);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-sidebar-label {
+          color: #9dc5b5;
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-nav-item {
+          border-color: rgba(77, 130, 109, 0.3);
+          background: rgba(15, 42, 37, 0.72);
+          color: #d3eadd;
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-nav-item.is-active {
+          border-color: rgba(99, 195, 140, 0.52);
+          background: linear-gradient(90deg, rgba(38, 121, 82, 0.58), rgba(22, 64, 53, 0.62));
+          color: #f0fff8;
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-nav-icon-box {
+          border-color: rgba(123, 172, 149, 0.36);
+          background: rgba(18, 49, 41, 0.76);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-card {
+          border-color: rgba(80, 137, 112, 0.28);
+          background: rgba(12, 36, 32, 0.7);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-header h3,
+        .highlight-model-shell.is-dashboard .hero-real-card-title,
+        .highlight-model-shell.is-dashboard .hero-real-general-list strong,
+        .highlight-model-shell.is-dashboard .hero-real-metric-card strong,
+        .highlight-model-shell.is-dashboard .hero-real-event-empty strong {
+          color: #f1fff8;
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-header p,
+        .highlight-model-shell.is-dashboard .hero-real-general-list li,
+        .highlight-model-shell.is-dashboard .hero-real-event-empty span,
+        .highlight-model-shell.is-dashboard .hero-real-metric-card span,
+        .highlight-model-shell.is-dashboard .hero-real-funnel-stage span,
+        .highlight-model-shell.is-dashboard .hero-real-funnel-stage i {
+          color: #a8c7ba;
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-field,
+        .highlight-model-shell.is-dashboard .hero-real-chip,
+        .highlight-model-shell.is-dashboard .hero-real-toggle {
+          border-color: rgba(83, 142, 116, 0.36);
+          background: rgba(18, 45, 39, 0.76);
+          color: #def2e8;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav {
+          border-right-color: rgba(115, 171, 136, 0.24);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-item {
+          color: #b4d2c3;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-item:not(.is-active):hover {
+          color: #f1fff9;
+          background: rgba(68, 116, 88, 0.34);
+          border-color: rgba(121, 182, 139, 0.34);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-icon {
+          border-color: rgba(112, 170, 136, 0.32);
+          background: rgba(22, 61, 46, 0.74);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-icon::before,
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-icon::after {
+          background: rgba(205, 233, 217, 0.94);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-brand {
+          color: #effff7;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-brand-context {
+          color: #b9d8c9;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-search {
+          border-color: rgba(96, 159, 127, 0.3);
+          background: rgba(17, 50, 40, 0.78);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-stat strong {
+          color: #f2fff8;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-stat span {
+          color: #b4d1c3;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-column {
+          border-color: rgba(88, 152, 121, 0.28);
+          background: rgba(13, 43, 35, 0.8);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-row {
+          border-color: rgba(94, 161, 126, 0.28);
+          background: rgba(16, 49, 39, 0.82);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-row-title {
+          color: #e9fbf2;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-row::before,
+        .highlight-model-shell.is-chatinterno .highlight-preview-row::after {
+          background: rgba(171, 223, 195, 0.26);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-chart {
+          border-color: rgba(94, 161, 126, 0.28);
+          background: rgba(14, 45, 36, 0.82);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-chart-line {
+          background: rgba(171, 223, 195, 0.22);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-preview-chart-line.is-green {
+          background: linear-gradient(180deg, rgba(153, 243, 188, 0.84), rgba(88, 173, 126, 0.34));
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav {
+          border-right-color: rgba(132, 204, 121, 0.24);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav-item {
+          color: #bed9b8;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav-item:not(.is-active):hover {
+          color: #f4fff1;
+          background: rgba(70, 131, 63, 0.36);
+          border-color: rgba(156, 253, 132, 0.42);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav-icon {
+          border-color: rgba(128, 196, 117, 0.34);
+          background: rgba(22, 59, 28, 0.76);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav-icon::before,
+        .highlight-model-shell.is-integracao .highlight-model-nav-icon::after {
+          background: rgba(223, 255, 213, 0.94);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-copy .section-tag,
+        .highlight-model-shell.is-integracao .highlight-integration-track .section-tag {
+          border-color: rgba(156, 253, 132, 0.42);
+          background: rgba(156, 253, 132, 0.12);
+          color: #dfffd6;
+        }
+
+        .highlight-preview-top {
+          display: grid;
+          grid-template-columns: 132px 1fr;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .highlight-preview-brand {
+          border-radius: 10px;
+          border: 1px solid var(--hl-brand-border);
+          background: var(--hl-brand-bg);
+          min-height: 36px;
+          padding: 8px 10px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #173b30;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .highlight-preview-brand-main {
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .highlight-preview-brand-context {
+          margin-left: auto;
+          color: #4a655e;
+          font-size: 10px;
+          font-weight: 600;
+          max-width: 106px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .highlight-preview-brand-dot {
+          width: 14px;
+          height: 14px;
+          border-radius: 999px;
+          background: linear-gradient(135deg, var(--hl-dot-a), var(--hl-dot-b));
+          box-shadow: 0 0 0 4px rgba(79, 201, 255, 0.16);
+        }
+
+        .highlight-preview-search {
+          border-radius: 10px;
+          border: 1px solid rgba(50, 102, 90, 0.16);
+          background: rgba(255, 255, 255, 0.72);
+          min-height: 36px;
+          position: relative;
+        }
+
+        .highlight-preview-search::after {
+          content: '';
+          position: absolute;
+          left: 12px;
+          right: 28%;
+          top: 50%;
+          height: 6px;
+          transform: translateY(-50%);
+          border-radius: 999px;
+          background: var(--hl-search-line);
+        }
+
+        .highlight-preview-stats {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .highlight-preview-stat {
+          border-radius: 12px;
+          border: 1px solid rgba(56, 106, 95, 0.2);
+          background: rgba(255, 255, 255, 0.82);
+          min-height: 74px;
+          padding: 10px;
+          display: grid;
+          align-content: center;
+          gap: 4px;
+        }
+
+        .highlight-preview-stat:nth-child(1) {
+          border-color: var(--hl-stat-1-border);
+          background: var(--hl-stat-1-bg);
+        }
+
+        .highlight-preview-stat:nth-child(2) {
+          border-color: var(--hl-stat-2-border);
+          background: var(--hl-stat-2-bg);
+        }
+
+        .highlight-preview-stat strong {
+          color: #173d31;
+          font-size: 23px;
+          line-height: 1;
+        }
+
+        .highlight-preview-stat span {
+          color: #5d736d;
+          font-size: 11px;
+          line-height: 1.25;
+        }
+
+        .highlight-preview-main {
+          display: grid;
+          grid-template-columns: 1.2fr 0.8fr;
+          gap: 8px;
+          min-height: 0;
+          flex: 1;
+        }
+
+        .highlight-preview-column {
+          border-radius: 12px;
+          border: 1px solid rgba(58, 108, 96, 0.18);
+          background: rgba(255, 255, 255, 0.78);
+          padding: 10px;
+          display: grid;
+          align-content: start;
+          gap: 8px;
+        }
+
+        .highlight-preview-row {
+          border-radius: 10px;
+          border: 1px solid rgba(57, 106, 95, 0.16);
+          background: rgba(248, 253, 251, 0.92);
+          padding: 9px;
+          display: grid;
+          gap: 6px;
+        }
+
+        .highlight-preview-column:first-child .highlight-preview-row {
+          border-color: var(--hl-row-left-border);
+          background: var(--hl-row-left-bg);
+        }
+
+        .highlight-preview-column:last-child .highlight-preview-row {
+          border-color: var(--hl-row-right-border);
+          background: var(--hl-row-right-bg);
+        }
+
+        .highlight-preview-row-title {
+          color: #24483e;
+          font-size: 11px;
+          font-weight: 700;
+          line-height: 1.3;
+        }
+
+        .highlight-preview-row::before,
+        .highlight-preview-row::after {
+          content: '';
+          height: 6px;
+          border-radius: 999px;
+          background: rgba(23, 61, 49, 0.18);
+          display: block;
+        }
+
+        .highlight-preview-row::after {
+          width: 68%;
+        }
+
+        .highlight-preview-chart {
+          border-radius: 10px;
+          border: 1px solid rgba(57, 106, 95, 0.16);
+          background: rgba(249, 253, 251, 0.9);
+          padding: 9px;
+          min-height: 130px;
+          display: grid;
+          align-content: end;
+          gap: 6px;
+        }
+
+        .highlight-preview-chart-line {
+          height: 2px;
+          border-radius: 999px;
+          background: rgba(32, 84, 71, 0.2);
+        }
+
+        .highlight-preview-chart-line.is-green {
+          height: 28px;
+          border-radius: 999px 999px 5px 5px;
+          background: linear-gradient(180deg, rgba(86, 206, 255, 0.78), rgba(74, 196, 125, 0.28));
+          width: 84%;
+          justify-self: center;
+        }
+
+        .highlight-model-resource-card {
+          grid-column: 2 / -1;
+          border-radius: 16px;
+          border: 1px solid rgba(18, 52, 43, 0.12);
+          background:
+            radial-gradient(560px 240px at 52% 0%, rgba(35, 198, 111, 0.16), rgba(35, 198, 111, 0) 72%),
+            linear-gradient(180deg, rgba(8, 24, 27, 0.96), rgba(6, 16, 19, 0.98));
+          padding: 12px;
+          display: grid;
+          gap: 12px;
+        }
+
+        .highlight-model-resource-head h3 {
+          margin: 0;
+          color: #e6f4f3;
+          font-size: 16px;
+          line-height: 1.2;
+          letter-spacing: -0.02em;
+        }
+
+        .highlight-model-resource-head p {
+          margin: 4px 0 0;
+          color: #9cb8b8;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .highlight-model-resource-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .highlight-model-resource-item {
+          border-radius: 12px;
+          border: 1px solid rgba(35, 198, 111, 0.1);
+          background:
+            radial-gradient(240px 120px at 80% 0%, rgba(35, 198, 111, 0.09), rgba(35, 198, 111, 0)),
+            linear-gradient(165deg, rgba(11, 28, 31, 0.95), rgba(7, 18, 21, 0.98));
+          padding: 11px;
+          min-height: 118px;
+          display: grid;
+          align-content: start;
+          gap: 7px;
+          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .highlight-model-resource-item:hover {
+          transform: translateY(-2px);
+          border-color: rgba(35, 198, 111, 0.24);
+          box-shadow: 0 12px 22px rgba(0, 0, 0, 0.2);
+        }
+
+        .highlight-model-resource-item.is-wide {
+          grid-column: span 2;
+        }
+
+        .highlight-model-resource-kicker {
+          color: #9ec2b4;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.07em;
+          text-transform: uppercase;
+        }
+
+        .highlight-model-resource-item h4 {
+          margin: 0;
+          font-size: 15px;
+          line-height: 1.2;
+          color: #edf7f6;
+          letter-spacing: -0.01em;
+        }
+
+        .highlight-model-resource-item p {
+          margin: 0;
+          color: #a3bebe;
+          font-size: 12px;
+          line-height: 1.52;
+        }
+
         .journey-layout {
           display: grid;
           grid-template-columns: 0.95fr 1.05fr;
@@ -1497,207 +3579,208 @@ export default function Planos() {
 
         .plans-grid {
           display: grid;
-          grid-template-columns: 1fr;
-          gap: 14px;
-        }
-
-        .plan-card {
-          border-radius: 18px;
-          border: 1px solid rgba(35, 198, 111, 0.07);
-          background:
-            radial-gradient(420px 200px at 82% 4%, rgba(35, 198, 111, 0.1), rgba(35, 198, 111, 0) 72%),
-            linear-gradient(155deg, rgba(12, 30, 33, 0.96), rgba(7, 19, 22, 0.98));
-          padding: 18px;
-          display: grid;
-          grid-template-columns: 1.2fr .8fr;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 16px;
-          align-items: start;
+          align-items: stretch;
         }
 
-        .plan-labels {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 10px;
-        }
-
-        .plan-chip {
-          border-radius: 999px;
-          padding: 6px 10px;
-          font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          color: #d4eaea;
-          background: rgba(255, 255, 255, 0.03);
-        }
-
-        .plan-chip.is-highlight {
-          border-color: rgba(35, 198, 111, 0.28);
-          background: rgba(35, 198, 111, 0.08);
-          color: #c4ffd9;
-        }
-
-        .plan-title {
-          margin: 0 0 8px;
-          font-size: 22px;
-          font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
-          letter-spacing: -0.02em;
-        }
-
-        .plan-description {
-          margin: 0 0 14px;
-          color: var(--muted);
-          font-size: 14px;
-          line-height: 1.55;
-        }
-
-        .plan-feature-grid {
-          margin: 0;
-          padding: 0;
-          list-style: none;
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px;
-        }
-
-        .plan-feature-grid li {
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          padding: 10px 12px;
-          background: rgba(255, 255, 255, 0.02);
-          color: #dcecec;
-          font-size: 13px;
-          line-height: 1.45;
-        }
-
-        .plan-sidebar {
-          border-radius: 16px;
-          border: 1px solid rgba(35, 198, 111, 0.07);
+        .pricing-card {
+          position: relative;
+          border-radius: 20px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
-            rgba(4, 14, 16, 0.92);
-          padding: 14px;
+            radial-gradient(260px 150px at 100% 0%, rgba(35, 198, 111, 0.08), rgba(35, 198, 111, 0)),
+            linear-gradient(160deg, rgba(10, 25, 29, 0.96), rgba(6, 17, 20, 0.98));
+          padding: 20px;
           display: grid;
-          gap: 10px;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+          gap: 12px;
+          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
         }
 
-        .plan-sidebar-price {
+        .pricing-card.is-featured {
+          background:
+            radial-gradient(320px 170px at 100% 0%, rgba(35, 198, 111, 0.16), rgba(35, 198, 111, 0)),
+            linear-gradient(160deg, rgba(5, 13, 16, 0.99), rgba(3, 9, 12, 0.99));
+          border-color: rgba(35, 198, 111, 0.38);
+          box-shadow:
+            0 14px 36px rgba(35, 198, 111, 0.2),
+            0 0 0 1px rgba(35, 198, 111, 0.14);
+        }
+
+        .pricing-popular-badge {
+          position: absolute;
+          top: -12px;
+          left: 50%;
+          transform: translateX(-50%);
+          border-radius: 999px;
+          border: 1px solid rgba(35, 198, 111, 0.35);
+          background: linear-gradient(180deg, rgba(35, 198, 111, 0.26), rgba(35, 198, 111, 0.16));
+          color: #d5ffe7;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          padding: 5px 12px;
+          white-space: nowrap;
+        }
+
+        .pricing-name {
+          margin: 0;
+          font-size: 24px;
+          letter-spacing: -0.02em;
+          font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+        }
+
+        .pricing-subtitle {
+          margin: 0;
+          color: #aac2c2;
+          font-size: 13px;
+          line-height: 1.5;
+          min-height: 40px;
+        }
+
+        .pricing-price-row {
           display: flex;
           align-items: baseline;
-          gap: 8px;
-          flex-wrap: wrap;
+          gap: 6px;
         }
 
-        .plan-sidebar-price strong {
-          font-size: 30px;
+        .pricing-price {
+          margin: 0;
+          font-size: 40px;
+          line-height: 1;
           letter-spacing: -0.04em;
         }
 
-        .plan-sidebar-price span {
-          color: #b5cbcb;
-          font-size: 13px;
-        }
-
-        .plan-sidebar-meta {
-          margin: 0;
-          color: #a7bdbd;
-          font-size: 12px;
-          line-height: 1.5;
-        }
-
-        .comparison-section {
-          margin-top: 16px;
-          border-radius: 18px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.008));
-          padding: 14px;
-        }
-
-        .roadmap-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
-          margin-bottom: 12px;
-        }
-
-        .roadmap-card {
-          border-radius: 14px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.01));
-          padding: 12px;
-          display: grid;
-          gap: 8px;
-          align-content: start;
-        }
-
-        .roadmap-card.is-live {
-          border-color: rgba(35, 198, 111, 0.22);
-          background:
-            linear-gradient(170deg, rgba(35, 198, 111, 0.07), rgba(255, 255, 255, 0.02));
-        }
-
-        .roadmap-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .roadmap-name {
-          margin: 0;
-          font-size: 15px;
-          line-height: 1.2;
-        }
-
-        .roadmap-price {
-          color: #d7ecec;
+        .pricing-period {
+          color: #a9c1c1;
+          font-size: 14px;
           font-weight: 700;
+        }
+
+        .pricing-billing {
+          margin: -2px 0 0;
+          color: #91abab;
+          font-size: 12px;
+          line-height: 1.45;
+        }
+
+        .pricing-meta-list {
+          margin: 2px 0 0;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          gap: 8px;
+        }
+
+        .pricing-meta-item {
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.02);
+          color: #d8eaea;
+          padding: 9px 10px;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+
+        .pricing-meta-item strong {
+          color: #f0fbfb;
           font-size: 13px;
         }
 
-        .roadmap-desc {
-          margin: 0;
-          color: var(--muted);
-          font-size: 12px;
-          line-height: 1.5;
+        .pricing-advanced-state {
+          color: #bad8d8;
         }
 
-        .status-badge {
+        .pricing-advanced-state.is-locked {
+          color: #d8cfbf;
+        }
+
+        .pricing-button {
+          margin-top: 6px;
+          min-height: 44px;
+          border-radius: 12px;
+          border: 1px solid rgba(35, 198, 111, 0.3);
+          background: rgba(35, 198, 111, 0.1);
+          color: #d6ffe8;
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+          text-decoration: none;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          border-radius: 999px;
-          padding: 5px 9px;
-          font-size: 11px;
-          font-weight: 700;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          color: #d5eaea;
-          background: rgba(255, 255, 255, 0.03);
+          transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
 
-        .status-badge.is-live {
-          color: #bff6d5;
-          border-color: rgba(35, 198, 111, 0.26);
-          background: rgba(35, 198, 111, 0.08);
+        .pricing-button:hover {
+          transform: translateY(-2px);
+          background: rgba(35, 198, 111, 0.15);
+          box-shadow: 0 10px 24px rgba(35, 198, 111, 0.18);
         }
 
-        .status-badge.is-coming {
-          color: #ffe6bb;
-          border-color: rgba(246, 184, 78, 0.2);
-          background: rgba(246, 184, 78, 0.07);
+        .pricing-button.is-featured {
+          background: linear-gradient(135deg, rgba(35, 198, 111, 0.92), rgba(21, 163, 74, 0.92));
+          border-color: rgba(35, 198, 111, 0.55);
+          color: #04130c;
+          box-shadow: 0 8px 24px rgba(35, 198, 111, 0.24);
         }
 
-        .comparison-note {
-          margin: 0 0 10px;
-          color: #a8c1c1;
+        .pricing-button.is-featured:hover {
+          background: linear-gradient(135deg, #35e084, #23c66f);
+          box-shadow: 0 14px 30px rgba(35, 198, 111, 0.3);
+        }
+
+        .plan-unified-compare {
+          margin-top: 14px;
+          grid-column: 1 / -1;
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background:
+            radial-gradient(360px 180px at 12% 0%, rgba(35, 198, 111, 0.07), rgba(35, 198, 111, 0)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.008));
+          padding: 12px;
+          display: grid;
+          gap: 10px;
+        }
+
+        .plan-compare-details {
+          margin: 0;
+          display: grid;
+          gap: 8px;
+        }
+
+        .plan-compare-details summary {
+          width: fit-content;
+          list-style: none;
+          cursor: pointer;
+          color: #d0e5e5;
           font-size: 12px;
-          line-height: 1.55;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .plan-compare-details summary::-webkit-details-marker {
+          display: none;
+        }
+
+        .plan-compare-details summary::before {
+          content: '+';
+          width: 16px;
+          height: 16px;
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          line-height: 1;
+        }
+
+        .plan-compare-details[open] summary::before {
+          content: '-';
         }
 
         .comparison-table-wrap {
@@ -1772,33 +3855,6 @@ export default function Planos() {
           color: var(--muted);
           font-size: 12px;
           line-height: 1.55;
-        }
-
-        .bottom-cta {
-          margin-top: 18px;
-          border-radius: 18px;
-          border: 1px solid rgba(35, 198, 111, 0.22);
-          background:
-            radial-gradient(340px 160px at 72% 10%, rgba(35, 198, 111, 0.13), rgba(35, 198, 111, 0)),
-            linear-gradient(145deg, rgba(10, 29, 24, 0.92), rgba(6, 18, 16, 0.95));
-          padding: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-
-        .bottom-cta-title {
-          margin: 0;
-          font-size: 17px;
-          letter-spacing: -0.02em;
-        }
-
-        .bottom-cta-text {
-          margin: 3px 0 0;
-          color: #a9c2bc;
-          font-size: 13px;
         }
 
         .sales-footer {
@@ -1983,8 +4039,128 @@ export default function Planos() {
             justify-content: center;
           }
 
-          .plan-card {
+          .hero-real-mock {
             grid-template-columns: 1fr;
+            min-height: 0;
+          }
+
+          .hero-real-top-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .hero-real-sidebar {
+            order: 2;
+          }
+
+          .hero-real-main {
+            order: 1;
+          }
+
+          .hero-real-funnel-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .hero-real-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .plans-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .highlight-model-shell {
+            grid-template-columns: 1fr;
+            gap: 14px;
+            padding: 14px;
+          }
+
+          .highlight-model-nav {
+            border-right: none;
+            border-bottom: 1px solid rgba(16, 42, 36, 0.12);
+            padding-right: 0;
+            padding-bottom: 10px;
+          }
+
+          .highlight-model-nav-list {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .highlight-model-copy {
+            padding-top: 0;
+          }
+
+          .highlight-model-title {
+            max-width: none;
+            font-size: 38px;
+          }
+
+          .highlight-model-subtitle {
+            max-width: none;
+            font-size: 29px;
+          }
+
+          .highlight-model-copy p {
+            max-width: none;
+          }
+
+          .highlight-model-preview {
+            min-height: 0;
+          }
+
+          .highlight-integration-tab {
+            grid-column: auto;
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-integration-copy {
+            padding: 14px;
+          }
+
+          .highlight-integration-title {
+            font-size: 32px;
+            max-width: none;
+          }
+
+          .highlight-operation-layout {
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-operation-modules {
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-strategy-tab {
+            grid-column: auto;
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-strategy-panel {
+            padding: 14px;
+          }
+
+          .highlight-strategy-title {
+            font-size: 36px;
+            max-width: none;
+          }
+
+          .highlight-strategy-pillar-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .highlight-preview-main {
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-model-resource-card {
+            grid-column: auto;
+          }
+
+          .highlight-model-resource-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .highlight-model-resource-item.is-wide {
+            grid-column: auto;
           }
 
           .pillar-grid,
@@ -2004,10 +4180,6 @@ export default function Planos() {
           .resources-section.section-variant-plain .resource-card:nth-child(4) {
             grid-column: auto;
             min-height: 150px;
-          }
-
-          .roadmap-grid {
-            grid-template-columns: 1fr;
           }
 
           .sales-footer-grid {
@@ -2100,6 +4272,7 @@ export default function Planos() {
 
           .hero-copy,
           .hero-card,
+          .feature-highlight-section,
           .solution-section,
           .resources-section,
           .journey-section,
@@ -2130,6 +4303,25 @@ export default function Planos() {
             padding: 9px;
           }
 
+          .hero-real-sidebar,
+          .hero-real-main,
+          .hero-real-events {
+            padding: 8px;
+          }
+
+          .hero-real-top-grid,
+          .hero-real-funnel-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .hero-real-funnel-stage::before {
+            display: none;
+          }
+
+          .hero-real-metrics {
+            grid-template-columns: 1fr;
+          }
+
           .hero-proof-row {
             padding: 9px;
             border-radius: 12px;
@@ -2137,9 +4329,100 @@ export default function Planos() {
 
           .pillar-grid,
           .resource-grid,
-          .journey-grid,
-          .plan-feature-grid {
+          .journey-grid {
             grid-template-columns: 1fr;
+          }
+
+          .highlight-model-shell {
+            padding: 12px;
+          }
+
+          .highlight-model-nav-list {
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-model-title {
+            font-size: 32px;
+          }
+
+          .highlight-model-subtitle {
+            font-size: 25px;
+          }
+
+          .highlight-model-copy p {
+            font-size: 14px;
+          }
+
+          .highlight-model-preview {
+            padding: 10px;
+          }
+
+          .highlight-integration-title {
+            font-size: 27px;
+          }
+
+          .highlight-integration-subtitle {
+            font-size: 13px;
+          }
+
+          .highlight-integration-track {
+            padding: 10px;
+          }
+
+          .highlight-operation-top {
+            align-items: flex-start;
+          }
+
+          .highlight-operation-status {
+            width: 100%;
+          }
+
+          .highlight-operation-kpis {
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-operation-sidebar,
+          .highlight-operation-main {
+            padding: 9px;
+          }
+
+          .highlight-strategy-panel {
+            padding: 12px;
+          }
+
+          .highlight-strategy-title {
+            font-size: 29px;
+          }
+
+          .highlight-strategy-subtitle,
+          .highlight-strategy-intro,
+          .highlight-strategy-pillar p,
+          .highlight-strategy-list li {
+            font-size: 14px;
+          }
+
+          .highlight-strategy-pillar h4 {
+            font-size: 18px;
+          }
+
+          .highlight-strategy-pillar-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-preview-top {
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-preview-stats {
+            grid-template-columns: 1fr;
+          }
+
+          .highlight-model-resource-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .section-anchor {
+            top: -84px;
           }
 
           .resources-section.section-variant-plain .resource-grid {
@@ -2171,23 +4454,33 @@ export default function Planos() {
             margin-bottom: 12px;
           }
 
-          .plan-card {
-            padding: 14px;
-            border-radius: 14px;
+          .plans-grid {
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
+
+          .pricing-card {
+            padding: 16px;
+            border-radius: 16px;
+            gap: 10px;
+          }
+
+          .pricing-popular-badge {
+            top: -10px;
+            font-size: 10px;
+            padding: 4px 10px;
+          }
+
+          .pricing-price {
+            font-size: 34px;
           }
 
           .section-panel {
             padding: 12px;
           }
 
-          .comparison-section {
-            margin-top: 12px;
-            border-radius: 14px;
-            padding: 12px;
-          }
-
-          .bottom-cta {
-            padding: 14px;
+          .plan-unified-compare {
+            padding: 10px;
             border-radius: 14px;
           }
 
@@ -2228,9 +4521,6 @@ export default function Planos() {
               <button type="button" className="sales-nav-link" onClick={() => scrollToSection('planos-lista')}>
                 Planos
               </button>
-              <button type="button" className="sales-nav-link" onClick={() => scrollToSection('faq-comercial')}>
-                FAQ
-              </button>
             </div>
 
             <div className="sales-nav-actions">
@@ -2244,12 +4534,9 @@ export default function Planos() {
           <section className="sales-hero" id="visao-geral" aria-labelledby="planos-hero-title">
             <div className="hero-copy">
               <h1 className="hero-title" id="planos-hero-title">
-                Transforme o WhatsApp em uma <strong>operacao comercial organizada</strong> com o ZapVender
+                Transforme o WhatsApp em uma <strong>operacao comercial organizada</strong> com o
+                <span className="hero-brand-name">ZapVender</span>
               </h1>
-              <p className="hero-subtitle">
-                Atendimento, CRM, campanhas, automacoes e funil em um unico painel para sua equipe vender melhor com mais controle.
-                Primeiro voce entende a solucao. Depois escolhe o plano.
-              </p>
 
               <ul className="hero-benefit-list" aria-label="Beneficios principais">
                 <li>Atendimento com contexto</li>
@@ -2269,263 +4556,707 @@ export default function Planos() {
                 </button>
               </div>
 
-              <div className="hero-proof-row" aria-label="Publicos ideais para o ZapVender">
-                <div className="hero-proof-label">Ideal para operacoes que vendem pelo WhatsApp</div>
-                <div className="hero-proof-chips" aria-hidden="true">
-                  {heroAudienceChips.map((chip) => (
-                    <span className="hero-proof-chip" key={chip}>{chip}</span>
-                  ))}
-                </div>
-              </div>
-
               <div className="hero-visual" aria-label="Visual da plataforma ZapVender">
-                <span className="hero-floating-tag is-top">Atendimento + CRM no mesmo painel</span>
-                <span className="hero-floating-tag is-bottom">Campanhas, automacoes e funil</span>
-
                 <div className="hero-screen">
                   <div className="hero-screen-top">
                     <div className="hero-screen-brand">
                       <img src={brandLogoUrl} alt="" aria-hidden="true" />
                       <span>ZapVender Workspace</span>
                     </div>
-                    <div className="hero-screen-tabs" aria-hidden="true">
-                      <span>Inbox</span>
-                      <span>CRM</span>
-                      <span>Campanhas</span>
-                      <span>Automacao</span>
-                      <span>Funil</span>
-                    </div>
                   </div>
 
                   <div className="hero-illustration-wrap">
-                    <svg
-                      className="hero-illustration"
-                      viewBox="0 0 960 420"
-                      role="img"
-                      aria-label="Ilustracao vetorial do painel ZapVender com inbox, CRM e funil"
-                    >
-                      <defs>
-                        <linearGradient id="zvHeroBg" x1="0" y1="0" x2="1" y2="1">
-                          <stop offset="0%" stopColor="#07161a" />
-                          <stop offset="100%" stopColor="#0b2127" />
-                        </linearGradient>
-                        <linearGradient id="zvHeroCard" x1="0" y1="0" x2="1" y2="1">
-                          <stop offset="0%" stopColor="rgba(255,255,255,0.06)" />
-                          <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
-                        </linearGradient>
-                        <linearGradient id="zvHeroAccent" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#25d77d" />
-                          <stop offset="100%" stopColor="#17b861" />
-                        </linearGradient>
-                        <linearGradient id="zvHeroAmber" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#f8c463" />
-                          <stop offset="100%" stopColor="#eea932" />
-                        </linearGradient>
-                        <linearGradient id="zvHeroCyan" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#7ee8ff" />
-                          <stop offset="100%" stopColor="#46c7f3" />
-                        </linearGradient>
-                      </defs>
+                    <div className="hero-illustration hero-real-mock" role="img" aria-label="Mock do painel real ZapVender com dashboard, eventos e funil">
+                      <aside className="hero-real-sidebar">
+                        <div className="hero-real-sidebar-main">
+                          <div className="hero-real-sidebar-brand">
+                            <img src={brandFullLogoUrl} alt="ZapVender" />
+                          </div>
 
-                      <rect x="8" y="8" width="944" height="404" rx="22" fill="url(#zvHeroBg)" stroke="rgba(255,255,255,0.06)" />
+                          <div className="hero-real-sidebar-groups">
+                            <div className="hero-real-sidebar-group">
+                              <div className="hero-real-nav-item is-active">
+                                <span className="hero-real-nav-icon-box">
+                                  <span className="icon icon-dashboard hero-real-nav-icon" />
+                                </span>
+                                <span className="hero-real-nav-text">Painel de Controle</span>
+                              </div>
+                              <div className="hero-real-nav-item">
+                                <span className="hero-real-nav-icon-box">
+                                  <span className="icon icon-contacts hero-real-nav-icon" />
+                                </span>
+                                <span className="hero-real-nav-text">Contatos</span>
+                              </div>
+                              <div className="hero-real-nav-item">
+                                <span className="hero-real-nav-icon-box">
+                                  <span className="icon icon-campaigns hero-real-nav-icon" />
+                                </span>
+                                <span className="hero-real-nav-text">Campanhas</span>
+                              </div>
+                            </div>
 
-                      <rect x="24" y="22" width="164" height="376" rx="14" fill="rgba(255,255,255,0.018)" stroke="rgba(255,255,255,0.06)" />
-                      <rect x="40" y="38" width="132" height="34" rx="10" fill="rgba(37,215,125,0.08)" stroke="rgba(37,215,125,0.22)" />
-                      <circle cx="54" cy="55" r="6" fill="#2fe085" />
-                      <rect x="66" y="50" width="78" height="10" rx="5" fill="rgba(222,247,236,0.8)" />
-                      <rect x="40" y="92" width="132" height="28" rx="9" fill="rgba(255,255,255,0.018)" />
-                      <rect x="40" y="130" width="132" height="28" rx="9" fill="rgba(255,255,255,0.018)" />
-                      <rect x="40" y="168" width="132" height="28" rx="9" fill="rgba(255,255,255,0.018)" />
-                      <rect x="40" y="206" width="132" height="28" rx="9" fill="rgba(255,255,255,0.018)" />
-                      <rect x="40" y="262" width="132" height="120" rx="10" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.04)" />
-                      <rect x="52" y="280" width="108" height="8" rx="4" fill="rgba(255,255,255,0.12)" />
-                      <rect x="52" y="298" width="84" height="7" rx="4" fill="rgba(255,255,255,0.08)" />
-                      <rect x="52" y="323" width="108" height="46" rx="8" fill="rgba(37,215,125,0.06)" stroke="rgba(37,215,125,0.14)" />
+                            <div className="hero-real-sidebar-group">
+                              <span className="hero-real-sidebar-label">Conversas</span>
+                              <div className="hero-real-nav-item">
+                                <span className="hero-real-nav-icon-box">
+                                  <span className="icon icon-inbox hero-real-nav-icon" />
+                                </span>
+                                <span className="hero-real-nav-text">Inbox</span>
+                              </div>
+                            </div>
 
-                      <rect x="204" y="22" width="732" height="60" rx="14" fill="rgba(255,255,255,0.018)" stroke="rgba(255,255,255,0.06)" />
-                      <rect x="220" y="39" width="180" height="12" rx="6" fill="rgba(235,250,246,0.72)" />
-                      <rect x="220" y="58" width="120" height="8" rx="4" fill="rgba(255,255,255,0.18)" />
-                      <rect x="635" y="34" width="92" height="18" rx="9" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" />
-                      <rect x="735" y="34" width="92" height="18" rx="9" fill="rgba(37,215,125,0.1)" stroke="rgba(37,215,125,0.22)" />
-                      <rect x="835" y="34" width="85" height="18" rx="9" fill="rgba(246,184,78,0.08)" stroke="rgba(246,184,78,0.18)" />
+                            <div className="hero-real-sidebar-group">
+                              <span className="hero-real-sidebar-label">Automacao</span>
+                              <div className="hero-real-nav-item">
+                                <span className="hero-real-nav-icon-box">
+                                  <span className="icon icon-flows hero-real-nav-icon" />
+                                </span>
+                                <span className="hero-real-nav-text">Fluxos de Conversa</span>
+                              </div>
+                              <div className="hero-real-nav-item">
+                                <span className="hero-real-nav-icon-box">
+                                  <span className="icon icon-funnel hero-real-nav-icon" />
+                                </span>
+                                <span className="hero-real-nav-text">Funil de Vendas</span>
+                              </div>
+                            </div>
 
-                      <rect x="204" y="98" width="732" height="88" rx="14" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.05)" />
-                      <rect x="220" y="114" width="225" height="56" rx="12" fill="url(#zvHeroCard)" stroke="rgba(255,255,255,0.05)" />
-                      <rect x="461" y="114" width="225" height="56" rx="12" fill="url(#zvHeroCard)" stroke="rgba(255,255,255,0.05)" />
-                      <rect x="702" y="114" width="218" height="56" rx="12" fill="url(#zvHeroCard)" stroke="rgba(255,255,255,0.05)" />
-                      <rect x="236" y="126" width="76" height="8" rx="4" fill="rgba(255,255,255,0.16)" />
-                      <rect x="236" y="142" width="104" height="16" rx="8" fill="url(#zvHeroAccent)" />
-                      <rect x="477" y="126" width="82" height="8" rx="4" fill="rgba(255,255,255,0.16)" />
-                      <rect x="477" y="142" width="118" height="16" rx="8" fill="url(#zvHeroCyan)" />
-                      <rect x="718" y="126" width="94" height="8" rx="4" fill="rgba(255,255,255,0.16)" />
-                      <rect x="718" y="142" width="126" height="16" rx="8" fill="url(#zvHeroAmber)" />
+                            <div className="hero-real-sidebar-group">
+                              <span className="hero-real-sidebar-label">Sistema</span>
+                              <div className="hero-real-nav-item">
+                                <span className="hero-real-nav-icon-box">
+                                  <span className="icon icon-settings hero-real-nav-icon" />
+                                </span>
+                                <span className="hero-real-nav-text">Configuracoes</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-                      <rect x="204" y="202" width="432" height="196" rx="14" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.05)" />
-                      <rect x="652" y="202" width="284" height="196" rx="14" fill="rgba(255,255,255,0.012)" stroke="rgba(255,255,255,0.05)" />
+                        <div className="hero-real-sidebar-footer">
+                          <div className="hero-real-exit">Sair</div>
+                        </div>
+                      </aside>
 
-                      <rect x="220" y="218" width="400" height="28" rx="10" fill="rgba(255,255,255,0.02)" />
-                      <circle cx="238" cy="232" r="6" fill="#2fe085" />
-                      <rect x="252" y="227" width="112" height="9" rx="4" fill="rgba(239,252,247,0.82)" />
-                      <rect x="575" y="226" width="29" height="11" rx="5" fill="rgba(37,215,125,0.12)" />
+                      <section className="hero-real-main">
+                        <header className="hero-real-header">
+                          <h3>Painel de Controle</h3>
+                          <p>Bem-vindo, teste5@gmail.com | quinta-feira, 26 de fevereiro</p>
+                        </header>
 
-                      <rect x="220" y="256" width="260" height="40" rx="12" fill="rgba(255,255,255,0.016)" stroke="rgba(255,255,255,0.05)" />
-                      <rect x="234" y="268" width="138" height="8" rx="4" fill="rgba(255,255,255,0.14)" />
-                      <rect x="234" y="282" width="112" height="6" rx="3" fill="rgba(255,255,255,0.08)" />
+                        <div className="hero-real-top-grid">
+                          <article className="hero-real-card">
+                            <h4 className="hero-real-card-title">Estatisticas por periodo</h4>
+                            <div className="hero-real-period-form">
+                              <div className="hero-real-field">19/02/2026</div>
+                              <div className="hero-real-field">26/02/2026</div>
+                            </div>
 
-                      <rect x="360" y="306" width="260" height="40" rx="12" fill="rgba(37,215,125,0.07)" stroke="rgba(37,215,125,0.16)" />
-                      <rect x="374" y="318" width="148" height="8" rx="4" fill="rgba(232,255,243,0.86)" />
-                      <rect x="374" y="332" width="126" height="6" rx="3" fill="rgba(255,255,255,0.12)" />
+                            <div className="hero-real-chart-meta">
+                              <span className="hero-real-chip">Novos contatos</span>
+                              <div className="hero-real-toggle-group">
+                                <span className="hero-real-toggle is-active">L</span>
+                                <span className="hero-real-toggle">B</span>
+                              </div>
+                            </div>
 
-                      <rect x="220" y="356" width="260" height="26" rx="10" fill="rgba(255,255,255,0.016)" />
-                      <rect x="234" y="365" width="196" height="8" rx="4" fill="rgba(255,255,255,0.08)" />
+                            <div className="hero-real-chart">
+                              <svg className="hero-real-chart-svg" viewBox="0 0 320 120" aria-hidden="true">
+                                <defs>
+                                  <linearGradient id="heroRealChartFill" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="rgba(67, 219, 140, 0.34)" />
+                                    <stop offset="100%" stopColor="rgba(67, 219, 140, 0.04)" />
+                                  </linearGradient>
+                                </defs>
+                                <path
+                                  d="M 12 102 L 42 102 L 72 102 L 102 102 L 132 102 L 162 18 L 192 102 L 222 102 L 252 102 L 282 102 L 308 102 L 308 108 L 12 108 Z"
+                                  fill="url(#heroRealChartFill)"
+                                />
+                                <path
+                                  d="M 12 102 L 42 102 L 72 102 L 102 102 L 132 102 L 162 18 L 192 102 L 222 102 L 252 102 L 282 102 L 308 102"
+                                  fill="none"
+                                  stroke="rgba(67, 219, 140, 0.9)"
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <circle cx="162" cy="18" r="4.5" fill="rgba(67, 219, 140, 1)" />
+                              </svg>
+                              <div className="hero-real-chart-axis">
+                                <span>19/02</span>
+                                <span>20/02</span>
+                                <span>21/02</span>
+                                <span>22/02</span>
+                                <span>23/02</span>
+                                <span>24/02</span>
+                                <span>26/02</span>
+                              </div>
+                            </div>
+                          </article>
 
-                      <rect x="668" y="218" width="252" height="166" rx="12" fill="rgba(255,255,255,0.016)" stroke="rgba(255,255,255,0.04)" />
-                      <rect x="684" y="234" width="94" height="8" rx="4" fill="rgba(255,255,255,0.14)" />
-                      <rect x="684" y="248" width="132" height="6" rx="3" fill="rgba(255,255,255,0.08)" />
+                          <article className="hero-real-card">
+                            <h4 className="hero-real-card-title">Estatisticas gerais</h4>
+                            <ul className="hero-real-general-list">
+                              <li><span>Contatos que interagiram</span><strong>9.603</strong></li>
+                              <li><span>Mensagem enviada pelo contato</span><strong>19.206</strong></li>
+                              <li><span>Interacoes/inscrito</span><strong>2.0</strong></li>
+                            </ul>
+                          </article>
+                        </div>
 
-                      <path d="M704 339 C745 316 758 332 787 300 C814 270 843 286 873 247" fill="none" stroke="url(#zvHeroAccent)" strokeWidth="3" strokeLinecap="round" />
-                      <circle cx="704" cy="339" r="5" fill="#25d77d" />
-                      <circle cx="787" cy="300" r="5" fill="#25d77d" />
-                      <circle cx="873" cy="247" r="6" fill="#25d77d" />
-                      <circle cx="873" cy="247" r="12" fill="none" stroke="rgba(37,215,125,0.18)" />
+                        <article className="hero-real-card hero-real-events">
+                          <div className="hero-real-events-head">
+                            <h4 className="hero-real-card-title">Eventos personalizados</h4>
+                            <div className="hero-real-events-actions">
+                              <span className="hero-real-chip">Este mes</span>
+                              <span className="hero-real-chip is-current">Criar</span>
+                            </div>
+                          </div>
+                          <div className="hero-real-event-empty">
+                            <strong>Nenhum evento personalizado ainda</strong>
+                            <span>Crie eventos e use o bloco Registrar Evento nos seus fluxos.</span>
+                          </div>
+                        </article>
 
-                      <path d="M692 304 L724 304" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
-                      <path d="M692 320 L744 320" stroke="rgba(255,255,255,0.08)" strokeWidth="2" />
-                      <path d="M692 336 L764 336" stroke="rgba(255,255,255,0.06)" strokeWidth="2" />
+                        <div className="hero-real-metrics">
+                          <article className="hero-real-metric-card">
+                            <div className="hero-real-metric-top">
+                              <span className="hero-real-metric-icon is-green" />
+                              <span className="hero-real-metric-delta is-positive">+0%</span>
+                            </div>
+                            <strong>9.603</strong>
+                            <span>Total de Leads</span>
+                          </article>
+                          <article className="hero-real-metric-card">
+                            <div className="hero-real-metric-top">
+                              <span className="hero-real-metric-icon is-green" />
+                              <span className="hero-real-metric-delta is-positive">+0%</span>
+                            </div>
+                            <strong>0</strong>
+                            <span>Concluidos</span>
+                          </article>
+                          <article className="hero-real-metric-card">
+                            <div className="hero-real-metric-top">
+                              <span className="hero-real-metric-icon is-amber" />
+                              <span className="hero-real-metric-delta is-negative">-0%</span>
+                            </div>
+                            <strong>9.603</strong>
+                            <span>Em andamento</span>
+                          </article>
+                          <article className="hero-real-metric-card">
+                            <div className="hero-real-metric-top">
+                              <span className="hero-real-metric-icon is-cyan" />
+                              <span className="hero-real-metric-delta is-positive">+0%</span>
+                            </div>
+                            <strong>0.0%</strong>
+                            <span>Conversao</span>
+                          </article>
+                        </div>
 
-                      <rect x="790" y="322" width="114" height="44" rx="10" fill="rgba(255,255,255,0.015)" stroke="rgba(255,255,255,0.05)" />
-                      <rect x="802" y="334" width="88" height="8" rx="4" fill="rgba(255,255,255,0.12)" />
-                      <rect x="802" y="348" width="64" height="6" rx="3" fill="rgba(255,255,255,0.08)" />
-
-                      <path d="M484 326 C565 326 604 320 668 282" fill="none" stroke="rgba(94,217,255,0.28)" strokeWidth="2" strokeDasharray="6 6" />
-                      <circle cx="668" cy="282" r="4" fill="#5ed9ff" />
-                    </svg>
-
-                    <div className="hero-illustration-caption">
-                      <div className="hero-legend" aria-hidden="true">
-                        <span className="hero-legend-item"><i className="hero-legend-dot is-green" /> Atendimento</span>
-                        <span className="hero-legend-item"><i className="hero-legend-dot is-cyan" /> CRM / Funil</span>
-                        <span className="hero-legend-item"><i className="hero-legend-dot is-amber" /> Campanhas</span>
-                      </div>
-                      <p className="hero-illustration-copy">
-                        Ilustracao vetorial da operacao no ZapVender: atendimento, controle comercial e escala em um fluxo visual unico.
-                      </p>
+                        <article className="hero-real-card hero-real-funnel">
+                          <h4 className="hero-real-card-title">Funil de Conversao</h4>
+                          <div className="hero-real-funnel-grid">
+                            <article className="hero-real-funnel-stage">
+                              <strong>9.603</strong>
+                              <span>Etapa 1</span>
+                              <i>100%</i>
+                            </article>
+                            <article className="hero-real-funnel-stage">
+                              <strong>0</strong>
+                              <span>Etapa 2</span>
+                              <i>0.0%</i>
+                            </article>
+                            <article className="hero-real-funnel-stage">
+                              <strong>0</strong>
+                              <span>Etapa 3</span>
+                              <i>0.0%</i>
+                            </article>
+                            <article className="hero-real-funnel-stage">
+                              <strong>0</strong>
+                              <span>Concluido</span>
+                              <i>0.0%</i>
+                            </article>
+                          </div>
+                        </article>
+                      </section>
                     </div>
+
                   </div>
                 </div>
               </div>
 
-              <p className="hero-note">
-                Role para ver a solucao, os recursos e depois os planos. O preco fica abaixo desta primeira dobra.
-              </p>
+              <div className="hero-proof-row" aria-label="Publicos ideais para o ZapVender">
+                <div className="hero-proof-label">Ideal para times comerciais no WhatsApp</div>
+                <div className="hero-proof-chips" aria-hidden="true">
+                  {heroAudienceChips.map((chip) => (
+                    <span className="hero-proof-chip" key={chip}>{chip}</span>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
-          <section className="solution-section section-variant-left" id="solucao" aria-labelledby="titulo-solucao">
+          <section className="feature-highlight-section section-variant-left" id="solucao" aria-labelledby="titulo-destaque">
+            <span id="recursos" className="section-anchor" aria-hidden="true" />
             <div className="section-head is-left">
               <div>
-                <div className="section-tag">O que o ZapVender resolve</div>
-                <h2 className="section-title" id="titulo-solucao">Primeiro a solucao, depois o preco</h2>
+                <div className="section-tag">Highlight feature</div>
+                <h2 className="section-title" id="titulo-destaque">Visao unica da operacao comercial</h2>
                 <p className="section-subtitle">
-                  Estrutura inspirada em paginas de produto que explicam valor antes do plano: problema, proposta e recursos.
+                  Modelo de alto impacto para mostrar plataforma, valor e uso real em uma dobra mais premium.
                 </p>
               </div>
             </div>
 
-            <div className="section-grid">
-              <div className="section-panel">
-                <p>
-                  O ZapVender foi posicionado para resolver um problema operacional comum: atendimento, acompanhamento comercial e automacoes
-                  espalhados em processos diferentes. A ideia da pagina e mostrar que a plataforma organiza a operacao antes de falar de plano.
-                </p>
-
-                <div className="pillar-grid" aria-label="Pilares da solucao">
-                  {solutionPillars.map((pillar) => (
-                    <article className="pillar-card" key={pillar.title}>
-                      <span className="pillar-stat">{pillar.stat}</span>
-                      <h3 className="pillar-title">{pillar.title}</h3>
-                      <p className="pillar-text">{pillar.description}</p>
-                    </article>
+            <div className={`highlight-model-shell is-${activeHighlightView.id.toLowerCase()}`}>
+              <aside className="highlight-model-nav" aria-label="Navegacao de beneficios">
+                <ul className="highlight-model-nav-list">
+                  {highlightViews.map((view) => (
+                    <li key={view.id}>
+                      <button
+                        type="button"
+                        className={`highlight-model-nav-item ${activeHighlightView.id === view.id ? 'is-active' : ''}`}
+                        onClick={() => setActiveHighlightTab(view.id)}
+                        aria-pressed={activeHighlightView.id === view.id}
+                      >
+                        <span className="highlight-model-nav-icon" aria-hidden="true" />
+                        {view.navLabel}
+                      </button>
+                    </li>
                   ))}
-                </div>
-              </div>
-
-              <div className="section-panel">
-                <div className="section-tag">Problemas que a pagina comunica</div>
-                <ul className="problem-list">
-                  <li>Leads se perdem quando atendimento e CRM nao conversam.</li>
-                  <li>Equipe atende sem contexto quando historico fica espalhado.</li>
-                  <li>Escala de envio sem fila e automacao gera risco operacional.</li>
-                  <li>Decisao comercial piora quando nao existe visao clara de funil.</li>
                 </ul>
+              </aside>
 
-                <div className="section-tag" style={{ marginTop: '12px' }}>Resultado esperado</div>
-                <ul className="resource-list">
-                  <li>Atendimento com contexto + operacao organizada em um painel.</li>
-                  <li>Mais clareza para a equipe comercial sobre status e proximos passos.</li>
-                  <li>Base pronta para crescer com campanhas, fluxos e novos planos.</li>
-                </ul>
-              </div>
-            </div>
-          </section>
-
-          <section className="resources-section section-variant-plain" id="recursos" aria-labelledby="titulo-recursos">
-            <div className="section-head is-center">
-              <div>
-                <div className="section-tag">Recursos principais</div>
-                <h2 className="section-title" id="titulo-recursos">O que existe dentro da plataforma</h2>
-                <p className="section-subtitle">
-                  Bloco de recursos para o visitante entender rapidamente o que ele ganha antes de olhar planos.
-                </p>
-              </div>
-            </div>
-
-            <div className="resource-grid" aria-label="Lista de recursos do ZapVender">
-              {resourceHighlights.map((resource) => (
-                <article className="resource-card" key={resource.title}>
-                  <div className="resource-kicker">{resource.subtitle}</div>
-                  <h3 className="resource-title">{resource.title}</h3>
-                  <p className="resource-desc">{resource.description}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="journey-section section-variant-right" aria-labelledby="titulo-jornada">
-            <div className="journey-layout">
-              <div className="journey-copy-pane">
-                <div className="section-head">
-                  <div>
-                    <div className="section-tag">Fluxo de uso</div>
-                    <h2 className="section-title" id="titulo-jornada">Como o ZapVender entra na rotina comercial</h2>
-                    <p className="section-subtitle">
-                      Uma narrativa curta para conectar solucao, recursos e operacao antes de mostrar os planos.
+              {activeHighlightView.id === 'integracao' ? (
+                <article className="highlight-integration-tab" aria-label="Operacao da plataforma">
+                  <div className="highlight-integration-copy">
+                    <div className="section-tag">Operacao real</div>
+                    <h3 className="highlight-integration-title">Como a operacao acontece dentro do ZapVender</h3>
+                    <p className="highlight-integration-subtitle">
+                      Inbox, CRM, campanhas, automacoes e funil funcionando no mesmo painel para reduzir atrito da equipe.
                     </p>
+
+                    <div className="hero-cta-row highlight-model-cta" style={{ marginTop: '14px' }}>
+                      <button
+                        type="button"
+                        className="sales-btn sales-btn-outline"
+                        onClick={() => scrollToSection('planos-lista')}
+                      >
+                        Ver planos agora
+                      </button>
+                      <Link to="/login" className="sales-btn sales-btn-primary">Quero testar</Link>
+                    </div>
                   </div>
-                </div>
 
-                <div className="hero-cta-row" style={{ marginTop: '6px', justifyContent: 'flex-start' }}>
-                  <button
-                    type="button"
-                    className="sales-btn sales-btn-outline"
-                    onClick={() => scrollToSection('planos-lista')}
-                  >
-                    Agora ver planos
-                  </button>
-                  <Link to="/login" className="sales-btn sales-btn-primary">Quero testar</Link>
-                </div>
-              </div>
+                  <div className="highlight-integration-track highlight-operation-mock" role="img" aria-label="Ilustracao da operacao real com Inbox, CRM, campanhas, automacoes e funil comercial">
+                    <div className="highlight-operation-top">
+                      <span className="highlight-operation-pill">Operacao em tempo real</span>
+                      <div className="highlight-operation-status">
+                        <span>Online</span>
+                        <span>Fila ativa</span>
+                        <span>Sincronizado</span>
+                      </div>
+                    </div>
 
-              <div className="journey-track">
-                <div className="journey-grid journey-grid-timeline" aria-label="Jornada de uso">
-                  {journeySteps.map((step) => (
-                    <article className="journey-card" key={step.step}>
-                      <span className="journey-step">{step.step}</span>
-                      <h3 className="journey-title">{step.title}</h3>
-                      <p className="journey-text">{step.text}</p>
-                    </article>
-                  ))}
-                </div>
-              </div>
+                    <div className="highlight-operation-layout">
+                      <aside className="highlight-operation-sidebar">
+                        <span className="highlight-operation-sidebar-head">Modulos ativos</span>
+                        <div className="highlight-operation-nav-item is-active">
+                          <span className="icon icon-inbox" />
+                          Inbox operacional
+                        </div>
+                        <div className="highlight-operation-nav-item">
+                          <span className="icon icon-contacts" />
+                          CRM e contatos
+                        </div>
+                        <div className="highlight-operation-nav-item">
+                          <span className="icon icon-campaigns" />
+                          Campanhas e fila
+                        </div>
+                        <div className="highlight-operation-nav-item">
+                          <span className="icon icon-flows" />
+                          Fluxos de conversa
+                        </div>
+                        <div className="highlight-operation-nav-item">
+                          <span className="icon icon-funnel" />
+                          Funil de vendas
+                        </div>
+                      </aside>
+
+                      <div className="highlight-operation-main">
+                        <header className="highlight-operation-main-head">
+                          <div>
+                            <h4>Painel de Operacao</h4>
+                            <p>Visao unificada do que esta em andamento</p>
+                          </div>
+                        </header>
+
+                        <div className="highlight-operation-kpis">
+                          <div className="highlight-operation-kpi">
+                            <strong>26</strong>
+                            <span>Conversas na fila</span>
+                          </div>
+                          <div className="highlight-operation-kpi">
+                            <strong>128</strong>
+                            <span>Leads ativos</span>
+                          </div>
+                          <div className="highlight-operation-kpi">
+                            <strong>21%</strong>
+                            <span>Conversao atual</span>
+                          </div>
+                        </div>
+
+                        <div className="highlight-operation-modules">
+                          <article className="highlight-operation-module is-inbox">
+                            <span className="highlight-operation-module-tag">Inbox operacional</span>
+                            <h5>Atender e qualificar</h5>
+                            <ul className="highlight-operation-list">
+                              <li><strong>Carlos M.</strong><span>Em andamento</span></li>
+                              <li><strong>Juliana R.</strong><span>Aguardando retorno</span></li>
+                              <li><strong>Rafael S.</strong><span>Qualificado</span></li>
+                            </ul>
+                          </article>
+
+                          <article className="highlight-operation-module">
+                            <span className="highlight-operation-module-tag">Campanhas e fila</span>
+                            <h5>Distribuicao controlada</h5>
+                            <ul className="highlight-operation-list">
+                              <li><strong>Campanha demo</strong><span>64 disparos</span></li>
+                              <li><strong>Fila prioritaria</strong><span>Ativa</span></li>
+                            </ul>
+                          </article>
+
+                          <article className="highlight-operation-module">
+                            <span className="highlight-operation-module-tag">Funil comercial</span>
+                            <h5>Pipeline atualizado</h5>
+                            <ul className="highlight-operation-stage-list">
+                              <li>
+                                <span>Etapa 1</span>
+                                <div className="highlight-operation-stage-bar"><span style={{ width: '84%' }} /></div>
+                                <i>84%</i>
+                              </li>
+                              <li>
+                                <span>Etapa 2</span>
+                                <div className="highlight-operation-stage-bar"><span style={{ width: '52%' }} /></div>
+                                <i>52%</i>
+                              </li>
+                              <li>
+                                <span>Concluido</span>
+                                <div className="highlight-operation-stage-bar"><span style={{ width: '21%' }} /></div>
+                                <i>21%</i>
+                              </li>
+                            </ul>
+                          </article>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ) : activeHighlightView.id === 'meta' ? (
+                <article className="highlight-strategy-tab" aria-label="Estrategia comercial da pagina">
+                  <div className="highlight-strategy-panel highlight-strategy-left">
+                    <div className="section-tag">O que o ZapVender resolve</div>
+                    <h3 className="highlight-strategy-title">Primeiro a solucao, depois o preco</h3>
+                    <p className="highlight-strategy-subtitle">
+                      Estrutura inspirada em paginas de produto que explicam valor antes do plano: problema, proposta e recursos.
+                    </p>
+                    <p className="highlight-strategy-intro">
+                      O ZapVender foi posicionado para resolver um problema operacional comum: atendimento, acompanhamento comercial e
+                      automacoes espalhadas em processos diferentes. A ideia da pagina e mostrar que a plataforma organiza a operacao
+                      antes de falar de plano.
+                    </p>
+
+                    <div className="highlight-strategy-pillar-grid" aria-label="Pilares de valor do produto">
+                      {strategyPillars.map((pillar) => (
+                        <article className="highlight-strategy-pillar" key={pillar.title}>
+                          <span className="highlight-strategy-pill">{pillar.tag}</span>
+                          <h4>{pillar.title}</h4>
+                          <p>{pillar.text}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="highlight-strategy-panel highlight-strategy-right">
+                    <div className="section-tag">Problemas que a pagina comunica</div>
+                    <ul className="highlight-strategy-list">
+                      {strategyProblems.map((problem) => (
+                        <li key={problem}>{problem}</li>
+                      ))}
+                    </ul>
+
+                    <div className="highlight-strategy-divider">
+                      <div className="section-tag">Resultado esperado</div>
+                      <ul className="highlight-strategy-list">
+                        {strategyOutcomes.map((outcome) => (
+                          <li key={outcome}>{outcome}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </article>
+              ) : (
+                <>
+                  <article className="highlight-model-copy" aria-label="Resumo estrategico da plataforma">
+                    <span className="highlight-model-brand" aria-hidden="true">
+                      <img src={brandLogoUrl} alt="" />
+                    </span>
+                    <span className="highlight-model-badge">{activeHighlightView.badge}</span>
+                    <h3 className="highlight-model-title">{activeHighlightView.title}</h3>
+                    <h4 className="highlight-model-subtitle">{activeHighlightView.subtitle}</h4>
+                    <p>{activeHighlightView.primaryText}</p>
+                    <p>{activeHighlightView.secondaryText}</p>
+
+                    <div className="hero-cta-row highlight-model-cta">
+                      <button
+                        type="button"
+                        className="sales-btn sales-btn-outline"
+                        onClick={() => scrollToSection('planos-lista')}
+                      >
+                        Ver planos agora
+                      </button>
+                      <Link to="/login" className="sales-btn sales-btn-primary">Quero testar</Link>
+                    </div>
+                  </article>
+
+                  <article className={`highlight-model-preview ${activeHighlightView.id === 'dashboard' ? 'is-dashboard-preview' : ''}`} aria-label={`Preview de ${activeHighlightView.navLabel}`}>
+                    {activeHighlightView.id === 'dashboard' ? (
+                      <div className="hero-screen" aria-label="Mock do workspace no card de dashboard">
+                        <div className="hero-screen-top">
+                          <div className="hero-screen-brand">
+                            <img src={brandLogoUrl} alt="" aria-hidden="true" />
+                            <span>ZapVender Workspace</span>
+                          </div>
+                        </div>
+
+                        <div className="hero-illustration-wrap">
+                          <div className="hero-illustration hero-real-mock" role="img" aria-label="Mock do painel real ZapVender com dashboard, eventos e funil">
+                            <aside className="hero-real-sidebar">
+                              <div className="hero-real-sidebar-main">
+                                <div className="hero-real-sidebar-brand">
+                                  <img src={brandFullLogoUrl} alt="ZapVender" />
+                                </div>
+
+                                <div className="hero-real-sidebar-groups">
+                                  <div className="hero-real-sidebar-group">
+                                    <div className="hero-real-nav-item is-active">
+                                      <span className="hero-real-nav-icon-box">
+                                        <span className="icon icon-dashboard hero-real-nav-icon" />
+                                      </span>
+                                      <span className="hero-real-nav-text">Painel de Controle</span>
+                                    </div>
+                                    <div className="hero-real-nav-item">
+                                      <span className="hero-real-nav-icon-box">
+                                        <span className="icon icon-contacts hero-real-nav-icon" />
+                                      </span>
+                                      <span className="hero-real-nav-text">Contatos</span>
+                                    </div>
+                                    <div className="hero-real-nav-item">
+                                      <span className="hero-real-nav-icon-box">
+                                        <span className="icon icon-campaigns hero-real-nav-icon" />
+                                      </span>
+                                      <span className="hero-real-nav-text">Campanhas</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="hero-real-sidebar-group">
+                                    <span className="hero-real-sidebar-label">Conversas</span>
+                                    <div className="hero-real-nav-item">
+                                      <span className="hero-real-nav-icon-box">
+                                        <span className="icon icon-inbox hero-real-nav-icon" />
+                                      </span>
+                                      <span className="hero-real-nav-text">Inbox</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="hero-real-sidebar-group">
+                                    <span className="hero-real-sidebar-label">Automacao</span>
+                                    <div className="hero-real-nav-item">
+                                      <span className="hero-real-nav-icon-box">
+                                        <span className="icon icon-flows hero-real-nav-icon" />
+                                      </span>
+                                      <span className="hero-real-nav-text">Fluxos de Conversa</span>
+                                    </div>
+                                    <div className="hero-real-nav-item">
+                                      <span className="hero-real-nav-icon-box">
+                                        <span className="icon icon-funnel hero-real-nav-icon" />
+                                      </span>
+                                      <span className="hero-real-nav-text">Funil de Vendas</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="hero-real-sidebar-group">
+                                    <span className="hero-real-sidebar-label">Sistema</span>
+                                    <div className="hero-real-nav-item">
+                                      <span className="hero-real-nav-icon-box">
+                                        <span className="icon icon-settings hero-real-nav-icon" />
+                                      </span>
+                                      <span className="hero-real-nav-text">Configuracoes</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="hero-real-sidebar-footer">
+                                <div className="hero-real-exit">Sair</div>
+                              </div>
+                            </aside>
+
+                            <section className="hero-real-main">
+                              <header className="hero-real-header">
+                                <h3>Painel de Controle</h3>
+                                <p>Bem-vindo, teste5@gmail.com | quinta-feira, 26 de fevereiro</p>
+                              </header>
+
+                              <div className="hero-real-top-grid">
+                                <article className="hero-real-card">
+                                  <h4 className="hero-real-card-title">Estatisticas por periodo</h4>
+                                  <div className="hero-real-period-form">
+                                    <div className="hero-real-field">19/02/2026</div>
+                                    <div className="hero-real-field">26/02/2026</div>
+                                  </div>
+
+                                  <div className="hero-real-chart-meta">
+                                    <span className="hero-real-chip">Novos contatos</span>
+                                    <div className="hero-real-toggle-group">
+                                      <span className="hero-real-toggle is-active">L</span>
+                                      <span className="hero-real-toggle">B</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="hero-real-chart">
+                                    <svg className="hero-real-chart-svg" viewBox="0 0 320 120" aria-hidden="true">
+                                      <defs>
+                                        <linearGradient id="heroRealChartFillDashboard" x1="0" y1="0" x2="0" y2="1">
+                                          <stop offset="0%" stopColor="rgba(67, 219, 140, 0.34)" />
+                                          <stop offset="100%" stopColor="rgba(67, 219, 140, 0.04)" />
+                                        </linearGradient>
+                                      </defs>
+                                      <path
+                                        d="M 12 102 L 42 102 L 72 102 L 102 102 L 132 102 L 162 18 L 192 102 L 222 102 L 252 102 L 282 102 L 308 102 L 308 108 L 12 108 Z"
+                                        fill="url(#heroRealChartFillDashboard)"
+                                      />
+                                      <path
+                                        d="M 12 102 L 42 102 L 72 102 L 102 102 L 132 102 L 162 18 L 192 102 L 222 102 L 252 102 L 282 102 L 308 102"
+                                        fill="none"
+                                        stroke="rgba(67, 219, 140, 0.9)"
+                                        strokeWidth="3"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                      <circle cx="162" cy="18" r="4.5" fill="rgba(67, 219, 140, 1)" />
+                                    </svg>
+                                    <div className="hero-real-chart-axis">
+                                      <span>19/02</span>
+                                      <span>20/02</span>
+                                      <span>21/02</span>
+                                      <span>22/02</span>
+                                      <span>23/02</span>
+                                      <span>24/02</span>
+                                      <span>26/02</span>
+                                    </div>
+                                  </div>
+                                </article>
+
+                                <article className="hero-real-card">
+                                  <h4 className="hero-real-card-title">Estatisticas gerais</h4>
+                                  <ul className="hero-real-general-list">
+                                    <li><span>Contatos que interagiram</span><strong>9.603</strong></li>
+                                    <li><span>Mensagem enviada pelo contato</span><strong>19.206</strong></li>
+                                    <li><span>Interacoes/inscrito</span><strong>2.0</strong></li>
+                                  </ul>
+                                </article>
+                              </div>
+
+                              <article className="hero-real-card hero-real-events">
+                                <div className="hero-real-events-head">
+                                  <h4 className="hero-real-card-title">Eventos personalizados</h4>
+                                  <div className="hero-real-events-actions">
+                                    <span className="hero-real-chip">Este mes</span>
+                                    <span className="hero-real-chip is-current">Criar</span>
+                                  </div>
+                                </div>
+                                <div className="hero-real-event-empty">
+                                  <strong>Nenhum evento personalizado ainda</strong>
+                                  <span>Crie eventos e use o bloco Registrar Evento nos seus fluxos.</span>
+                                </div>
+                              </article>
+
+                              <div className="hero-real-metrics">
+                                <article className="hero-real-metric-card">
+                                  <div className="hero-real-metric-top">
+                                    <span className="hero-real-metric-icon is-green" />
+                                    <span className="hero-real-metric-delta is-positive">+0%</span>
+                                  </div>
+                                  <strong>9.603</strong>
+                                  <span>Total de Leads</span>
+                                </article>
+                                <article className="hero-real-metric-card">
+                                  <div className="hero-real-metric-top">
+                                    <span className="hero-real-metric-icon is-green" />
+                                    <span className="hero-real-metric-delta is-positive">+0%</span>
+                                  </div>
+                                  <strong>0</strong>
+                                  <span>Concluidos</span>
+                                </article>
+                                <article className="hero-real-metric-card">
+                                  <div className="hero-real-metric-top">
+                                    <span className="hero-real-metric-icon is-amber" />
+                                    <span className="hero-real-metric-delta is-negative">-0%</span>
+                                  </div>
+                                  <strong>9.603</strong>
+                                  <span>Em andamento</span>
+                                </article>
+                                <article className="hero-real-metric-card">
+                                  <div className="hero-real-metric-top">
+                                    <span className="hero-real-metric-icon is-cyan" />
+                                    <span className="hero-real-metric-delta is-positive">+0%</span>
+                                  </div>
+                                  <strong>0.0%</strong>
+                                  <span>Conversao</span>
+                                </article>
+                              </div>
+
+                              <article className="hero-real-card hero-real-funnel">
+                                <h4 className="hero-real-card-title">Funil de Conversao</h4>
+                                <div className="hero-real-funnel-grid">
+                                  <article className="hero-real-funnel-stage">
+                                    <strong>9.603</strong>
+                                    <span>Etapa 1</span>
+                                    <i>100%</i>
+                                  </article>
+                                  <article className="hero-real-funnel-stage">
+                                    <strong>0</strong>
+                                    <span>Etapa 2</span>
+                                    <i>0.0%</i>
+                                  </article>
+                                  <article className="hero-real-funnel-stage">
+                                    <strong>0</strong>
+                                    <span>Etapa 3</span>
+                                    <i>0.0%</i>
+                                  </article>
+                                  <article className="hero-real-funnel-stage">
+                                    <strong>0</strong>
+                                    <span>Concluido</span>
+                                    <i>0.0%</i>
+                                  </article>
+                                </div>
+                              </article>
+                            </section>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <PlatformMock
+                        viewLabel={activeHighlightView.navLabel}
+                        stats={activeHighlightView.stats}
+                        primaryItems={activeHighlightView.previewLeft}
+                        secondaryItems={activeHighlightView.previewRight}
+                      />
+                    )}
+                  </article>
+                </>
+              )}
+
             </div>
           </section>
 
@@ -2534,173 +5265,78 @@ export default function Planos() {
               <div>
                 <h2 className="section-title" id="titulo-planos">Planos</h2>
                 <p className="section-subtitle">
-                  Estrutura inicial com 1 plano público. Você pode adicionar versões Lite/Equipe/Enterprise depois.
+                  Escolha o plano ideal para seu momento comercial e evolua quando quiser.
                 </p>
               </div>
             </div>
 
             <div className="plans-grid">
-              <article className="plan-card" aria-label="Plano ZapVender Pro">
-                <div>
-                  <div className="plan-labels">
-                    <span className="plan-chip is-highlight">Plano atual</span>
-                    <span className="plan-chip">R$297/mês</span>
+              {pricingPlans.map((plan) => (
+                <article
+                  className={`pricing-card ${plan.featured ? 'is-featured' : ''}`}
+                  key={plan.name}
+                  aria-label={`Plano ${plan.name}`}
+                >
+                  {plan.featured && <span className="pricing-popular-badge">Mais popular</span>}
+                  <h3 className="pricing-name">{plan.name}</h3>
+                  <p className="pricing-subtitle">{plan.subtitle}</p>
+                  <div className="pricing-price-row">
+                    <strong className="pricing-price">{plan.monthlyPrice}</strong>
+                    <span className="pricing-period">/m</span>
                   </div>
+                  <p className="pricing-billing">{plan.billing}</p>
 
-                  <h3 className="plan-title">ZapVender Pro</h3>
-                  <p className="plan-description">
-                    Plano principal para vender agora, com posicionamento simples e direto. Reúne os módulos centrais para captar, atender e acompanhar clientes pelo WhatsApp.
-                  </p>
-
-                  <ul className="plan-feature-grid">
-                    {planFeatures.map((feature) => (
-                      <li key={feature}>{feature}</li>
-                    ))}
+                  <ul className="pricing-meta-list" aria-label={`Resumo do plano ${plan.name}`}>
+                    <li className="pricing-meta-item">
+                      WhatsApps inclusos: <strong>{plan.whatsappIncluded}</strong>
+                    </li>
+                    <li className={`pricing-meta-item pricing-advanced-state ${plan.name === 'Starter' ? 'is-locked' : ''}`}>
+                      {plan.featuresState}
+                    </li>
                   </ul>
-                </div>
 
-                <div className="plan-sidebar">
-                  <div className="plan-sidebar-price">
-                    <strong>{monthlyPrice}</strong>
-                    <span>/mês</span>
-                  </div>
-
-                  <p className="plan-sidebar-meta">
-                    Oferta única para simplificar a decisão de compra no início da operação comercial.
-                  </p>
-
-                  <Link to="/login" className="sales-btn sales-btn-primary">Começar com este plano</Link>
-                  <Link to="/login" className="sales-btn sales-btn-outline">Entrar no painel</Link>
-                </div>
-              </article>
-            </div>
-
-            <section className="comparison-section" aria-labelledby="titulo-comparacao">
-              <div className="section-head">
-                <div>
-                  <h2 className="section-title" id="titulo-comparacao">Comparacao de planos (roadmap)</h2>
-                  <p className="section-subtitle">
-                    Hoje voce vende 1 plano. A comparacao abaixo ja prepara o terreno para tiers futuros.
-                  </p>
-                </div>
-              </div>
-
-              <div className="roadmap-grid" aria-label="Roadmap de planos">
-                {planRoadmap.map((plan) => (
-                  <article className={`roadmap-card ${plan.badgeClass}`} key={plan.name}>
-                    <div className="roadmap-top">
-                      <h3 className="roadmap-name">{plan.name}</h3>
-                      <span className={`status-badge ${plan.badgeClass}`}>{plan.status}</span>
-                    </div>
-                    <div className="roadmap-price">{plan.price}</div>
-                    <p className="roadmap-desc">{plan.description}</p>
-                  </article>
-                ))}
-              </div>
-
-              <p className="comparison-note">
-                Os itens abaixo sao um quadro comercial inicial para comunicacao de posicionamento. Ajuste conforme escopo real, SLA e limites que voce decidir.
-              </p>
-
-              <div className="comparison-table-wrap">
-                <table className="comparison-table">
-                  <thead>
-                    <tr>
-                      <th>Recurso / escopo</th>
-                      <th>Pro (atual)</th>
-                      <th>Equipe (futuro)</th>
-                      <th>Enterprise (futuro)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparisonRows.map((row) => (
-                      <tr key={row.feature}>
-                        <td>{row.feature}</td>
-                        <td>{row.pro}</td>
-                        <td>{row.equipe}</td>
-                        <td>{row.enterprise}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <div className="faq-grid" id="faq-comercial" aria-label="Duvidas frequentes">
-              {faqItems.map((item) => (
-                <article className="faq-item" key={item.question}>
-                  <h3>{item.question}</h3>
-                  <p>{item.answer}</p>
+                  <Link
+                    to="/login"
+                    className={`pricing-button ${plan.featured ? 'is-featured' : ''}`}
+                  >
+                    {plan.ctaLabel}
+                  </Link>
                 </article>
               ))}
             </div>
-            <div className="bottom-cta">
-              <div>
-                <h3 className="bottom-cta-title">Pronto para publicar e começar a vender</h3>
-                <p className="bottom-cta-text">
-                  Use esta rota como landing de venda agora e evolua depois com checkout e comparação de planos.
-                </p>
-              </div>
-              <div className="sales-nav-actions">
-                <Link to="/login" className="sales-btn sales-btn-outline">Entrar</Link>
-                <Link to="/login" className="sales-btn sales-btn-primary">Quero assinar</Link>
-              </div>
+
+            <div className="plan-unified-compare" aria-label="Comparacao de planos">
+              <details className="plan-compare-details">
+                <summary>Ver comparacao detalhada</summary>
+                <div className="comparison-table-wrap">
+                  <table className="comparison-table">
+                    <thead>
+                      <tr>
+                        <th>Recurso / escopo</th>
+                        <th>Starter</th>
+                        <th>Premium</th>
+                        <th>Business</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparisonRows.map((row) => (
+                        <tr key={row.feature}>
+                          <td>{row.feature}</td>
+                          <td>{row.pro}</td>
+                          <td>{row.equipe}</td>
+                          <td>{row.enterprise}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </div>
+
           </section>
         </main>
 
-        <footer className="sales-footer" aria-label="Rodape da pagina de vendas">
-          <div className="sales-footer-grid">
-            <div className="sales-footer-card">
-              <Link to="/planos" className="sales-footer-brand" aria-label={`${brandName} pagina de planos`}>
-                <img src={brandLogoUrl} alt="" aria-hidden="true" />
-                <span>{brandName}</span>
-              </Link>
-              <p className="sales-footer-copy">
-                Plataforma para organizar atendimento e operacao comercial no WhatsApp com CRM, funil, campanhas e automacoes em um unico painel.
-              </p>
-              <div className="sales-footer-tags" aria-hidden="true">
-                <span className="sales-footer-tag">Inbox</span>
-                <span className="sales-footer-tag">CRM</span>
-                <span className="sales-footer-tag">Campanhas</span>
-                <span className="sales-footer-tag">Automacao</span>
-                <span className="sales-footer-tag">Funil</span>
-              </div>
-            </div>
-
-            <div className="sales-footer-card">
-              <h3 className="sales-footer-title">Navegacao rapida</h3>
-              <ul className="sales-footer-links">
-                <li><button type="button" onClick={() => scrollToSection('visao-geral')}>Visao geral</button></li>
-                <li><button type="button" onClick={() => scrollToSection('solucao')}>Solucao</button></li>
-                <li><button type="button" onClick={() => scrollToSection('recursos')}>Recursos</button></li>
-                <li><button type="button" onClick={() => scrollToSection('planos-lista')}>Planos</button></li>
-                <li><button type="button" onClick={() => scrollToSection('faq-comercial')}>FAQ</button></li>
-              </ul>
-            </div>
-
-            <div className="sales-footer-card">
-              <h3 className="sales-footer-title">Comercial</h3>
-              <ul className="sales-footer-links">
-                <li><Link to="/login">Entrar no painel</Link></li>
-                <li><Link to="/login">Assinar / solicitar acesso</Link></li>
-                <li><button type="button" onClick={() => scrollToSection('planos-lista')}>Ver plano atual</button></li>
-              </ul>
-              <p className="sales-footer-copy" style={{ marginTop: '8px' }}>
-                Rodape pronto para evoluir com links reais de contato, termos, politica de privacidade e checkout.
-              </p>
-            </div>
-          </div>
-
-          <div className="sales-footer-bottom">
-            <span>{`© ${currentYear} ${brandName}. Todos os direitos reservados.`}</span>
-            <div className="sales-footer-cta">
-              <span>Pronto para continuar?</span>
-              <Link to="/login" className="sales-btn sales-btn-outline">Entrar</Link>
-              <Link to="/login" className="sales-btn sales-btn-primary">Assinar agora</Link>
-            </div>
-          </div>
-        </footer>
+        <FooterPremium onNavigateSection={scrollToSection} />
       </div>
     </div>
   );
