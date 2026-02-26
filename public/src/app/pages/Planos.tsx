@@ -302,9 +302,9 @@ export default function Planos() {
         }
 
         .sales-nav-sticky {
-          position: sticky;
-          top: 10px;
-          z-index: 20;
+          position: static;
+          top: auto;
+          z-index: 2;
           margin-bottom: 22px;
         }
 
@@ -474,31 +474,6 @@ export default function Planos() {
           background: linear-gradient(135deg, rgba(35, 198, 111, 0.12), rgba(35, 198, 111, 0));
           border: 1px solid rgba(35, 198, 111, 0.12);
           z-index: 0;
-        }
-
-        .hero-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 11px;
-          border-radius: 999px;
-          border: 1px solid rgba(35, 198, 111, 0.28);
-          background: rgba(35, 198, 111, 0.08);
-          color: #bdf7d6;
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: 0.04em;
-          text-transform: uppercase;
-          margin: 0 auto 14px;
-        }
-
-        .hero-badge::before {
-          content: '';
-          width: 8px;
-          height: 8px;
-          border-radius: 999px;
-          background: #35e084;
-          box-shadow: 0 0 0 6px rgba(53, 224, 132, 0.15);
         }
 
         .hero-title {
@@ -1710,7 +1685,6 @@ export default function Planos() {
           }
 
           .sales-nav-sticky {
-            top: 6px;
             margin-bottom: 14px;
           }
 
@@ -1872,7 +1846,6 @@ export default function Planos() {
         <main>
           <section className="sales-hero" id="visao-geral" aria-labelledby="planos-hero-title">
             <div className="hero-copy">
-              <div className="hero-badge">Plataforma de vendas e atendimento no WhatsApp</div>
               <h1 className="hero-title" id="planos-hero-title">
                 Transforme o WhatsApp em uma <strong>operacao comercial organizada</strong> com o ZapVender
               </h1>
