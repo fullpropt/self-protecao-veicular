@@ -20,6 +20,7 @@ type ConfiguracoesGlobals = {
   saveWhatsAppSessionName?: (sessionId: string) => Promise<void>;
   removeWhatsAppSession?: (sessionId: string) => Promise<void>;
   saveWhatsAppSettings?: () => void;
+  saveAiSettings?: () => Promise<void>;
   saveBusinessHoursSettings?: () => void;
   saveNotificationSettings?: () => Promise<void>;
   createContactField?: () => Promise<void>;
@@ -308,6 +309,7 @@ export default function Configuracoes() {
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Etiquetas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas rápidas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Horários</div>
+                      <div className="settings-nav-item" onClick={() => globals.showPanel?.('ai')}><span className="icon icon-automation icon-sm"></span> Inteligencia Artificial</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('funnel')}><span className="icon icon-funnel icon-sm"></span> Funil de Vendas</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('notifications')}><span className="icon icon-bell icon-sm"></span> Notificações</div>
                       <div className="settings-nav-item" onClick={() => globals.showPanel?.('users')}><span className="icon icon-user icon-sm"></span> Usuários</div>
@@ -481,6 +483,81 @@ export default function Configuracoes() {
                           </div>
                           <button className="btn btn-primary" onClick={() => globals.saveCopysSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar respostas rápidas</button>
                       </div>
+                      <div className="settings-panel" id="panel-ai">
+                          <div className="settings-section">
+                              <h3 className="settings-section-title"><span className="icon icon-automation icon-sm"></span> Inteligencia Artificial</h3>
+                              <p className="text-muted mb-3">
+                                  Configure o contexto do seu negocio para a IA gerar rascunhos de fluxos mais alinhados ao seu atendimento.
+                              </p>
+
+                              <div className="copy-card">
+                                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                      <label className="checkbox-wrapper">
+                                          <input type="checkbox" id="aiEnabled" />
+                                          <span className="checkbox-custom"></span>
+                                      </label>
+                                      <label className="form-label" htmlFor="aiEnabled" style={{ margin: 0 }}>Ativar Inteligencia Artificial para geracao de fluxos</label>
+                                  </div>
+
+                                  <div className="form-group">
+                                      <label className="form-label">Descricao do negocio</label>
+                                      <textarea className="form-textarea" id="aiBusinessDescription" rows={4} placeholder="Explique o que sua empresa faz, seu segmento e diferenciais."></textarea>
+                                  </div>
+
+                                  <div className="form-group">
+                                      <label className="form-label">Produtos / servicos</label>
+                                      <textarea className="form-textarea" id="aiProductsServices" rows={4} placeholder="Liste os principais produtos, servicos, planos ou ofertas."></textarea>
+                                  </div>
+
+                                  <div className="form-row">
+                                      <div className="form-group">
+                                          <label className="form-label">Publico-alvo</label>
+                                          <textarea className="form-textarea" id="aiTargetAudience" rows={3} placeholder="Quem voce atende? Perfil, necessidades, regiao, etc."></textarea>
+                                      </div>
+                                      <div className="form-group">
+                                          <label className="form-label">Tom de voz</label>
+                                          <select className="form-select" id="aiToneOfVoice" defaultValue="consultivo">
+                                              <option value="consultivo">Consultivo</option>
+                                              <option value="formal">Formal</option>
+                                              <option value="amigavel">Amigavel</option>
+                                              <option value="direto">Direto</option>
+                                          </select>
+                                      </div>
+                                  </div>
+
+                                  <div className="form-group">
+                                      <label className="form-label">Regras e politicas</label>
+                                      <textarea className="form-textarea" id="aiRulesPolicies" rows={4} placeholder="Regras que a IA deve considerar (prazo, pagamento, limites, compliance, etc.)."></textarea>
+                                  </div>
+
+                                  <div className="form-group">
+                                      <label className="form-label">FAQ (uma pergunta/resposta por linha)</label>
+                                      <textarea className="form-textarea" id="aiFaqs" rows={5} placeholder="Ex.: Qual o prazo de atendimento? Resposta: ..."></textarea>
+                                  </div>
+
+                                  <div className="form-group">
+                                      <label className="form-label">Site</label>
+                                      <input type="url" className="form-input" id="aiWebsiteUrl" placeholder="https://seusite.com.br" />
+                                      <p className="form-help">Nesta primeira fase, a IA usa o URL como contexto cadastrado. A sincronizacao/indexacao vira na proxima etapa.</p>
+                                  </div>
+
+                                  <div className="form-group">
+                                      <label className="form-label">Documentos / catalogos (resumo)</label>
+                                      <textarea className="form-textarea" id="aiDocumentsNotes" rows={4} placeholder="Resuma catalogos, tabelas, scripts comerciais e materiais importantes."></textarea>
+                                  </div>
+
+                                  <div className="form-group">
+                                      <label className="form-label">Observacoes internas</label>
+                                      <textarea className="form-textarea" id="aiInternalNotes" rows={4} placeholder="Instrucoes internas para geracao de fluxos (ex.: quando transferir para humano, como abordar objecoes)."></textarea>
+                                  </div>
+                              </div>
+
+                              <button className="btn btn-primary" onClick={() => globals.saveAiSettings?.()}>
+                                  <span className="icon icon-save icon-sm"></span> Salvar Inteligencia Artificial
+                              </button>
+                          </div>
+                      </div>
+
                       <div className="settings-panel" id="panel-hours">
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-clock icon-sm"></span> Horários de funcionamento</h3>

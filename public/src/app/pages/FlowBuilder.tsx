@@ -8,6 +8,7 @@ type FlowBuilderGlobals = {
   createNewFlow?: () => void;
   clearCanvas?: () => void;
   saveFlow?: () => void;
+  generateFlowWithAi?: () => Promise<void>;
   toggleFlowActive?: () => void;
   updateFlowStatusFromSelect?: () => void;
   zoomIn?: () => void;
@@ -1391,6 +1392,9 @@ export default function FlowBuilder() {
                   <div className="header-actions">
                       <button className="toolbar-btn secondary" onClick={() => globals.openFlowsModal?.()}>
                           <span className="icon icon-list icon-sm"></span> Meus Fluxos
+                      </button>
+                      <button className="toolbar-btn secondary" onClick={() => globals.generateFlowWithAi?.()}>
+                          <span className="icon icon-automation icon-sm"></span> Gerar com IA
                       </button>
                       <button className="toolbar-btn secondary" onClick={() => globals.saveFlow?.()}>
                           <span className="icon icon-save icon-sm"></span> Salvar

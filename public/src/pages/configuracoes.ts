@@ -6,6 +6,20 @@ type Settings = {
     whatsapp?: { interval?: string; messagesPerHour?: string; workStart?: string; workEnd?: string };
     businessHours?: { enabled?: boolean; start?: string; end?: string; autoReplyMessage?: string };
     notifications?: { notifyNewLead?: boolean; notifyNewMessage?: boolean; notifySound?: boolean };
+    ai?: AiSettingsConfig;
+};
+
+type AiSettingsConfig = {
+    enabled?: boolean;
+    businessDescription?: string;
+    productsServices?: string;
+    targetAudience?: string;
+    toneOfVoice?: string;
+    rulesPolicies?: string;
+    faqs?: string;
+    websiteUrl?: string;
+    documentsNotes?: string;
+    internalNotes?: string;
 };
 
 type TemplateItem = {
@@ -119,6 +133,19 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
     notifyNewLead: true,
     notifyNewMessage: true,
     notifySound: true
+};
+
+const DEFAULT_AI_SETTINGS: AiSettingsConfig = {
+    enabled: false,
+    businessDescription: '',
+    productsServices: '',
+    targetAudience: '',
+    toneOfVoice: 'consultivo',
+    rulesPolicies: '',
+    faqs: '',
+    websiteUrl: '',
+    documentsNotes: '',
+    internalNotes: ''
 };
 
 function onReady(callback: () => void) {
@@ -374,11 +401,86 @@ function readNotificationSettingsFromForm() {
     };
 }
 
+function sanitizeAiText(value: unknown, maxLength = 4000) {
+    return String(value || '').replace(/\r/g, '').trim().slice(0, maxLength);
+}
+
+function sanitizeAiUrl(value: unknown) {
+    return String(value || '').trim().slice(0, 300);
+}
+
+function normalizeAiSettings(values: Partial<AiSettingsConfig> | null | undefined): AiSettingsConfig {
+    return {
+        enabled: parseBooleanSetting(values?.enabled, DEFAULT_AI_SETTINGS.enabled),
+        businessDescription: sanitizeAiText(values?.businessDescription, 5000),
+        productsServices: sanitizeAiText(values?.productsServices, 5000),
+        targetAudience: sanitizeAiText(values?.targetAudience, 3000),
+        toneOfVoice: sanitizeAiText(values?.toneOfVoice, 120) || String(DEFAULT_AI_SETTINGS.toneOfVoice || ''),
+        rulesPolicies: sanitizeAiText(values?.rulesPolicies, 5000),
+        faqs: sanitizeAiText(values?.faqs, 8000),
+        websiteUrl: sanitizeAiUrl(values?.websiteUrl),
+        documentsNotes: sanitizeAiText(values?.documentsNotes, 8000),
+        internalNotes: sanitizeAiText(values?.internalNotes, 8000)
+    };
+}
+
+function applyAiSettings(values: Partial<AiSettingsConfig> | null | undefined) {
+    const normalized = normalizeAiSettings(values);
+    const enabledInput = document.getElementById('aiEnabled') as HTMLInputElement | null;
+    const businessDescriptionInput = document.getElementById('aiBusinessDescription') as HTMLTextAreaElement | null;
+    const productsServicesInput = document.getElementById('aiProductsServices') as HTMLTextAreaElement | null;
+    const targetAudienceInput = document.getElementById('aiTargetAudience') as HTMLTextAreaElement | null;
+    const toneOfVoiceInput = document.getElementById('aiToneOfVoice') as HTMLInputElement | HTMLSelectElement | null;
+    const rulesPoliciesInput = document.getElementById('aiRulesPolicies') as HTMLTextAreaElement | null;
+    const faqsInput = document.getElementById('aiFaqs') as HTMLTextAreaElement | null;
+    const websiteUrlInput = document.getElementById('aiWebsiteUrl') as HTMLInputElement | null;
+    const documentsNotesInput = document.getElementById('aiDocumentsNotes') as HTMLTextAreaElement | null;
+    const internalNotesInput = document.getElementById('aiInternalNotes') as HTMLTextAreaElement | null;
+
+    if (enabledInput) enabledInput.checked = Boolean(normalized.enabled);
+    if (businessDescriptionInput) businessDescriptionInput.value = String(normalized.businessDescription || '');
+    if (productsServicesInput) productsServicesInput.value = String(normalized.productsServices || '');
+    if (targetAudienceInput) targetAudienceInput.value = String(normalized.targetAudience || '');
+    if (toneOfVoiceInput) toneOfVoiceInput.value = String(normalized.toneOfVoice || DEFAULT_AI_SETTINGS.toneOfVoice || 'consultivo');
+    if (rulesPoliciesInput) rulesPoliciesInput.value = String(normalized.rulesPolicies || '');
+    if (faqsInput) faqsInput.value = String(normalized.faqs || '');
+    if (websiteUrlInput) websiteUrlInput.value = String(normalized.websiteUrl || '');
+    if (documentsNotesInput) documentsNotesInput.value = String(normalized.documentsNotes || '');
+    if (internalNotesInput) internalNotesInput.value = String(normalized.internalNotes || '');
+}
+
+function readAiSettingsFromForm(): AiSettingsConfig {
+    const enabledInput = document.getElementById('aiEnabled') as HTMLInputElement | null;
+    const businessDescriptionInput = document.getElementById('aiBusinessDescription') as HTMLTextAreaElement | null;
+    const productsServicesInput = document.getElementById('aiProductsServices') as HTMLTextAreaElement | null;
+    const targetAudienceInput = document.getElementById('aiTargetAudience') as HTMLTextAreaElement | null;
+    const toneOfVoiceInput = document.getElementById('aiToneOfVoice') as HTMLInputElement | HTMLSelectElement | null;
+    const rulesPoliciesInput = document.getElementById('aiRulesPolicies') as HTMLTextAreaElement | null;
+    const faqsInput = document.getElementById('aiFaqs') as HTMLTextAreaElement | null;
+    const websiteUrlInput = document.getElementById('aiWebsiteUrl') as HTMLInputElement | null;
+    const documentsNotesInput = document.getElementById('aiDocumentsNotes') as HTMLTextAreaElement | null;
+    const internalNotesInput = document.getElementById('aiInternalNotes') as HTMLTextAreaElement | null;
+
+    return normalizeAiSettings({
+        enabled: Boolean(enabledInput?.checked),
+        businessDescription: businessDescriptionInput?.value || '',
+        productsServices: productsServicesInput?.value || '',
+        targetAudience: targetAudienceInput?.value || '',
+        toneOfVoice: toneOfVoiceInput?.value || String(DEFAULT_AI_SETTINGS.toneOfVoice || 'consultivo'),
+        rulesPolicies: rulesPoliciesInput?.value || '',
+        faqs: faqsInput?.value || '',
+        websiteUrl: websiteUrlInput?.value || '',
+        documentsNotes: documentsNotesInput?.value || '',
+        internalNotes: internalNotesInput?.value || ''
+    });
+}
+
 async function loadSettings() {
     const localSettings: Settings = readLocalSettingsStorage();
     applyCompanySettings(localSettings.company || {});
     applyBusinessHoursSettings(localSettings.businessHours || DEFAULT_BUSINESS_HOURS_SETTINGS);
     applyNotificationSettings(localSettings.notifications || DEFAULT_NOTIFICATION_SETTINGS);
+    applyAiSettings(localSettings.ai || DEFAULT_AI_SETTINGS);
 
     try {
         const response = await api.get('/api/settings');
@@ -403,18 +505,25 @@ async function loadSettings() {
             notifyNewMessage: parseBooleanSetting(serverSettings.notify_new_message, localSettings.notifications?.notifyNewMessage ?? DEFAULT_NOTIFICATION_SETTINGS.notifyNewMessage),
             notifySound: parseBooleanSetting(serverSettings.notify_sound, localSettings.notifications?.notifySound ?? DEFAULT_NOTIFICATION_SETTINGS.notifySound)
         };
+        const aiSettings = normalizeAiSettings(
+            (serverSettings.ai_assistant && typeof serverSettings.ai_assistant === 'object')
+                ? serverSettings.ai_assistant as AiSettingsConfig
+                : (localSettings.ai || DEFAULT_AI_SETTINGS)
+        );
 
         if (hasCompanySettings) {
             applyCompanySettings(company);
         }
         applyBusinessHoursSettings(businessHours);
         applyNotificationSettings(notifications);
+        applyAiSettings(aiSettings);
 
         writeLocalSettingsStorage({
             ...localSettings,
             company: hasCompanySettings ? company : (localSettings.company || {}),
             businessHours,
-            notifications
+            notifications,
+            ai: aiSettings
         });
     } catch (error) {
         // Mantem fallback local sem interromper a pagina
@@ -1519,6 +1628,23 @@ function saveWhatsAppSettings() {
     showToast('success', 'Sucesso', 'Configurações salvas!');
 }
 
+async function saveAiSettings() {
+    const settings: Settings = readLocalSettingsStorage();
+    const ai = readAiSettingsFromForm();
+
+    settings.ai = ai;
+    writeLocalSettingsStorage(settings);
+
+    try {
+        await api.put('/api/settings', {
+            ai_assistant: ai
+        });
+        showToast('success', 'Sucesso', 'Configuracoes de Inteligencia Artificial salvas!');
+    } catch (error) {
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nao foi possivel sincronizar no servidor');
+    }
+}
+
 async function saveNotificationSettings() {
     const settings: Settings = readLocalSettingsStorage();
     const notifications = readNotificationSettingsFromForm();
@@ -2007,6 +2133,7 @@ const windowAny = window as Window & {
     saveWhatsAppSessionName?: (sessionToken: string) => Promise<void>;
     removeWhatsAppSession?: (sessionToken: string) => Promise<void>;
     saveWhatsAppSettings?: () => void;
+    saveAiSettings?: () => Promise<void>;
     saveBusinessHoursSettings?: () => Promise<void>;
     saveNotificationSettings?: () => Promise<void>;
     createContactField?: () => Promise<void>;
@@ -2051,6 +2178,7 @@ windowAny.refreshWhatsAppAccounts = refreshWhatsAppAccounts;
 windowAny.saveWhatsAppSessionName = saveWhatsAppSessionName;
 windowAny.removeWhatsAppSession = removeWhatsAppSession;
 windowAny.saveWhatsAppSettings = saveWhatsAppSettings;
+windowAny.saveAiSettings = saveAiSettings;
 windowAny.saveBusinessHoursSettings = saveBusinessHoursSettings;
 windowAny.saveNotificationSettings = saveNotificationSettings;
 windowAny.createContactField = createContactField;

@@ -68,6 +68,7 @@ const webhookService = require('./services/webhookService');
 const queueService = require('./services/queueService');
 
 const flowService = require('./services/flowService');
+const aiFlowDraftService = require('./services/aiFlowDraftService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
@@ -12338,6 +12339,59 @@ app.delete('/api/automations/:id', authenticate, async (req, res) => {
 // API DE FLUXOS
 
 // ============================================
+
+
+app.post('/api/ai/flows/generate', authenticate, async (req, res) => {
+
+    try {
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const prompt = String(req.body?.prompt || '').trim();
+        const preset = String(req.body?.preset || '').trim();
+
+        if (!prompt) {
+            return res.status(400).json({ success: false, error: 'Prompt e obrigatorio' });
+        }
+
+        if (prompt.length > 5000) {
+            return res.status(400).json({ success: false, error: 'Prompt muito longo (maximo 5000 caracteres)' });
+        }
+
+        const aiSettingsKey = buildScopedSettingsKey('ai_assistant', ownerScopeUserId);
+        const aiSettings = await Settings.get(aiSettingsKey);
+        const normalizedAiConfig = aiFlowDraftService.normalizeAiConfig(aiSettings || {});
+        const aiConfigHasEnabledFlag = Boolean(
+            aiSettings
+            && typeof aiSettings === 'object'
+            && !Array.isArray(aiSettings)
+            && Object.prototype.hasOwnProperty.call(aiSettings, 'enabled')
+        );
+
+        if (aiConfigHasEnabledFlag && !normalizedAiConfig.enabled) {
+            return res.status(403).json({
+                success: false,
+                error: 'Ative a Inteligencia Artificial em Configuracoes para gerar fluxos.'
+            });
+        }
+
+        const generated = aiFlowDraftService.generateFlowDraft({
+            prompt,
+            preset: preset || null,
+            businessContext: normalizedAiConfig
+        });
+
+        res.json({
+            success: true,
+            provider: generated.provider || 'heuristic',
+            intent: generated.intent || null,
+            context: generated.context || {},
+            draft: generated.draft || null
+        });
+    } catch (error) {
+        console.error('Falha ao gerar rascunho de fluxo por IA:', error);
+        res.status(500).json({ success: false, error: 'Erro ao gerar fluxo com IA' });
+    }
+
+});
 
 
 

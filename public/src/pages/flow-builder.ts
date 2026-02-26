@@ -37,6 +37,24 @@ type Edge = {
     label?: string;
 };
 
+type AiGeneratedFlowDraft = {
+    name?: string;
+    description?: string;
+    nodes?: FlowNode[];
+    edges?: Edge[];
+    assumptions?: string[];
+    is_active?: number | boolean;
+};
+
+type AiGenerateFlowResponse = {
+    success?: boolean;
+    error?: string;
+    provider?: string;
+    intent?: string;
+    context?: Record<string, any>;
+    draft?: AiGeneratedFlowDraft | null;
+};
+
 type FlowSummary = {
     id: number;
     name: string;
@@ -2190,6 +2208,80 @@ function createNewFlow() {
     closeFlowsModal();
 }
 
+function applyAiDraftToEditor(draft: AiGeneratedFlowDraft) {
+    const nextNodes = Array.isArray(draft?.nodes) ? draft.nodes : [];
+    const nextEdges = Array.isArray(draft?.edges) ? draft.edges : [];
+
+    if (nextNodes.length === 0) {
+        throw new Error('A IA nao retornou blocos para o fluxo.');
+    }
+
+    resetEditorState();
+    closeFlowsModal();
+
+    const canvasContainer = document.getElementById('canvasContainer') as HTMLElement | null;
+    const connectionsSvg = document.getElementById('connectionsSvg') as HTMLElement | null;
+    if (canvasContainer) canvasContainer.innerHTML = '';
+    if (connectionsSvg) connectionsSvg.innerHTML = '';
+    document.getElementById('emptyCanvas')?.remove();
+
+    currentFlowId = null;
+    persistLastOpenFlowId(null);
+    currentFlowName = String(draft.name || 'Fluxo IA (rascunho)').trim() || 'Fluxo IA (rascunho)';
+    nodes = nextNodes;
+    edges = nextEdges;
+    normalizeLoadedFlowData();
+    setCurrentFlowActive(false);
+    renderCurrentFlowName();
+
+    nodes.forEach((node) => renderNode(node));
+    setTimeout(() => renderConnections(), 100);
+}
+
+async function generateFlowWithAi() {
+    const seedPrompt = 'gere um fluxo de conversa que receba novos leads e feche vendas';
+    const promptText = String(prompt('Descreva o fluxo que a IA deve gerar:', seedPrompt) || '').trim();
+    if (!promptText) return;
+
+    if (nodes.length > 0) {
+        const confirmed = confirm('Substituir o fluxo atual pelo rascunho gerado por IA? As alteracoes nao salvas serao perdidas.');
+        if (!confirmed) return;
+    }
+
+    const token = getSessionToken();
+    if (!token) {
+        alert('Sessao expirada. Faca login novamente.');
+        return;
+    }
+
+    try {
+        notify('info', 'IA', 'Gerando rascunho de fluxo...');
+        const response = await fetch('/api/ai/flows/generate', {
+            method: 'POST',
+            headers: buildAuthHeaders(true),
+            body: JSON.stringify({
+                prompt: promptText
+            })
+        });
+        const result = await response.json() as AiGenerateFlowResponse;
+
+        if (!response.ok || !result?.success || !result?.draft) {
+            throw new Error(result?.error || 'Nao foi possivel gerar o fluxo com IA');
+        }
+
+        applyAiDraftToEditor(result.draft);
+
+        const assumptions = Array.isArray(result.draft.assumptions) ? result.draft.assumptions : [];
+        const provider = String(result.provider || 'ia').toUpperCase();
+        const summaryMessage = assumptions.length > 0
+            ? `Rascunho gerado (${provider}). Revise antes de salvar.`
+            : `Rascunho gerado (${provider}).`;
+        notify('success', 'IA', summaryMessage);
+    } catch (error) {
+        alert('Erro ao gerar fluxo com IA: ' + (error instanceof Error ? error.message : 'Falha inesperada'));
+    }
+}
+
 // Modal
 function openFlowsModal() {
     renderFlowStatusControls();
@@ -2211,6 +2303,7 @@ const windowAny = window as Window & {
     createNewFlow?: () => void;
     clearCanvas?: () => void;
     saveFlow?: () => Promise<void>;
+    generateFlowWithAi?: () => Promise<void>;
     toggleFlowActive?: () => void;
     updateFlowStatusFromSelect?: () => void;
     zoomIn?: () => void;
@@ -2245,6 +2338,7 @@ windowAny.openFlowsModal = openFlowsModal;
 windowAny.createNewFlow = createNewFlow;
 windowAny.clearCanvas = clearCanvas;
 windowAny.saveFlow = saveFlow;
+windowAny.generateFlowWithAi = generateFlowWithAi;
 windowAny.toggleFlowActive = toggleFlowActive;
 windowAny.updateFlowStatusFromSelect = updateFlowStatusFromSelect;
 windowAny.zoomIn = zoomIn;
