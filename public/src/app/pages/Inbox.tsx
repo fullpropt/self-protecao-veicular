@@ -279,7 +279,7 @@ export default function Inbox() {
         .chat-panel {
             display: flex;
             flex-direction: column;
-            background: var(--surface-muted);
+            background: linear-gradient(180deg, rgba(19, 33, 54, 0.94), rgba(17, 30, 49, 0.96));
             min-height: 0;
         }
         .chat-header {
@@ -301,31 +301,21 @@ export default function Inbox() {
             position: relative;
             isolation: isolate;
             background:
-                radial-gradient(420px 220px at 85% 0%, rgba(var(--primary-rgb), 0.08), rgba(var(--primary-rgb), 0)),
-                radial-gradient(320px 180px at 12% 100%, rgba(var(--primary-rgb), 0.04), rgba(var(--primary-rgb), 0)),
-                linear-gradient(180deg, #0b1420 0%, #09111b 55%, #070f17 100%);
+                radial-gradient(520px 260px at 50% 0%, rgba(53, 224, 132, 0.02), rgba(53, 224, 132, 0)),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0)),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240' fill='none'%3E%3Cg stroke='%2335e084' stroke-width='1.15' stroke-linecap='round' stroke-linejoin='round' stroke-opacity='0.028'%3E%3Cpath d='M20 34h40a10 10 0 0 1 10 10v20a10 10 0 0 1-10 10H40l-12 9V74h-8a10 10 0 0 1-10-10V44a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M104 28h34a9 9 0 0 1 9 9v16a9 9 0 0 1-9 9h-17l-10 8v-8h-7a9 9 0 0 1-9-9V37a9 9 0 0 1 9-9Z'/%3E%3Cpath d='M176 42l17 9-17 9 4-9-4-9Z'/%3E%3Cpath d='M37 132c8 12 18 21 30 27l10-10c2-2 4-2 6-1 6 3 12 5 18 6 2 0 3 2 3 4v16c0 3-2 5-5 5-40-2-73-35-75-75 0-3 2-5 5-5h16c2 0 4 1 4 3 1 6 3 12 6 18 1 2 1 4-1 6l-10 10Z'/%3E%3Cpath d='M127 112l7 7 15-15'/%3E%3Cpath d='M121 120l7 7 15-15'/%3E%3Cpath d='M173 118c7 0 13 6 13 13s-6 13-13 13-13-6-13-13 6-13 13-13Z'/%3E%3Cpath d='M166 156h14'/%3E%3Cpath d='M188 156h8'/%3E%3Cpath d='M34 201h30'/%3E%3Cpath d='M86 194h20a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H94l-8 6v-6h-4a8 8 0 0 1-8-8v-10a8 8 0 0 1 8-8Z'/%3E%3Cpath d='M144 191h34a10 10 0 0 1 10 10v14a10 10 0 0 1-10 10h-12l-10 8v-8h-12a10 10 0 0 1-10-10v-14a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M149 206h24'/%3E%3Cpath d='M149 213h17'/%3E%3C/g%3E%3C/svg%3E"),
+                radial-gradient(420px 220px at 85% 0%, rgba(var(--primary-rgb), 0.035), rgba(var(--primary-rgb), 0)),
+                radial-gradient(320px 180px at 12% 100%, rgba(var(--primary-rgb), 0.02), rgba(var(--primary-rgb), 0)),
+                linear-gradient(180deg, #15263f 0%, #132238 55%, #112034 100%);
+            background-repeat: no-repeat, no-repeat, repeat, no-repeat, no-repeat, no-repeat;
+            background-size: auto, auto, 180px 180px, auto, auto, auto;
+            background-position: 50% 0, 0 0, 12px 8px, 85% 0, 12% 100%, 0 0;
         }
         .chat-messages::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            z-index: 0;
-            opacity: 0.06;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240' fill='none'%3E%3Cg stroke='%2335e084' stroke-width='1.15' stroke-linecap='round' stroke-linejoin='round' stroke-opacity='0.9'%3E%3Cpath d='M20 34h40a10 10 0 0 1 10 10v20a10 10 0 0 1-10 10H40l-12 9V74h-8a10 10 0 0 1-10-10V44a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M104 28h34a9 9 0 0 1 9 9v16a9 9 0 0 1-9 9h-17l-10 8v-8h-7a9 9 0 0 1-9-9V37a9 9 0 0 1 9-9Z'/%3E%3Cpath d='M176 42l17 9-17 9 4-9-4-9Z'/%3E%3Cpath d='M37 132c8 12 18 21 30 27l10-10c2-2 4-2 6-1 6 3 12 5 18 6 2 0 3 2 3 4v16c0 3-2 5-5 5-40-2-73-35-75-75 0-3 2-5 5-5h16c2 0 4 1 4 3 1 6 3 12 6 18 1 2 1 4-1 6l-10 10Z'/%3E%3Cpath d='M127 112l7 7 15-15'/%3E%3Cpath d='M121 120l7 7 15-15'/%3E%3Cpath d='M173 118c7 0 13 6 13 13s-6 13-13 13-13-6-13-13 6-13 13-13Z'/%3E%3Cpath d='M166 156h14'/%3E%3Cpath d='M188 156h8'/%3E%3Cpath d='M34 201h30'/%3E%3Cpath d='M86 194h20a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H94l-8 6v-6h-4a8 8 0 0 1-8-8v-10a8 8 0 0 1 8-8Z'/%3E%3Cpath d='M144 191h34a10 10 0 0 1 10 10v14a10 10 0 0 1-10 10h-12l-10 8v-8h-12a10 10 0 0 1-10-10v-14a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M149 206h24'/%3E%3Cpath d='M149 213h17'/%3E%3C/g%3E%3C/svg%3E");
-            background-repeat: repeat;
-            background-size: 240px 240px;
-            background-position: 0 0;
+            content: none;
         }
         .chat-messages::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            z-index: 0;
-            background:
-                radial-gradient(520px 260px at 50% 0%, rgba(53, 224, 132, 0.05), rgba(53, 224, 132, 0)),
-                linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0));
+            content: none;
         }
         .chat-messages > * {
             position: relative;
@@ -642,7 +632,28 @@ export default function Inbox() {
             align-items: center;
             justify-content: center;
             color: var(--gray-700);
-            background: var(--surface-muted);
+            background:
+                radial-gradient(360px 180px at 80% 0%, rgba(var(--primary-rgb), 0.03), rgba(var(--primary-rgb), 0)),
+                linear-gradient(180deg, #15263f 0%, #132238 55%, #112034 100%);
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+        }
+        .chat-empty::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.024;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240' fill='none'%3E%3Cg stroke='%2335e084' stroke-width='1.15' stroke-linecap='round' stroke-linejoin='round' stroke-opacity='0.9'%3E%3Cpath d='M20 34h40a10 10 0 0 1 10 10v20a10 10 0 0 1-10 10H40l-12 9V74h-8a10 10 0 0 1-10-10V44a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M104 28h34a9 9 0 0 1 9 9v16a9 9 0 0 1-9 9h-17l-10 8v-8h-7a9 9 0 0 1-9-9V37a9 9 0 0 1 9-9Z'/%3E%3Cpath d='M176 42l17 9-17 9 4-9-4-9Z'/%3E%3Cpath d='M37 132c8 12 18 21 30 27l10-10c2-2 4-2 6-1 6 3 12 5 18 6 2 0 3 2 3 4v16c0 3-2 5-5 5-40-2-73-35-75-75 0-3 2-5 5-5h16c2 0 4 1 4 3 1 6 3 12 6 18 1 2 1 4-1 6l-10 10Z'/%3E%3Cpath d='M127 112l7 7 15-15'/%3E%3Cpath d='M121 120l7 7 15-15'/%3E%3Cpath d='M173 118c7 0 13 6 13 13s-6 13-13 13-13-6-13-13 6-13 13-13Z'/%3E%3Cpath d='M166 156h14'/%3E%3Cpath d='M188 156h8'/%3E%3Cpath d='M34 201h30'/%3E%3Cpath d='M86 194h20a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H94l-8 6v-6h-4a8 8 0 0 1-8-8v-10a8 8 0 0 1 8-8Z'/%3E%3Cpath d='M144 191h34a10 10 0 0 1 10 10v14a10 10 0 0 1-10 10h-12l-10 8v-8h-12a10 10 0 0 1-10-10v-14a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M149 206h24'/%3E%3Cpath d='M149 213h17'/%3E%3C/g%3E%3C/svg%3E");
+            background-repeat: repeat;
+            background-size: 180px 180px;
+            background-position: 12px 8px;
+        }
+        .chat-empty > * {
+            position: relative;
+            z-index: 1;
         }
         .chat-empty-icon { font-size: 80px; margin-bottom: 20px; opacity: 0.5; }
         .typing-indicator {
