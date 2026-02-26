@@ -698,7 +698,7 @@ function bindQuickReplyDismiss() {
         const target = event.target as HTMLElement | null;
         const picker = document.getElementById('quickReplyPicker') as HTMLElement | null;
         if (!picker || !picker.classList.contains('open')) return;
-        if (target?.closest('.quick-reply-toolbar')) return;
+        if (target?.closest('.chat-input')) return;
         closeQuickReplyPicker();
     });
 }
@@ -1402,6 +1402,18 @@ function renderMessageContent(message: ChatMessage) {
         `;
     }
 
+    if (mediaType === 'sticker' && mediaUrl) {
+        const safeUrl = escapeHtml(mediaUrl);
+        return `
+            <div class="message-media message-media-sticker-wrap">
+                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">
+                    <img class="message-media-sticker" src="${safeUrl}" alt="Sticker recebido" loading="lazy" />
+                </a>
+            </div>
+            ${hasReadableText ? `<div class="message-caption">${safeText}</div>` : ''}
+        `;
+    }
+
     if (mediaType === 'document' && mediaUrl) {
         const safeUrl = escapeHtml(mediaUrl);
         const docLabel = escapeHtml(resolveDocumentLabel(message));
@@ -1583,15 +1595,6 @@ function renderChat() {
             </div>
         </div>
 
-        <div class="quick-reply-toolbar">
-            <button class="btn btn-sm btn-outline quick-reply-trigger" onclick="toggleQuickReplyPicker()" title="Selecionar resposta rapida">
-                <span class="icon icon-bolt icon-sm"></span> Respostas rapidas
-            </button>
-            <div class="quick-reply-picker" id="quickReplyPicker">
-                ${quickReplyItems}
-            </div>
-        </div>
-
         <div class="chat-input">
             <input id="chatMediaInput" type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" onchange="handleMediaInputChange(event)" style="display:none" />
             <button class="chat-input-btn chat-attach-btn" onclick="triggerMediaPicker()" title="Anexar arquivo">
@@ -1600,6 +1603,12 @@ function renderChat() {
             <button class="chat-input-btn chat-emoji-btn" onclick="toggleEmojiPicker()" title="Inserir emoji" type="button">
                 <span class="icon icon-smile icon-sm"></span>
             </button>
+            <button class="quick-reply-trigger" onclick="toggleQuickReplyPicker()" title="Selecionar resposta rapida" type="button">
+                <span class="icon icon-bolt icon-sm"></span> R&aacute;pidas
+            </button>
+            <div class="quick-reply-picker" id="quickReplyPicker">
+                ${quickReplyItems}
+            </div>
             <div class="chat-emoji-picker" id="emojiPicker" aria-label="Selecionador de emojis">
                 ${emojiPickerItems}
             </div>

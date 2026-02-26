@@ -1898,6 +1898,16 @@ function resolveIncomingMediaPayload(content, mediaType) {
         };
     }
 
+    if (mediaType === 'sticker' && content.stickerMessage) {
+        return {
+            payload: content.stickerMessage,
+            downloadType: 'sticker',
+            mimetype: content.stickerMessage.mimetype || 'image/webp',
+            fileName: content.stickerMessage.fileName || '',
+            fallbackExtension: 'webp'
+        };
+    }
+
     return null;
 }
 

@@ -42,6 +42,13 @@ export default function Inbox() {
   return (
     <div className="inbox-react">
       <style>{`
+        .inbox-react {
+            --inbox-scroll-track: rgba(7, 13, 23, 0.94);
+            --inbox-scroll-track-border: rgba(255, 255, 255, 0.03);
+            --inbox-scroll-thumb: rgba(var(--primary-rgb), 0.42);
+            --inbox-scroll-thumb-hover: rgba(var(--primary-rgb), 0.62);
+            --inbox-scroll-thumb-active: rgba(var(--primary-rgb), 0.74);
+        }
         .inbox-container {
             display: grid;
             grid-template-columns: 350px 1fr 320px;
@@ -53,6 +60,89 @@ export default function Inbox() {
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-lg);
             overflow: hidden;
+        }
+        .inbox-react .conversations-list,
+        .inbox-react .chat-messages,
+        .inbox-react .quick-reply-picker,
+        .inbox-react .inbox-right-panel,
+        .inbox-react .inbox-right-panel-content,
+        .inbox-react .chat-input textarea {
+            scrollbar-width: thin;
+            scrollbar-color: var(--inbox-scroll-thumb) var(--inbox-scroll-track);
+        }
+        .inbox-react .conversations-list::-webkit-scrollbar,
+        .inbox-react .chat-messages::-webkit-scrollbar,
+        .inbox-react .quick-reply-picker::-webkit-scrollbar,
+        .inbox-react .inbox-right-panel::-webkit-scrollbar,
+        .inbox-react .inbox-right-panel-content::-webkit-scrollbar,
+        .inbox-react .chat-input textarea::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        .inbox-react .conversations-list::-webkit-scrollbar-track,
+        .inbox-react .chat-messages::-webkit-scrollbar-track,
+        .inbox-react .quick-reply-picker::-webkit-scrollbar-track,
+        .inbox-react .inbox-right-panel::-webkit-scrollbar-track,
+        .inbox-react .inbox-right-panel-content::-webkit-scrollbar-track,
+        .inbox-react .chat-input textarea::-webkit-scrollbar-track {
+            background: linear-gradient(180deg, rgba(9, 15, 25, 0.96), rgba(11, 19, 31, 0.96));
+            border-left: 1px solid var(--inbox-scroll-track-border);
+        }
+        .inbox-react .conversations-list::-webkit-scrollbar-thumb,
+        .inbox-react .chat-messages::-webkit-scrollbar-thumb,
+        .inbox-react .quick-reply-picker::-webkit-scrollbar-thumb,
+        .inbox-react .inbox-right-panel::-webkit-scrollbar-thumb,
+        .inbox-react .inbox-right-panel-content::-webkit-scrollbar-thumb,
+        .inbox-react .chat-input textarea::-webkit-scrollbar-thumb {
+            background: linear-gradient(
+                180deg,
+                rgba(var(--primary-rgb), 0.62) 0%,
+                rgba(var(--primary-rgb), 0.38) 100%
+            );
+            border-radius: 999px;
+            border: 2px solid rgba(10, 17, 28, 0.92);
+            background-clip: padding-box;
+            min-height: 36px;
+        }
+        .inbox-react .conversations-list::-webkit-scrollbar-thumb:hover,
+        .inbox-react .chat-messages::-webkit-scrollbar-thumb:hover,
+        .inbox-react .quick-reply-picker::-webkit-scrollbar-thumb:hover,
+        .inbox-react .inbox-right-panel::-webkit-scrollbar-thumb:hover,
+        .inbox-react .inbox-right-panel-content::-webkit-scrollbar-thumb:hover,
+        .inbox-react .chat-input textarea::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(
+                180deg,
+                rgba(var(--primary-rgb), 0.78) 0%,
+                rgba(var(--primary-rgb), 0.5) 100%
+            );
+        }
+        .inbox-react .conversations-list::-webkit-scrollbar-thumb:active,
+        .inbox-react .chat-messages::-webkit-scrollbar-thumb:active,
+        .inbox-react .quick-reply-picker::-webkit-scrollbar-thumb:active,
+        .inbox-react .inbox-right-panel::-webkit-scrollbar-thumb:active,
+        .inbox-react .inbox-right-panel-content::-webkit-scrollbar-thumb:active,
+        .inbox-react .chat-input textarea::-webkit-scrollbar-thumb:active {
+            background: var(--inbox-scroll-thumb-active);
+        }
+        .inbox-react .conversations-list::-webkit-scrollbar-button,
+        .inbox-react .chat-messages::-webkit-scrollbar-button,
+        .inbox-react .quick-reply-picker::-webkit-scrollbar-button,
+        .inbox-react .inbox-right-panel::-webkit-scrollbar-button,
+        .inbox-react .inbox-right-panel-content::-webkit-scrollbar-button,
+        .inbox-react .chat-input textarea::-webkit-scrollbar-button {
+            background: rgba(8, 14, 24, 0.96);
+            border-left: 1px solid var(--inbox-scroll-track-border);
+            border-top: 1px solid var(--inbox-scroll-track-border);
+            height: 12px;
+            width: 12px;
+        }
+        .inbox-react .conversations-list::-webkit-scrollbar-corner,
+        .inbox-react .chat-messages::-webkit-scrollbar-corner,
+        .inbox-react .quick-reply-picker::-webkit-scrollbar-corner,
+        .inbox-react .inbox-right-panel::-webkit-scrollbar-corner,
+        .inbox-react .inbox-right-panel-content::-webkit-scrollbar-corner,
+        .inbox-react .chat-input textarea::-webkit-scrollbar-corner {
+            background: rgba(8, 14, 24, 0.96);
         }
         @media (max-width: 1024px) {
             .inbox-container { grid-template-columns: 350px 1fr; }
@@ -446,6 +536,34 @@ export default function Inbox() {
         .chat-messages .message.sent .message-media-video {
             border-color: rgba(var(--primary-rgb), 0.35);
         }
+        .chat-messages .message.media-sticker {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 4px 4px 6px;
+            min-width: 0;
+            max-width: 220px;
+        }
+        .chat-messages .message.sent.media-sticker,
+        .chat-messages .message.received.media-sticker {
+            background: transparent;
+            border: none;
+        }
+        .message-media-sticker-wrap {
+            display: inline-block;
+        }
+        .message-media-sticker {
+            display: block;
+            width: 100%;
+            max-width: 170px;
+            height: auto;
+            border-radius: 8px;
+            filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.2));
+        }
+        .chat-messages .message.media-sticker .message-time {
+            margin-top: 6px;
+            padding-inline: 4px;
+        }
         .message-document-link {
             display: inline-flex;
             align-items: center;
@@ -568,29 +686,40 @@ export default function Inbox() {
             outline: none;
             border-color: var(--primary);
         }
-        .quick-reply-toolbar {
-            position: relative;
-            display: flex;
-            justify-content: flex-start;
-            padding: 10px 20px 0;
-            background: var(--surface);
-            border-top: 1px solid var(--border-color);
-        }
         .quick-reply-trigger {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            height: 36px;
-            border-radius: 999px;
-            padding: 0 14px;
+            height: 44px;
+            border-radius: 14px;
+            padding: 0 12px;
             font-weight: 600;
+            font-size: 13px;
+            flex-shrink: 0;
+            white-space: nowrap;
+            border: 1px solid var(--border-color);
+            background: var(--surface-muted);
+            color: var(--gray-700);
+            cursor: pointer;
+            transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        }
+        .quick-reply-trigger:hover {
+            background: rgba(var(--primary-rgb), 0.08);
+            border-color: rgba(var(--primary-rgb), 0.2);
+            color: var(--dark);
+            transform: translateY(-1px);
+        }
+        .quick-reply-trigger:focus-visible {
+            outline: 2px solid rgba(var(--primary-rgb), 0.32);
+            outline-offset: 1px;
+            border-color: rgba(var(--primary-rgb), 0.24);
         }
         .quick-reply-picker {
             display: none;
             position: absolute;
             left: 20px;
             right: 20px;
-            bottom: calc(100% + 8px);
+            bottom: calc(100% + 10px);
             background: var(--surface);
             border: 1px solid var(--border-color);
             border-radius: 12px;
@@ -598,7 +727,7 @@ export default function Inbox() {
             padding: 8px;
             max-height: 220px;
             overflow-y: auto;
-            z-index: 10;
+            z-index: 25;
         }
         .quick-reply-picker.open {
             display: flex;
@@ -619,6 +748,12 @@ export default function Inbox() {
         .quick-reply-option:hover {
             background: rgba(var(--primary-rgb), 0.1);
             border-color: var(--border-color);
+        }
+        .quick-reply-option:focus-visible {
+            outline: 2px solid rgba(var(--primary-rgb), 0.28);
+            outline-offset: 1px;
+            border-color: rgba(var(--primary-rgb), 0.22);
+            background: rgba(var(--primary-rgb), 0.08);
         }
         .quick-reply-empty {
             padding: 10px 12px;
@@ -854,12 +989,20 @@ export default function Inbox() {
                 max-width: 86%;
                 font-size: 13px;
             }
-            .quick-reply-toolbar {
-                padding: 8px 12px 0;
-            }
             .chat-input {
                 padding: 10px 12px;
                 gap: 10px;
+            }
+            .quick-reply-trigger {
+                height: 42px;
+                padding: 0 10px;
+                font-size: 12px;
+                gap: 5px;
+            }
+            .quick-reply-picker {
+                left: 12px;
+                right: 12px;
+                bottom: calc(100% + 8px);
             }
             .chat-input .chat-emoji-picker {
                 left: 12px;
