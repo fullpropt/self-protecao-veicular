@@ -276,13 +276,17 @@ export default function FlowBuilder() {
         .flow-builder-react .flow-ai-assistant-dock {
             position: absolute;
             left: 50%;
-            bottom: 16px;
+            bottom: 24px;
             transform: translateX(-50%);
             z-index: 42;
             width: min(640px, calc(100% - 36px));
             display: grid;
             justify-items: center;
             pointer-events: none;
+        }
+
+        .flow-builder-react .flow-ai-assistant-launch[hidden] {
+            display: none !important;
         }
 
         .flow-builder-react .flow-ai-assistant-launch {
@@ -1704,7 +1708,7 @@ export default function FlowBuilder() {
             }
             .flow-builder-react .flow-ai-assistant-dock {
                 width: calc(100% - 20px);
-                bottom: 10px;
+                bottom: 14px;
             }
             .flow-builder-react .flow-ai-assistant-launch {
                 width: min(100%, 240px);
@@ -1924,7 +1928,7 @@ export default function FlowBuilder() {
                               type="button"
                               onClick={() => globals.toggleFlowAiAssistant?.(true)}
                           >
-                              <span className="icon icon-spark icon-sm"></span> Gerar com IA
+                              <span className="icon icon-spark icon-sm"></span> <span id="flowAiAssistantLaunchLabel">Gerar com IA</span>
                           </button>
 
                           <div className="flow-ai-assistant-panel" id="flowAiAssistantPanel" hidden>

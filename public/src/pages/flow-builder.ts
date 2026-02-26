@@ -61,6 +61,10 @@ type AiFlowGenerationRunResult = {
     cancelled?: boolean;
 };
 
+type AiFlowGenerationRunOptions = {
+    confirmReplace?: boolean;
+};
+
 type FlowSummary = {
     id: number;
     name: string;
@@ -152,6 +156,7 @@ let activeFlowDialogDismiss: (() => void) | null = null;
 let flowAiAssistantOpen = false;
 let flowAiAssistantLoading = false;
 let flowAiAssistantBound = false;
+let flowAiAssistantHasOpenedOnce = false;
 let flowAiAssistantMessages: FlowAiAssistantMessage[] = [];
 
 function getFlowDialogElements(): FlowDialogElements | null {
@@ -352,6 +357,7 @@ function notify(type: ToastType, title: string, message: string, fallbackMessage
 function getFlowAiAssistantElements() {
     return {
         launchBtn: document.getElementById('flowAiAssistantLaunchBtn') as HTMLButtonElement | null,
+        launchLabel: document.getElementById('flowAiAssistantLaunchLabel') as HTMLElement | null,
         panel: document.getElementById('flowAiAssistantPanel') as HTMLElement | null,
         messages: document.getElementById('flowAiAssistantMessages') as HTMLElement | null,
         input: document.getElementById('flowAiAssistantInput') as HTMLTextAreaElement | null,
@@ -366,7 +372,7 @@ function ensureFlowAiAssistantWelcome() {
     flowAiAssistantMessages = [
         {
             role: 'assistant',
-            text: 'Descreva o fluxo que você quer criar. Ex.: "gere um fluxo de conversa que receba novos leads e feche vendas".'
+            text: 'Descreva o que a IA deve fazer no fluxo (criar ou ajustar). Ex.: "gere um fluxo de conversa que receba novos leads e feche vendas".'
         }
     ];
 }
@@ -393,11 +399,14 @@ function autoResizeFlowAiAssistantInput() {
 }
 
 function renderFlowAiAssistantState() {
-    const { launchBtn, panel, sendBtn, status, input } = getFlowAiAssistantElements();
+    const { launchBtn, launchLabel, panel, sendBtn, status, input } = getFlowAiAssistantElements();
 
     if (launchBtn) {
         launchBtn.hidden = flowAiAssistantOpen;
         launchBtn.classList.toggle('is-hidden', flowAiAssistantOpen);
+    }
+    if (launchLabel) {
+        launchLabel.textContent = flowAiAssistantHasOpenedOnce ? 'Chat IA' : 'Gerar com IA';
     }
     if (panel) {
         panel.hidden = !flowAiAssistantOpen;
@@ -426,7 +435,11 @@ function appendFlowAiAssistantMessage(role: FlowAiAssistantMessage['role'], text
 }
 
 function setFlowAiAssistantOpen(forceOpen?: boolean) {
-    flowAiAssistantOpen = typeof forceOpen === 'boolean' ? forceOpen : !flowAiAssistantOpen;
+    const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !flowAiAssistantOpen;
+    flowAiAssistantOpen = nextOpen;
+    if (nextOpen) {
+        flowAiAssistantHasOpenedOnce = true;
+    }
     ensureFlowAiAssistantWelcome();
     renderFlowAiAssistantState();
 
@@ -459,7 +472,7 @@ function handleFlowAiAssistantInputKeydown(event: KeyboardEvent) {
 
 function bindFlowAiAssistant() {
     if (flowAiAssistantBound) return;
-    const { panel, input } = getFlowAiAssistantElements();
+    const { panel, input, closeBtn } = getFlowAiAssistantElements();
     if (!panel || !input) return;
 
     flowAiAssistantBound = true;
@@ -474,6 +487,12 @@ function bindFlowAiAssistant() {
     input.addEventListener('input', () => {
         autoResizeFlowAiAssistantInput();
         renderFlowAiAssistantState();
+    });
+
+    closeBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeFlowAiAssistant();
     });
 
     renderFlowAiAssistantState();
@@ -495,7 +514,7 @@ async function sendFlowAiAssistantPrompt() {
     renderFlowAiAssistantState();
 
     try {
-        const result = await runGenerateFlowWithAiPrompt(promptText);
+        const result = await runGenerateFlowWithAiPrompt(promptText, { confirmReplace: false });
         if (result.cancelled) {
             appendFlowAiAssistantMessage('system', 'Geração cancelada.');
             return;
@@ -2705,13 +2724,14 @@ function applyAiDraftToEditor(draft: AiGeneratedFlowDraft) {
     setTimeout(() => renderConnections(), 100);
 }
 
-async function runGenerateFlowWithAiPrompt(promptText: string): Promise<AiFlowGenerationRunResult> {
+async function runGenerateFlowWithAiPrompt(promptText: string, options: AiFlowGenerationRunOptions = {}): Promise<AiFlowGenerationRunResult> {
     const normalizedPrompt = String(promptText || '').trim();
     if (!normalizedPrompt) {
         return { cancelled: true };
     }
 
-    if (nodes.length > 0) {
+    const shouldConfirmReplace = options.confirmReplace !== false;
+    if (shouldConfirmReplace && nodes.length > 0) {
         const confirmed = await showFlowConfirmDialog(
             'Substituir o fluxo atual pelo rascunho gerado por IA? As alteracoes nao salvas serao perdidas.',
             'Gerar fluxo com IA'
