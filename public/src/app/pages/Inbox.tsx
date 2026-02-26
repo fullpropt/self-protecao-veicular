@@ -371,7 +371,7 @@ export default function Inbox() {
         .chat-panel {
             display: flex;
             flex-direction: column;
-            background: linear-gradient(180deg, rgba(19, 33, 54, 0.94), rgba(17, 30, 49, 0.96));
+            background: linear-gradient(180deg, rgba(24, 40, 64, 0.94), rgba(20, 35, 57, 0.96));
             min-height: 0;
             position: relative;
         }
@@ -397,9 +397,9 @@ export default function Inbox() {
                 radial-gradient(520px 260px at 50% 0%, rgba(53, 224, 132, 0.02), rgba(53, 224, 132, 0)),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0)),
                 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240' fill='none'%3E%3Cg stroke='%2335e084' stroke-width='1.15' stroke-linecap='round' stroke-linejoin='round' stroke-opacity='0.028'%3E%3Cpath d='M20 34h40a10 10 0 0 1 10 10v20a10 10 0 0 1-10 10H40l-12 9V74h-8a10 10 0 0 1-10-10V44a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M104 28h34a9 9 0 0 1 9 9v16a9 9 0 0 1-9 9h-17l-10 8v-8h-7a9 9 0 0 1-9-9V37a9 9 0 0 1 9-9Z'/%3E%3Cpath d='M176 42l17 9-17 9 4-9-4-9Z'/%3E%3Cpath d='M37 132c8 12 18 21 30 27l10-10c2-2 4-2 6-1 6 3 12 5 18 6 2 0 3 2 3 4v16c0 3-2 5-5 5-40-2-73-35-75-75 0-3 2-5 5-5h16c2 0 4 1 4 3 1 6 3 12 6 18 1 2 1 4-1 6l-10 10Z'/%3E%3Cpath d='M127 112l7 7 15-15'/%3E%3Cpath d='M121 120l7 7 15-15'/%3E%3Cpath d='M173 118c7 0 13 6 13 13s-6 13-13 13-13-6-13-13 6-13 13-13Z'/%3E%3Cpath d='M166 156h14'/%3E%3Cpath d='M188 156h8'/%3E%3Cpath d='M34 201h30'/%3E%3Cpath d='M86 194h20a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H94l-8 6v-6h-4a8 8 0 0 1-8-8v-10a8 8 0 0 1 8-8Z'/%3E%3Cpath d='M144 191h34a10 10 0 0 1 10 10v14a10 10 0 0 1-10 10h-12l-10 8v-8h-12a10 10 0 0 1-10-10v-14a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M149 206h24'/%3E%3Cpath d='M149 213h17'/%3E%3C/g%3E%3C/svg%3E"),
-                radial-gradient(420px 220px at 85% 0%, rgba(var(--primary-rgb), 0.035), rgba(var(--primary-rgb), 0)),
-                radial-gradient(320px 180px at 12% 100%, rgba(var(--primary-rgb), 0.02), rgba(var(--primary-rgb), 0)),
-                linear-gradient(180deg, #15263f 0%, #132238 55%, #112034 100%);
+                radial-gradient(420px 220px at 85% 0%, rgba(var(--primary-rgb), 0.04), rgba(var(--primary-rgb), 0)),
+                radial-gradient(320px 180px at 12% 100%, rgba(var(--primary-rgb), 0.024), rgba(var(--primary-rgb), 0)),
+                linear-gradient(180deg, #1a2d49 0%, #172844 55%, #14243c 100%);
             background-repeat: no-repeat, no-repeat, repeat, no-repeat, no-repeat, no-repeat;
             background-size: auto, auto, 180px 180px, auto, auto, auto;
             background-position: 50% 0, 0 0, 12px 8px, 85% 0, 12% 100%, 0 0;
@@ -446,9 +446,9 @@ export default function Inbox() {
             background:
                 linear-gradient(
                     90deg,
-                    rgba(var(--primary-rgb), 0.26) 0%,
-                    rgba(var(--primary-rgb), 0.19) 56%,
-                    rgba(10, 28, 24, 0.2) 100%
+                    rgba(var(--primary-rgb), 0.24) 0%,
+                    rgba(var(--primary-rgb), 0.18) 56%,
+                    rgba(18, 39, 35, 0.16) 100%
                 );
             border-color: rgba(var(--primary-rgb), 0.22);
             box-shadow:
@@ -462,9 +462,10 @@ export default function Inbox() {
         .chat-messages .message.received {
             background:
                 linear-gradient(
-                    180deg,
-                    rgba(25, 40, 65, 0.92) 0%,
-                    rgba(20, 33, 54, 0.95) 100%
+                    90deg,
+                    rgba(28, 45, 72, 0.9) 0%,
+                    rgba(31, 49, 77, 0.91) 56%,
+                    rgba(39, 59, 90, 0.9) 100%
                 );
             border-color: rgba(255, 255, 255, 0.06);
             box-shadow:
@@ -833,17 +834,14 @@ export default function Inbox() {
             width: 38px;
             height: 38px;
             border-radius: 999px;
-            border: 1px solid rgba(var(--primary-rgb), 0.24);
-            background:
-                radial-gradient(80px 40px at 50% 0%, rgba(var(--primary-rgb), 0.14), rgba(var(--primary-rgb), 0)),
-                linear-gradient(180deg, rgba(14, 25, 41, 0.95), rgba(11, 19, 31, 0.96));
-            color: rgba(231, 255, 244, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(14, 23, 36, 0.94);
+            color: rgba(227, 236, 246, 0.9);
             display: grid;
             place-items: center;
             cursor: pointer;
             box-shadow:
-                0 10px 22px rgba(2, 6, 23, 0.28),
-                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+                0 8px 18px rgba(2, 6, 23, 0.24);
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
@@ -863,11 +861,10 @@ export default function Inbox() {
             transform: translateY(0) scale(1);
         }
         .chat-scroll-bottom-btn:hover {
-            border-color: rgba(var(--primary-rgb), 0.34);
+            border-color: rgba(255, 255, 255, 0.16);
             box-shadow:
-                0 12px 24px rgba(2, 6, 23, 0.32),
-                inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
-                0 0 0 1px rgba(var(--primary-rgb), 0.06);
+                0 10px 22px rgba(2, 6, 23, 0.28);
+            background: rgba(15, 25, 39, 0.96);
         }
         .chat-scroll-bottom-btn:focus-visible {
             outline: 2px solid rgba(var(--primary-rgb), 0.34);
