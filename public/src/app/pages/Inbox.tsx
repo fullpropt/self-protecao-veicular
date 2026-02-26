@@ -371,6 +371,7 @@ export default function Inbox() {
             flex-direction: column;
             background: linear-gradient(180deg, rgba(19, 33, 54, 0.94), rgba(17, 30, 49, 0.96));
             min-height: 0;
+            position: relative;
         }
         .chat-header {
             background: var(--surface);
@@ -425,38 +426,83 @@ export default function Inbox() {
             width: fit-content;
             min-width: 76px;
             margin: 0 !important;
-            padding: 10px 15px;
-            border-radius: 12px;
+            padding: 11px 15px 10px;
+            border-radius: 14px;
+            border: 1px solid transparent;
             font-size: 14px;
             line-height: 1.4;
             position: relative;
             word-break: break-word;
             font-family: inherit, 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+            box-shadow: 0 10px 20px rgba(2, 6, 23, 0.14);
+            transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+        }
+        .chat-messages .message:not(.media-sticker):hover {
+            transform: translateY(-1px);
         }
         .chat-messages .message.sent {
-            background: rgba(var(--primary-rgb), 0.24);
+            background:
+                linear-gradient(
+                    180deg,
+                    rgba(var(--primary-rgb), 0.22) 0%,
+                    rgba(var(--primary-rgb), 0.16) 62%,
+                    rgba(10, 28, 24, 0.2) 100%
+                );
+            border-color: rgba(var(--primary-rgb), 0.22);
+            box-shadow:
+                inset 0 1px 0 rgba(var(--primary-rgb), 0.22),
+                0 12px 22px rgba(2, 8, 20, 0.14);
             color: #ecfff6;
             align-self: flex-end;
             margin-left: auto !important;
-            border-bottom-right-radius: 4px;
+            border-bottom-right-radius: 6px;
         }
         .chat-messages .message.received {
-            background: var(--surface);
-            border: 1px solid var(--border-color);
+            background:
+                linear-gradient(
+                    180deg,
+                    rgba(25, 40, 65, 0.92) 0%,
+                    rgba(20, 33, 54, 0.95) 100%
+                );
+            border-color: rgba(255, 255, 255, 0.06);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                0 10px 20px rgba(2, 6, 23, 0.16);
             color: var(--dark);
             align-self: flex-start;
             margin-right: auto !important;
-            border-bottom-left-radius: 4px;
+            border-bottom-left-radius: 6px;
+        }
+        .chat-messages .message.sent:not(.media-sticker):hover {
+            border-color: rgba(var(--primary-rgb), 0.34);
+            box-shadow:
+                inset 0 1px 0 rgba(var(--primary-rgb), 0.28),
+                0 14px 26px rgba(2, 8, 20, 0.18),
+                0 0 0 1px rgba(var(--primary-rgb), 0.06);
+        }
+        .chat-messages .message.received:not(.media-sticker):hover {
+            border-color: rgba(var(--primary-rgb), 0.14);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                0 14px 24px rgba(2, 6, 23, 0.18);
         }
         .message-time {
             font-size: 10px;
-            color: var(--gray-600);
-            margin-top: 5px;
+            color: rgba(193, 206, 224, 0.72);
+            margin-top: 6px;
             display: inline-flex;
             justify-content: flex-end;
             align-items: center;
             gap: 4px;
             width: 100%;
+            letter-spacing: 0.01em;
+            line-height: 1;
+        }
+        .chat-messages .message.sent .message-time {
+            color: rgba(220, 249, 235, 0.72);
+        }
+        .chat-messages .message.received .message-time {
+            color: rgba(190, 203, 223, 0.72);
         }
         .message-status {
             display: inline-flex;
@@ -497,7 +543,7 @@ export default function Inbox() {
         .message-media-image {
             display: block;
             width: 100%;
-            max-width: 260px;
+            max-width: 220px;
             border-radius: 10px;
             border: 1px solid var(--border-color);
         }
@@ -507,13 +553,13 @@ export default function Inbox() {
         .message-media-audio {
             display: block;
             width: 100%;
-            min-width: 250px;
+            min-width: 220px;
             max-width: 100%;
             height: 38px;
         }
         .chat-messages .message.media-audio {
-            min-width: 280px;
-            max-width: min(360px, 75%);
+            min-width: 240px;
+            max-width: min(320px, 72%);
         }
         .message-media-download {
             color: var(--gray-700);
@@ -528,7 +574,7 @@ export default function Inbox() {
         .message-media-video {
             display: block;
             width: 100%;
-            max-width: 280px;
+            max-width: 220px;
             border-radius: 10px;
             border: 1px solid var(--border-color);
             background: #000;
@@ -542,7 +588,7 @@ export default function Inbox() {
             box-shadow: none;
             padding: 4px 4px 6px;
             min-width: 0;
-            max-width: 220px;
+            max-width: 180px;
         }
         .chat-messages .message.sent.media-sticker,
         .chat-messages .message.received.media-sticker {
@@ -555,7 +601,7 @@ export default function Inbox() {
         .message-media-sticker {
             display: block;
             width: 100%;
-            max-width: 170px;
+            max-width: 140px;
             height: auto;
             border-radius: 8px;
             filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.2));
@@ -623,6 +669,60 @@ export default function Inbox() {
             color: var(--gray-700);
         }
         .chat-input .chat-input-btn:hover { transform: scale(1.05); }
+        .chat-scroll-bottom-btn {
+            position: absolute;
+            right: 20px;
+            bottom: 86px;
+            width: 38px;
+            height: 38px;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--primary-rgb), 0.24);
+            background:
+                radial-gradient(80px 40px at 50% 0%, rgba(var(--primary-rgb), 0.14), rgba(var(--primary-rgb), 0)),
+                linear-gradient(180deg, rgba(14, 25, 41, 0.95), rgba(11, 19, 31, 0.96));
+            color: rgba(231, 255, 244, 0.92);
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            box-shadow:
+                0 10px 22px rgba(2, 6, 23, 0.28),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(8px) scale(0.96);
+            transition:
+                opacity 0.16s ease,
+                transform 0.16s ease,
+                border-color 0.16s ease,
+                box-shadow 0.16s ease,
+                visibility 0.16s ease;
+            z-index: 16;
+        }
+        .chat-scroll-bottom-btn.visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateY(0) scale(1);
+        }
+        .chat-scroll-bottom-btn:hover {
+            border-color: rgba(var(--primary-rgb), 0.34);
+            box-shadow:
+                0 12px 24px rgba(2, 6, 23, 0.32),
+                inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+                0 0 0 1px rgba(var(--primary-rgb), 0.06);
+        }
+        .chat-scroll-bottom-btn:focus-visible {
+            outline: 2px solid rgba(var(--primary-rgb), 0.34);
+            outline-offset: 2px;
+            border-color: rgba(var(--primary-rgb), 0.32);
+        }
+        .chat-scroll-bottom-btn .chat-scroll-bottom-icon {
+            display: inline-block;
+            line-height: 1;
+            font-size: 15px;
+            transform: translateY(-1px);
+        }
         .chat-input .chat-emoji-picker {
             display: none;
             position: absolute;
@@ -992,6 +1092,12 @@ export default function Inbox() {
             .chat-input {
                 padding: 10px 12px;
                 gap: 10px;
+            }
+            .chat-scroll-bottom-btn {
+                right: 12px;
+                bottom: 76px;
+                width: 36px;
+                height: 36px;
             }
             .quick-reply-trigger {
                 height: 42px;

@@ -95,6 +95,8 @@ let inboxSessionFilter = '';
 let inboxAvailableSessions: WhatsappSessionItem[] = [];
 let mediaUploadInProgress = false;
 let inboxLifecycleBound = false;
+const stickerMediaRehydrateAttempts = new Set<string>();
+let activeChatScrollContainer: HTMLElement | null = null;
 
 const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 
@@ -1041,6 +1043,8 @@ async function selectConversation(id: number) {
     if (isTabletOrMobileView()) {
         closeContactInfoPanel();
     }
+
+    void tryAutoRehydrateMissingStickerMedia(currentConversation);
 }
 
 async function loadMessages(leadId: number, conversationId?: number, sessionId?: string, contactJid?: string) {
@@ -1072,6 +1076,58 @@ async function loadMessages(leadId: number, conversationId?: number, sessionId?:
         }));
     } catch (error) {
         messages = [];
+    }
+}
+
+function hasMissingStickerMedia(items: ChatMessage[] = messages) {
+    return items.some((item) => {
+        const mediaType = String(item?.media_type || '').trim().toLowerCase();
+        if (mediaType !== 'sticker') return false;
+        return !String(item?.media_url || '').trim();
+    });
+}
+
+async function tryAutoRehydrateMissingStickerMedia(conversation: Conversation | null) {
+    if (!conversation) return;
+
+    const conversationId = Number(conversation.id);
+    const leadId = Number(conversation.leadId);
+    if (!Number.isFinite(conversationId) || conversationId <= 0) return;
+    if (!Number.isFinite(leadId) || leadId <= 0) return;
+    if (!hasMissingStickerMedia(messages)) return;
+
+    const sessionId = resolveConversationSessionId(conversation);
+    const attemptKey = `${conversationId}:${sessionId || ''}`;
+    if (stickerMediaRehydrateAttempts.has(attemptKey)) return;
+    stickerMediaRehydrateAttempts.add(attemptKey);
+
+    try {
+        const response = await api.post(`/api/messages/${leadId}/rehydrate-missing-media`, {
+            conversationId,
+            sessionId,
+            contactJid: conversation.phone || '',
+            limit: 250
+        });
+
+        const hydratedMedia = Number(response?.backfill?.hydratedMedia || 0) || 0;
+        const missingBefore = Number(response?.missingStickersBefore || 0) || 0;
+        const missingAfter = Number(response?.missingStickersAfter || 0) || 0;
+        const changed = hydratedMedia > 0 || (missingBefore > missingAfter);
+        if (!changed) return;
+
+        if (!currentConversation || Number(currentConversation.id) !== conversationId) return;
+
+        await loadMessages(leadId, conversationId, sessionId, conversation.phone);
+
+        if (!currentConversation || Number(currentConversation.id) !== conversationId) return;
+
+        renderChat();
+        setMobileConversationMode(true);
+        if (isTabletOrMobileView()) {
+            closeContactInfoPanel();
+        }
+    } catch (error) {
+        // Silencioso: tentativa opportunistic para preencher stickers antigos
     }
 }
 
@@ -1594,6 +1650,16 @@ function renderChat() {
                 ${renderMessages()}
             </div>
         </div>
+        <button
+            class="chat-scroll-bottom-btn"
+            id="chatScrollBottomBtn"
+            type="button"
+            title="Voltar para a última mensagem"
+            aria-label="Voltar para a última mensagem"
+            onclick="scrollChatToLatest()"
+        >
+            <span class="chat-scroll-bottom-icon" aria-hidden="true">↓</span>
+        </button>
 
         <div class="chat-input">
             <input id="chatMediaInput" type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" onchange="handleMediaInputChange(event)" style="display:none" />
@@ -1619,6 +1685,7 @@ function renderChat() {
 
     setMobileConversationMode(true);
     closeContactInfoPanel();
+    bindChatScrollBottomVisibility();
     scrollToBottom();
 }
 function renderMessages() {
@@ -1649,13 +1716,50 @@ function renderMessages() {
 function renderMessagesInto(container: HTMLElement | null) {
     if (!container) return;
     container.innerHTML = `<div class="chat-messages-stack">${renderMessages()}</div>`;
+    updateChatScrollBottomVisibility();
 }
 
-function scrollToBottom() {
+function isChatNearBottom(container: HTMLElement, threshold = 96) {
+    const distance = container.scrollHeight - container.clientHeight - container.scrollTop;
+    return distance <= threshold;
+}
+
+function updateChatScrollBottomVisibility() {
+    const container = document.getElementById('chatMessages') as HTMLElement | null;
+    const button = document.getElementById('chatScrollBottomBtn') as HTMLButtonElement | null;
+    if (!container || !button) return;
+
+    const canScroll = (container.scrollHeight - container.clientHeight) > 24;
+    const shouldShow = canScroll && !isChatNearBottom(container);
+    button.classList.toggle('visible', shouldShow);
+}
+
+function bindChatScrollBottomVisibility() {
+    const container = document.getElementById('chatMessages') as HTMLElement | null;
+    if (!container) return;
+
+    if (activeChatScrollContainer !== container) {
+        activeChatScrollContainer = container;
+        container.addEventListener('scroll', updateChatScrollBottomVisibility, { passive: true });
+    }
+
+    window.requestAnimationFrame(updateChatScrollBottomVisibility);
+}
+
+function scrollToBottom(behavior: ScrollBehavior = 'auto') {
     const container = document.getElementById('chatMessages') as HTMLElement | null;
     if (container) {
-        container.scrollTop = container.scrollHeight;
+        if (typeof container.scrollTo === 'function') {
+            container.scrollTo({ top: container.scrollHeight, behavior });
+        } else {
+            container.scrollTop = container.scrollHeight;
+        }
+        window.requestAnimationFrame(updateChatScrollBottomVisibility);
     }
+}
+
+function scrollChatToLatest() {
+    scrollToBottom('smooth');
 }
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -1808,6 +1912,7 @@ const windowAny = window as Window & {
     toggleEmojiPicker?: () => void;
     closeEmojiPicker?: () => void;
     selectEmojiByIndex?: (index: number) => void;
+    scrollChatToLatest?: () => void;
     handleKeyDown?: (event: KeyboardEvent) => void;
     sendMessage?: () => Promise<void>;
     triggerMediaPicker?: () => void;
@@ -1832,6 +1937,7 @@ windowAny.selectQuickReply = selectQuickReply;
 windowAny.toggleEmojiPicker = toggleEmojiPicker;
 windowAny.closeEmojiPicker = closeEmojiPicker;
 windowAny.selectEmojiByIndex = selectEmojiByIndex;
+windowAny.scrollChatToLatest = scrollChatToLatest;
 windowAny.handleKeyDown = handleKeyDown;
 windowAny.sendMessage = sendMessage;
 windowAny.triggerMediaPicker = triggerMediaPicker;

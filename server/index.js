@@ -10704,6 +10704,26 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
 
 
 
+async function countMissingStickerMediaForConversation(conversationId) {
+    const normalizedConversationId = Number(conversationId);
+    if (!Number.isFinite(normalizedConversationId) || normalizedConversationId <= 0) return 0;
+
+    try {
+        const rows = await query(`
+            SELECT COUNT(*) AS total
+            FROM messages
+            WHERE conversation_id = ?
+              AND LOWER(COALESCE(media_type, '')) = 'sticker'
+              AND COALESCE(TRIM(media_url), '') = ''
+        `, [normalizedConversationId]);
+
+        return Math.max(0, Number(rows?.[0]?.total || 0) || 0);
+    } catch (error) {
+        console.warn(`[rehydrate-sticker] Falha ao contar stickers pendentes na conversa ${normalizedConversationId}:`, error.message);
+        return 0;
+    }
+}
+
 app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     const leadId = Number(req.params.leadId);
     const limit = parseInt(req.query.limit) || 100;
@@ -10784,6 +10804,109 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     });
 
     res.json({ success: true, messages: decrypted });
+});
+
+app.post('/api/messages/:leadId/rehydrate-missing-media', authenticate, async (req, res) => {
+    const leadId = Number(req.params.leadId);
+    const payload = req.body || {};
+    const requestedLimit = Number(payload.limit || req.query.limit);
+    const limit = Math.max(50, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 250, 500));
+    const conversationId = Number(
+        payload.conversation_id ||
+        payload.conversationId ||
+        req.query.conversation_id ||
+        req.query.conversationId
+    );
+    const hasConversationId = Number.isFinite(conversationId) && conversationId > 0;
+    const sessionId = sanitizeSessionId(
+        payload.session_id ||
+        payload.sessionId ||
+        req.query.session_id ||
+        req.query.sessionId
+    );
+    const contactJid = normalizeJid(
+        payload.contact_jid ||
+        payload.contactJid ||
+        req.query.contact_jid ||
+        req.query.contactJid
+    );
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+
+    let resolvedConversation = null;
+    let resolvedLead = null;
+
+    if (hasConversationId) {
+        const conversation = await Conversation.findById(conversationId);
+        const conversationSessionId = sanitizeSessionId(conversation?.session_id);
+        if (conversation && (!sessionId || conversationSessionId === sessionId)) {
+            resolvedConversation = conversation;
+        }
+        if (resolvedConversation) {
+            resolvedLead = await Lead.findById(resolvedConversation.lead_id);
+        }
+    } else if (Number.isFinite(leadId) && leadId > 0) {
+        resolvedLead = await Lead.findById(leadId);
+        const conversation = await Conversation.findByLeadId(leadId, sessionId || null);
+        if (conversation) {
+            resolvedConversation = conversation;
+        }
+    }
+
+    const hasConversationAccess = resolvedConversation
+        ? await canAccessConversationInOwnerScope(req, resolvedConversation, ownerScopeUserId)
+        : false;
+
+    if (resolvedLead && !hasConversationAccess && !(await canAccessAssignedRecordInOwnerScope(req, resolvedLead.assigned_to, ownerScopeUserId))) {
+        return res.status(404).json({ success: false, error: 'Lead nao encontrado' });
+    }
+    if (!resolvedLead && resolvedConversation && !hasConversationAccess) {
+        return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
+    }
+    if (!resolvedConversation) {
+        return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
+    }
+
+    const backfillSessionId = sanitizeSessionId(sessionId || resolvedConversation.session_id);
+    if (!backfillSessionId) {
+        return res.status(400).json({ success: false, error: 'Sessao da conversa nao encontrada' });
+    }
+
+    try {
+        const runtimeSession = sessions.get(backfillSessionId);
+        if (runtimeSession?.socket && runtimeSession?.store) {
+            try {
+                await triggerChatSync(backfillSessionId, runtimeSession.socket, runtimeSession.store, 0);
+            } catch (syncError) {
+                console.warn(`[${backfillSessionId}] Falha no sync manual para reidratacao de midia:`, syncError.message);
+            }
+        }
+
+        const missingStickersBefore = await countMissingStickerMediaForConversation(resolvedConversation.id);
+        const backfillResult = await backfillConversationMessagesFromStore({
+            sessionId: backfillSessionId,
+            conversation: resolvedConversation,
+            lead: resolvedLead,
+            contactJid: contactJid || resolvedLead?.jid || resolvedLead?.phone || '',
+            limit
+        });
+        const missingStickersAfter = await countMissingStickerMediaForConversation(resolvedConversation.id);
+
+        return res.json({
+            success: true,
+            conversationId: resolvedConversation.id,
+            leadId: resolvedLead?.id || resolvedConversation.lead_id || null,
+            sessionId: backfillSessionId,
+            limit,
+            backfill: backfillResult || createStoreBackfillResult(),
+            missingStickersBefore,
+            missingStickersAfter
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: error?.message || 'Falha ao reidratar midias da conversa'
+        });
+    }
 });
 
 
