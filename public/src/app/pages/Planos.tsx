@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { brandFullLogoUrl, brandName } from '../lib/brand';
+import { brandFullLogoUrl, brandLogoUrl, brandName } from '../lib/brand';
 
 const monthlyPrice = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -403,6 +403,7 @@ export default function Planos() {
         }
 
         .hero-copy,
+        .hero-copy,
         .hero-card {
           border-radius: 22px;
           border: 1px solid var(--line);
@@ -413,6 +414,12 @@ export default function Planos() {
           padding: clamp(20px, 3vw, 30px);
           position: relative;
           overflow: hidden;
+          text-align: center;
+        }
+
+        .hero-copy > * {
+          position: relative;
+          z-index: 1;
         }
 
         .hero-copy::before {
@@ -425,6 +432,7 @@ export default function Planos() {
           transform: rotate(18deg);
           background: linear-gradient(135deg, rgba(35, 198, 111, 0.12), rgba(35, 198, 111, 0));
           border: 1px solid rgba(35, 198, 111, 0.12);
+          z-index: 0;
         }
 
         .hero-badge {
@@ -440,7 +448,7 @@ export default function Planos() {
           font-weight: 700;
           letter-spacing: 0.04em;
           text-transform: uppercase;
-          margin-bottom: 14px;
+          margin: 0 auto 14px;
         }
 
         .hero-badge::before {
@@ -453,12 +461,12 @@ export default function Planos() {
         }
 
         .hero-title {
-          margin: 0;
+          margin: 0 auto;
           font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
           font-size: clamp(30px, 4.2vw, 56px);
           line-height: 1.02;
           letter-spacing: -0.03em;
-          max-width: 16ch;
+          max-width: 18ch;
         }
 
         .hero-title strong {
@@ -467,149 +475,225 @@ export default function Planos() {
         }
 
         .hero-subtitle {
-          margin: 14px 0 0;
+          margin: 14px auto 0;
           color: var(--muted);
           font-size: 16px;
           line-height: 1.65;
-          max-width: 74ch;
+          max-width: 68ch;
         }
 
-        .hero-points {
-          display: grid;
+        .hero-benefit-list {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
           gap: 8px;
-          margin: 16px 0 0;
+          margin: 16px auto 0;
           padding: 0;
           list-style: none;
+          max-width: 920px;
         }
 
-        .hero-points li {
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.07);
+        .hero-benefit-list li {
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
           background: rgba(255, 255, 255, 0.02);
-          padding: 10px 12px 10px 34px;
-          font-size: 13px;
-          color: #d7eaea;
-          line-height: 1.45;
-          position: relative;
-        }
-
-        .hero-points li::before {
-          content: '•';
-          position: absolute;
-          left: 12px;
-          top: 8px;
-          color: #4ae48f;
-          font-size: 18px;
-          line-height: 1;
+          padding: 9px 12px;
+          font-size: 12px;
+          color: #d7ecec;
+          line-height: 1.2;
         }
 
         .hero-cta-row {
           display: flex;
           flex-wrap: wrap;
+          justify-content: center;
           gap: 10px;
           margin-top: 16px;
         }
 
         .hero-note {
-          margin-top: 12px;
+          margin-top: 10px;
           color: #9bb5b5;
           font-size: 12px;
         }
 
-        .hero-stack {
-          display: grid;
-          gap: 14px;
-          margin-top: 14px;
-        }
-
-        .hero-block {
-          border-radius: 16px;
-          border: 1px solid rgba(255, 255, 255, 0.07);
+        .hero-visual {
+          margin: 18px auto 0;
+          max-width: 980px;
+          border-radius: 20px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
           background:
-            linear-gradient(160deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.015));
+            radial-gradient(520px 260px at 80% 10%, rgba(35, 198, 111, 0.12), rgba(35, 198, 111, 0)),
+            linear-gradient(165deg, rgba(12, 31, 35, 0.9), rgba(7, 21, 24, 0.94));
           padding: 14px;
+          position: relative;
+          overflow: hidden;
         }
 
-        .hero-block-title {
-          margin: 0 0 8px;
-          font-size: 14px;
-          letter-spacing: -0.01em;
+        .hero-visual::before {
+          content: '';
+          position: absolute;
+          inset: auto auto -80px -60px;
+          width: 240px;
+          height: 240px;
+          border-radius: 24px;
+          transform: rotate(18deg);
+          background: linear-gradient(135deg, rgba(246, 184, 78, 0.12), rgba(246, 184, 78, 0));
+          border: 1px solid rgba(246, 184, 78, 0.08);
         }
 
-        .hero-block-text {
-          margin: 0;
-          color: #a9c0c0;
-          font-size: 13px;
-          line-height: 1.6;
+        .hero-screen {
+          position: relative;
+          z-index: 1;
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: linear-gradient(180deg, rgba(5, 17, 20, 0.88), rgba(7, 20, 23, 0.96));
+          padding: 12px;
         }
 
-        .hero-metric-row {
+        .hero-screen-top {
           display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 10px;
           flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 10px;
         }
 
-        .hero-metric {
+        .hero-screen-brand {
           display: inline-flex;
           align-items: center;
-          gap: 8px;
-          border-radius: 999px;
-          border: 1px solid rgba(35, 198, 111, 0.18);
-          background: rgba(35, 198, 111, 0.06);
-          color: #c6f9dc;
-          padding: 7px 10px;
-          font-size: 12px;
+          gap: 10px;
+          color: #eaf8f8;
+          font-size: 13px;
           font-weight: 700;
-          line-height: 1;
         }
 
-        .hero-metric::before {
-          content: '';
-          width: 6px;
-          height: 6px;
-          border-radius: 999px;
-          background: #38e386;
-          box-shadow: 0 0 0 4px rgba(56, 227, 134, 0.14);
+        .hero-screen-brand img {
+          width: 26px;
+          height: 26px;
+          display: block;
+          filter: drop-shadow(0 6px 12px rgba(35, 198, 111, 0.16));
         }
 
-        .hero-module-list {
-          margin: 0;
-          padding: 0;
-          list-style: none;
-          display: flex;
+        .hero-screen-tabs {
+          display: inline-flex;
           flex-wrap: wrap;
-          gap: 8px;
+          gap: 6px;
+          justify-content: center;
         }
 
-        .hero-module-list li {
-          border-radius: 10px;
+        .hero-screen-tabs span {
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.02);
+          color: #c9dddd;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 6px 9px;
+        }
+
+        .hero-ui-layout {
+          display: grid;
+          grid-template-columns: 0.9fr 1.1fr;
+          gap: 10px;
+        }
+
+        .hero-ui-card {
+          border-radius: 12px;
           border: 1px solid rgba(255, 255, 255, 0.07);
           background: rgba(255, 255, 255, 0.02);
-          color: #d7ecec;
-          padding: 8px 10px;
-          font-size: 12px;
-          font-weight: 600;
+          padding: 10px;
+          text-align: left;
         }
 
-        .hero-proof-list {
-          margin: 0;
-          padding: 0;
-          list-style: none;
+        .hero-ui-card h4 {
+          margin: 0 0 8px;
+          font-size: 12px;
+          letter-spacing: 0.01em;
+          color: #e8f5f5;
+        }
+
+        .hero-ui-stack {
           display: grid;
           gap: 8px;
         }
 
-        .hero-proof-list li {
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.06);
+        .hero-ui-chip {
+          border-radius: 10px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
           background: rgba(255, 255, 255, 0.015);
-          padding: 10px 12px;
-          color: #dcefee;
-          font-size: 13px;
-          line-height: 1.5;
+          padding: 8px 9px;
+          color: #d1e4e4;
+          font-size: 11px;
+          line-height: 1.35;
         }
 
+        .hero-ui-chip strong {
+          color: #effcfc;
+          display: block;
+          margin-bottom: 2px;
+          font-size: 11px;
+        }
+
+        .hero-chat-list {
+          display: grid;
+          gap: 8px;
+        }
+
+        .hero-chat-item {
+          border-radius: 10px;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(255, 255, 255, 0.015);
+          padding: 8px 9px;
+          display: grid;
+          gap: 5px;
+        }
+
+        .hero-chat-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          font-size: 11px;
+          color: #d8eeee;
+        }
+
+        .hero-chat-head strong {
+          color: #f0fbfb;
+          font-weight: 700;
+        }
+
+        .hero-chat-item p {
+          margin: 0;
+          color: #a9c2c2;
+          font-size: 11px;
+          line-height: 1.45;
+        }
+
+        .hero-floating-tag {
+          position: absolute;
+          z-index: 2;
+          border-radius: 999px;
+          border: 1px solid rgba(35, 198, 111, 0.22);
+          background: rgba(8, 28, 20, 0.78);
+          color: #ccfae0;
+          font-size: 11px;
+          font-weight: 700;
+          padding: 7px 10px;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+          backdrop-filter: blur(6px);
+        }
+
+        .hero-floating-tag.is-top {
+          top: 10px;
+          right: 14px;
+        }
+
+        .hero-floating-tag.is-bottom {
+          bottom: 12px;
+          left: 14px;
+        }
         .hero-card {
           padding: 22px;
           display: grid;
@@ -1325,11 +1409,11 @@ export default function Planos() {
         }
 
         @media (max-width: 980px) {
-          .sales-hero {
+          .section-grid {
             grid-template-columns: 1fr;
           }
 
-          .section-grid {
+          .hero-ui-layout {
             grid-template-columns: 1fr;
           }
 
@@ -1411,7 +1495,6 @@ export default function Planos() {
             padding: 18px;
           }
 
-          .hero-points,
           .pillar-grid,
           .resource-grid,
           .journey-grid,
@@ -1421,6 +1504,18 @@ export default function Planos() {
 
           .hero-title {
             max-width: none;
+          }
+
+          .hero-benefit-list {
+            max-width: none;
+          }
+
+          .hero-screen-top {
+            justify-content: center;
+          }
+
+          .hero-floating-tag {
+            display: none;
           }
 
           .section-head {
@@ -1485,15 +1580,15 @@ export default function Planos() {
                 Transforme o WhatsApp em uma <strong>operacao comercial organizada</strong> com o ZapVender
               </h1>
               <p className="hero-subtitle">
-                O ZapVender centraliza atendimento, CRM, campanhas, automacoes e funil em um unico painel. Em vez de vender preco na primeira dobra,
-                esta pagina mostra primeiro a solucao e os recursos para o lead entender o valor da plataforma.
+                Atendimento, CRM, campanhas, automacoes e funil em um unico painel para sua equipe vender melhor com mais controle.
+                Primeiro voce entende a solucao. Depois escolhe o plano.
               </p>
 
-              <ul className="hero-points" aria-label="Resumo da proposta de valor">
-                <li>Atenda com contexto e historico do lead no mesmo lugar.</li>
-                <li>Organize o processo comercial com funil e acompanhamento por etapa.</li>
-                <li>Ganhe escala com campanhas, filas de envio e automacoes.</li>
-                <li>Padronize a rotina da equipe sem depender de planilhas paralelas.</li>
+              <ul className="hero-benefit-list" aria-label="Beneficios principais">
+                <li>Atendimento com contexto</li>
+                <li>CRM + funil comercial</li>
+                <li>Automacoes e campanhas</li>
+                <li>Operacao multi-sessao</li>
               </ul>
 
               <div className="hero-cta-row">
@@ -1505,53 +1600,69 @@ export default function Planos() {
                 >
                   Ver recursos
                 </button>
-                <button
-                  type="button"
-                  className="sales-btn sales-btn-outline"
-                  onClick={() => scrollToSection('planos-lista')}
-                >
-                  Ver planos
-                </button>
               </div>
 
-              <div className="hero-stack" aria-label="Resumo da proposta de valor">
-                <div className="hero-block">
-                  <h3 className="hero-block-title">O que muda quando voce usa o ZapVender</h3>
-                  <p className="hero-block-text">
-                    O atendimento deixa de ser apenas troca de mensagem e vira processo comercial: o time atende, registra contexto,
-                    acompanha o status do lead e executa follow-up com mais consistencia.
-                  </p>
-                  <div className="hero-metric-row">
-                    <span className="hero-metric">Atendimento + CRM</span>
-                    <span className="hero-metric">Funil + equipe</span>
-                    <span className="hero-metric">Automacao + campanhas</span>
+              <div className="hero-visual" aria-label="Visual da plataforma ZapVender">
+                <span className="hero-floating-tag is-top">Atendimento + CRM no mesmo painel</span>
+                <span className="hero-floating-tag is-bottom">Campanhas, automacoes e funil</span>
+
+                <div className="hero-screen">
+                  <div className="hero-screen-top">
+                    <div className="hero-screen-brand">
+                      <img src={brandLogoUrl} alt="" aria-hidden="true" />
+                      <span>ZapVender Workspace</span>
+                    </div>
+                    <div className="hero-screen-tabs" aria-hidden="true">
+                      <span>Inbox</span>
+                      <span>CRM</span>
+                      <span>Campanhas</span>
+                      <span>Automacao</span>
+                      <span>Funil</span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="hero-block">
-                  <h3 className="hero-block-title">Modulos que sustentam a operacao</h3>
-                  <ul className="hero-module-list">
-                    <li>Inbox operacional</li>
-                    <li>CRM de contatos</li>
-                    <li>Campanhas e fila</li>
-                    <li>Automacoes e fluxos</li>
-                    <li>Gestao de sessoes WhatsApp</li>
-                    <li>Funil comercial</li>
-                  </ul>
-                </div>
+                  <div className="hero-ui-layout">
+                    <div className="hero-ui-card">
+                      <h4>Operacao comercial</h4>
+                      <div className="hero-ui-stack">
+                        <div className="hero-ui-chip">
+                          <strong>Leads em atendimento</strong>
+                          Inbox com contexto e historico centralizado
+                        </div>
+                        <div className="hero-ui-chip">
+                          <strong>Qualificacao e follow-up</strong>
+                          Funil e status por etapa para o time
+                        </div>
+                        <div className="hero-ui-chip">
+                          <strong>Escala com controle</strong>
+                          Fila de envio, campanhas e automacoes
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="hero-block">
-                  <h3 className="hero-block-title">Estrutura pensada para vender valor antes do plano</h3>
-                  <ul className="hero-proof-list">
-                    <li>Primeiro mostramos o problema e a transformacao que a plataforma entrega.</li>
-                    <li>Depois o lead entende os recursos que explicam essa transformacao.</li>
-                    <li>So entao a pagina apresenta o plano e a condicao comercial.</li>
-                  </ul>
+                    <div className="hero-ui-card">
+                      <h4>Exemplo de fluxo no painel</h4>
+                      <div className="hero-chat-list">
+                        <div className="hero-chat-item">
+                          <div className="hero-chat-head"><strong>Inbox</strong><span>Atendimento</span></div>
+                          <p>Equipe responde com contexto e registra andamento sem sair da conversa.</p>
+                        </div>
+                        <div className="hero-chat-item">
+                          <div className="hero-chat-head"><strong>CRM + Funil</strong><span>Processo</span></div>
+                          <p>Lead e movido de etapa com historico visivel para tomada de decisao.</p>
+                        </div>
+                        <div className="hero-chat-item">
+                          <div className="hero-chat-head"><strong>Campanhas</strong><span>Escala</span></div>
+                          <p>Mensagens e automacoes ajudam a manter constancia sem poluir a operacao.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <p className="hero-note">
-                Role para ver a solucao, os recursos e depois os planos. O preco fica abaixo, depois da proposta de valor.
+                Role para ver a solucao, os recursos e depois os planos. O preco fica abaixo desta primeira dobra.
               </p>
             </div>
           </section>
