@@ -97,6 +97,8 @@ let mediaUploadInProgress = false;
 let inboxLifecycleBound = false;
 const stickerMediaRehydrateAttempts = new Set<string>();
 let activeChatScrollContainer: HTMLElement | null = null;
+let chatMediaPreviewBindingsBound = false;
+let chatMediaPreviewLastFocusedElement: HTMLElement | null = null;
 
 const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 
@@ -537,6 +539,7 @@ function initInbox() {
     bindInboxLifecycle();
     bindQuickReplyDismiss();
     bindEmojiPickerDismiss();
+    bindChatMediaPreviewModal();
     loadContactFields();
     void loadInboxSessionFilters().finally(() => {
         loadConversations();
@@ -1144,6 +1147,7 @@ async function selectConversation(id: number) {
     if (isTabletOrMobileView()) {
         closeContactInfoPanel();
     }
+    focusMessageComposerOnOpen();
 
     void tryAutoRehydrateMissingStickerMedia(currentConversation);
 }
@@ -1539,6 +1543,115 @@ function resolveDocumentLabel(message: ChatMessage) {
     return 'documento';
 }
 
+function getChatMediaPreviewElements() {
+    return {
+        modal: document.getElementById('chatMediaPreviewModal') as HTMLElement | null,
+        dialog: document.getElementById('chatMediaPreviewDialog') as HTMLElement | null,
+        content: document.getElementById('chatMediaPreviewContent') as HTMLElement | null,
+        closeButton: document.getElementById('chatMediaPreviewCloseBtn') as HTMLButtonElement | null
+    };
+}
+
+function openChatMediaPreview(kind: 'image' | 'video', rawUrl: string) {
+    const url = String(rawUrl || '').trim();
+    if (!url) return;
+
+    const { modal, content, closeButton } = getChatMediaPreviewElements();
+    if (!modal || !content) return;
+
+    closeQuickReplyPicker();
+    closeEmojiPicker();
+
+    const safeUrl = escapeHtml(url);
+    content.innerHTML = kind === 'video'
+        ? `<video class="chat-media-preview-video" src="${safeUrl}" controls preload="metadata" autoplay playsinline></video>`
+        : `<img class="chat-media-preview-image" src="${safeUrl}" alt="Midia da conversa" loading="eager" />`;
+
+    chatMediaPreviewLastFocusedElement = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    modal.classList.add('open');
+
+    window.requestAnimationFrame(() => {
+        closeButton?.focus();
+    });
+}
+
+function closeChatMediaPreview() {
+    const { modal, content } = getChatMediaPreviewElements();
+    if (!modal || !content || modal.hidden) return;
+
+    const video = content.querySelector('video') as HTMLVideoElement | null;
+    if (video) {
+        try {
+            video.pause();
+        } catch {
+            // noop
+        }
+    }
+
+    content.innerHTML = '';
+    modal.classList.remove('open');
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+
+    if (chatMediaPreviewLastFocusedElement && document.contains(chatMediaPreviewLastFocusedElement)) {
+        chatMediaPreviewLastFocusedElement.focus();
+    }
+    chatMediaPreviewLastFocusedElement = null;
+}
+
+function bindChatMediaPreviewModal() {
+    if (chatMediaPreviewBindingsBound) return;
+    chatMediaPreviewBindingsBound = true;
+
+    document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        const previewTrigger = target.closest<HTMLElement>('[data-chat-media-preview][data-chat-media-url]');
+        if (previewTrigger) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const kind = String(previewTrigger.dataset.chatMediaPreview || '').trim().toLowerCase();
+            const url = String(previewTrigger.dataset.chatMediaUrl || '').trim();
+            if ((kind === 'image' || kind === 'video') && url) {
+                openChatMediaPreview(kind as 'image' | 'video', url);
+            }
+            return;
+        }
+
+        const { modal, dialog } = getChatMediaPreviewElements();
+        if (!modal || modal.hidden) return;
+        if (target.closest('#chatMediaPreviewCloseBtn')) {
+            event.preventDefault();
+            closeChatMediaPreview();
+            return;
+        }
+
+        if (target === modal && (!dialog || !dialog.contains(target))) {
+            closeChatMediaPreview();
+            return;
+        }
+
+        if (!dialog) return;
+        if (!dialog.contains(target) && modal.contains(target)) {
+            closeChatMediaPreview();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        const { modal } = getChatMediaPreviewElements();
+        if (!modal || modal.hidden) return;
+        closeChatMediaPreview();
+    });
+}
+
 function renderMessageContent(message: ChatMessage) {
     const mediaType = String(message.media_type || 'text').toLowerCase();
     const mediaUrl = getMediaUrl(message.media_url);
@@ -1550,9 +1663,16 @@ function renderMessageContent(message: ChatMessage) {
         const safeUrl = escapeHtml(mediaUrl);
         return `
             <div class="message-media">
-                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">
+                <button
+                    type="button"
+                    class="message-media-preview-trigger"
+                    data-chat-media-preview="image"
+                    data-chat-media-url="${safeUrl}"
+                    aria-label="Abrir imagem"
+                    title="Abrir imagem"
+                >
                     <img class="message-media-image" src="${safeUrl}" alt="Imagem recebida" loading="lazy" />
-                </a>
+                </button>
             </div>
             ${hasReadableText ? `<div class="message-caption">${safeText}</div>` : ''}
         `;
@@ -1603,8 +1723,16 @@ function renderMessageContent(message: ChatMessage) {
     if (mediaType === 'video' && mediaUrl) {
         const safeUrl = escapeHtml(mediaUrl);
         return `
-            <div class="message-media">
-                <video controls preload="metadata" class="message-media-video" src="${safeUrl}"></video>
+            <div class="message-media message-media-video-frame">
+                <video controls preload="metadata" playsinline class="message-media-video" src="${safeUrl}"></video>
+                <button
+                    type="button"
+                    class="message-media-preview-fab"
+                    data-chat-media-preview="video"
+                    data-chat-media-url="${safeUrl}"
+                    aria-label="Abrir video"
+                    title="Abrir video"
+                >⤢</button>
             </div>
             ${hasReadableText ? `<div class="message-caption">${safeText}</div>` : ''}
         `;
@@ -1874,6 +2002,26 @@ function renderMessagesInto(container: HTMLElement | null) {
     container.innerHTML = `<div class="chat-messages-stack">${renderMessages()}</div>`;
     bindInlineAudioPlayers(container);
     updateChatScrollBottomVisibility();
+}
+
+function focusMessageComposerOnOpen() {
+    const focusComposer = () => {
+        const input = document.getElementById('messageInput') as HTMLTextAreaElement | null;
+        if (!input) return;
+
+        try {
+            input.focus({ preventScroll: true });
+        } catch {
+            input.focus();
+        }
+
+        const end = input.value.length;
+        if (typeof input.setSelectionRange === 'function') {
+            input.setSelectionRange(end, end);
+        }
+    };
+
+    window.requestAnimationFrame(focusComposer);
 }
 
 function formatAudioPlayerTime(totalSeconds: number) {

@@ -543,6 +543,53 @@ export default function Inbox() {
         .message-media {
             max-width: 100%;
         }
+        .message-media-preview-trigger {
+            display: block;
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            border-radius: 10px;
+            cursor: zoom-in;
+            line-height: 0;
+        }
+        .message-media-preview-trigger:focus-visible {
+            outline: 2px solid rgba(var(--primary-rgb), 0.35);
+            outline-offset: 2px;
+        }
+        .message-media-video-frame {
+            position: relative;
+            display: inline-block;
+            width: fit-content;
+            max-width: 100%;
+        }
+        .message-media-preview-fab {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(2, 6, 23, 0.62);
+            color: #f8fafc;
+            font-size: 14px;
+            line-height: 1;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .message-media-preview-fab:hover {
+            transform: translateY(-1px);
+            background: rgba(2, 6, 23, 0.82);
+            border-color: rgba(var(--primary-rgb), 0.32);
+        }
+        .message-media-preview-fab:focus-visible {
+            outline: 2px solid rgba(var(--primary-rgb), 0.35);
+            outline-offset: 2px;
+        }
         .message-media-image {
             display: block;
             width: 100%;
@@ -790,6 +837,77 @@ export default function Inbox() {
         .chat-messages .message.sent .message-document-link {
             border-color: rgba(var(--primary-rgb), 0.35);
             background: rgba(var(--primary-rgb), 0.16);
+        }
+        .chat-media-preview-modal[hidden] {
+            display: none !important;
+        }
+        .chat-media-preview-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1400;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(2, 6, 23, 0.78);
+            backdrop-filter: blur(6px);
+        }
+        .chat-media-preview-dialog {
+            position: relative;
+            width: min(94vw, 1120px);
+            max-height: 92vh;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                radial-gradient(circle at top right, rgba(var(--primary-rgb), 0.09), transparent 48%),
+                rgba(4, 10, 18, 0.92);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+            padding: 14px;
+        }
+        .chat-media-preview-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 34px;
+            height: 34px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(15, 23, 42, 0.76);
+            color: #e2e8f0;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+            z-index: 2;
+        }
+        .chat-media-preview-close:hover {
+            border-color: rgba(var(--primary-rgb), 0.28);
+            color: #ffffff;
+        }
+        .chat-media-preview-close:focus-visible {
+            outline: 2px solid rgba(var(--primary-rgb), 0.35);
+            outline-offset: 2px;
+        }
+        .chat-media-preview-content {
+            min-height: 160px;
+            max-height: calc(92vh - 28px);
+            display: grid;
+            place-items: center;
+            overflow: auto;
+            border-radius: 12px;
+        }
+        .chat-media-preview-image,
+        .chat-media-preview-video {
+            display: block;
+            max-width: 100%;
+            max-height: calc(92vh - 70px);
+            border-radius: 12px;
+            background: #000;
+            box-shadow: 0 14px 38px rgba(0, 0, 0, 0.28);
+        }
+        .chat-media-preview-video {
+            width: min(100%, 960px);
         }
         .chat-input {
             background: var(--surface);
@@ -1325,6 +1443,28 @@ export default function Inbox() {
                 width: 26px;
                 height: 26px;
             }
+            .chat-media-preview-modal {
+                padding: 12px;
+            }
+            .chat-media-preview-dialog {
+                width: 100%;
+                max-height: 94vh;
+                padding: 10px;
+            }
+            .chat-media-preview-content {
+                max-height: calc(94vh - 20px);
+            }
+            .chat-media-preview-image,
+            .chat-media-preview-video {
+                max-height: calc(94vh - 56px);
+                border-radius: 10px;
+            }
+            .chat-media-preview-close {
+                top: 6px;
+                right: 6px;
+                width: 32px;
+                height: 32px;
+            }
             .conversations-header {
                 padding: 14px 12px;
             }
@@ -1508,6 +1648,12 @@ export default function Inbox() {
           </div>
         </div>
         <div className="contact-info-backdrop" id="contactInfoBackdrop" onClick={() => globals.toggleContactInfo?.(false)}></div>
+        <div className="chat-media-preview-modal" id="chatMediaPreviewModal" hidden aria-hidden="true">
+          <div className="chat-media-preview-dialog" id="chatMediaPreviewDialog" role="dialog" aria-modal="true" aria-label="Visualizacao de midia">
+            <button className="chat-media-preview-close" id="chatMediaPreviewCloseBtn" type="button" aria-label="Fechar visualizacao">×</button>
+            <div className="chat-media-preview-content" id="chatMediaPreviewContent"></div>
+          </div>
+        </div>
       </main>
     </div>
   );
