@@ -351,11 +351,6 @@ export default function Campanhas() {
             color: var(--dark);
             margin: 0;
         }
-        .campaign-variations-subtitle {
-            font-size: 12px;
-            color: var(--gray-600);
-            margin: 2px 0 0;
-        }
         .campaign-variations-counter {
             border: 1px solid var(--border-color);
             border-radius: 999px;
@@ -446,11 +441,6 @@ export default function Campanhas() {
         .campaign-variation-create-btn[disabled] {
             opacity: 0.6;
             cursor: not-allowed;
-        }
-        .campaign-variations-help {
-            margin: 0;
-            font-size: 12px;
-            color: var(--gray-500);
         }
         @media (max-width: 640px) {
             .campaign-variations-header {
@@ -667,14 +657,13 @@ export default function Campanhas() {
                               <div className="campaign-variations-panel">
                                   <div className="campaign-variations-header">
                                       <div>
-                                          <p className="campaign-variations-title">Variações da mensagem</p>
-                                          <p className="campaign-variations-subtitle">Opcional: alterna aleatoriamente entre a mensagem principal e variações salvas.</p>
+                                          <p className="campaign-variations-title">Variações</p>
                                       </div>
                                       <span className="campaign-variations-counter" id="campaignMessageVariationsCounter">0/10</span>
                                   </div>
 
                                   <div className="campaign-variations-list" id="campaignMessageVariationsList">
-                                      <p className="campaign-variations-empty">Nenhuma variação adicionada.</p>
+                                      <p className="campaign-variations-empty">Sem variações.</p>
                                   </div>
 
                                   <div className="campaign-variation-editor" id="campaignMessageVariationEditor" hidden>
@@ -691,7 +680,6 @@ export default function Campanhas() {
                                   </div>
 
                                   <button type="button" className="btn btn-outline campaign-variation-create-btn" id="campaignCreateVariationBtn"><span className="icon icon-add icon-sm"></span> Criar variação</button>
-                                  <p className="campaign-variations-help" id="campaignMessageVariationsHelp">Limite de até 10 variações.</p>
                               </div>
                           </div>
       

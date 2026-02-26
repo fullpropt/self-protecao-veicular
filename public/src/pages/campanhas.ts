@@ -659,7 +659,7 @@ function renderCampaignMessageVariations() {
     if (!list) return;
 
     if (!count) {
-        list.innerHTML = '<p class="campaign-variations-empty">Nenhuma variação adicionada.</p>';
+        list.innerHTML = '<p class="campaign-variations-empty">Sem variações.</p>';
         return;
     }
 
