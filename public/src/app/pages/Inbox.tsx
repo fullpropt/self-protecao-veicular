@@ -48,12 +48,14 @@ export default function Inbox() {
             --inbox-scroll-thumb: rgba(var(--primary-rgb), 0.42);
             --inbox-scroll-thumb-hover: rgba(var(--primary-rgb), 0.62);
             --inbox-scroll-thumb-active: rgba(var(--primary-rgb), 0.74);
+            --inbox-main-pad-y: 20px;
         }
         .inbox-container {
             display: grid;
             grid-template-columns: 350px 1fr 320px;
             grid-template-rows: 1fr;
-            height: calc(100vh - 120px);
+            height: calc(100vh - (var(--inbox-main-pad-y) * 2));
+            height: calc(100dvh - (var(--inbox-main-pad-y) * 2));
             gap: 0;
             background: var(--surface);
             border: 1px solid var(--border-color);
@@ -927,7 +929,10 @@ export default function Inbox() {
         .inbox-right-panel p { color: var(--gray-700); line-height: 1.5; margin: 0 0 16px; font-size: 14px; }
         .inbox-right-panel .btn-register-user { background: var(--whatsapp, #25d366); color: white; padding: 12px 24px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; font-size: 14px; }
         .inbox-right-panel .btn-register-user:hover { opacity: 0.9; }
-        .inbox-main-content { padding: 20px; }
+        .inbox-main-content {
+            padding: var(--inbox-main-pad-y) 20px;
+            box-sizing: border-box;
+        }
         .chat-header-actions { display: flex; gap: 8px; align-items: center; }
         .chat-back-btn { display: none; }
         .contact-info-backdrop {
@@ -1029,7 +1034,6 @@ export default function Inbox() {
         @media (max-width: 1024px) {
             .inbox-container {
                 grid-template-columns: 340px 1fr !important;
-                height: calc(100vh - 105px);
             }
             .inbox-right-panel {
                 display: flex !important;
@@ -1049,11 +1053,11 @@ export default function Inbox() {
         }
 
         @media (max-width: 768px) {
+            .inbox-react { --inbox-main-pad-y: 8px; }
             .inbox-main-content { padding: 8px !important; }
             .inbox-container {
                 grid-template-columns: 1fr !important;
                 border-radius: 12px;
-                height: calc(100vh - 86px);
             }
             .conversations-panel {
                 display: flex !important;
