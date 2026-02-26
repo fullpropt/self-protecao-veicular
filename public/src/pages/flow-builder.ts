@@ -2415,9 +2415,26 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
 }
 
 // Criar novo fluxo
-function createNewFlow() {
+async function createNewFlow() {
+    const typedName = await showFlowPromptDialog('Escolha um nome para o novo fluxo:', {
+        title: 'Novo fluxo',
+        placeholder: 'Ex.: Captacao de leads - Plano Premium',
+        confirmLabel: 'Criar fluxo'
+    });
+
+    if (typedName === null) return;
+
+    const nextName = String(typedName || '').trim();
+    if (!nextName) {
+        await showFlowAlertDialog('Informe um nome para criar o novo fluxo.', 'Novo fluxo');
+        return;
+    }
+
     resetEditorState();
     closeFlowsModal();
+    persistLastOpenFlowId(null);
+    currentFlowName = nextName;
+    renderCurrentFlowName();
 }
 
 function applyAiDraftToEditor(draft: AiGeneratedFlowDraft) {
@@ -2521,7 +2538,7 @@ function closeFlowsModal() {
 const windowAny = window as Window & {
     initFlowBuilder?: () => void;
     openFlowsModal?: () => void;
-    createNewFlow?: () => void;
+    createNewFlow?: () => Promise<void>;
     clearCanvas?: () => void;
     saveFlow?: () => Promise<void>;
     generateFlowWithAi?: () => Promise<void>;
