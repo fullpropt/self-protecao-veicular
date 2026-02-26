@@ -87,6 +87,7 @@ let socketBound = false;
 let refreshInterval: number | null = null;
 let currentFilter: 'all' | 'unread' = 'all';
 let quickReplyDismissBound = false;
+let emojiPickerDismissBound = false;
 let currentLeadDetails: LeadDetails | null = null;
 let contactFieldsCache: ContactField[] = [];
 let isContactInfoOpen = false;
@@ -101,6 +102,13 @@ const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', is_default: true, source: 'name' },
     { key: 'telefone', label: 'Telefone', is_default: true, source: 'phone' },
     { key: 'email', label: 'Email', is_default: true, source: 'email' }
+];
+
+const TEXT_EMOJIS = [
+    '😀', '😁', '😂', '🤣', '😊', '😍', '😉', '😎',
+    '🥹', '😅', '🤔', '😮', '😴', '😭', '😡', '🙏',
+    '👏', '👍', '👎', '💚', '❤️', '🔥', '✨', '🎯',
+    '📩', '💬', '📞', '✅', '⚡', '🚀', '🎉', '🤝'
 ];
 
 function normalizeDirection(message: Record<string, any>): 'outgoing' | 'incoming' {
@@ -484,6 +492,7 @@ function getContatosUrl(id: string | number) {
 function initInbox() {
     bindInboxLifecycle();
     bindQuickReplyDismiss();
+    bindEmojiPickerDismiss();
     loadContactFields();
     void loadInboxSessionFilters().finally(() => {
         loadConversations();
@@ -691,6 +700,19 @@ function bindQuickReplyDismiss() {
         if (!picker || !picker.classList.contains('open')) return;
         if (target?.closest('.quick-reply-toolbar')) return;
         closeQuickReplyPicker();
+    });
+}
+
+function bindEmojiPickerDismiss() {
+    if (emojiPickerDismissBound) return;
+    emojiPickerDismissBound = true;
+
+    document.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement | null;
+        const picker = document.getElementById('emojiPicker') as HTMLElement | null;
+        if (!picker || !picker.classList.contains('open')) return;
+        if (target?.closest('.chat-input')) return;
+        closeEmojiPicker();
     });
 }
 
@@ -1124,6 +1146,15 @@ function renderQuickReplyItems() {
         .join('');
 }
 
+function renderEmojiPickerItems() {
+    return TEXT_EMOJIS
+        .map((emoji, index) => {
+            const label = escapeHtml(`Inserir emoji ${emoji}`);
+            return `<button type="button" class="chat-emoji-item" onclick="selectEmojiByIndex(${index})" title="${label}" aria-label="${label}">${emoji}</button>`;
+        })
+        .join('');
+}
+
 function applyQuickReplyVariables(content: string) {
     if (!currentConversation) return content;
 
@@ -1153,6 +1184,7 @@ function applyQuickReplyVariables(content: string) {
 function toggleQuickReplyPicker() {
     const picker = document.getElementById('quickReplyPicker') as HTMLElement | null;
     if (!picker) return;
+    closeEmojiPicker();
     picker.classList.toggle('open');
 }
 
@@ -1160,6 +1192,39 @@ function closeQuickReplyPicker() {
     const picker = document.getElementById('quickReplyPicker') as HTMLElement | null;
     if (!picker) return;
     picker.classList.remove('open');
+}
+
+function toggleEmojiPicker() {
+    const picker = document.getElementById('emojiPicker') as HTMLElement | null;
+    if (!picker) return;
+    closeQuickReplyPicker();
+    picker.classList.toggle('open');
+}
+
+function closeEmojiPicker() {
+    const picker = document.getElementById('emojiPicker') as HTMLElement | null;
+    if (!picker) return;
+    picker.classList.remove('open');
+}
+
+function insertTextAtCursor(input: HTMLTextAreaElement, text: string) {
+    const start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+    const end = typeof input.selectionEnd === 'number' ? input.selectionEnd : input.value.length;
+    const before = input.value.slice(0, start);
+    const after = input.value.slice(end);
+    input.value = `${before}${text}${after}`;
+    const nextPos = start + text.length;
+    input.focus();
+    input.setSelectionRange(nextPos, nextPos);
+}
+
+function selectEmojiByIndex(index: number) {
+    const input = document.getElementById('messageInput') as HTMLTextAreaElement | null;
+    if (!input) return;
+    const emoji = TEXT_EMOJIS[index];
+    if (!emoji) return;
+
+    insertTextAtCursor(input, emoji);
 }
 
 function selectQuickReply(id: number) {
@@ -1489,6 +1554,7 @@ function renderChat() {
     if (!panel || !currentConversation) return;
 
     const quickReplyItems = renderQuickReplyItems();
+    const emojiPickerItems = renderEmojiPickerItems();
 
     panel.innerHTML = `
         <div class="chat-header">
@@ -1531,6 +1597,12 @@ function renderChat() {
             <button class="chat-input-btn chat-attach-btn" onclick="triggerMediaPicker()" title="Anexar arquivo">
                 <span class="icon icon-attachment icon-sm"></span>
             </button>
+            <button class="chat-input-btn chat-emoji-btn" onclick="toggleEmojiPicker()" title="Inserir emoji" type="button">
+                <span class="icon icon-smile icon-sm"></span>
+            </button>
+            <div class="chat-emoji-picker" id="emojiPicker" aria-label="Selecionador de emojis">
+                ${emojiPickerItems}
+            </div>
             <textarea id="messageInput" placeholder="Digite uma mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
             <button class="chat-input-btn chat-send-btn" onclick="sendMessage()" title="Enviar"><span class="icon icon-send icon-sm"></span></button>
         </div>
@@ -1590,6 +1662,7 @@ async function sendMessage() {
     
     const activeConversation = currentConversation;
     if (!content || !activeConversation) return;
+    closeEmojiPicker();
 
     const sessionId = resolveConversationSessionId(activeConversation);
     const sessionConnected = await ensureSessionConnected(sessionId);
@@ -1723,6 +1796,9 @@ const windowAny = window as Window & {
     toggleQuickReplyPicker?: () => void;
     closeQuickReplyPicker?: () => void;
     selectQuickReply?: (id: number) => void;
+    toggleEmojiPicker?: () => void;
+    closeEmojiPicker?: () => void;
+    selectEmojiByIndex?: (index: number) => void;
     handleKeyDown?: (event: KeyboardEvent) => void;
     sendMessage?: () => Promise<void>;
     triggerMediaPicker?: () => void;
@@ -1744,6 +1820,9 @@ windowAny.selectConversation = selectConversation;
 windowAny.toggleQuickReplyPicker = toggleQuickReplyPicker;
 windowAny.closeQuickReplyPicker = closeQuickReplyPicker;
 windowAny.selectQuickReply = selectQuickReply;
+windowAny.toggleEmojiPicker = toggleEmojiPicker;
+windowAny.closeEmojiPicker = closeEmojiPicker;
+windowAny.selectEmojiByIndex = selectEmojiByIndex;
 windowAny.handleKeyDown = handleKeyDown;
 windowAny.sendMessage = sendMessage;
 windowAny.triggerMediaPicker = triggerMediaPicker;
