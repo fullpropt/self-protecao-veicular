@@ -1603,16 +1603,16 @@ function renderChat() {
             <button class="chat-input-btn chat-emoji-btn" onclick="toggleEmojiPicker()" title="Inserir emoji" type="button">
                 <span class="icon icon-smile icon-sm"></span>
             </button>
+            <div class="chat-emoji-picker" id="emojiPicker" aria-label="Selecionador de emojis">
+                ${emojiPickerItems}
+            </div>
+            <textarea id="messageInput" placeholder="Digite uma mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
             <button class="quick-reply-trigger" onclick="toggleQuickReplyPicker()" title="Selecionar resposta rapida" type="button">
                 <span class="icon icon-bolt icon-sm"></span> R&aacute;pidas
             </button>
             <div class="quick-reply-picker" id="quickReplyPicker">
                 ${quickReplyItems}
             </div>
-            <div class="chat-emoji-picker" id="emojiPicker" aria-label="Selecionador de emojis">
-                ${emojiPickerItems}
-            </div>
-            <textarea id="messageInput" placeholder="Digite uma mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
             <button class="chat-input-btn chat-send-btn" onclick="sendMessage()" title="Enviar"><span class="icon icon-send icon-sm"></span></button>
         </div>
     `;
