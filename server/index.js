@@ -11199,6 +11199,69 @@ app.delete('/api/templates/:id', authenticate, async (req, res) => {
 
 // ============================================
 const SUPPORTED_CAMPAIGN_TYPES = new Set(['broadcast', 'drip']);
+const MAX_CAMPAIGN_MESSAGE_VARIATIONS = 10;
+
+function normalizeCampaignMessageVariations(value) {
+    if (!Array.isArray(value)) return [];
+
+    const normalized = [];
+    const seen = new Set();
+
+    for (const item of value) {
+        const text = String(item || '')
+            .replace(/\r\n/g, '\n')
+            .trim();
+        if (!text || seen.has(text)) continue;
+        seen.add(text);
+        normalized.push(text);
+        if (normalized.length >= MAX_CAMPAIGN_MESSAGE_VARIATIONS) break;
+    }
+
+    return normalized;
+}
+
+function readCampaignMessageVariationsFromConfig(campaignOrConfig) {
+    if (!campaignOrConfig) return [];
+
+    const directTopLevel = normalizeCampaignMessageVariations(campaignOrConfig.message_variations);
+    if (directTopLevel.length) return directTopLevel;
+
+    const configSource = Object.prototype.hasOwnProperty.call(campaignOrConfig, 'distribution_config')
+        ? campaignOrConfig.distribution_config
+        : campaignOrConfig;
+    const parsedConfig = parseCampaignDistributionConfig(configSource);
+
+    return normalizeCampaignMessageVariations(parsedConfig?.message_variations);
+}
+
+function buildBroadcastCampaignMessagePool(campaign) {
+    const pool = [];
+    const seen = new Set();
+
+    const baseMessage = String(campaign?.message || '')
+        .replace(/\r\n/g, '\n')
+        .trim();
+    if (baseMessage) {
+        pool.push(baseMessage);
+        seen.add(baseMessage);
+    }
+
+    for (const variation of readCampaignMessageVariationsFromConfig(campaign)) {
+        if (!variation || seen.has(variation)) continue;
+        seen.add(variation);
+        pool.push(variation);
+    }
+
+    return pool;
+}
+
+function pickRandomCampaignMessagePoolEntry(pool = [], fallback = '') {
+    if (!Array.isArray(pool) || pool.length === 0) return fallback;
+    if (pool.length === 1) return String(pool[0] || fallback);
+
+    const index = Math.floor(Math.random() * pool.length);
+    return String(pool[index] || fallback);
+}
 
 function sanitizeCampaignPayload(input = {}, options = {}) {
 
@@ -11239,15 +11302,44 @@ function sanitizeCampaignPayload(input = {}, options = {}) {
     const hasDistributionConfig =
         Object.prototype.hasOwnProperty.call(payload, 'distribution_config') ||
         Object.prototype.hasOwnProperty.call(payload, 'distributionConfig');
+    const hasMessageVariations =
+        Object.prototype.hasOwnProperty.call(payload, 'message_variations') ||
+        Object.prototype.hasOwnProperty.call(payload, 'messageVariations');
+
+    let parsedDistributionConfig = null;
     if (hasDistributionConfig) {
         const rawDistributionConfig = Object.prototype.hasOwnProperty.call(payload, 'distribution_config')
             ? payload.distribution_config
             : payload.distributionConfig;
-        const parsedDistributionConfig = parseCampaignDistributionConfig(rawDistributionConfig);
+        parsedDistributionConfig = parseCampaignDistributionConfig(rawDistributionConfig);
+    }
+
+    if (hasMessageVariations) {
+        const rawMessageVariations = Object.prototype.hasOwnProperty.call(payload, 'message_variations')
+            ? payload.message_variations
+            : payload.messageVariations;
+        const normalizedMessageVariations = normalizeCampaignMessageVariations(rawMessageVariations);
+        const nextDistributionConfig = (parsedDistributionConfig && typeof parsedDistributionConfig === 'object')
+            ? { ...parsedDistributionConfig }
+            : {};
+
+        if (normalizedMessageVariations.length) {
+            nextDistributionConfig.message_variations = normalizedMessageVariations;
+        } else {
+            delete nextDistributionConfig.message_variations;
+        }
+
+        parsedDistributionConfig = Object.keys(nextDistributionConfig).length ? nextDistributionConfig : null;
+    }
+
+    if (hasDistributionConfig || hasMessageVariations) {
         payload.distribution_config = parsedDistributionConfig ? JSON.stringify(parsedDistributionConfig) : null;
     }
     if (Object.prototype.hasOwnProperty.call(payload, 'distributionConfig')) {
         delete payload.distributionConfig;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'messageVariations')) {
+        delete payload.messageVariations;
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'sender_accounts')) {
@@ -11514,10 +11606,12 @@ async function resolveCampaignLeadIds(options = {}) {
 function serializeCampaign(campaign, senderAccounts = []) {
     if (!campaign) return null;
     const parsedDistributionConfig = parseCampaignDistributionConfig(campaign.distribution_config);
+    const messageVariations = readCampaignMessageVariationsFromConfig(parsedDistributionConfig || campaign);
     return {
         ...campaign,
         distribution_strategy: normalizeCampaignDistributionStrategy(campaign.distribution_strategy, 'single'),
         distribution_config: parsedDistributionConfig,
+        message_variations: messageVariations,
         sender_accounts: normalizeSenderAccountsPayload(senderAccounts || [])
     };
 }
@@ -11796,6 +11890,13 @@ async function queueCampaignMessages(campaign, options = {}) {
     } else {
 
         const startAt = new Date(baseStartMs).toISOString();
+        const broadcastMessagePool = buildBroadcastCampaignMessagePool(campaign);
+        const contentByLead = broadcastMessagePool.length > 1
+            ? leadIds.reduce((acc, leadId) => {
+                acc[String(leadId)] = pickRandomCampaignMessagePoolEntry(broadcastMessagePool, steps[0]);
+                return acc;
+            }, {})
+            : null;
 
         const results = await queueService.addBulk(leadIds, steps[0], {
 
@@ -11810,6 +11911,8 @@ async function queueCampaignMessages(campaign, options = {}) {
             sessionAssignments,
 
             assignmentMetaByLead,
+
+            ...(contentByLead ? { contentByLead } : {}),
 
             scheduledAtByLead,
 

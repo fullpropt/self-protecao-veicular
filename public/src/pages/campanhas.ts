@@ -10,6 +10,7 @@ type Campaign = {
     type: CampaignType;
     distribution_strategy?: 'single' | 'round_robin' | 'weighted_round_robin' | 'random';
     distribution_config?: Record<string, unknown> | null;
+    message_variations?: string[];
     sender_accounts?: CampaignSenderAccount[];
     status: CampaignStatus;
     sent?: number;
@@ -110,6 +111,9 @@ let campaignsRealtimeRefreshInFlight = false;
 let activeCampaignDetailsId: number | null = null;
 let activeCampaignDetailsTab: 'overview' | 'messages' | 'recipients' = 'overview';
 let campaignRecipientsRefreshInFlight = false;
+let campaignMessageVariationsDrafts: string[] = [];
+let campaignMessageVariationEditingIndex: number | null = null;
+let campaignMessageVariationsUiBound = false;
 
 function appConfirm(message: string, title = 'Confirmacao') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -121,6 +125,7 @@ function appConfirm(message: string, title = 'Confirmacao') {
 
 const DEFAULT_DELAY_MIN_SECONDS = 5;
 const DEFAULT_DELAY_MAX_SECONDS = 15;
+const MAX_CAMPAIGN_MESSAGE_VARIATIONS = 10;
 const CAMPAIGNS_CACHE_TTL_MS = 60 * 1000;
 const CAMPAIGNS_LIVE_REFRESH_MS = 4000;
 const FIXED_CAMPAIGN_MESSAGE_VARIABLES: ReadonlyArray<CampaignMessageVariable> = Object.freeze([
@@ -353,7 +358,16 @@ function insertCampaignMessageVariable(variableKey: string) {
     const normalizedKey = normalizeCampaignVariableKey(variableKey);
     if (!normalizedKey) return;
 
-    const textarea = document.getElementById('campaignMessage') as HTMLTextAreaElement | null;
+    const activeElement = document.activeElement;
+    const activeTextarea = activeElement instanceof HTMLTextAreaElement
+        ? activeElement
+        : null;
+    const textarea = (
+        activeTextarea &&
+        (activeTextarea.id === 'campaignMessage' || activeTextarea.id === 'campaignMessageVariationDraft')
+            ? activeTextarea
+            : (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)
+    );
     if (!textarea) return;
 
     const token = `{{${normalizedKey}}}`;
@@ -459,6 +473,277 @@ async function loadCampaignMessageVariables() {
     }
 
     renderCampaignMessageVariableOptions();
+}
+
+function normalizeCampaignMessageVariationsList(raw: unknown): string[] {
+    if (!Array.isArray(raw)) return [];
+
+    const normalized: string[] = [];
+    for (const item of raw) {
+        const text = String(item || '')
+            .replace(/\r\n/g, '\n')
+            .trim();
+        if (!text) continue;
+        normalized.push(text);
+        if (normalized.length >= MAX_CAMPAIGN_MESSAGE_VARIATIONS) break;
+    }
+
+    return normalized;
+}
+
+function getCampaignMessageVariationsFromCampaign(campaign?: Partial<Campaign> | null): string[] {
+    if (!campaign) return [];
+
+    const topLevel = normalizeCampaignMessageVariationsList(campaign.message_variations);
+    if (topLevel.length) return topLevel;
+
+    const config = campaign.distribution_config && typeof campaign.distribution_config === 'object'
+        ? campaign.distribution_config as Record<string, unknown>
+        : null;
+
+    return normalizeCampaignMessageVariationsList(config?.message_variations);
+}
+
+function getCampaignMessageVariationUiElements() {
+    return {
+        list: document.getElementById('campaignMessageVariationsList') as HTMLElement | null,
+        counter: document.getElementById('campaignMessageVariationsCounter') as HTMLElement | null,
+        help: document.getElementById('campaignMessageVariationsHelp') as HTMLElement | null,
+        createButton: document.getElementById('campaignCreateVariationBtn') as HTMLButtonElement | null,
+        editor: document.getElementById('campaignMessageVariationEditor') as HTMLElement | null,
+        draftInput: document.getElementById('campaignMessageVariationDraft') as HTMLTextAreaElement | null,
+        saveButton: document.getElementById('campaignSaveVariationBtn') as HTMLButtonElement | null,
+        cancelButton: document.getElementById('campaignCancelVariationBtn') as HTMLButtonElement | null
+    };
+}
+
+function isCampaignMessageVariationEditorOpen() {
+    return campaignMessageVariationEditingIndex !== null;
+}
+
+function closeCampaignMessageVariationEditor() {
+    campaignMessageVariationEditingIndex = null;
+    const { editor, draftInput } = getCampaignMessageVariationUiElements();
+    if (editor) editor.hidden = true;
+    if (draftInput) draftInput.value = '';
+}
+
+function openCampaignMessageVariationEditor(index: number = -1) {
+    const {
+        editor,
+        draftInput,
+        createButton
+    } = getCampaignMessageVariationUiElements();
+    if (!editor || !draftInput) return;
+
+    const isEditingExisting = Number.isInteger(index) && index >= 0;
+
+    if (!isEditingExisting && campaignMessageVariationsDrafts.length >= MAX_CAMPAIGN_MESSAGE_VARIATIONS) {
+        showToast('warning', 'Limite atingido', `Você pode cadastrar até ${MAX_CAMPAIGN_MESSAGE_VARIATIONS} variações.`);
+        return;
+    }
+
+    campaignMessageVariationEditingIndex = isEditingExisting ? index : -1;
+
+    if (isEditingExisting) {
+        draftInput.value = campaignMessageVariationsDrafts[index] || '';
+    } else {
+        const mainMessage = (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)?.value || '';
+        draftInput.value = mainMessage.trim();
+    }
+
+    editor.hidden = false;
+    if (createButton) {
+        createButton.disabled = true;
+    }
+
+    draftInput.focus();
+    draftInput.selectionStart = draftInput.value.length;
+    draftInput.selectionEnd = draftInput.value.length;
+    renderCampaignMessageVariations();
+}
+
+function resetCampaignMessageVariationsState(values: string[] = []) {
+    campaignMessageVariationsDrafts = normalizeCampaignMessageVariationsList(values);
+    closeCampaignMessageVariationEditor();
+    renderCampaignMessageVariations();
+}
+
+function saveCampaignMessageVariationDraft() {
+    const { draftInput } = getCampaignMessageVariationUiElements();
+    if (!draftInput) return;
+
+    const value = draftInput.value.replace(/\r\n/g, '\n').trim();
+    if (!value) {
+        showToast('error', 'Erro', 'A variação não pode ficar vazia');
+        draftInput.focus();
+        return;
+    }
+
+    const editingIndex = campaignMessageVariationEditingIndex;
+    if (editingIndex !== null && editingIndex >= 0 && editingIndex < campaignMessageVariationsDrafts.length) {
+        campaignMessageVariationsDrafts[editingIndex] = value;
+    } else {
+        if (campaignMessageVariationsDrafts.length >= MAX_CAMPAIGN_MESSAGE_VARIATIONS) {
+            showToast('warning', 'Limite atingido', `Você pode cadastrar até ${MAX_CAMPAIGN_MESSAGE_VARIATIONS} variações.`);
+            return;
+        }
+        campaignMessageVariationsDrafts.push(value);
+    }
+
+    closeCampaignMessageVariationEditor();
+    renderCampaignMessageVariations();
+}
+
+function removeCampaignMessageVariation(index: number) {
+    if (!Number.isInteger(index) || index < 0 || index >= campaignMessageVariationsDrafts.length) return;
+
+    campaignMessageVariationsDrafts.splice(index, 1);
+
+    if (campaignMessageVariationEditingIndex !== null) {
+        if (campaignMessageVariationEditingIndex === index) {
+            closeCampaignMessageVariationEditor();
+        } else if (campaignMessageVariationEditingIndex > index) {
+            campaignMessageVariationEditingIndex -= 1;
+        }
+    }
+
+    renderCampaignMessageVariations();
+}
+
+function renderCampaignMessageVariations() {
+    const {
+        list,
+        counter,
+        help,
+        createButton,
+        editor,
+        saveButton
+    } = getCampaignMessageVariationUiElements();
+
+    const count = campaignMessageVariationsDrafts.length;
+    const limitReached = count >= MAX_CAMPAIGN_MESSAGE_VARIATIONS;
+    const editorOpen = isCampaignMessageVariationEditorOpen();
+    const editingExisting = campaignMessageVariationEditingIndex !== null && campaignMessageVariationEditingIndex >= 0;
+
+    if (counter) {
+        counter.textContent = `${count}/${MAX_CAMPAIGN_MESSAGE_VARIATIONS}`;
+    }
+
+    if (help) {
+        help.textContent = limitReached
+            ? `Limite de ${MAX_CAMPAIGN_MESSAGE_VARIATIONS} variações atingido.`
+            : 'Limite de até 10 variações.';
+    }
+
+    if (createButton) {
+        createButton.disabled = editorOpen || limitReached;
+        createButton.innerHTML = '<span class="icon icon-add icon-sm"></span> Criar variação';
+        if (limitReached) {
+            createButton.title = `Limite de ${MAX_CAMPAIGN_MESSAGE_VARIATIONS} variações atingido`;
+        } else {
+            createButton.removeAttribute('title');
+        }
+    }
+
+    if (editor) {
+        editor.hidden = !editorOpen;
+    }
+
+    if (saveButton) {
+        saveButton.innerHTML = editingExisting
+            ? '<span class="icon icon-save icon-sm"></span> Salvar edição'
+            : '<span class="icon icon-save icon-sm"></span> Salvar variação';
+    }
+
+    if (!list) return;
+
+    if (!count) {
+        list.innerHTML = '<p class="campaign-variations-empty">Nenhuma variação adicionada.</p>';
+        return;
+    }
+
+    list.innerHTML = campaignMessageVariationsDrafts.map((variation, index) => {
+        const preview = variation.length > 260 ? `${variation.slice(0, 257)}...` : variation;
+        return `
+            <div class="campaign-variation-card">
+                <div class="campaign-variation-card-header">
+                    <p class="campaign-variation-card-title">Variação ${index + 1}</p>
+                    <div class="campaign-variation-card-actions">
+                        <button type="button" class="campaign-variation-action" data-variation-action="edit" data-variation-index="${index}">Editar</button>
+                        <button type="button" class="campaign-variation-action danger" data-variation-action="remove" data-variation-index="${index}">Remover</button>
+                    </div>
+                </div>
+                <p class="campaign-variation-card-preview">${escapeCampaignText(preview)}</p>
+            </div>
+        `;
+    }).join('');
+}
+
+function bindCampaignMessageVariationsUi() {
+    if (campaignMessageVariationsUiBound) return;
+
+    const {
+        list,
+        createButton,
+        saveButton,
+        cancelButton
+    } = getCampaignMessageVariationUiElements();
+
+    if (!list || !createButton || !saveButton || !cancelButton) return;
+
+    campaignMessageVariationsUiBound = true;
+
+    createButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        openCampaignMessageVariationEditor(-1);
+    });
+
+    saveButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        saveCampaignMessageVariationDraft();
+    });
+
+    cancelButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeCampaignMessageVariationEditor();
+        renderCampaignMessageVariations();
+    });
+
+    list.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        const button = target.closest<HTMLButtonElement>('[data-variation-action][data-variation-index]');
+        if (!button) return;
+
+        event.preventDefault();
+
+        const action = String(button.dataset.variationAction || '').trim();
+        const index = Number(button.dataset.variationIndex);
+        if (!Number.isInteger(index) || index < 0) return;
+
+        if (action === 'edit') {
+            openCampaignMessageVariationEditor(index);
+            return;
+        }
+
+        if (action === 'remove') {
+            removeCampaignMessageVariation(index);
+        }
+    });
+
+    const draftInput = document.getElementById('campaignMessageVariationDraft') as HTMLTextAreaElement | null;
+    if (draftInput) {
+        draftInput.addEventListener('keydown', (event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                event.preventDefault();
+                saveCampaignMessageVariationDraft();
+            }
+        });
+    }
+
+    renderCampaignMessageVariations();
 }
 
 function getSessionDispatchWeight(session: WhatsappSenderSession) {
@@ -641,12 +926,15 @@ function renderCampaignMessages(campaign: Campaign) {
     if (!campaignMessages) return;
 
     const steps = splitCampaignMessageSteps(campaign);
+    const variations = campaign.type === 'broadcast'
+        ? getCampaignMessageVariationsFromCampaign(campaign)
+        : [];
     if (!steps.length) {
         campaignMessages.innerHTML = '<p style="color: var(--gray-500);">Nenhuma mensagem configurada.</p>';
         return;
     }
 
-    campaignMessages.innerHTML = steps.map((step, index) => `
+    const baseCards = steps.map((step, index) => `
         <div class="copy-card" style="margin-bottom: 12px;">
             <div style="font-weight: 600; margin-bottom: 8px;">
                 ${campaign.type === 'drip' ? `Etapa ${index + 1}` : 'Mensagem'}
@@ -654,6 +942,19 @@ function renderCampaignMessages(campaign: Campaign) {
             <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">${escapeCampaignText(step)}</pre>
         </div>
     `).join('');
+
+    const variationCards = variations.map((variation, index) => `
+        <div class="copy-card" style="margin-bottom: 12px;">
+            <div style="font-weight: 600; margin-bottom: 8px;">Variação ${index + 1}</div>
+            <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">${escapeCampaignText(variation)}</pre>
+        </div>
+    `).join('');
+
+    const variationIntro = variations.length
+        ? `<p style="color: var(--gray-600); margin: 0 0 12px;">A campanha alterna aleatoriamente entre a mensagem principal e ${variations.length} variação(ões).</p>`
+        : '';
+
+    campaignMessages.innerHTML = `${baseCards}${variationIntro}${variationCards}`;
 }
 
 function renderCampaignSenderAccountsSummary(campaign: Campaign) {
@@ -936,6 +1237,7 @@ function resetCampaignForm() {
     setDelayRangeInputs(DEFAULT_DELAY_MIN_SECONDS, DEFAULT_DELAY_MAX_SECONDS);
     closeCampaignMessageVariableMenu();
     bindCampaignMessageVariablePicker();
+    resetCampaignMessageVariationsState([]);
     setCampaignModalTitle('new');
 }
 
@@ -945,6 +1247,7 @@ function openCampaignModal() {
     void loadCampaignMessageVariables();
     void loadSenderSessions();
     bindCampaignMessageVariablePicker();
+    bindCampaignMessageVariationsUi();
     const win = window as Window & { openModal?: (id: string) => void };
     win.openModal?.('newCampaignModal');
 }
@@ -1011,6 +1314,7 @@ function openBroadcastModal() {
 async function initCampanhas() {
     syncCampaignSegmentOptions();
     bindCampaignMessageVariablePicker();
+    bindCampaignMessageVariationsUi();
     bindCampaignsRealtimeUpdates();
     await Promise.all([
         loadCampaigns(),
@@ -1244,6 +1548,7 @@ async function saveCampaign(statusOverride?: CampaignStatus) {
         segment: (document.getElementById('campaignSegment') as HTMLSelectElement | null)?.value || '',
         tag_filter: (document.getElementById('campaignTagFilter') as HTMLSelectElement | null)?.value || '',
         message: (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)?.value.trim() || '',
+        message_variations: [...campaignMessageVariationsDrafts],
         delay: delayMinMs,
         delay_min: delayMinMs,
         delay_max: delayMaxMs,
@@ -1348,8 +1653,10 @@ function editCampaign(id: number) {
 
     const messageInput = document.getElementById('campaignMessage') as HTMLTextAreaElement | null;
     if (messageInput) messageInput.value = campaign.message || '';
+    resetCampaignMessageVariationsState(getCampaignMessageVariationsFromCampaign(campaign));
     closeCampaignMessageVariableMenu();
     bindCampaignMessageVariablePicker();
+    bindCampaignMessageVariationsUi();
 
     const { minMs, maxMs } = resolveCampaignDelayRangeMs(campaign);
     setDelayRangeInputs(Math.round(minMs / 1000), Math.round(maxMs / 1000));

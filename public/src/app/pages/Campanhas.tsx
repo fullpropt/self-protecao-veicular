@@ -329,6 +329,147 @@ export default function Campanhas() {
             margin: 0;
             padding: 2px 0 4px;
         }
+        .campaign-variations-panel {
+            margin-top: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--surface) 86%, var(--gray-50) 14%);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .campaign-variations-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .campaign-variations-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--dark);
+            margin: 0;
+        }
+        .campaign-variations-subtitle {
+            font-size: 12px;
+            color: var(--gray-600);
+            margin: 2px 0 0;
+        }
+        .campaign-variations-counter {
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--gray-600);
+            background: var(--surface);
+            white-space: nowrap;
+        }
+        .campaign-variations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .campaign-variations-empty {
+            margin: 0;
+            font-size: 12px;
+            color: var(--gray-500);
+        }
+        .campaign-variation-card {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--surface);
+            padding: 10px;
+        }
+        .campaign-variation-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .campaign-variation-card-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--dark);
+            margin: 0;
+        }
+        .campaign-variation-card-actions {
+            display: inline-flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .campaign-variation-action {
+            border: 1px solid var(--border-color);
+            background: var(--gray-50);
+            color: var(--gray-700);
+            border-radius: 7px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .campaign-variation-action:hover {
+            border-color: rgba(var(--primary-rgb), 0.4);
+            color: var(--dark);
+        }
+        .campaign-variation-action.danger:hover {
+            border-color: rgba(var(--danger-rgb, 220, 38, 38), 0.35);
+            color: var(--danger);
+        }
+        .campaign-variation-card-preview {
+            margin: 0;
+            color: var(--gray-700);
+            font-size: 13px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .campaign-variation-editor[hidden] {
+            display: none;
+        }
+        .campaign-variation-editor .form-textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .campaign-variation-editor-actions {
+            margin-top: 8px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .campaign-variation-create-btn {
+            align-self: flex-start;
+        }
+        .campaign-variation-create-btn[disabled] {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .campaign-variations-help {
+            margin: 0;
+            font-size: 12px;
+            color: var(--gray-500);
+        }
+        @media (max-width: 640px) {
+            .campaign-variations-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .campaign-variation-card-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .campaign-variation-editor-actions {
+                width: 100%;
+                justify-content: stretch;
+            }
+            .campaign-variation-editor-actions .btn {
+                flex: 1 1 auto;
+                width: 100%;
+            }
+        }
       `}</style>
       <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
           <div className="sidebar-overlay"></div>
@@ -522,6 +663,35 @@ export default function Campanhas() {
                                           </div>
                                       </div>
                                   </div>
+                              </div>
+                              <div className="campaign-variations-panel">
+                                  <div className="campaign-variations-header">
+                                      <div>
+                                          <p className="campaign-variations-title">Variações da mensagem</p>
+                                          <p className="campaign-variations-subtitle">Opcional: alterna aleatoriamente entre a mensagem principal e variações salvas.</p>
+                                      </div>
+                                      <span className="campaign-variations-counter" id="campaignMessageVariationsCounter">0/10</span>
+                                  </div>
+
+                                  <div className="campaign-variations-list" id="campaignMessageVariationsList">
+                                      <p className="campaign-variations-empty">Nenhuma variação adicionada.</p>
+                                  </div>
+
+                                  <div className="campaign-variation-editor" id="campaignMessageVariationEditor" hidden>
+                                      <textarea
+                                          className="form-textarea campaign-message-variation-input"
+                                          id="campaignMessageVariationDraft"
+                                          rows={4}
+                                          placeholder="Digite a variação da mensagem..."
+                                      ></textarea>
+                                      <div className="campaign-variation-editor-actions">
+                                          <button type="button" className="btn btn-outline" id="campaignCancelVariationBtn">Cancelar</button>
+                                          <button type="button" className="btn btn-primary" id="campaignSaveVariationBtn"><span className="icon icon-save icon-sm"></span> Salvar variação</button>
+                                      </div>
+                                  </div>
+
+                                  <button type="button" className="btn btn-outline campaign-variation-create-btn" id="campaignCreateVariationBtn"><span className="icon icon-add icon-sm"></span> Criar variação</button>
+                                  <p className="campaign-variations-help" id="campaignMessageVariationsHelp">Limite de até 10 variações.</p>
                               </div>
                           </div>
       

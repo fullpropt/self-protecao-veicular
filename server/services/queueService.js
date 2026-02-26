@@ -130,6 +130,9 @@ class QueueService extends EventEmitter {
         const assignmentMetaByLead = (options.assignmentMetaByLead && typeof options.assignmentMetaByLead === 'object')
             ? options.assignmentMetaByLead
             : {};
+        const contentByLead = (options.contentByLead && typeof options.contentByLead === 'object')
+            ? options.contentByLead
+            : {};
         const scheduledAtByLead = (options.scheduledAtByLead && typeof options.scheduledAtByLead === 'object')
             ? options.scheduledAtByLead
             : {};
@@ -171,6 +174,11 @@ class QueueService extends EventEmitter {
         
         for (let i = 0; i < leadIds.length; i++) {
             const leadId = leadIds[i];
+            const perLeadContentCandidate = contentByLead[String(leadId)];
+            const perLeadContent = typeof perLeadContentCandidate === 'string'
+                ? perLeadContentCandidate
+                : '';
+            const hasPerLeadContent = perLeadContent.trim().length > 0;
             
             // Calcular tempo de agendamento baseado na posicao na fila
             const explicitScheduledAt = String(scheduledAtByLead[String(leadId)] || '').trim();
@@ -183,7 +191,7 @@ class QueueService extends EventEmitter {
             const result = await this.add({
                 leadId,
                 campaignId: options.campaignId || null,
-                content,
+                content: hasPerLeadContent ? perLeadContent : content,
                 mediaType: options.mediaType,
                 mediaUrl: options.mediaUrl,
                 priority: options.priority || 0,

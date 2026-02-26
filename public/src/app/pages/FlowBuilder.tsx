@@ -182,7 +182,7 @@ export default function FlowBuilder() {
             gap: 10px;
             flex-wrap: wrap;
             box-sizing: border-box;
-            padding-right: 10px;
+            padding-right: 28px;
         }
 
         .flow-builder-react .header-flow-row .flow-name-highlight {
@@ -203,7 +203,7 @@ export default function FlowBuilder() {
             align-items: center;
             flex-wrap: wrap;
             box-sizing: border-box;
-            padding-right: 10px;
+            padding-right: 28px;
         }
 
         .flow-builder-react .sidebar-menu {
