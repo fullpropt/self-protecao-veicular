@@ -13,6 +13,7 @@ import Funil from './pages/Funil';
 import Home from './pages/Home';
 import Inbox from './pages/Inbox';
 import Login from './pages/Login';
+import Planos from './pages/Planos';
 import Transmissao from './pages/Transmissao';
 import Whatsapp from './pages/Whatsapp';
 
@@ -89,6 +90,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/planos" element={<Planos />} />
+      <Route path="/venda" element={<Planos />} />
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/contatos" element={<Contatos />} />
