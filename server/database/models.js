@@ -1068,6 +1068,26 @@ const Message = {
         return await queryOne("SELECT * FROM messages WHERE conversation_id = ? ORDER BY COALESCE(sent_at, created_at) DESC, id DESC LIMIT 1", [conversationId]);
     },
 
+    async getLastMessagesByConversationIds(conversationIds = []) {
+        const ids = Array.from(
+            new Set(
+                (Array.isArray(conversationIds) ? conversationIds : [])
+                    .map((id) => Number(id))
+                    .filter((id) => Number.isInteger(id) && id > 0)
+            )
+        );
+
+        if (ids.length === 0) return [];
+
+        const placeholders = ids.map(() => '?').join(', ');
+        return await query(`
+            SELECT DISTINCT ON (conversation_id) *
+            FROM messages
+            WHERE conversation_id IN (${placeholders})
+            ORDER BY conversation_id, COALESCE(sent_at, created_at) DESC, id DESC
+        `, ids);
+    },
+
     async hasCampaignDelivery(campaignId, leadId) {
         const row = await queryOne(`
             SELECT id

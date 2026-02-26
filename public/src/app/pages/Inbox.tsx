@@ -397,9 +397,9 @@ export default function Inbox() {
                 radial-gradient(520px 260px at 50% 0%, rgba(53, 224, 132, 0.02), rgba(53, 224, 132, 0)),
                 linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0)),
                 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240' fill='none'%3E%3Cg stroke='%2335e084' stroke-width='1.15' stroke-linecap='round' stroke-linejoin='round' stroke-opacity='0.028'%3E%3Cpath d='M20 34h40a10 10 0 0 1 10 10v20a10 10 0 0 1-10 10H40l-12 9V74h-8a10 10 0 0 1-10-10V44a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M104 28h34a9 9 0 0 1 9 9v16a9 9 0 0 1-9 9h-17l-10 8v-8h-7a9 9 0 0 1-9-9V37a9 9 0 0 1 9-9Z'/%3E%3Cpath d='M176 42l17 9-17 9 4-9-4-9Z'/%3E%3Cpath d='M37 132c8 12 18 21 30 27l10-10c2-2 4-2 6-1 6 3 12 5 18 6 2 0 3 2 3 4v16c0 3-2 5-5 5-40-2-73-35-75-75 0-3 2-5 5-5h16c2 0 4 1 4 3 1 6 3 12 6 18 1 2 1 4-1 6l-10 10Z'/%3E%3Cpath d='M127 112l7 7 15-15'/%3E%3Cpath d='M121 120l7 7 15-15'/%3E%3Cpath d='M173 118c7 0 13 6 13 13s-6 13-13 13-13-6-13-13 6-13 13-13Z'/%3E%3Cpath d='M166 156h14'/%3E%3Cpath d='M188 156h8'/%3E%3Cpath d='M34 201h30'/%3E%3Cpath d='M86 194h20a8 8 0 0 1 8 8v10a8 8 0 0 1-8 8H94l-8 6v-6h-4a8 8 0 0 1-8-8v-10a8 8 0 0 1 8-8Z'/%3E%3Cpath d='M144 191h34a10 10 0 0 1 10 10v14a10 10 0 0 1-10 10h-12l-10 8v-8h-12a10 10 0 0 1-10-10v-14a10 10 0 0 1 10-10Z'/%3E%3Cpath d='M149 206h24'/%3E%3Cpath d='M149 213h17'/%3E%3C/g%3E%3C/svg%3E"),
-                radial-gradient(420px 220px at 85% 0%, rgba(var(--primary-rgb), 0.04), rgba(var(--primary-rgb), 0)),
-                radial-gradient(320px 180px at 12% 100%, rgba(var(--primary-rgb), 0.024), rgba(var(--primary-rgb), 0)),
-                linear-gradient(180deg, #1a2d49 0%, #172844 55%, #14243c 100%);
+                radial-gradient(420px 220px at 85% 0%, rgba(var(--primary-rgb), 0.032), rgba(var(--primary-rgb), 0)),
+                radial-gradient(320px 180px at 12% 100%, rgba(var(--primary-rgb), 0.02), rgba(var(--primary-rgb), 0)),
+                linear-gradient(180deg, #182941 0%, #15253d 55%, #122036 100%);
             background-repeat: no-repeat, no-repeat, repeat, no-repeat, no-repeat, no-repeat;
             background-size: auto, auto, 180px 180px, auto, auto, auto;
             background-position: 50% 0, 0 0, 12px 8px, 85% 0, 12% 100%, 0 0;

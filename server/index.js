@@ -10432,6 +10432,12 @@ app.get('/api/conversations', authenticate, async (req, res) => {
         limit: limit ? parseInt(limit) : 100,
         offset: offset ? parseInt(offset) : 0
     });
+    const lastMessages = await Message.getLastMessagesByConversationIds(
+        conversations.map((conversation) => conversation.id)
+    );
+    const lastMessageByConversationId = new Map(
+        lastMessages.map((message) => [Number(message.conversation_id), message])
+    );
 
     const previewForMedia = (mediaType) => {
         switch (mediaType) {
@@ -10457,8 +10463,8 @@ app.get('/api/conversations', authenticate, async (req, res) => {
         return digits.length >= 11 ? digits.slice(-11) : digits;
     };
 
-    const normalized = (await Promise.all(conversations.map(async (c) => {
-        const lastMessage = await Message.getLastMessage(c.id);
+    const normalized = conversations.map((c) => {
+        const lastMessage = lastMessageByConversationId.get(Number(c.id)) || null;
         const decrypted = lastMessage?.content_encrypted
             ? decryptMessage(lastMessage.content_encrypted)
             : lastMessage?.content;
@@ -10509,7 +10515,7 @@ app.get('/api/conversations', authenticate, async (req, res) => {
             phone: c.phone,
             avatar_url: avatarUrl || null
         };
-    }))).filter((conv) => {
+    }).filter((conv) => {
         if (!conv.lastMessageAt && !conv.lastMessage && Number(conv?.unread || 0) <= 0) {
             return false;
         }
