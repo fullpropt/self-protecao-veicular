@@ -662,9 +662,7 @@ export default function Campanhas() {
                                       <span className="campaign-variations-counter" id="campaignMessageVariationsCounter">0/10</span>
                                   </div>
 
-                                  <div className="campaign-variations-list" id="campaignMessageVariationsList">
-                                      <p className="campaign-variations-empty">Sem variações.</p>
-                                  </div>
+                                  <div className="campaign-variations-list" id="campaignMessageVariationsList"></div>
 
                                   <div className="campaign-variation-editor" id="campaignMessageVariationEditor" hidden>
                                       <textarea

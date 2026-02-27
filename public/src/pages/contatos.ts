@@ -557,6 +557,34 @@ function applyUrlFilters() {
     }
 }
 
+function clearContactIdFromUrl() {
+    const currentUrl = new URL(window.location.href);
+
+    if (currentUrl.searchParams.has('id')) {
+        currentUrl.searchParams.delete('id');
+        window.history.replaceState({}, '', currentUrl.toString());
+        return;
+    }
+
+    const hash = String(window.location.hash || '');
+    if (!hash) return;
+
+    const queryIndex = hash.indexOf('?');
+    if (queryIndex < 0) return;
+
+    const hashPath = hash.slice(0, queryIndex);
+    const hashQuery = hash.slice(queryIndex + 1);
+    const params = new URLSearchParams(hashQuery);
+
+    if (!params.has('id')) return;
+
+    params.delete('id');
+    const nextQuery = params.toString();
+    const nextHash = nextQuery ? `${hashPath}?${nextQuery}` : hashPath;
+    const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+    window.history.replaceState({}, '', nextUrl);
+}
+
 function initContacts() {
     if (!isContactsRouteActive()) {
         return;
@@ -1127,6 +1155,7 @@ async function updateContact() {
         showLoading('Salvando...');
         await api.put(`/api/leads/${id}`, data);
         closeModal('editContactModal');
+        clearContactIdFromUrl();
         clearLeadViewCaches();
         await loadContacts({ forceRefresh: true, silent: true });
         showToast('success', 'Sucesso', 'Contato atualizado!');
