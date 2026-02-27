@@ -25,6 +25,8 @@ type RegisterResponse = LoginResponse & {
     requiresEmailConfirmation?: boolean;
     retryable?: boolean;
     accountCreated?: boolean;
+    sent?: boolean;
+    alreadyConfirmed?: boolean;
 };
 
 type AuthMode = 'login' | 'register';
@@ -79,6 +81,25 @@ function getRegisterErrorElement(): HTMLElement | null {
 
 function getAuthInfoElement(): HTMLElement | null {
     return document.getElementById('authInfoMsg');
+}
+
+function getResendConfirmationButton(): HTMLButtonElement | null {
+    return document.getElementById('resendConfirmationBtn') as HTMLButtonElement | null;
+}
+
+function setResendConfirmationLoading(loading: boolean) {
+    const button = getResendConfirmationButton();
+    if (!button) return;
+    button.disabled = loading;
+    button.textContent = loading ? 'Reenviando...' : 'Reenviar confirmação';
+}
+
+function normalizeEmailAddress(value: unknown) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function isValidEmailAddress(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }
 
 function setErrorMessage(target: HTMLElement | null, message: string) {
@@ -355,6 +376,54 @@ async function handleRegister(e: Event) {
     return false;
 }
 
+async function resendEmailConfirmation() {
+    const errorMsg = getErrorMessageElement();
+    const infoMsg = getAuthInfoElement();
+    hideInfoMessage();
+
+    const email = normalizeEmailAddress(getInputValue('username'));
+    if (!email) {
+        setErrorMessage(errorMsg, 'Digite seu e-mail no campo Usuário para reenviar a confirmação');
+        return;
+    }
+
+    if (!isValidEmailAddress(email)) {
+        setErrorMessage(errorMsg, 'Informe um e-mail válido para reenviar a confirmação');
+        return;
+    }
+
+    setResendConfirmationLoading(true);
+
+    try {
+        const response = await fetch(`${window.location.origin}/api/auth/resend-confirmation`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email })
+        });
+
+        const data: RegisterResponse = await response.json().catch(() => ({} as RegisterResponse));
+
+        if (!response.ok) {
+            throw new Error(data?.error || 'Não foi possível reenviar o e-mail de confirmação');
+        }
+
+        const message = String(
+            data?.message
+            || 'Se existir uma conta pendente para este e-mail, enviaremos um novo link de confirmação.'
+        );
+        setInfoMessage(infoMsg, message, true);
+    } catch (error) {
+        setErrorMessage(
+            errorMsg,
+            error instanceof Error ? error.message : 'Falha ao reenviar e-mail de confirmação'
+        );
+    } finally {
+        setResendConfirmationLoading(false);
+    }
+}
+
 let confirmEmailRequestInFlight = false;
 
 async function handleConfirmEmailFromRoute() {
@@ -431,12 +500,14 @@ async function initLogin() {
     const windowAny = window as Window & {
         handleLogin?: (e: Event) => boolean | Promise<boolean>;
         handleRegister?: (e: Event) => boolean | Promise<boolean>;
+        resendEmailConfirmation?: () => Promise<void>;
         initLogin?: () => void;
         showLogin?: () => void;
         showRegister?: () => void;
     };
     windowAny.handleLogin = handleLogin;
     windowAny.handleRegister = handleRegister;
+    windowAny.resendEmailConfirmation = resendEmailConfirmation;
     windowAny.initLogin = initLogin;
     windowAny.showLogin = () => setAuthMode('login');
     windowAny.showRegister = () => setAuthMode('register');
@@ -446,6 +517,7 @@ async function initLogin() {
     if (rememberInput) {
         rememberInput.checked = readRememberSessionPreference();
     }
+    setResendConfirmationLoading(false);
     void handleConfirmEmailFromRoute();
 }
 

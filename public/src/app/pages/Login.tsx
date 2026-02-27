@@ -5,6 +5,7 @@ type LoginGlobals = {
   initLogin?: () => void;
   handleLogin?: (event: Event) => boolean | Promise<boolean>;
   handleRegister?: (event: Event) => boolean | Promise<boolean>;
+  resendEmailConfirmation?: () => Promise<void>;
   showLogin?: () => void;
   showRegister?: () => void;
 };
@@ -227,6 +228,26 @@ export default function Login() {
             text-decoration: underline;
         }
 
+        .auth-resend-wrap {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .auth-resend-btn {
+            border: none;
+            background: transparent;
+            color: #9cc4ff;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: underline;
+            padding: 0;
+        }
+
+        .auth-resend-btn:disabled {
+            opacity: 0.65;
+            cursor: default;
+        }
+
         .security-badge {
             text-align: center;
             margin-top: 20px;
@@ -293,6 +314,17 @@ export default function Login() {
           </div>
 
           <button type="submit" className="btn-login">Entrar</button>
+
+          <div className="auth-resend-wrap">
+            <button
+              type="button"
+              className="auth-resend-btn"
+              id="resendConfirmationBtn"
+              onClick={() => globals.resendEmailConfirmation?.()}
+            >
+              Reenviar confirmação
+            </button>
+          </div>
 
           <div className="auth-switch">
             {'Ainda n\u00E3o tem conta?'}
