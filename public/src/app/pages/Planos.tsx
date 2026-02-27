@@ -7,9 +7,9 @@ import { brandFullLogoUrl, brandLogoUrl, brandName } from '../lib/brand';
 const pricingPlans = [
   {
     name: 'Starter',
-    subtitle: 'Plano essencial para quem esta iniciando a operacao.',
+    subtitle: 'Plano essencial para quem está iniciando a operação.',
     monthlyPrice: 'R$ 99',
-    billing: 'Cobranca trimestral de R$ 297.',
+    billing: 'Cobrança trimestral de R$ 297.',
     whatsappIncluded: 1,
     featuresState: 'Recursos avan\u00E7ados: N\u00E3o inclusos',
     ctaLabel: 'Escolher Starter',
@@ -17,9 +17,9 @@ const pricingPlans = [
   },
   {
     name: 'Premium',
-    subtitle: 'Melhor equilibrio para escalar atendimento e vendas.',
+    subtitle: 'Melhor equilíbrio para escalar atendimento e vendas.',
     monthlyPrice: 'R$ 199',
-    billing: 'Cobranca trimestral de R$ 597.',
+    billing: 'Cobrança trimestral de R$ 597.',
     whatsappIncluded: 3,
     featuresState: 'Todos os recursos liberados',
     ctaLabel: 'Escolher Premium',
@@ -27,9 +27,9 @@ const pricingPlans = [
   },
   {
     name: 'Business',
-    subtitle: 'Camada para times com mais volume e mais operacao.',
+    subtitle: 'Camada para times com mais volume e mais operação.',
     monthlyPrice: 'R$ 349',
-    billing: 'Cobranca trimestral de R$ 1.047.',
+    billing: 'Cobrança trimestral de R$ 1.047.',
     whatsappIncluded: 5,
     featuresState: 'Todos os recursos liberados',
     ctaLabel: 'Escolher Business',
@@ -40,39 +40,39 @@ const pricingPlans = [
 const comparisonRows = [
   {
     feature: 'CRM + Inbox de atendimento',
-    pro: 'Incluido',
-    equipe: 'Incluido',
-    enterprise: 'Incluido'
+    pro: 'Incluído',
+    equipe: 'Incluído',
+    enterprise: 'Incluído'
   },
   {
     feature: 'Campanhas + fila de envios',
-    pro: 'Incluido',
-    equipe: 'Incluido',
-    enterprise: 'Incluido'
+    pro: 'Incluído',
+    equipe: 'Incluído',
+    enterprise: 'Incluído'
   },
   {
-    feature: 'Automacoes e fluxos',
-    pro: 'Incluido',
-    equipe: 'Incluido',
-    enterprise: 'Incluido'
+    feature: 'Automações e fluxos',
+    pro: 'Incluído',
+    equipe: 'Incluído',
+    enterprise: 'Incluído'
   },
   {
-    feature: 'Organizacao para equipe / permissoes',
+    feature: 'Organização para equipe / permissões',
     pro: 'Essencial',
-    equipe: 'Avancado (planejado)',
-    enterprise: 'Avancado'
+    equipe: 'Avançado (planejado)',
+    enterprise: 'Avançado'
   },
   {
     feature: 'Onboarding e suporte',
-    pro: 'Padrao',
-    equipe: 'Prioritario (planejado)',
+    pro: 'Padrão',
+    equipe: 'Prioritário (planejado)',
     enterprise: 'SLA / consultivo'
   },
   {
-    feature: 'Customizacoes e integracoes',
-    pro: 'Sob avaliacao',
+    feature: 'Customizações e integrações',
+    pro: 'Sob avaliação',
     equipe: 'Opcional',
-    enterprise: 'Prioritario'
+    enterprise: 'Prioritário'
   }
 ];
 
@@ -80,12 +80,12 @@ const resourceHighlights = [
   {
     title: 'Inbox operacional',
     subtitle: 'Atenda com contexto',
-    description: 'Visualize mensagens, midias e historico do lead em um fluxo unico de atendimento.'
+    description: 'Visualize mensagens, mídias e histórico do lead em um fluxo único de atendimento.'
   },
   {
     title: 'CRM e contatos',
-    subtitle: 'Relacao comercial organizada',
-    description: 'Cadastre, segmente e acompanhe leads com informacoes centralizadas e filtros por sessao.'
+    subtitle: 'Relação comercial organizada',
+    description: 'Cadastre, segmente e acompanhe leads com informações centralizadas e filtros por sessão.'
   },
   {
     title: 'Campanhas e fila',
@@ -93,19 +93,19 @@ const resourceHighlights = [
     description: 'Dispare mensagens com fila, reenvio e controle de throughput para reduzir risco operacional.'
   },
   {
-    title: 'Automacoes e fluxos',
+    title: 'Automações e fluxos',
     subtitle: 'Menos trabalho manual',
-    description: 'Crie jornadas e respostas para acelerar atendimento, follow-up e qualificacao.'
+    description: 'Crie jornadas e respostas para acelerar atendimento, follow-up e qualificação.'
   },
   {
-    title: 'Gestao de contas WhatsApp',
-    subtitle: 'Operacao multi-sessao',
-    description: 'Gerencie sessoes, status de conexao e distribuicao de envios a partir do painel.'
+    title: 'Gestão de contas WhatsApp',
+    subtitle: 'Operação multi-sessão',
+    description: 'Gerencie sessões, status de conexão e distribuição de envios a partir do painel.'
   },
   {
     title: 'Funil comercial',
-    subtitle: 'Visao de pipeline',
-    description: 'Acompanhe andamento das oportunidades e tome decisoes com base no progresso real.'
+    subtitle: 'Visão de pipeline',
+    description: 'Acompanhe andamento das oportunidades e tome decisões com base no progresso real.'
   }
 ];
 
@@ -113,7 +113,7 @@ const journeySteps = [
   {
     step: '01',
     title: 'Captar e organizar',
-    text: 'Entradas de contato e atendimento chegam ao painel, com visao de conversa e cadastro do lead.'
+    text: 'Entradas de contato e atendimento chegam ao painel, com visão de conversa e cadastro do lead.'
   },
   {
     step: '02',
@@ -123,12 +123,12 @@ const journeySteps = [
   {
     step: '03',
     title: 'Automatizar e escalar',
-    text: 'Fluxos, campanhas e fila de envio ajudam a manter constancia sem sobrecarregar o time.'
+    text: 'Fluxos, campanhas e fila de envio ajudam a manter constância sem sobrecarregar o time.'
   }
 ];
 
 const heroAudienceChips = [
-  'Agencias',
+  'Agências',
   'Times comerciais',
   'Infoprodutos',
   'Prestadores',
@@ -139,30 +139,30 @@ const strategyPillars = [
   {
     tag: 'WhatsApp + CRM',
     title: 'Atendimento centralizado',
-    text: 'Concentre conversas, contatos e historico em um unico painel para tirar o time do improviso.'
+    text: 'Concentre conversas, contatos e histórico em um único painel para tirar o time do improviso.'
   },
   {
     tag: 'Funil + Inbox',
-    title: 'Processo comercial visivel',
+    title: 'Processo comercial visível',
     text: 'Organize leads por etapa e acompanhe o funil com contexto real de atendimento.'
   },
   {
-    tag: 'Fila + automacao',
+    tag: 'Fila + automação',
     title: 'Escala com controle',
-    text: 'Use campanhas, filas e automacoes para crescer sem perder previsibilidade operacional.'
+    text: 'Use campanhas, filas e automações para crescer sem perder previsibilidade operacional.'
   }
 ];
 
 const strategyProblems = [
-  'Leads se perdem quando atendimento e CRM nao conversam.',
-  'Equipe atende sem contexto quando o historico fica espalhado.',
-  'Escala de envio sem fila e automacao gera risco operacional.',
-  'Decisao comercial piora quando nao existe visao clara de funil.'
+  'Leads se perdem quando atendimento e CRM não conversam.',
+  'Equipe atende sem contexto quando o histórico fica espalhado.',
+  'Escala de envio sem fila e automação gera risco operacional.',
+  'Decisão comercial piora quando não existe visão clara de funil.'
 ];
 
 const strategyOutcomes = [
-  'Atendimento com contexto + operacao organizada em um painel.',
-  'Mais clareza para a equipe comercial sobre status e proximos passos.',
+  'Atendimento com contexto + operação organizada em um painel.',
+  'Mais clareza para a equipe comercial sobre status e próximos passos.',
   'Base pronta para crescer com campanhas, fluxos e novos planos.'
 ];
 
@@ -198,8 +198,8 @@ const highlightViews: HighlightView[] = [
     badge: 'Certificada pela Meta',
     title: 'Dashboard completo',
     subtitle: 'em tempo real.',
-    primaryText: 'Acompanhe atendimentos, contatos, setores, agendamentos e campanhas em um painel unico e organizado.',
-    secondaryText: 'Tudo atualizado em tempo real para decisoes mais rapidas e operacao previsivel.',
+    primaryText: 'Acompanhe atendimentos, contatos, setores, agendamentos e campanhas em um painel único e organizado.',
+    secondaryText: 'Tudo atualizado em tempo real para decisões mais rápidas e operação previsível.',
     stats: [
       { value: '674', label: 'Conversas no bot' },
       { value: '25', label: 'Atendentes online' }
@@ -219,15 +219,15 @@ const highlightViews: HighlightView[] = [
     badge: 'Recursos principais',
     title: 'O que existe dentro',
     subtitle: 'da plataforma.',
-    primaryText: 'Veja rapidamente os modulos que sua operacao ganha antes de entrar na comparacao de planos.',
+    primaryText: 'Veja rapidamente os módulos que sua operação ganha antes de entrar na comparação de planos.',
     secondaryText: 'Tudo pensado para atendimento, CRM, campanhas e funil no mesmo fluxo de trabalho.',
     stats: [
-      { value: '6', label: 'Modulos principais' },
+      { value: '6', label: 'Módulos principais' },
       { value: '1', label: 'Painel unificado' }
     ],
     previewLeft: resourceHighlights.slice(0, 3).map((resource) => resource.title),
     previewRight: resourceHighlights.slice(3, 6).map((resource) => resource.title),
-    resourceHeading: 'Colaboracao em tempo real',
+    resourceHeading: 'Colaboração em tempo real',
     resourceSubtitle: 'Estruture atendimento multi-time sem perder contexto comercial.',
     resourceItems: [
       {
@@ -239,52 +239,52 @@ const highlightViews: HighlightView[] = [
       {
         subtitle: 'Contexto interno',
         title: 'Notas e repasses',
-        description: 'Registre informacoes internas antes de transferir o atendimento.'
+        description: 'Registre informações internas antes de transferir o atendimento.'
       },
       {
         subtitle: 'Controle de dono',
-        title: 'Responsavel ativo',
-        description: 'Defina quem esta conduzindo cada lead no momento.'
+        title: 'Responsável ativo',
+        description: 'Defina quem está conduzindo cada lead no momento.'
       },
       {
         subtitle: 'SLA comercial',
         title: 'Prioridades por etapa',
-        description: 'Priorize conversas criticas para manter resposta no tempo esperado.',
+        description: 'Priorize conversas críticas para manter resposta no tempo esperado.',
         wide: true
       },
       {
-        subtitle: 'Historico unico',
+        subtitle: 'Histórico único',
         title: 'Linha do tempo',
         description: 'Veja toda a jornada do lead no mesmo painel.'
       },
       {
         subtitle: 'Produtividade',
         title: 'Atalhos de resposta',
-        description: 'Padronize respostas sem perder personalizacao.'
+        description: 'Padronize respostas sem perder personalização.'
       }
     ]
   },
   {
     id: 'integracao',
-    navLabel: 'Operacao',
-    badge: 'Operacao conectada',
-    title: 'Operacao',
+    navLabel: 'Operação',
+    badge: 'Operação conectada',
+    title: 'Operação',
     subtitle: 'sem friccao.',
-    primaryText: 'Conecte CRM, Inbox, campanhas e automacoes para manter dados sincronizados e operacao escalavel.',
-    secondaryText: 'A equipe trabalha em um fluxo unico enquanto os modulos trocam contexto em tempo real.',
+    primaryText: 'Conecte CRM, Inbox, campanhas e automações para manter dados sincronizados e operação escalável.',
+    secondaryText: 'A equipe trabalha em um fluxo único enquanto os módulos trocam contexto em tempo real.',
     stats: [
-      { value: '14', label: 'Integracoes ativas' },
+      { value: '14', label: 'Integrações ativas' },
       { value: '99.8%', label: 'Entrega de eventos' }
     ],
-    previewLeft: ['Webhook de eventos', 'Conexao com CRM', 'Sincronizacao de contatos'],
-    previewRight: ['Fila de envio', 'Status por sessao', 'Logs de entrega'],
+    previewLeft: ['Webhook de eventos', 'Conexão com CRM', 'Sincronização de contatos'],
+    previewRight: ['Fila de envio', 'Status por sessão', 'Logs de entrega'],
     resourceHeading: 'Base conectada para crescer',
     resourceSubtitle: 'Integre sistemas sem quebrar o fluxo de atendimento e vendas.',
     resourceItems: [
       {
         subtitle: 'API e webhook',
         title: 'Eventos em tempo real',
-        description: 'Dispare automacoes e sincronizacoes conforme a interacao acontece.',
+        description: 'Dispare automações e sincronizações conforme a interação acontece.',
         wide: true
       },
       {
@@ -294,7 +294,7 @@ const highlightViews: HighlightView[] = [
       },
       {
         subtitle: 'Campanhas',
-        title: 'Orquestracao de envios',
+        title: 'Orquestração de envios',
         description: 'Ative campanhas com regras e filas por prioridade.'
       },
       {
@@ -304,65 +304,65 @@ const highlightViews: HighlightView[] = [
         wide: true
       },
       {
-        subtitle: 'Seguranca',
+        subtitle: 'Segurança',
         title: 'Controle de credenciais',
         description: 'Gerencie acessos e tokens por equipe.'
       },
       {
         subtitle: 'Escalabilidade',
         title: 'Arquitetura pronta',
-        description: 'Cresca volume sem refazer a operacao.'
+        description: 'Cresça volume sem refazer a operação.'
       }
     ]
   },
   {
     id: 'meta',
-    navLabel: 'Estrategia',
-    badge: 'Confianca de canal',
-    title: 'Operacao',
+    navLabel: 'Estratégia',
+    badge: 'Confiança de canal',
+    title: 'Operação',
     subtitle: 'certificada.',
-    primaryText: 'Com boas praticas de canal, sua equipe reduz risco de bloqueio e ganha previsibilidade no atendimento.',
-    secondaryText: 'Padronize mensagens, acompanhe qualidade e mantenha governanca da operacao WhatsApp.',
+    primaryText: 'Com boas práticas de canal, sua equipe reduz risco de bloqueio e ganha previsibilidade no atendimento.',
+    secondaryText: 'Padronize mensagens, acompanhe qualidade e mantenha governança da operação WhatsApp.',
     stats: [
       { value: '100%', label: 'Governanca de conta' },
       { value: '24/7', label: 'Monitoramento ativo' }
     ],
-    previewLeft: ['Templates aprovados', 'Qualidade de sessao', 'Historico de conformidade'],
-    previewRight: ['Alertas de risco', 'Politicas de uso', 'Auditoria de operacao'],
-    resourceHeading: 'Confianca para operar em escala',
-    resourceSubtitle: 'Proteja a conta e mantenha consistencia no canal comercial.',
+    previewLeft: ['Templates aprovados', 'Qualidade de sessão', 'Histórico de conformidade'],
+    previewRight: ['Alertas de risco', 'Políticas de uso', 'Auditoria de operação'],
+    resourceHeading: 'Confiança para operar em escala',
+    resourceSubtitle: 'Proteja a conta e mantenha consistência no canal comercial.',
     resourceItems: [
       {
         subtitle: 'Conformidade',
-        title: 'Politicas do canal',
+        title: 'Políticas do canal',
         description: 'Mantenha equipe alinhada ao uso correto do WhatsApp.',
         wide: true
       },
       {
         subtitle: 'Qualidade',
-        title: 'Monitoramento continuo',
+        title: 'Monitoramento contínuo',
         description: 'Acompanhe indicadores para agir antes de incidentes.'
       },
       {
-        subtitle: 'Governanca',
-        title: 'Permissoes por perfil',
+        subtitle: 'Governança',
+        title: 'Permissões por perfil',
         description: 'Defina acesso por papel e responsabilidade.'
       },
       {
         subtitle: 'Previsibilidade',
-        title: 'Historico auditavel',
-        description: 'Tenha registro completo de alteracoes e eventos.',
+        title: 'Histórico auditável',
+        description: 'Tenha registro completo de alterações e eventos.',
         wide: true
       },
       {
-        subtitle: 'Escalacao',
+        subtitle: 'Escalação',
         title: 'Alertas operacionais',
-        description: 'Notifique rapidamente riscos de interrupcao.'
+        description: 'Notifique rapidamente riscos de interrupção.'
       },
       {
-        subtitle: 'Padrao',
+        subtitle: 'Padrão',
         title: 'Biblioteca de mensagens',
-        description: 'Centralize modelos para manter consistencia.'
+        description: 'Centralize modelos para manter consistência.'
       }
     ]
   }
@@ -855,7 +855,7 @@ export default function Planos() {
         }
 
         .hero-visual {
-          margin: 18px auto 0;
+          margin: clamp(34px, 4.6vw, 46px) auto 0;
           max-width: 920px;
           border-radius: 22px;
           border: 1px solid rgba(72, 128, 112, 0.3);
@@ -2060,7 +2060,7 @@ export default function Planos() {
         }
 
         .plans-section {
-          margin-top: 0;
+          margin-top: clamp(0.9rem, 1.8vw, 1.4rem);
         }
 
         .section-head {
@@ -2112,6 +2112,7 @@ export default function Planos() {
         }
 
         .highlight-model-shell {
+          --hl-main-card-height: clamp(500px, 36vw, 620px);
           --hl-shell-border: rgba(151, 188, 172, 0.34);
           --hl-shell-a: rgba(83, 209, 255, 0.2);
           --hl-shell-b: rgba(243, 193, 100, 0.19);
@@ -2149,7 +2150,7 @@ export default function Planos() {
           display: grid;
           grid-template-columns: 252px minmax(280px, 420px) minmax(360px, 1fr);
           gap: 18px;
-          align-items: start;
+          align-items: stretch;
           border-radius: 22px;
           border: 1px solid var(--hl-shell-border);
           background:
@@ -2219,6 +2220,107 @@ export default function Planos() {
           --hl-row-right-bg: rgba(16, 50, 40, 0.9);
         }
 
+        .highlight-model-shell.is-chatinterno {
+          --hl-shell-border: rgba(170, 208, 187, 0.2);
+          --hl-shell-a: rgba(46, 212, 122, 0.15);
+          --hl-shell-b: rgba(29, 109, 76, 0.18);
+          --hl-shell-c: rgba(18, 60, 47, 0.25);
+          --hl-shell-start: rgba(15, 46, 35, 0.98);
+          --hl-shell-end: rgba(18, 60, 47, 0.97);
+          gap: clamp(1.5rem, 2.1vw, 2rem);
+          padding: clamp(1.5rem, 2.2vw, 2rem);
+          border-radius: 24px;
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            0 14px 30px rgba(5, 17, 12, 0.18);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav {
+          border-color: rgba(255, 255, 255, 0.36);
+          background: linear-gradient(180deg, rgba(249, 252, 251, 0.9), rgba(239, 246, 242, 0.84));
+          box-shadow: none;
+          backdrop-filter: blur(6px);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-copy {
+          border-radius: 24px;
+          padding: clamp(1.6rem, 2.1vw, 2rem);
+          gap: 1rem;
+          background:
+            radial-gradient(520px 240px at 24% 8%, rgba(46, 212, 122, 0.12), rgba(46, 212, 122, 0) 72%),
+            linear-gradient(160deg, rgba(11, 38, 30, 0.68), rgba(10, 33, 27, 0.54));
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-title {
+          font-size: clamp(3rem, 4.2vw, 4rem);
+          line-height: 0.98;
+          color: #f2fff8;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-subtitle {
+          color: #d3eadf;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-copy p {
+          color: #bbd6ca;
+          font-size: 1.08rem;
+          line-height: 1.6;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-cta {
+          margin-top: 0.55rem;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-cta .sales-btn-primary {
+          background: linear-gradient(135deg, #2ed47a, #39dc86);
+          border-color: rgba(46, 212, 122, 0.48);
+          color: #0a261c;
+          box-shadow: 0 10px 24px rgba(46, 212, 122, 0.24);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-cta .sales-btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 14px 28px rgba(46, 212, 122, 0.28);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-preview {
+          border-radius: 24px;
+          padding: clamp(0.8rem, 1.2vw, 1rem);
+          background: linear-gradient(160deg, rgba(9, 34, 26, 0.62), rgba(7, 28, 22, 0.46));
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-preview .platform-mock {
+          opacity: 0.9;
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__frame {
+          border-color: rgba(188, 219, 203, 0.14);
+          background:
+            radial-gradient(340px 130px at 14% 0%, rgba(46, 212, 122, 0.08), rgba(46, 212, 122, 0)),
+            linear-gradient(180deg, rgba(246, 252, 249, 0.88), rgba(237, 246, 242, 0.82));
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.7),
+            0 8px 16px rgba(5, 17, 12, 0.08);
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__sidebar,
+        .highlight-model-shell.is-chatinterno .platform-mock__metric,
+        .highlight-model-shell.is-chatinterno .platform-mock__module,
+        .highlight-model-shell.is-chatinterno .platform-mock__footer-card,
+        .highlight-model-shell.is-chatinterno .platform-mock__lead-row,
+        .highlight-model-shell.is-chatinterno .platform-mock__event-row,
+        .highlight-model-shell.is-chatinterno .platform-mock__table-row,
+        .highlight-model-shell.is-chatinterno .platform-mock__search,
+        .highlight-model-shell.is-chatinterno .platform-mock__chart-grid {
+          border-color: rgba(27, 86, 66, 0.1);
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__module--featured {
+          border-color: rgba(46, 212, 122, 0.22);
+          box-shadow: none;
+        }
+
         .highlight-model-shell.is-integracao {
           --hl-shell-border: rgba(129, 206, 120, 0.38);
           --hl-shell-a: rgba(156, 253, 132, 0.24);
@@ -2240,23 +2342,23 @@ export default function Planos() {
         }
 
         .highlight-model-shell.is-meta {
-          --hl-shell-border: rgba(193, 150, 131, 0.36);
-          --hl-shell-a: rgba(255, 181, 155, 0.24);
-          --hl-shell-b: rgba(247, 206, 129, 0.2);
-          --hl-shell-c: rgba(114, 214, 248, 0.14);
-          --hl-shell-start: rgba(248, 239, 236, 0.97);
-          --hl-shell-end: rgba(237, 227, 223, 0.93);
+          --hl-shell-border: rgba(26, 59, 47, 0.14);
+          --hl-shell-a: rgba(255, 255, 255, 0);
+          --hl-shell-b: rgba(255, 255, 255, 0);
+          --hl-shell-c: rgba(255, 255, 255, 0);
+          --hl-shell-start: #ffffff;
+          --hl-shell-end: #ffffff;
 
           --hl-badge-border: rgba(190, 118, 93, 0.34);
           --hl-badge-bg: linear-gradient(90deg, rgba(255, 206, 188, 0.66), rgba(255, 225, 167, 0.6), rgba(196, 236, 252, 0.52));
           --hl-badge-text: #5b2f25;
 
-          --hl-preview-border: rgba(174, 126, 103, 0.24);
-          --hl-preview-a: rgba(255, 188, 164, 0.24);
-          --hl-preview-b: rgba(248, 208, 129, 0.2);
-          --hl-preview-c: rgba(107, 206, 243, 0.16);
-          --hl-preview-start: rgba(255, 250, 247, 0.97);
-          --hl-preview-end: rgba(245, 236, 231, 0.95);
+          --hl-preview-border: rgba(26, 59, 47, 0.12);
+          --hl-preview-a: rgba(255, 255, 255, 0);
+          --hl-preview-b: rgba(255, 255, 255, 0);
+          --hl-preview-c: rgba(255, 255, 255, 0);
+          --hl-preview-start: #ffffff;
+          --hl-preview-end: #ffffff;
 
           --hl-brand-border: rgba(186, 117, 94, 0.28);
           --hl-brand-bg: linear-gradient(135deg, rgba(255, 219, 205, 0.72), rgba(255, 238, 195, 0.66));
@@ -2269,15 +2371,18 @@ export default function Planos() {
           --hl-stat-2-border: rgba(186, 141, 62, 0.3);
           --hl-stat-2-bg: linear-gradient(180deg, rgba(255, 245, 216, 0.8), rgba(255, 255, 255, 0.88));
 
-          --hl-row-left-border: rgba(201, 124, 95, 0.24);
-          --hl-row-left-bg: rgba(255, 241, 234, 0.9);
-          --hl-row-right-border: rgba(188, 142, 63, 0.24);
-          --hl-row-right-bg: rgba(255, 249, 232, 0.9);
+          --hl-row-left-border: rgba(26, 59, 47, 0.12);
+          --hl-row-left-bg: #ffffff;
+          --hl-row-right-border: rgba(26, 59, 47, 0.12);
+          --hl-row-right-bg: #ffffff;
         }
 
         .highlight-model-nav {
-          border-right: 1px solid rgba(16, 42, 36, 0.12);
-          padding-right: 14px;
+          border-right: 1px solid rgba(18, 47, 40, 0.14);
+          border-radius: 16px;
+          border: 1px solid rgba(255, 255, 255, 0.74);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 246, 0.94));
+          padding: 12px;
           min-height: 100%;
         }
 
@@ -2342,17 +2447,17 @@ export default function Planos() {
         }
 
         .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-item.is-active {
-          color: #f4fff1;
-          background: linear-gradient(120deg, rgba(90, 162, 82, 0.68), rgba(40, 86, 45, 0.78));
-          border-color: rgba(156, 253, 132, 0.56);
-          box-shadow: 0 10px 18px rgba(7, 25, 11, 0.42);
+          color: #163327;
+          background: linear-gradient(120deg, #e3efe8, #d7e7dd);
+          border-color: rgba(72, 124, 101, 0.22);
+          box-shadow: 0 8px 14px rgba(10, 26, 18, 0.12);
         }
 
         .highlight-model-nav-list li:nth-child(4) .highlight-model-nav-item.is-active {
-          color: #4a2c23;
-          background: rgba(255, 193, 169, 0.42);
-          border-color: rgba(190, 118, 93, 0.32);
-          box-shadow: 0 10px 18px rgba(156, 96, 76, 0.16);
+          color: #122d23;
+          background: linear-gradient(120deg, #ffffff, #f7faf8);
+          border-color: rgba(67, 110, 92, 0.18);
+          box-shadow: 0 8px 14px rgba(8, 18, 13, 0.08);
         }
 
         .highlight-model-nav-icon {
@@ -2385,18 +2490,18 @@ export default function Planos() {
         }
 
         .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon {
-          border-color: rgba(156, 253, 132, 0.52);
-          background: rgba(34, 79, 40, 0.82);
+          border-color: rgba(68, 119, 95, 0.22);
+          background: rgba(255, 255, 255, 0.72);
         }
 
         .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon::before,
         .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon::after {
-          background: rgba(242, 255, 241, 0.95);
+          background: rgba(27, 73, 58, 0.88);
         }
 
         .highlight-model-nav-list li:nth-child(4) .highlight-model-nav-icon {
-          border-color: rgba(180, 110, 86, 0.36);
-          background: rgba(255, 224, 211, 0.66);
+          border-color: rgba(67, 110, 92, 0.18);
+          background: rgba(255, 255, 255, 0.9);
         }
 
         .highlight-model-nav-icon::before,
@@ -2427,6 +2532,7 @@ export default function Planos() {
           gap: 14px;
           color: #102f27;
           padding-top: 8px;
+          min-height: var(--hl-main-card-height);
         }
 
         .highlight-model-shell.is-dashboard .highlight-model-copy {
@@ -2539,7 +2645,7 @@ export default function Planos() {
           display: grid;
           grid-template-columns: 0.96fr 1.04fr;
           gap: 12px;
-          align-items: start;
+          align-items: stretch;
         }
 
         .highlight-integration-copy {
@@ -2549,6 +2655,7 @@ export default function Planos() {
             radial-gradient(260px 120px at 0% 0%, var(--hl-preview-a), rgba(95, 204, 160, 0)),
             linear-gradient(180deg, rgba(9, 31, 20, 0.92), rgba(6, 20, 13, 0.9));
           padding: 16px;
+          min-height: var(--hl-main-card-height);
           box-shadow:
             inset 0 1px 0 rgba(184, 252, 165, 0.12),
             0 14px 28px rgba(5, 17, 10, 0.36);
@@ -2584,6 +2691,7 @@ export default function Planos() {
             linear-gradient(180deg, rgba(8, 28, 18, 0.95), rgba(4, 17, 11, 0.94));
           padding: 12px;
           overflow: hidden;
+          min-height: var(--hl-main-card-height);
           box-shadow:
             inset 0 1px 0 rgba(185, 253, 167, 0.08),
             0 14px 28px rgba(5, 18, 10, 0.38);
@@ -2884,6 +2992,7 @@ export default function Planos() {
             radial-gradient(320px 140px at 100% 0%, var(--hl-preview-b), rgba(95, 204, 160, 0)),
             linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(249, 245, 238, 0.84));
           padding: 16px;
+          min-height: var(--hl-main-card-height);
           box-shadow:
             inset 0 1px 0 rgba(255, 255, 255, 0.7),
             0 12px 22px rgba(20, 32, 27, 0.08);
@@ -2926,6 +3035,7 @@ export default function Planos() {
         .highlight-strategy-pillar-grid {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-auto-rows: 1fr;
           gap: 10px;
           margin-top: 12px;
         }
@@ -2938,6 +3048,7 @@ export default function Planos() {
           display: grid;
           gap: 9px;
           align-content: start;
+          min-height: 100%;
         }
 
         .highlight-strategy-pill {
@@ -3004,8 +3115,13 @@ export default function Planos() {
           border: none;
           background: transparent;
           padding: 0;
-          min-height: 0;
+          min-height: var(--hl-main-card-height);
           box-shadow: none;
+        }
+
+        .highlight-model-preview > .platform-mock,
+        .highlight-model-preview > .hero-screen {
+          height: 100%;
         }
 
         .highlight-model-preview.is-dashboard-preview .hero-screen-top {
@@ -3196,6 +3312,51 @@ export default function Planos() {
           background: linear-gradient(180deg, rgba(153, 243, 188, 0.84), rgba(88, 173, 126, 0.34));
         }
 
+        .highlight-model-shell.is-chatinterno .highlight-model-nav,
+        .highlight-model-shell.is-chatinterno .highlight-model-copy,
+        .highlight-model-shell.is-chatinterno .highlight-model-preview,
+        .highlight-model-shell.is-chatinterno .platform-mock__frame {
+          border: none;
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav {
+          background: linear-gradient(145deg, #123c2f, #0f2e23);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-copy {
+          background: linear-gradient(145deg, #2d6d52, #255e47);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-preview {
+          background: linear-gradient(145deg, #e3efe8, #d7e7dd);
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__frame {
+          background: linear-gradient(145deg, #ffffff, #f7faf8);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-preview .platform-mock {
+          opacity: 1;
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-item:not(.is-active) {
+          color: rgba(238, 251, 245, 0.88);
+          border-color: rgba(255, 255, 255, 0.16);
+          background: rgba(255, 255, 255, 0.04);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-item:not(.is-active):hover {
+          color: #f6fff9;
+          border-color: rgba(255, 255, 255, 0.26);
+          background: rgba(255, 255, 255, 0.1);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-icon {
+          border-color: rgba(255, 255, 255, 0.18);
+          background: rgba(255, 255, 255, 0.08);
+        }
+
         .highlight-model-shell.is-integracao .highlight-model-nav {
           border-right-color: rgba(132, 204, 121, 0.24);
         }
@@ -3225,6 +3386,426 @@ export default function Planos() {
           border-color: rgba(156, 253, 132, 0.42);
           background: rgba(156, 253, 132, 0.12);
           color: #dfffd6;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav,
+        .highlight-model-shell.is-chatinterno .highlight-model-nav,
+        .highlight-model-shell.is-integracao .highlight-model-nav,
+        .highlight-model-shell.is-meta .highlight-model-nav {
+          border-right-color: rgba(23, 57, 48, 0.14);
+          border-color: rgba(255, 255, 255, 0.74);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 246, 0.94));
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-item:not(.is-active),
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-item:not(.is-active),
+        .highlight-model-shell.is-integracao .highlight-model-nav-item:not(.is-active),
+        .highlight-model-shell.is-meta .highlight-model-nav-item:not(.is-active) {
+          color: #304840;
+          border-color: rgba(23, 58, 48, 0.1);
+          background: rgba(255, 255, 255, 0.62);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-item:not(.is-active):hover,
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-item:not(.is-active):hover,
+        .highlight-model-shell.is-integracao .highlight-model-nav-item:not(.is-active):hover,
+        .highlight-model-shell.is-meta .highlight-model-nav-item:not(.is-active):hover {
+          color: #18382f;
+          border-color: rgba(23, 58, 48, 0.18);
+          background: rgba(255, 255, 255, 0.96);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-icon,
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-icon,
+        .highlight-model-shell.is-integracao .highlight-model-nav-icon,
+        .highlight-model-shell.is-meta .highlight-model-nav-icon {
+          border-color: rgba(24, 58, 49, 0.18);
+          background: rgba(255, 255, 255, 0.96);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-icon::before,
+        .highlight-model-shell.is-dashboard .highlight-model-nav-icon::after,
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-icon::before,
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-icon::after,
+        .highlight-model-shell.is-integracao .highlight-model-nav-icon::before,
+        .highlight-model-shell.is-integracao .highlight-model-nav-icon::after,
+        .highlight-model-shell.is-meta .highlight-model-nav-icon::before,
+        .highlight-model-shell.is-meta .highlight-model-nav-icon::after {
+          background: rgba(30, 66, 55, 0.9);
+        }
+
+        /* Progressive gradient by tab: Dashboard -> Recursos -> Operação -> Estratégia */
+        .highlight-model-shell.is-dashboard .highlight-model-nav {
+          border: none;
+          box-shadow: none;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 246, 0.94));
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-copy,
+        .highlight-model-shell.is-dashboard .highlight-model-preview,
+        .highlight-model-shell.is-dashboard .hero-real-mock {
+          border: none;
+          box-shadow: none;
+          background:
+            radial-gradient(420px 240px at 8% 0%, rgba(156, 253, 132, 0.14), rgba(156, 253, 132, 0) 72%),
+            radial-gradient(360px 220px at 100% 0%, rgba(45, 109, 82, 0.2), rgba(45, 109, 82, 0) 72%),
+            linear-gradient(145deg, #123c2f, #0f2e23);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-item:not(.is-active) {
+          color: #304840;
+          border-color: rgba(23, 58, 48, 0.1);
+          background: rgba(255, 255, 255, 0.62);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-item:not(.is-active):hover {
+          color: #18382f;
+          border-color: rgba(23, 58, 48, 0.18);
+          background: rgba(255, 255, 255, 0.96);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav-icon {
+          border-color: rgba(24, 58, 49, 0.18);
+          background: rgba(255, 255, 255, 0.96);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-sidebar,
+        .highlight-model-shell.is-dashboard .hero-real-main,
+        .highlight-model-shell.is-dashboard .hero-real-card,
+        .highlight-model-shell.is-dashboard .hero-real-metric-card,
+        .highlight-model-shell.is-dashboard .hero-real-funnel-stage,
+        .highlight-model-shell.is-dashboard .hero-real-nav-item,
+        .highlight-model-shell.is-dashboard .hero-real-field,
+        .highlight-model-shell.is-dashboard .hero-real-chip,
+        .highlight-model-shell.is-dashboard .hero-real-toggle {
+          background: linear-gradient(145deg, rgba(18, 60, 47, 0.92), rgba(15, 46, 35, 0.9));
+          border-color: rgba(184, 223, 203, 0.22);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav {
+          border: none;
+          box-shadow: none;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 246, 0.94));
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-copy,
+        .highlight-model-shell.is-chatinterno .highlight-model-preview,
+        .highlight-model-shell.is-chatinterno .platform-mock__frame {
+          --resources-panel-surface: linear-gradient(145deg, rgba(11, 38, 30, 0.92), rgba(9, 31, 25, 0.9));
+          --resources-card-surface: linear-gradient(145deg, rgba(19, 58, 46, 0.93), rgba(16, 48, 38, 0.9));
+          --resources-sidebar-surface: linear-gradient(145deg, rgba(21, 62, 49, 0.95), rgba(18, 52, 41, 0.93));
+          border: none;
+          box-shadow: none;
+          background:
+            radial-gradient(420px 240px at 8% 0%, rgba(46, 212, 122, 0.16), rgba(46, 212, 122, 0) 72%),
+            radial-gradient(360px 220px at 100% 0%, rgba(18, 60, 47, 0.2), rgba(18, 60, 47, 0) 72%),
+            linear-gradient(145deg, #2d6d52, #255e47);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-item:not(.is-active) {
+          color: #304840;
+          border-color: rgba(23, 58, 48, 0.1);
+          background: rgba(255, 255, 255, 0.62);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-item:not(.is-active):hover {
+          color: #18382f;
+          border-color: rgba(23, 58, 48, 0.18);
+          background: rgba(255, 255, 255, 0.96);
+        }
+
+        .highlight-model-shell.is-chatinterno .highlight-model-nav-icon {
+          border-color: rgba(24, 58, 49, 0.18);
+          background: rgba(255, 255, 255, 0.96);
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__sidebar {
+          background: var(--resources-sidebar-surface);
+          border-color: rgba(184, 223, 203, 0.26);
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__panel {
+          background: var(--resources-panel-surface);
+          border-color: rgba(184, 223, 203, 0.22);
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__metric,
+        .highlight-model-shell.is-chatinterno .platform-mock__module,
+        .highlight-model-shell.is-chatinterno .platform-mock__footer-card,
+        .highlight-model-shell.is-chatinterno .platform-mock__lead-row,
+        .highlight-model-shell.is-chatinterno .platform-mock__event-row,
+        .highlight-model-shell.is-chatinterno .platform-mock__table-row,
+        .highlight-model-shell.is-chatinterno .platform-mock__search,
+        .highlight-model-shell.is-chatinterno .platform-mock__chart-grid {
+          background: var(--resources-card-surface);
+          border-color: rgba(184, 223, 203, 0.24);
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__brand strong,
+        .highlight-model-shell.is-chatinterno .platform-mock__sidebar-item span,
+        .highlight-model-shell.is-chatinterno .platform-mock__metric strong,
+        .highlight-model-shell.is-chatinterno .platform-mock__module h4,
+        .highlight-model-shell.is-chatinterno .platform-mock__module-badge,
+        .highlight-model-shell.is-chatinterno .platform-mock__table-head strong,
+        .highlight-model-shell.is-chatinterno .platform-mock__lead-id strong,
+        .highlight-model-shell.is-chatinterno .platform-mock__event-row strong,
+        .highlight-model-shell.is-chatinterno .platform-mock__funnel-head strong {
+          color: #f2fff8;
+        }
+
+        .highlight-model-shell.is-chatinterno .platform-mock__pill,
+        .highlight-model-shell.is-chatinterno .platform-mock__metric span,
+        .highlight-model-shell.is-chatinterno .platform-mock__module-count,
+        .highlight-model-shell.is-chatinterno .platform-mock__lead-id span,
+        .highlight-model-shell.is-chatinterno .platform-mock__table-head span,
+        .highlight-model-shell.is-chatinterno .platform-mock__event-row span,
+        .highlight-model-shell.is-chatinterno .platform-mock__funnel-head span,
+        .highlight-model-shell.is-chatinterno .platform-mock__sidebar-label {
+          color: #c5dfd2;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav {
+          border: none;
+          box-shadow: none;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 246, 0.94));
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-copy,
+        .highlight-model-shell.is-integracao .highlight-integration-track {
+          border: none;
+          box-shadow: none;
+          background:
+            radial-gradient(320px 180px at 10% 0%, rgba(156, 253, 132, 0.12), rgba(156, 253, 132, 0) 72%),
+            linear-gradient(145deg, #e3efe8, #d7e7dd);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav-item:not(.is-active) {
+          color: #27463b;
+          border-color: rgba(44, 86, 68, 0.14);
+          background: rgba(255, 255, 255, 0.58);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav-item:not(.is-active):hover {
+          color: #163327;
+          border-color: rgba(44, 86, 68, 0.2);
+          background: rgba(255, 255, 255, 0.86);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav-icon {
+          border-color: rgba(44, 86, 68, 0.18);
+          background: rgba(255, 255, 255, 0.82);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-title,
+        .highlight-model-shell.is-integracao .highlight-operation-main-head h4,
+        .highlight-model-shell.is-integracao .highlight-operation-module h5 {
+          color: #153327;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-subtitle,
+        .highlight-model-shell.is-integracao .highlight-operation-main-head p,
+        .highlight-model-shell.is-integracao .highlight-operation-kpi span {
+          color: #3d5f53;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-sidebar,
+        .highlight-model-shell.is-integracao .highlight-operation-main {
+          background:
+            radial-gradient(220px 120px at 0% 0%, rgba(156, 253, 132, 0.1), rgba(156, 253, 132, 0) 72%),
+            linear-gradient(145deg, rgba(227, 239, 232, 0.96), rgba(215, 231, 221, 0.92));
+          border-color: rgba(44, 86, 68, 0.18);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-kpi,
+        .highlight-model-shell.is-integracao .highlight-operation-module,
+        .highlight-model-shell.is-integracao .highlight-operation-list li,
+        .highlight-model-shell.is-integracao .highlight-operation-nav-item {
+          background: linear-gradient(145deg, rgba(227, 239, 232, 0.98), rgba(215, 231, 221, 0.94));
+          border-color: rgba(44, 86, 68, 0.2);
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-nav-item {
+          color: #23483a;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-nav-item.is-active {
+          color: #12382b;
+          border-color: rgba(120, 191, 109, 0.52);
+          background: linear-gradient(120deg, rgba(156, 253, 132, 0.3), rgba(128, 206, 118, 0.24));
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-sidebar-head,
+        .highlight-model-shell.is-integracao .highlight-operation-list li,
+        .highlight-model-shell.is-integracao .highlight-operation-stage-list span,
+        .highlight-model-shell.is-integracao .highlight-operation-stage-list i,
+        .highlight-model-shell.is-integracao .highlight-operation-kpi strong,
+        .highlight-model-shell.is-integracao .highlight-operation-module-tag {
+          color: #1f4737;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-list li strong {
+          color: #12372b;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-status span,
+        .highlight-model-shell.is-integracao .highlight-operation-pill {
+          background: rgba(156, 253, 132, 0.2);
+          border-color: rgba(120, 191, 109, 0.4);
+          color: #1f4737;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-stage-bar {
+          background: rgba(74, 129, 95, 0.18);
+        }
+
+        .highlight-model-shell.is-meta .highlight-model-nav,
+        .highlight-model-shell.is-meta .highlight-strategy-panel {
+          border: none;
+          box-shadow: none;
+          background: #ffffff;
+        }
+
+        .highlight-model-shell.is-meta {
+          background: #ffffff;
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-panel,
+        .highlight-model-shell.is-meta .highlight-strategy-intro,
+        .highlight-model-shell.is-meta .highlight-strategy-pillar,
+        .highlight-model-shell.is-meta .highlight-strategy-list li {
+          background: #ffffff;
+          border-color: rgba(25, 58, 47, 0.12);
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-dashboard {
+          gap: clamp(1.5rem, 2.1vw, 2rem);
+          padding: clamp(1.5rem, 2.2vw, 2rem);
+          border-radius: 24px;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-copy {
+          border-radius: 24px;
+          padding: clamp(1.6rem, 2.1vw, 2rem);
+          gap: 1rem;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-title {
+          font-size: clamp(3rem, 4.2vw, 4rem);
+          line-height: 0.98;
+          letter-spacing: -0.035em;
+          max-width: 9ch;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-subtitle {
+          font-size: clamp(2.2rem, 3.2vw, 3.1rem);
+          line-height: 1.08;
+          max-width: 10ch;
+          color: #d3eadf;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-copy p {
+          font-size: 1.08rem;
+          line-height: 1.6;
+          max-width: 36ch;
+          color: #bbd6ca;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-cta {
+          margin-top: 0.55rem;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav,
+        .highlight-model-shell.is-dashboard .highlight-model-preview {
+          border-radius: 24px;
+          padding: clamp(0.8rem, 1.2vw, 1rem);
+        }
+
+        .highlight-model-shell.is-integracao,
+        .highlight-model-shell.is-meta {
+          gap: clamp(1.5rem, 2.1vw, 2rem);
+          padding: clamp(1.5rem, 2.2vw, 2rem);
+          border-radius: 24px;
+        }
+
+        .highlight-model-shell.is-dashboard {
+          background:
+            radial-gradient(560px 250px at 8% 0%, rgba(156, 253, 132, 0.16), rgba(156, 253, 132, 0) 74%),
+            radial-gradient(540px 240px at 88% 0%, rgba(45, 109, 82, 0.22), rgba(45, 109, 82, 0) 74%),
+            linear-gradient(145deg, #123c2f, #0f2e23);
+        }
+
+        .highlight-model-shell.is-chatinterno {
+          background:
+            radial-gradient(560px 250px at 8% 0%, rgba(46, 212, 122, 0.14), rgba(46, 212, 122, 0) 74%),
+            radial-gradient(540px 240px at 88% 0%, rgba(18, 60, 47, 0.18), rgba(18, 60, 47, 0) 74%),
+            linear-gradient(145deg, #245742, #1e4b39);
+        }
+
+        .highlight-model-shell.is-integracao {
+          background:
+            radial-gradient(560px 250px at 8% 0%, rgba(156, 253, 132, 0.16), rgba(156, 253, 132, 0) 74%),
+            radial-gradient(540px 240px at 88% 0%, rgba(45, 109, 82, 0.22), rgba(45, 109, 82, 0) 74%),
+            linear-gradient(145deg, #123c2f, #0f2e23);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-nav,
+        .highlight-model-shell.is-meta .highlight-model-nav {
+          border-radius: 24px;
+          padding: clamp(0.8rem, 1.2vw, 1rem);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-tab {
+          gap: clamp(1.2rem, 1.7vw, 1.6rem);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-copy,
+        .highlight-model-shell.is-integracao .highlight-integration-track {
+          border-radius: 24px;
+          padding: clamp(1.35rem, 2vw, 1.8rem);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-title {
+          font-size: clamp(3rem, 4.2vw, 4rem);
+          line-height: 0.98;
+          letter-spacing: -0.035em;
+          max-width: 9ch;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-subtitle {
+          font-size: 1.08rem;
+          line-height: 1.6;
+          max-width: 36ch;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-model-cta {
+          margin-top: 0.55rem;
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-tab {
+          gap: clamp(1.2rem, 1.7vw, 1.6rem);
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-panel {
+          border-radius: 24px;
+          padding: clamp(1.35rem, 2vw, 1.8rem);
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-title {
+          font-size: clamp(3rem, 4.2vw, 4rem);
+          line-height: 0.98;
+          letter-spacing: -0.035em;
+          max-width: 9ch;
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-subtitle,
+        .highlight-model-shell.is-meta .highlight-strategy-intro,
+        .highlight-model-shell.is-meta .highlight-strategy-list li,
+        .highlight-model-shell.is-meta .highlight-strategy-pillar p {
+          font-size: 1.08rem;
+          line-height: 1.6;
         }
 
         .highlight-preview-top {
@@ -3415,15 +3996,9 @@ export default function Planos() {
         }
 
         .highlight-model-resource-card {
-          grid-column: 2 / -1;
-          border-radius: 16px;
-          border: 1px solid rgba(18, 52, 43, 0.12);
-          background:
-            radial-gradient(560px 240px at 52% 0%, rgba(35, 198, 111, 0.16), rgba(35, 198, 111, 0) 72%),
-            linear-gradient(180deg, rgba(8, 24, 27, 0.96), rgba(6, 16, 19, 0.98));
-          padding: 12px;
+          margin-top: clamp(1.4rem, 2.8vw, 2rem);
           display: grid;
-          gap: 12px;
+          gap: 0.9rem;
         }
 
         .highlight-model-resource-head h3 {
@@ -3441,38 +4016,79 @@ export default function Planos() {
           line-height: 1.5;
         }
 
+        .cardsContainer {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          align-items: stretch;
+          gap: 1.5rem;
+        }
+
         .highlight-model-resource-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 1.5rem;
+          align-items: stretch;
+        }
+
+        .highlight-model-resource-card .card {
+          border-radius: 20px;
+          padding: 2rem;
+          height: 100%;
+          min-height: clamp(170px, 13vw, 210px);
+          box-sizing: border-box;
         }
 
         .highlight-model-resource-item {
-          border-radius: 12px;
-          border: 1px solid rgba(35, 198, 111, 0.1);
-          background:
-            radial-gradient(240px 120px at 80% 0%, rgba(35, 198, 111, 0.09), rgba(35, 198, 111, 0)),
-            linear-gradient(165deg, rgba(11, 28, 31, 0.95), rgba(7, 18, 21, 0.98));
-          padding: 11px;
-          min-height: 118px;
+          --card-bg-a: #123c2f;
+          --card-bg-b: #0f3126;
+          --card-kicker: #b9dece;
+          --card-title: #eff9f4;
+          --card-text: #c9dfd5;
+          border-radius: 20px;
+          border: none;
+          box-shadow: none;
+          background: linear-gradient(145deg, var(--card-bg-a), var(--card-bg-b));
+          padding: 2rem;
+          min-height: clamp(170px, 13vw, 210px);
+          height: 100%;
           display: grid;
           align-content: start;
-          gap: 7px;
-          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+          gap: 0.58rem;
+          transition: transform 180ms ease, filter 180ms ease;
+          overflow: hidden;
         }
 
         .highlight-model-resource-item:hover {
-          transform: translateY(-2px);
-          border-color: rgba(35, 198, 111, 0.24);
-          box-shadow: 0 12px 22px rgba(0, 0, 0, 0.2);
+          transform: translateY(-3px);
+          filter: brightness(1.02);
         }
 
-        .highlight-model-resource-item.is-wide {
-          grid-column: span 2;
+        .highlight-model-resource-item:nth-child(2) {
+          --card-bg-a: hsl(152 28% 34%);
+          --card-bg-b: hsl(150 27% 30%);
+          --card-kicker: #d8ebde;
+          --card-title: #f5fbf8;
+          --card-text: #ddece4;
+        }
+
+        .highlight-model-resource-item:nth-child(3) {
+          --card-bg-a: hsl(142 34% 92%);
+          --card-bg-b: hsl(142 28% 88%);
+          --card-kicker: #3b6154;
+          --card-title: #183227;
+          --card-text: #35554a;
+        }
+
+        .highlight-model-resource-item:nth-child(4) {
+          --card-bg-a: #ffffff;
+          --card-bg-b: #f4f7f5;
+          --card-kicker: #385e51;
+          --card-title: #162f26;
+          --card-text: #345348;
         }
 
         .highlight-model-resource-kicker {
-          color: #9ec2b4;
+          color: var(--card-kicker);
           font-size: 10px;
           font-weight: 700;
           letter-spacing: 0.07em;
@@ -3483,15 +4099,83 @@ export default function Planos() {
           margin: 0;
           font-size: 15px;
           line-height: 1.2;
-          color: #edf7f6;
+          color: var(--card-title);
           letter-spacing: -0.01em;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
 
         .highlight-model-resource-item p {
           margin: 0;
-          color: #a3bebe;
+          color: var(--card-text);
           font-size: 12px;
           line-height: 1.52;
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .highlight-model-resource-card.is-chatinterno {
+          margin-top: clamp(1.6rem, 2.4vw, 2.2rem);
+          gap: 0.95rem;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-head h3 {
+          color: #eaf8f1;
+          font-size: 1.05rem;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-head p {
+          color: #b5d2c4;
+          font-size: 0.9rem;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-grid {
+          gap: clamp(1.5rem, 1.9vw, 2rem);
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item {
+          border: none;
+          border-radius: 20px;
+          box-shadow: none;
+          min-height: clamp(170px, 13vw, 210px);
+          height: 100%;
+          padding: 2rem;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(1) {
+          --card-bg-a: #123c2f;
+          --card-bg-b: #0f2e23;
+          --card-kicker: #b8dbc9;
+          --card-title: #f2fbf6;
+          --card-text: #cae3d7;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(2) {
+          --card-bg-a: #2d6d52;
+          --card-bg-b: #255e47;
+          --card-kicker: #d6ece1;
+          --card-title: #f6fcf9;
+          --card-text: #dfefe7;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(3) {
+          --card-bg-a: #e3efe8;
+          --card-bg-b: #d7e7dd;
+          --card-kicker: #3a6153;
+          --card-title: #173327;
+          --card-text: #36584b;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(4) {
+          --card-bg-a: #ffffff;
+          --card-bg-b: #f7faf8;
+          --card-kicker: #355d4f;
+          --card-title: #132d24;
+          --card-text: #325347;
         }
 
         .journey-layout {
@@ -3732,62 +4416,112 @@ export default function Planos() {
         }
 
         .plan-unified-compare {
-          margin-top: 14px;
+          margin-top: 16px;
           grid-column: 1 / -1;
-          border-radius: 16px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 18px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           background:
-            radial-gradient(360px 180px at 12% 0%, rgba(35, 198, 111, 0.07), rgba(35, 198, 111, 0)),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.008));
-          padding: 12px;
-          display: grid;
-          gap: 10px;
+            radial-gradient(520px 220px at 8% 0%, rgba(35, 198, 111, 0.09), rgba(35, 198, 111, 0)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.008));
+          overflow: hidden;
         }
 
         .plan-compare-details {
           margin: 0;
-          display: grid;
-          gap: 8px;
         }
 
         .plan-compare-details summary {
-          width: fit-content;
+          width: 100%;
           list-style: none;
           cursor: pointer;
-          color: #d0e5e5;
-          font-size: 12px;
+          color: #e8f4f0;
+          font-size: 14px;
           font-weight: 700;
-          display: inline-flex;
+          display: flex;
           align-items: center;
-          gap: 6px;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 16px;
+          background: linear-gradient(90deg, rgba(35, 198, 111, 0.06), rgba(13, 31, 33, 0.18));
+          transition: background 160ms ease, color 160ms ease;
         }
 
         .plan-compare-details summary::-webkit-details-marker {
           display: none;
         }
 
-        .plan-compare-details summary::before {
-          content: '+';
-          width: 16px;
-          height: 16px;
+        .plan-compare-details summary:hover {
+          background: linear-gradient(90deg, rgba(35, 198, 111, 0.1), rgba(13, 31, 33, 0.26));
+        }
+
+        .plan-compare-details summary:focus-visible {
+          outline: 2px solid rgba(126, 243, 177, 0.55);
+          outline-offset: -2px;
+        }
+
+        .plan-compare-summary-main {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+        }
+
+        .plan-compare-summary-icon {
+          width: 20px;
+          height: 20px;
           border-radius: 999px;
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(255, 255, 255, 0.24);
+          background: rgba(255, 255, 255, 0.03);
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 12px;
-          line-height: 1;
+          position: relative;
+          flex: 0 0 auto;
         }
 
-        .plan-compare-details[open] summary::before {
-          content: '-';
+        .plan-compare-summary-icon::before,
+        .plan-compare-summary-icon::after {
+          content: '';
+          position: absolute;
+          background: rgba(233, 248, 241, 0.95);
+          border-radius: 999px;
+          transition: transform 180ms ease, opacity 180ms ease;
+        }
+
+        .plan-compare-summary-icon::before {
+          width: 8px;
+          height: 1.6px;
+        }
+
+        .plan-compare-summary-icon::after {
+          width: 1.6px;
+          height: 8px;
+        }
+
+        .plan-compare-summary-meta {
+          font-size: 11px;
+          font-weight: 600;
+          color: #9db8b3;
+          letter-spacing: 0.02em;
+          white-space: nowrap;
+        }
+
+        .plan-compare-details[open] summary {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          background: linear-gradient(90deg, rgba(35, 198, 111, 0.12), rgba(13, 31, 33, 0.3));
+        }
+
+        .plan-compare-details[open] .plan-compare-summary-icon::after {
+          opacity: 0;
+          transform: scaleY(0.3);
         }
 
         .comparison-table-wrap {
           overflow-x: auto;
-          border-radius: 12px;
+          border-radius: 14px;
           border: 1px solid rgba(255, 255, 255, 0.06);
-          background: rgba(3, 11, 13, 0.55);
+          background: rgba(3, 11, 13, 0.54);
+          margin: 12px;
         }
 
         .comparison-table {
@@ -3987,6 +4721,559 @@ export default function Planos() {
           border-radius: 10px;
         }
 
+        /* Final override: Operacao com cards internos escurecidos em ~50% */
+        .highlight-model-shell.is-integracao {
+          --operation-surface: linear-gradient(145deg, #6f7a6b, #677266);
+          --operation-surface-soft: linear-gradient(145deg, #778274, #6f7a70);
+          --operation-copy-surface: linear-gradient(145deg, #7b8777, #727e6f);
+          --operation-border: rgba(205, 225, 214, 0.24);
+          --operation-text-1: #f3fbf7;
+          --operation-text-2: #d2e0d7;
+          --operation-text-3: #c2d4ca;
+          background:
+            radial-gradient(560px 250px at 8% 0%, rgba(156, 253, 132, 0.2), rgba(156, 253, 132, 0) 74%),
+            radial-gradient(540px 240px at 88% 0%, rgba(45, 109, 82, 0.26), rgba(45, 109, 82, 0) 74%),
+            linear-gradient(145deg, #1a4a39, #153b2d);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-copy {
+          background:
+            radial-gradient(420px 220px at 10% 0%, rgba(166, 223, 165, 0.12), rgba(166, 223, 165, 0) 72%),
+            var(--operation-copy-surface);
+          border-color: var(--operation-border);
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-track {
+          background:
+            radial-gradient(420px 220px at 10% 0%, rgba(166, 223, 165, 0.1), rgba(166, 223, 165, 0) 72%),
+            var(--operation-copy-surface);
+          border-color: var(--operation-border);
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-title {
+          color: var(--operation-text-1);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-integration-subtitle {
+          color: var(--operation-text-2);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-sidebar,
+        .highlight-model-shell.is-integracao .highlight-operation-main {
+          background: var(--operation-copy-surface);
+          border-color: var(--operation-border);
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-kpi,
+        .highlight-model-shell.is-integracao .highlight-operation-module,
+        .highlight-model-shell.is-integracao .highlight-operation-list li,
+        .highlight-model-shell.is-integracao .highlight-operation-nav-item {
+          background: var(--operation-copy-surface);
+          border-color: var(--operation-border);
+          box-shadow: none;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-nav-item {
+          color: var(--operation-text-1);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-nav-item.is-active {
+          color: #f6fff9;
+          border-color: rgba(166, 223, 165, 0.44);
+          background: linear-gradient(120deg, rgba(115, 180, 112, 0.48), rgba(86, 146, 88, 0.34));
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-main-head h4,
+        .highlight-model-shell.is-integracao .highlight-operation-module h5,
+        .highlight-model-shell.is-integracao .highlight-operation-kpi strong,
+        .highlight-model-shell.is-integracao .highlight-operation-list li strong {
+          color: var(--operation-text-1);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-main-head p,
+        .highlight-model-shell.is-integracao .highlight-operation-kpi span,
+        .highlight-model-shell.is-integracao .highlight-operation-list li {
+          color: var(--operation-text-2);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-sidebar-head,
+        .highlight-model-shell.is-integracao .highlight-operation-module-tag,
+        .highlight-model-shell.is-integracao .highlight-operation-stage-list span,
+        .highlight-model-shell.is-integracao .highlight-operation-stage-list i {
+          color: var(--operation-text-3);
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-status span,
+        .highlight-model-shell.is-integracao .highlight-operation-pill {
+          background: rgba(116, 180, 112, 0.26);
+          border-color: rgba(166, 223, 165, 0.4);
+          color: #e6f4e9;
+        }
+
+        .highlight-model-shell.is-integracao .highlight-operation-stage-bar {
+          background: rgba(226, 242, 230, 0.2);
+        }
+
+        /* Final override: Dashboard com paleta da landing */
+        .highlight-model-shell.is-dashboard {
+          --dashboard-base: linear-gradient(180deg, #050d0a 0%, var(--bg) 48%, var(--bg-2) 100%);
+          --dashboard-surface: linear-gradient(160deg, rgba(5, 13, 10, 0.96), rgba(4, 11, 9, 0.95) 58%, rgba(2, 6, 5, 0.98));
+          --dashboard-panel-surface: linear-gradient(155deg, rgba(9, 22, 17, 0.92), rgba(7, 17, 13, 0.9));
+          --dashboard-card-surface: linear-gradient(155deg, rgba(19, 42, 33, 0.93), rgba(16, 35, 28, 0.9));
+          --dashboard-sidebar-surface: linear-gradient(155deg, rgba(21, 46, 36, 0.95), rgba(17, 38, 30, 0.93));
+          background:
+            radial-gradient(620px 280px at 14% 0%, rgba(35, 198, 111, 0.09), rgba(35, 198, 111, 0) 74%),
+            radial-gradient(520px 240px at 90% 4%, rgba(21, 163, 74, 0.07), rgba(21, 163, 74, 0) 74%),
+            var(--dashboard-base);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-copy,
+        .highlight-model-shell.is-dashboard .highlight-model-preview,
+        .highlight-model-shell.is-dashboard .hero-real-mock {
+          border: none;
+          box-shadow: none;
+          background:
+            radial-gradient(440px 220px at 12% 0%, rgba(35, 198, 111, 0.14), rgba(35, 198, 111, 0) 72%),
+            radial-gradient(360px 180px at 96% 8%, rgba(21, 163, 74, 0.12), rgba(21, 163, 74, 0) 74%),
+            var(--dashboard-surface);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-copy {
+          background:
+            radial-gradient(420px 220px at 10% 0%, rgba(35, 198, 111, 0.12), rgba(35, 198, 111, 0) 72%),
+            linear-gradient(145deg, #123c2f, #0f2e23);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-main {
+          background: var(--dashboard-panel-surface);
+          border-color: rgba(35, 198, 111, 0.22);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-sidebar {
+          background: var(--dashboard-sidebar-surface);
+          border-color: rgba(35, 198, 111, 0.3);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-card,
+        .highlight-model-shell.is-dashboard .hero-real-metric-card,
+        .highlight-model-shell.is-dashboard .hero-real-funnel-stage,
+        .highlight-model-shell.is-dashboard .hero-real-nav-item,
+        .highlight-model-shell.is-dashboard .hero-real-field,
+        .highlight-model-shell.is-dashboard .hero-real-chip,
+        .highlight-model-shell.is-dashboard .hero-real-toggle {
+          background: var(--dashboard-card-surface);
+          border-color: rgba(35, 198, 111, 0.26);
+        }
+
+        .highlight-model-shell.is-dashboard .hero-real-nav-item.is-active,
+        .highlight-model-shell.is-dashboard .hero-real-toggle.is-active {
+          background: linear-gradient(120deg, rgba(35, 198, 111, 0.28), rgba(21, 163, 74, 0.22));
+          border-color: rgba(35, 198, 111, 0.44);
+        }
+
+        /* Final override: Dashboard + Recursos com a mesma geometria */
+        .highlight-model-shell.is-dashboard,
+        .highlight-model-shell.is-chatinterno {
+          --hl-main-card-height: clamp(500px, 36vw, 620px);
+          grid-template-columns: 252px minmax(280px, 420px) minmax(360px, 1fr);
+          gap: clamp(1.5rem, 2.1vw, 2rem);
+          padding: clamp(1.5rem, 2.2vw, 2rem);
+          border-radius: 24px;
+          align-items: stretch;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav,
+        .highlight-model-shell.is-dashboard .highlight-model-copy,
+        .highlight-model-shell.is-dashboard .highlight-model-preview,
+        .highlight-model-shell.is-chatinterno .highlight-model-nav,
+        .highlight-model-shell.is-chatinterno .highlight-model-copy,
+        .highlight-model-shell.is-chatinterno .highlight-model-preview {
+          min-height: var(--hl-main-card-height);
+          height: 100%;
+          border-radius: 24px;
+          align-self: stretch;
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-nav,
+        .highlight-model-shell.is-dashboard .highlight-model-preview,
+        .highlight-model-shell.is-chatinterno .highlight-model-nav,
+        .highlight-model-shell.is-chatinterno .highlight-model-preview {
+          padding: clamp(0.8rem, 1.2vw, 1rem);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-copy,
+        .highlight-model-shell.is-chatinterno .highlight-model-copy {
+          padding: clamp(1.6rem, 2.1vw, 2rem);
+        }
+
+        .highlight-model-shell.is-dashboard .highlight-model-preview > .platform-mock,
+        .highlight-model-shell.is-dashboard .highlight-model-preview > .platform-mock .platform-mock__frame,
+        .highlight-model-shell.is-dashboard .highlight-model-preview > .hero-screen,
+        .highlight-model-shell.is-chatinterno .highlight-model-preview > .platform-mock,
+        .highlight-model-shell.is-chatinterno .highlight-model-preview > .platform-mock .platform-mock__frame {
+          height: 100%;
+        }
+
+        /* Estrategia: fundo do card principal com paleta da Operacao e cards internos brancos */
+        .highlight-model-shell.is-meta .highlight-strategy-left {
+          background: linear-gradient(145deg, #dff4d7, #d4edcc);
+          border-color: rgba(56, 101, 56, 0.22);
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-left .highlight-strategy-title {
+          color: #16331a;
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-left .highlight-strategy-pill {
+          border-color: rgba(56, 101, 56, 0.34);
+          background: rgba(255, 255, 255, 0.9);
+          color: #305b2e;
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-left .highlight-strategy-pillar:nth-child(1) {
+          background: #ffffff;
+          border-color: rgba(56, 101, 56, 0.22);
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-left .highlight-strategy-pillar:nth-child(2) {
+          background: #ffffff;
+          border-color: rgba(56, 101, 56, 0.2);
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-left .highlight-strategy-pillar:nth-child(3) {
+          background: #ffffff;
+          border-color: rgba(56, 101, 56, 0.18);
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-left .highlight-strategy-pillar h4 {
+          color: #19371d;
+        }
+
+        .highlight-model-shell.is-meta .highlight-strategy-left .highlight-strategy-pillar p {
+          color: #3a593f;
+        }
+
+        .highlight-model-resource-card .highlight-model-resource-grid,
+        .highlight-model-resource-card .cardsContainer {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          align-items: stretch;
+          grid-auto-rows: 1fr;
+        }
+
+        .highlight-model-resource-card .highlight-model-resource-item,
+        .highlight-model-resource-card .card.highlight-model-resource-item {
+          min-height: clamp(170px, 13vw, 210px);
+          height: 100%;
+          padding: 2rem;
+          border-radius: 20px;
+          box-sizing: border-box;
+          align-self: stretch;
+        }
+
+        /* Secondary cards inherit the active tab palette (same family, softened variants) */
+        .highlight-model-resource-card .highlight-model-resource-item {
+          box-shadow: none;
+          border: none;
+        }
+
+        .highlight-model-resource-card.is-dashboard .highlight-model-resource-item:nth-child(1) {
+          --card-bg-a: #123c2f;
+          --card-bg-b: #0f2e23;
+          --card-kicker: #bfdccc;
+          --card-title: #f3fbf7;
+          --card-text: #cde4d8;
+        }
+
+        .highlight-model-resource-card.is-dashboard .highlight-model-resource-item:nth-child(2) {
+          --card-bg-a: #174535;
+          --card-bg-b: #12392d;
+          --card-kicker: #c7e3d4;
+          --card-title: #f4fcf8;
+          --card-text: #d2e8dd;
+        }
+
+        .highlight-model-resource-card.is-dashboard .highlight-model-resource-item:nth-child(3) {
+          --card-bg-a: #1b4d3a;
+          --card-bg-b: #164133;
+          --card-kicker: #cfe8db;
+          --card-title: #f5fcf9;
+          --card-text: #d8ebe1;
+        }
+
+        .highlight-model-resource-card.is-dashboard .highlight-model-resource-item:nth-child(4) {
+          --card-bg-a: #205540;
+          --card-bg-b: #194736;
+          --card-kicker: #d6ecdf;
+          --card-title: #f7fdfa;
+          --card-text: #deefe6;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(1) {
+          --card-bg-a: #d9e8df;
+          --card-bg-b: #cfdfd5;
+          --card-kicker: #35594b;
+          --card-title: #173227;
+          --card-text: #35564a;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(2) {
+          --card-bg-a: #deede4;
+          --card-bg-b: #d4e5da;
+          --card-kicker: #365b4d;
+          --card-title: #183327;
+          --card-text: #37594c;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(3) {
+          --card-bg-a: #e4f1e9;
+          --card-bg-b: #daeade;
+          --card-kicker: #385e4f;
+          --card-title: #193428;
+          --card-text: #395b4d;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(4) {
+          --card-bg-a: #ebf6ef;
+          --card-bg-b: #e1f0e6;
+          --card-kicker: #3a6151;
+          --card-title: #1a3529;
+          --card-text: #3a5d4f;
+        }
+
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item,
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(1),
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(2),
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(3),
+        .highlight-model-resource-card.is-chatinterno .highlight-model-resource-item:nth-child(4) {
+          --card-bg-a: #245742;
+          --card-bg-b: #1e4b39;
+          --card-kicker: #c0dfd1;
+          --card-title: #f1fbf6;
+          --card-text: #d0e6dc;
+        }
+
+        .highlight-model-resource-card.is-integracao .highlight-model-resource-item:nth-child(1) {
+          --card-bg-a: #6f7a6b;
+          --card-bg-b: #6a7666;
+          --card-kicker: #d4e6d2;
+          --card-title: #f0f8ef;
+          --card-text: #cdddc9;
+        }
+
+        .highlight-model-resource-card.is-integracao .highlight-model-resource-item:nth-child(2) {
+          --card-bg-a: #727c6f;
+          --card-bg-b: #6d7969;
+          --card-kicker: #d8e8d5;
+          --card-title: #f3faf1;
+          --card-text: #d2e0ce;
+        }
+
+        .highlight-model-resource-card.is-integracao .highlight-model-resource-item:nth-child(3) {
+          --card-bg-a: #767d72;
+          --card-bg-b: #707a6d;
+          --card-kicker: #dbe9d8;
+          --card-title: #f5fbf3;
+          --card-text: #d5e2d1;
+        }
+
+        .highlight-model-resource-card.is-integracao .highlight-model-resource-item:nth-child(4) {
+          --card-bg-a: #797e78;
+          --card-bg-b: #747c71;
+          --card-kicker: #deebdb;
+          --card-title: #f7fcf5;
+          --card-text: #d8e4d3;
+        }
+
+        .highlight-model-resource-card.is-meta .highlight-model-resource-item:nth-child(1) {
+          --card-bg-a: #dff4d7;
+          --card-bg-b: #d4edcc;
+          --card-kicker: #305b2e;
+          --card-title: #16331a;
+          --card-text: #36523b;
+        }
+
+        .highlight-model-resource-card.is-meta .highlight-model-resource-item:nth-child(2) {
+          --card-bg-a: #e5f8de;
+          --card-bg-b: #daf1d3;
+          --card-kicker: #325d30;
+          --card-title: #17341c;
+          --card-text: #37553d;
+        }
+
+        .highlight-model-resource-card.is-meta .highlight-model-resource-item:nth-child(3) {
+          --card-bg-a: #ecfae5;
+          --card-bg-b: #e1f5da;
+          --card-kicker: #356133;
+          --card-title: #19371d;
+          --card-text: #3a593f;
+        }
+
+        .highlight-model-resource-card.is-meta .highlight-model-resource-item:nth-child(4) {
+          --card-bg-a: #f3fdf0;
+          --card-bg-b: #e8f8e3;
+          --card-kicker: #386538;
+          --card-title: #1b3a20;
+          --card-text: #3d5d43;
+        }
+
+        /* Secondary cards below the 4-tone row inherit a softened matching identity */
+        .plans-grid .pricing-card,
+        .plan-unified-compare {
+          --tone-bg-a: rgba(18, 60, 47, 0.9);
+          --tone-bg-b: rgba(15, 46, 35, 0.92);
+          --tone-border: rgba(178, 214, 195, 0.18);
+          --tone-title: #eef9f4;
+          --tone-muted: #c8dfd4;
+          --tone-text: #d9eaea;
+          --tone-strong: #f1fbf8;
+          --tone-surface: rgba(255, 255, 255, 0.06);
+          --tone-button-bg: rgba(35, 198, 111, 0.14);
+          --tone-button-border: rgba(35, 198, 111, 0.32);
+          --tone-button-text: #d7ffe9;
+        }
+
+        .plans-grid .pricing-card:nth-child(1) {
+          --tone-bg-a: rgba(18, 60, 47, 0.92);
+          --tone-bg-b: rgba(15, 46, 35, 0.94);
+          --tone-border: rgba(178, 214, 195, 0.18);
+        }
+
+        .plans-grid .pricing-card:nth-child(2) {
+          --tone-bg-a: rgba(45, 109, 82, 0.88);
+          --tone-bg-b: rgba(37, 94, 71, 0.92);
+          --tone-border: rgba(197, 227, 212, 0.2);
+          --tone-title: #f2fbf7;
+          --tone-muted: #d7ece1;
+          --tone-text: #e1f0e9;
+          --tone-strong: #f8fdfb;
+          --tone-surface: rgba(255, 255, 255, 0.1);
+          --tone-button-bg: rgba(35, 198, 111, 0.2);
+          --tone-button-border: rgba(35, 198, 111, 0.38);
+          --tone-button-text: #f3fff9;
+        }
+
+        .plans-grid .pricing-card:nth-child(3) {
+          --tone-bg-a: rgba(227, 239, 232, 0.96);
+          --tone-bg-b: rgba(215, 231, 221, 0.94);
+          --tone-border: rgba(43, 84, 66, 0.16);
+          --tone-title: #173327;
+          --tone-muted: #35584b;
+          --tone-text: #385c4f;
+          --tone-strong: #173327;
+          --tone-surface: rgba(255, 255, 255, 0.58);
+          --tone-button-bg: rgba(35, 94, 71, 0.12);
+          --tone-button-border: rgba(35, 94, 71, 0.24);
+          --tone-button-text: #173327;
+        }
+
+        .plan-unified-compare {
+          --tone-bg-a: rgba(17, 51, 40, 0.92);
+          --tone-bg-b: rgba(12, 39, 30, 0.94);
+          --tone-border: rgba(178, 214, 195, 0.2);
+          --tone-title: #eafaf1;
+          --tone-muted: #bad7c8;
+          --tone-text: #d3e8dc;
+          --tone-strong: #f4fff8;
+          --tone-surface: rgba(20, 61, 48, 0.58);
+        }
+
+        .plans-grid .pricing-card {
+          border-color: var(--tone-border);
+          box-shadow: none;
+          background:
+            radial-gradient(280px 150px at 100% 0%, rgba(35, 198, 111, 0.08), rgba(35, 198, 111, 0)),
+            linear-gradient(160deg, var(--tone-bg-a), var(--tone-bg-b));
+        }
+
+        .plans-grid .pricing-card.is-featured {
+          box-shadow: none;
+        }
+
+        .plans-grid .pricing-name,
+        .plans-grid .pricing-price {
+          color: var(--tone-title);
+        }
+
+        .plans-grid .pricing-subtitle,
+        .plans-grid .pricing-billing,
+        .plans-grid .pricing-period {
+          color: var(--tone-muted);
+        }
+
+        .plans-grid .pricing-meta-item {
+          border-color: var(--tone-border);
+          background: var(--tone-surface);
+          color: var(--tone-text);
+        }
+
+        .plans-grid .pricing-meta-item strong {
+          color: var(--tone-strong);
+        }
+
+        .plans-grid .pricing-button {
+          border-color: var(--tone-button-border);
+          background: var(--tone-button-bg);
+          color: var(--tone-button-text);
+        }
+
+        .plans-grid .pricing-button:hover {
+          box-shadow: none;
+          transform: translateY(-2px);
+        }
+
+        .plan-unified-compare {
+          border-color: var(--tone-border);
+          box-shadow: none;
+          background:
+            radial-gradient(460px 180px at 8% 0%, rgba(35, 198, 111, 0.07), rgba(35, 198, 111, 0)),
+            linear-gradient(170deg, var(--tone-bg-a), var(--tone-bg-b));
+        }
+
+        .plan-compare-details summary {
+          color: var(--tone-title);
+          background: linear-gradient(90deg, rgba(35, 198, 111, 0.16), rgba(12, 39, 30, 0.58));
+        }
+
+        .plan-compare-details summary:hover {
+          background: linear-gradient(90deg, rgba(35, 198, 111, 0.24), rgba(12, 39, 30, 0.7));
+        }
+
+        .plan-compare-summary-meta {
+          color: var(--tone-muted);
+        }
+
+        .plan-compare-summary-icon {
+          border-color: rgba(126, 243, 177, 0.36);
+          background: rgba(18, 57, 45, 0.58);
+        }
+
+        .plan-compare-summary-icon::before,
+        .plan-compare-summary-icon::after {
+          background: rgba(233, 248, 241, 0.96);
+        }
+
+        .comparison-table-wrap {
+          border-color: var(--tone-border);
+          background: linear-gradient(165deg, rgba(16, 48, 38, 0.82), rgba(10, 32, 25, 0.86));
+        }
+
+        .comparison-table thead th {
+          color: var(--tone-title);
+          background: rgba(23, 66, 52, 0.72);
+        }
+
+        .comparison-table th:first-child,
+        .comparison-table td:first-child {
+          color: var(--tone-title);
+        }
+
+        .comparison-table td:not(:first-child) {
+          color: var(--tone-text);
+        }
+
         @keyframes page-enter {
           from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
@@ -4075,10 +5362,9 @@ export default function Planos() {
           }
 
           .highlight-model-nav {
-            border-right: none;
+            border-right: 1px solid rgba(255, 255, 255, 0.74);
             border-bottom: 1px solid rgba(16, 42, 36, 0.12);
-            padding-right: 0;
-            padding-bottom: 10px;
+            padding: 10px;
           }
 
           .highlight-model-nav-list {
@@ -4087,6 +5373,7 @@ export default function Planos() {
 
           .highlight-model-copy {
             padding-top: 0;
+            min-height: 0;
           }
 
           .highlight-model-title {
@@ -4114,6 +5401,11 @@ export default function Planos() {
 
           .highlight-integration-copy {
             padding: 14px;
+            min-height: 0;
+          }
+
+          .highlight-integration-track {
+            min-height: 0;
           }
 
           .highlight-integration-title {
@@ -4136,6 +5428,7 @@ export default function Planos() {
 
           .highlight-strategy-panel {
             padding: 14px;
+            min-height: 0;
           }
 
           .highlight-strategy-title {
@@ -4157,6 +5450,12 @@ export default function Planos() {
 
           .highlight-model-resource-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .highlight-model-resource-card .card,
+          .highlight-model-resource-item {
+            min-height: 160px;
+            padding: 1.25rem;
           }
 
           .highlight-model-resource-item.is-wide {
@@ -4286,7 +5585,7 @@ export default function Planos() {
           }
 
           .hero-visual {
-            margin-top: 14px;
+            margin-top: 28px;
             padding: 10px;
             border-radius: 16px;
           }
@@ -4367,6 +5666,7 @@ export default function Planos() {
 
           .highlight-integration-track {
             padding: 10px;
+            min-height: 0;
           }
 
           .highlight-operation-top {
@@ -4419,6 +5719,12 @@ export default function Planos() {
 
           .highlight-model-resource-grid {
             grid-template-columns: 1fr;
+          }
+
+          .highlight-model-resource-card .card,
+          .highlight-model-resource-item {
+            min-height: 0;
+            padding: 1.1rem;
           }
 
           .section-anchor {
@@ -4480,8 +5786,21 @@ export default function Planos() {
           }
 
           .plan-unified-compare {
-            padding: 10px;
+            padding: 0;
             border-radius: 14px;
+          }
+
+          .plan-compare-details summary {
+            padding: 12px 13px;
+            font-size: 13px;
+          }
+
+          .plan-compare-summary-meta {
+            display: none;
+          }
+
+          .comparison-table-wrap {
+            margin: 10px;
           }
 
           .sales-footer {
@@ -4506,14 +5825,14 @@ export default function Planos() {
 
       <div className="sales-shell">
         <div className="sales-nav-sticky">
-          <header className="sales-nav" aria-label="Navegacao da pagina de planos">
+          <header className="sales-nav" aria-label="Navegação da página de planos">
             <Link to="/planos" className="sales-brand" aria-label={`${brandName} planos`}>
               <img src={brandFullLogoUrl} alt={brandName} />
             </Link>
 
-            <div className="sales-nav-links" aria-label="Atalhos de secao">
+            <div className="sales-nav-links" aria-label="Atalhos de seção">
               <button type="button" className="sales-nav-link" onClick={() => scrollToSection('solucao')}>
-                Solucao
+                Solução
               </button>
               <button type="button" className="sales-nav-link" onClick={() => scrollToSection('recursos')}>
                 Recursos
@@ -4534,15 +5853,15 @@ export default function Planos() {
           <section className="sales-hero" id="visao-geral" aria-labelledby="planos-hero-title">
             <div className="hero-copy">
               <h1 className="hero-title" id="planos-hero-title">
-                Transforme o WhatsApp em uma <strong>operacao comercial organizada</strong> com o
+                Transforme o WhatsApp em uma <strong>operação comercial organizada</strong> com o
                 <span className="hero-brand-name">ZapVender</span>
               </h1>
 
-              <ul className="hero-benefit-list" aria-label="Beneficios principais">
+              <ul className="hero-benefit-list" aria-label="Benefícios principais">
                 <li>Atendimento com contexto</li>
                 <li>CRM + funil comercial</li>
-                <li>Automacoes e campanhas</li>
-                <li>Operacao multi-sessao</li>
+                <li>Automações e campanhas</li>
+                <li>Operação multi-sessão</li>
               </ul>
 
               <div className="hero-cta-row">
@@ -4606,7 +5925,7 @@ export default function Planos() {
                             </div>
 
                             <div className="hero-real-sidebar-group">
-                              <span className="hero-real-sidebar-label">Automacao</span>
+                              <span className="hero-real-sidebar-label">Automação</span>
                               <div className="hero-real-nav-item">
                                 <span className="hero-real-nav-icon-box">
                                   <span className="icon icon-flows hero-real-nav-icon" />
@@ -4627,7 +5946,7 @@ export default function Planos() {
                                 <span className="hero-real-nav-icon-box">
                                   <span className="icon icon-settings hero-real-nav-icon" />
                                 </span>
-                                <span className="hero-real-nav-text">Configuracoes</span>
+                                <span className="hero-real-nav-text">Configurações</span>
                               </div>
                             </div>
                           </div>
@@ -4646,7 +5965,7 @@ export default function Planos() {
 
                         <div className="hero-real-top-grid">
                           <article className="hero-real-card">
-                            <h4 className="hero-real-card-title">Estatisticas por periodo</h4>
+                            <h4 className="hero-real-card-title">Estatísticas por período</h4>
                             <div className="hero-real-period-form">
                               <div className="hero-real-field">19/02/2026</div>
                               <div className="hero-real-field">26/02/2026</div>
@@ -4695,11 +6014,11 @@ export default function Planos() {
                           </article>
 
                           <article className="hero-real-card">
-                            <h4 className="hero-real-card-title">Estatisticas gerais</h4>
+                            <h4 className="hero-real-card-title">Estatísticas gerais</h4>
                             <ul className="hero-real-general-list">
                               <li><span>Contatos que interagiram</span><strong>9.603</strong></li>
                               <li><span>Mensagem enviada pelo contato</span><strong>19.206</strong></li>
-                              <li><span>Interacoes/inscrito</span><strong>2.0</strong></li>
+                              <li><span>Interações/inscrito</span><strong>2.0</strong></li>
                             </ul>
                           </article>
                         </div>
@@ -4708,7 +6027,7 @@ export default function Planos() {
                           <div className="hero-real-events-head">
                             <h4 className="hero-real-card-title">Eventos personalizados</h4>
                             <div className="hero-real-events-actions">
-                              <span className="hero-real-chip">Este mes</span>
+                              <span className="hero-real-chip">Este mês</span>
                               <span className="hero-real-chip is-current">Criar</span>
                             </div>
                           </div>
@@ -4733,7 +6052,7 @@ export default function Planos() {
                               <span className="hero-real-metric-delta is-positive">+0%</span>
                             </div>
                             <strong>0</strong>
-                            <span>Concluidos</span>
+                            <span>Concluídos</span>
                           </article>
                           <article className="hero-real-metric-card">
                             <div className="hero-real-metric-top">
@@ -4749,12 +6068,12 @@ export default function Planos() {
                               <span className="hero-real-metric-delta is-positive">+0%</span>
                             </div>
                             <strong>0.0%</strong>
-                            <span>Conversao</span>
+                            <span>Conversão</span>
                           </article>
                         </div>
 
                         <article className="hero-real-card hero-real-funnel">
-                          <h4 className="hero-real-card-title">Funil de Conversao</h4>
+                          <h4 className="hero-real-card-title">Funil de Conversão</h4>
                           <div className="hero-real-funnel-grid">
                             <article className="hero-real-funnel-stage">
                               <strong>9.603</strong>
@@ -4773,7 +6092,7 @@ export default function Planos() {
                             </article>
                             <article className="hero-real-funnel-stage">
                               <strong>0</strong>
-                              <span>Concluido</span>
+                              <span>Concluído</span>
                               <i>0.0%</i>
                             </article>
                           </div>
@@ -4785,7 +6104,7 @@ export default function Planos() {
                 </div>
               </div>
 
-              <div className="hero-proof-row" aria-label="Publicos ideais para o ZapVender">
+              <div className="hero-proof-row" aria-label="Públicos ideais para o ZapVender">
                 <div className="hero-proof-label">Ideal para times comerciais no WhatsApp</div>
                 <div className="hero-proof-chips" aria-hidden="true">
                   {heroAudienceChips.map((chip) => (
@@ -4797,18 +6116,9 @@ export default function Planos() {
           </section>
           <section className="feature-highlight-section section-variant-left" id="solucao" aria-labelledby="titulo-destaque">
             <span id="recursos" className="section-anchor" aria-hidden="true" />
-            <div className="section-head is-left">
-              <div>
-                <div className="section-tag">Highlight feature</div>
-                <h2 className="section-title" id="titulo-destaque">Visao unica da operacao comercial</h2>
-                <p className="section-subtitle">
-                  Modelo de alto impacto para mostrar plataforma, valor e uso real em uma dobra mais premium.
-                </p>
-              </div>
-            </div>
 
             <div className={`highlight-model-shell is-${activeHighlightView.id.toLowerCase()}`}>
-              <aside className="highlight-model-nav" aria-label="Navegacao de beneficios">
+              <aside className="highlight-model-nav" aria-label="Navegação de benefícios">
                 <ul className="highlight-model-nav-list">
                   {highlightViews.map((view) => (
                     <li key={view.id}>
@@ -4827,12 +6137,11 @@ export default function Planos() {
               </aside>
 
               {activeHighlightView.id === 'integracao' ? (
-                <article className="highlight-integration-tab" aria-label="Operacao da plataforma">
+                <article className="highlight-integration-tab" aria-label="Operação da plataforma">
                   <div className="highlight-integration-copy">
-                    <div className="section-tag">Operacao real</div>
-                    <h3 className="highlight-integration-title">Como a operacao acontece dentro do ZapVender</h3>
+                    <h3 className="highlight-integration-title">Como a operação acontece dentro do ZapVender</h3>
                     <p className="highlight-integration-subtitle">
-                      Inbox, CRM, campanhas, automacoes e funil funcionando no mesmo painel para reduzir atrito da equipe.
+                      Inbox, CRM, campanhas, automações e funil funcionando no mesmo painel para reduzir atrito da equipe.
                     </p>
 
                     <div className="hero-cta-row highlight-model-cta" style={{ marginTop: '14px' }}>
@@ -4847,9 +6156,9 @@ export default function Planos() {
                     </div>
                   </div>
 
-                  <div className="highlight-integration-track highlight-operation-mock" role="img" aria-label="Ilustracao da operacao real com Inbox, CRM, campanhas, automacoes e funil comercial">
+                  <div className="highlight-integration-track highlight-operation-mock" role="img" aria-label="Ilustração da operação real com Inbox, CRM, campanhas, automações e funil comercial">
                     <div className="highlight-operation-top">
-                      <span className="highlight-operation-pill">Operacao em tempo real</span>
+                      <span className="highlight-operation-pill">Operação em tempo real</span>
                       <div className="highlight-operation-status">
                         <span>Online</span>
                         <span>Fila ativa</span>
@@ -4859,7 +6168,7 @@ export default function Planos() {
 
                     <div className="highlight-operation-layout">
                       <aside className="highlight-operation-sidebar">
-                        <span className="highlight-operation-sidebar-head">Modulos ativos</span>
+                        <span className="highlight-operation-sidebar-head">Módulos ativos</span>
                         <div className="highlight-operation-nav-item is-active">
                           <span className="icon icon-inbox" />
                           Inbox operacional
@@ -4885,8 +6194,8 @@ export default function Planos() {
                       <div className="highlight-operation-main">
                         <header className="highlight-operation-main-head">
                           <div>
-                            <h4>Painel de Operacao</h4>
-                            <p>Visao unificada do que esta em andamento</p>
+                            <h4>Painel de Operação</h4>
+                            <p>Visão unificada do que está em andamento</p>
                           </div>
                         </header>
 
@@ -4901,7 +6210,7 @@ export default function Planos() {
                           </div>
                           <div className="highlight-operation-kpi">
                             <strong>21%</strong>
-                            <span>Conversao atual</span>
+                            <span>Conversão atual</span>
                           </div>
                         </div>
 
@@ -4918,10 +6227,10 @@ export default function Planos() {
 
                           <article className="highlight-operation-module">
                             <span className="highlight-operation-module-tag">Campanhas e fila</span>
-                            <h5>Distribuicao controlada</h5>
+                            <h5>Distribuição controlada</h5>
                             <ul className="highlight-operation-list">
                               <li><strong>Campanha demo</strong><span>64 disparos</span></li>
-                              <li><strong>Fila prioritaria</strong><span>Ativa</span></li>
+                              <li><strong>Fila prioritária</strong><span>Ativa</span></li>
                             </ul>
                           </article>
 
@@ -4940,7 +6249,7 @@ export default function Planos() {
                                 <i>52%</i>
                               </li>
                               <li>
-                                <span>Concluido</span>
+                                <span>Concluído</span>
                                 <div className="highlight-operation-stage-bar"><span style={{ width: '21%' }} /></div>
                                 <i>21%</i>
                               </li>
@@ -4952,18 +6261,9 @@ export default function Planos() {
                   </div>
                 </article>
               ) : activeHighlightView.id === 'meta' ? (
-                <article className="highlight-strategy-tab" aria-label="Estrategia comercial da pagina">
+                <article className="highlight-strategy-tab" aria-label="Estratégia comercial da página">
                   <div className="highlight-strategy-panel highlight-strategy-left">
-                    <div className="section-tag">O que o ZapVender resolve</div>
-                    <h3 className="highlight-strategy-title">Primeiro a solucao, depois o preco</h3>
-                    <p className="highlight-strategy-subtitle">
-                      Estrutura inspirada em paginas de produto que explicam valor antes do plano: problema, proposta e recursos.
-                    </p>
-                    <p className="highlight-strategy-intro">
-                      O ZapVender foi posicionado para resolver um problema operacional comum: atendimento, acompanhamento comercial e
-                      automacoes espalhadas em processos diferentes. A ideia da pagina e mostrar que a plataforma organiza a operacao
-                      antes de falar de plano.
-                    </p>
+                    <h3 className="highlight-strategy-title">Primeiro a solução, depois o preço</h3>
 
                     <div className="highlight-strategy-pillar-grid" aria-label="Pilares de valor do produto">
                       {strategyPillars.map((pillar) => (
@@ -4977,7 +6277,6 @@ export default function Planos() {
                   </div>
 
                   <div className="highlight-strategy-panel highlight-strategy-right">
-                    <div className="section-tag">Problemas que a pagina comunica</div>
                     <ul className="highlight-strategy-list">
                       {strategyProblems.map((problem) => (
                         <li key={problem}>{problem}</li>
@@ -4985,7 +6284,6 @@ export default function Planos() {
                     </ul>
 
                     <div className="highlight-strategy-divider">
-                      <div className="section-tag">Resultado esperado</div>
                       <ul className="highlight-strategy-list">
                         {strategyOutcomes.map((outcome) => (
                           <li key={outcome}>{outcome}</li>
@@ -4996,11 +6294,15 @@ export default function Planos() {
                 </article>
               ) : (
                 <>
-                  <article className="highlight-model-copy" aria-label="Resumo estrategico da plataforma">
-                    <span className="highlight-model-brand" aria-hidden="true">
-                      <img src={brandLogoUrl} alt="" />
-                    </span>
-                    <span className="highlight-model-badge">{activeHighlightView.badge}</span>
+                  <article className="highlight-model-copy" aria-label="Resumo estratégico da plataforma">
+                    {!['dashboard', 'chatinterno'].includes(activeHighlightView.id.toLowerCase()) && (
+                      <>
+                        <span className="highlight-model-brand" aria-hidden="true">
+                          <img src={brandLogoUrl} alt="" />
+                        </span>
+                        <span className="highlight-model-badge">{activeHighlightView.badge}</span>
+                      </>
+                    )}
                     <h3 className="highlight-model-title">{activeHighlightView.title}</h3>
                     <h4 className="highlight-model-subtitle">{activeHighlightView.subtitle}</h4>
                     <p>{activeHighlightView.primaryText}</p>
@@ -5021,13 +6323,6 @@ export default function Planos() {
                   <article className={`highlight-model-preview ${activeHighlightView.id === 'dashboard' ? 'is-dashboard-preview' : ''}`} aria-label={`Preview de ${activeHighlightView.navLabel}`}>
                     {activeHighlightView.id === 'dashboard' ? (
                       <div className="hero-screen" aria-label="Mock do workspace no card de dashboard">
-                        <div className="hero-screen-top">
-                          <div className="hero-screen-brand">
-                            <img src={brandLogoUrl} alt="" aria-hidden="true" />
-                            <span>ZapVender Workspace</span>
-                          </div>
-                        </div>
-
                         <div className="hero-illustration-wrap">
                           <div className="hero-illustration hero-real-mock" role="img" aria-label="Mock do painel real ZapVender com dashboard, eventos e funil">
                             <aside className="hero-real-sidebar">
@@ -5069,7 +6364,7 @@ export default function Planos() {
                                   </div>
 
                                   <div className="hero-real-sidebar-group">
-                                    <span className="hero-real-sidebar-label">Automacao</span>
+                                    <span className="hero-real-sidebar-label">Automação</span>
                                     <div className="hero-real-nav-item">
                                       <span className="hero-real-nav-icon-box">
                                         <span className="icon icon-flows hero-real-nav-icon" />
@@ -5090,7 +6385,7 @@ export default function Planos() {
                                       <span className="hero-real-nav-icon-box">
                                         <span className="icon icon-settings hero-real-nav-icon" />
                                       </span>
-                                      <span className="hero-real-nav-text">Configuracoes</span>
+                                      <span className="hero-real-nav-text">Configurações</span>
                                     </div>
                                   </div>
                                 </div>
@@ -5109,7 +6404,7 @@ export default function Planos() {
 
                               <div className="hero-real-top-grid">
                                 <article className="hero-real-card">
-                                  <h4 className="hero-real-card-title">Estatisticas por periodo</h4>
+                                  <h4 className="hero-real-card-title">Estatísticas por período</h4>
                                   <div className="hero-real-period-form">
                                     <div className="hero-real-field">19/02/2026</div>
                                     <div className="hero-real-field">26/02/2026</div>
@@ -5158,11 +6453,11 @@ export default function Planos() {
                                 </article>
 
                                 <article className="hero-real-card">
-                                  <h4 className="hero-real-card-title">Estatisticas gerais</h4>
+                                  <h4 className="hero-real-card-title">Estatísticas gerais</h4>
                                   <ul className="hero-real-general-list">
                                     <li><span>Contatos que interagiram</span><strong>9.603</strong></li>
                                     <li><span>Mensagem enviada pelo contato</span><strong>19.206</strong></li>
-                                    <li><span>Interacoes/inscrito</span><strong>2.0</strong></li>
+                                    <li><span>Interações/inscrito</span><strong>2.0</strong></li>
                                   </ul>
                                 </article>
                               </div>
@@ -5171,7 +6466,7 @@ export default function Planos() {
                                 <div className="hero-real-events-head">
                                   <h4 className="hero-real-card-title">Eventos personalizados</h4>
                                   <div className="hero-real-events-actions">
-                                    <span className="hero-real-chip">Este mes</span>
+                                    <span className="hero-real-chip">Este mês</span>
                                     <span className="hero-real-chip is-current">Criar</span>
                                   </div>
                                 </div>
@@ -5196,7 +6491,7 @@ export default function Planos() {
                                     <span className="hero-real-metric-delta is-positive">+0%</span>
                                   </div>
                                   <strong>0</strong>
-                                  <span>Concluidos</span>
+                                  <span>Concluídos</span>
                                 </article>
                                 <article className="hero-real-metric-card">
                                   <div className="hero-real-metric-top">
@@ -5212,12 +6507,12 @@ export default function Planos() {
                                     <span className="hero-real-metric-delta is-positive">+0%</span>
                                   </div>
                                   <strong>0.0%</strong>
-                                  <span>Conversao</span>
+                                  <span>Conversão</span>
                                 </article>
                               </div>
 
                               <article className="hero-real-card hero-real-funnel">
-                                <h4 className="hero-real-card-title">Funil de Conversao</h4>
+                                <h4 className="hero-real-card-title">Funil de Conversão</h4>
                                 <div className="hero-real-funnel-grid">
                                   <article className="hero-real-funnel-stage">
                                     <strong>9.603</strong>
@@ -5236,7 +6531,7 @@ export default function Planos() {
                                   </article>
                                   <article className="hero-real-funnel-stage">
                                     <strong>0</strong>
-                                    <span>Concluido</span>
+                                    <span>Concluído</span>
                                     <i>0.0%</i>
                                   </article>
                                 </div>
@@ -5258,6 +6553,18 @@ export default function Planos() {
               )}
 
             </div>
+
+            <article className={`highlight-model-resource-card is-${activeHighlightView.id.toLowerCase()}`} aria-label={`Resumo de recursos da aba ${activeHighlightView.navLabel}`}>
+              <div className="highlight-model-resource-grid cardsContainer">
+                {activeHighlightView.resourceItems.slice(0, 4).map((item) => (
+                  <article className="highlight-model-resource-item card" key={`${activeHighlightView.id}-${item.title}`}>
+                    <span className="highlight-model-resource-kicker">{item.subtitle}</span>
+                    <h4>{item.title}</h4>
+                    <p>{item.description}</p>
+                  </article>
+                ))}
+              </div>
+            </article>
           </section>
 
           <section className="plans-section section-variant-frame" id="planos-lista" aria-labelledby="titulo-planos">
@@ -5305,9 +6612,15 @@ export default function Planos() {
               ))}
             </div>
 
-            <div className="plan-unified-compare" aria-label="Comparacao de planos">
+            <div className="plan-unified-compare" aria-label="Comparação de planos">
               <details className="plan-compare-details">
-                <summary>Ver comparacao detalhada</summary>
+                <summary>
+                  <span className="plan-compare-summary-main">
+                    <span className="plan-compare-summary-icon" aria-hidden="true" />
+                    <span>Ver comparação detalhada</span>
+                  </span>
+                  <span className="plan-compare-summary-meta">Starter x Premium x Business</span>
+                </summary>
                 <div className="comparison-table-wrap">
                   <table className="comparison-table">
                     <thead>
@@ -5341,3 +6654,5 @@ export default function Planos() {
     </div>
   );
 }
+
+

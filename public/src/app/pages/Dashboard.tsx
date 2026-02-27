@@ -24,59 +24,575 @@ type DashboardGlobals = {
 function DashboardStyles() {
   return (
     <style>{`
-        .dashboard-botconversa { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
-        @media (max-width: 900px) { .dashboard-botconversa { grid-template-columns: 1fr; } }
-        .stats-period-card, .stats-general-card, .events-personalized-card { background: var(--surface); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-md); padding: 24px; border: 1px solid var(--border-color); }
-        .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 600; }
-        .stats-period-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
-        .stats-period-controls .form-input, .stats-period-controls .form-select { height: 38px; padding: 0 12px; }
-        .chart-type-toggle { display: flex; gap: 4px; }
-        .chart-type-toggle .chart-btn { padding: 8px 12px; border: 1px solid var(--border-color); background: var(--surface-muted); border-radius: 8px; cursor: pointer; color: var(--gray-700); }
-        .chart-type-toggle .chart-btn.active { background: rgba(var(--primary-rgb), 0.16); border-color: var(--primary); color: #eafff4; }
-        .stats-general-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--gray-100); }
-        .stats-general-item:last-child { border-bottom: none; }
-        .stats-general-label { font-size: 13px; color: var(--gray-600); }
-        .stats-general-value { font-weight: 700; font-size: 18px; }
-        .events-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-        .events-header h3 { margin: 0; }
-        .events-controls { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
-        .events-summary { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: var(--gray-500); }
-        .events-summary strong { color: var(--gray-700); }
-        .events-list { display: flex; flex-direction: column; gap: 10px; }
-        .events-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(15, 23, 42, 0.24); }
-        .events-row-main { min-width: 0; }
-        .events-row-name { font-weight: 700; color: #e7edf7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .events-row-key { font-size: 11px; color: var(--gray-500); }
-        .events-row-count { font-size: 13px; color: var(--gray-600); white-space: nowrap; }
-        .events-row-last { font-size: 12px; color: var(--gray-500); white-space: nowrap; }
-        .events-row-actions { display: inline-flex; gap: 6px; }
-        .events-loading, .events-error { padding: 14px; text-align: center; border: 1px dashed var(--border-color); border-radius: 10px; color: var(--gray-500); }
-        .info-icon { cursor: help; opacity: 0.7; }
-        .events-empty { text-align: center; padding: 40px 20px; color: var(--gray-500); }
-        .events-empty-emoji { width: 48px; height: 48px; display: block; margin: 0 auto 16px; opacity: 0.6; background-color: var(--gray-400); }
-        .custom-event-status { font-size: 11px; border-radius: 999px; padding: 3px 8px; border: 1px solid rgba(var(--primary-rgb), 0.25); color: var(--gray-500); background: rgba(15, 23, 42, 0.24); white-space: nowrap; }
-        .custom-event-status.active { border-color: rgba(var(--primary-rgb), 0.45); color: #d8f4e6; background: rgba(var(--primary-rgb), 0.13); }
-        .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.4); color: #cbd5e1; }
+        :root {
+          --bg-0: #050f0b;
+          --bg-1: rgba(10, 29, 23, 0.9);
+          --bg-2: rgba(16, 44, 34, 0.78);
+          --stroke-soft: rgba(223, 255, 239, 0.07);
+          --text-1: #e8f6ee;
+          --text-2: #9cb9ac;
+          --accent: #22c77a;
+        }
+
+        .dashboard-react {
+          --primary: var(--accent);
+          --primary-rgb: 34, 199, 122;
+          --surface: var(--bg-1);
+          --surface-muted: var(--bg-2);
+          --border-color: var(--stroke-soft);
+          --dark: var(--text-1);
+          --radius-panel: 22px;
+          --radius-card: 18px;
+          --space-gap: 20px;
+        }
+
+        .dashboard-react .main-content {
+          color: var(--text-1);
+          padding: 30px;
+          background:
+            radial-gradient(560px 240px at 8% 0%, rgba(34, 199, 122, 0.09), rgba(34, 199, 122, 0)),
+            radial-gradient(520px 220px at 96% 0%, rgba(34, 199, 122, 0.07), rgba(34, 199, 122, 0)),
+            linear-gradient(180deg, rgba(5, 16, 12, 0.92), rgba(3, 10, 8, 0.96));
+        }
+
+        .dashboard-react .sidebar {
+          background: linear-gradient(180deg, rgba(18, 50, 39, 0.92), rgba(11, 32, 24, 0.95));
+          border-right: none;
+          box-shadow: inset -1px 0 0 var(--stroke-soft);
+          backdrop-filter: blur(6px);
+        }
+
+        .dashboard-react .sidebar-header,
+        .dashboard-react .sidebar-footer {
+          border-color: transparent;
+          box-shadow: none;
+        }
+
+        .dashboard-react .sidebar-footer {
+          box-shadow: none;
+        }
+
+        .dashboard-react .sidebar-nav {
+          padding: 16px 12px;
+        }
+
+        .dashboard-react .nav-section {
+          margin-bottom: 22px;
+        }
+
+        .dashboard-react .nav-section-title {
+          color: rgba(202, 230, 217, 0.62);
+          letter-spacing: 0.08em;
+          margin-bottom: 10px;
+        }
+
+        .dashboard-react .nav-item {
+          margin-bottom: 6px;
+        }
+
+        .dashboard-react .nav-link {
+          border-radius: 14px;
+          padding: 11px 13px;
+          background: rgba(255, 255, 255, 0.01);
+          color: var(--text-2);
+          transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+        }
+
+        .dashboard-react .nav-link:hover {
+          transform: translateX(2px);
+          background: rgba(var(--primary-rgb), 0.14);
+          color: var(--text-1);
+        }
+
+        .dashboard-react .nav-link.active {
+          border: none;
+          color: var(--text-1);
+          background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.28), rgba(var(--primary-rgb), 0.12));
+          box-shadow: inset 0 0 0 1px rgba(150, 241, 199, 0.2);
+        }
+
+        .dashboard-react .btn-logout {
+          background: rgba(248, 113, 113, 0.12);
+        }
+
+        .dashboard-react .btn-logout:hover {
+          background: rgba(248, 113, 113, 0.2);
+        }
+
+        .dashboard-react .page-header {
+          margin-bottom: 22px;
+        }
+
+        .dashboard-react .page-title h1 {
+          color: var(--text-1);
+          font-size: clamp(24px, 2.3vw, 30px);
+          letter-spacing: -0.02em;
+        }
+
+        .dashboard-react .page-title p {
+          color: var(--text-2);
+          font-size: 13px;
+        }
+
+        .dashboard-react .dashboard-botconversa {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: var(--space-gap);
+          margin-bottom: 22px;
+        }
+
+        .dashboard-react .stats-period-card,
+        .dashboard-react .stats-general-card,
+        .dashboard-react .events-personalized-card,
+        .dashboard-react .funnel-container {
+          background: linear-gradient(170deg, rgba(11, 32, 25, 0.94), rgba(8, 22, 18, 0.92));
+          border-radius: var(--radius-panel);
+          border: none;
+          box-shadow: inset 0 0 0 1px var(--stroke-soft), 0 8px 20px rgba(0, 0, 0, 0.14);
+          padding: 22px;
+        }
+
+        .dashboard-react .stats-period-card h3,
+        .dashboard-react .stats-general-card h3,
+        .dashboard-react .events-personalized-card h3,
+        .dashboard-react .funnel-title {
+          margin: 0 0 16px;
+          color: var(--text-1);
+          font-size: 16px;
+          font-weight: 650;
+          letter-spacing: -0.01em;
+        }
+
+        .dashboard-react .funnel-title {
+          margin-bottom: 14px;
+        }
+
+        .dashboard-react .stats-period-controls {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+
+        .dashboard-react .stats-period-controls .form-input,
+        .dashboard-react .stats-period-controls .form-select,
+        .dashboard-react #customEventsPeriod.form-select {
+          height: 38px;
+          padding: 0 12px;
+          border: none;
+          border-radius: 12px;
+          background: rgba(16, 44, 34, 0.72);
+          color: var(--text-1);
+        }
+
+        .dashboard-react .stats-period-controls .form-input:focus,
+        .dashboard-react .stats-period-controls .form-select:focus,
+        .dashboard-react #customEventsPeriod.form-select:focus {
+          box-shadow: 0 0 0 1px rgba(147, 239, 194, 0.3);
+        }
+
+        .dashboard-react .chart-type-toggle {
+          display: flex;
+          gap: 6px;
+        }
+
+        .dashboard-react .chart-type-toggle .chart-btn {
+          min-height: 36px;
+          padding: 8px 12px;
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          color: var(--text-2);
+          background: rgba(16, 44, 34, 0.66);
+          transition: background 160ms ease, color 160ms ease;
+        }
+
+        .dashboard-react .chart-type-toggle .chart-btn:hover {
+          color: var(--text-1);
+          background: rgba(var(--primary-rgb), 0.15);
+        }
+
+        .dashboard-react .chart-type-toggle .chart-btn.active {
+          color: var(--text-1);
+          background: rgba(var(--primary-rgb), 0.22);
+        }
+
+        .dashboard-react .stats-period-chart {
+          margin-top: 4px;
+          padding: 10px;
+          border-radius: 14px;
+          background: rgba(8, 24, 19, 0.44);
+        }
+
+        .dashboard-react .stats-general-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          padding: 13px 0;
+          border-bottom: 1px solid rgba(223, 255, 239, 0.08);
+        }
+
+        .dashboard-react .stats-general-item:last-child {
+          border-bottom: none;
+        }
+
+        .dashboard-react .stats-general-label {
+          font-size: 12px;
+          color: var(--text-2);
+        }
+
+        .dashboard-react .stats-general-value {
+          font-weight: 750;
+          font-size: 20px;
+          color: var(--text-1);
+        }
+
+        .dashboard-react .events-header {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 16px;
+        }
+
+        .dashboard-react .events-header h3 {
+          margin: 0;
+        }
+
+        .dashboard-react .events-controls {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-left: auto;
+          flex-wrap: wrap;
+        }
+
+        .dashboard-react .events-summary {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 12px;
+          font-size: 12px;
+          color: var(--text-2);
+        }
+
+        .dashboard-react .events-summary strong {
+          color: var(--text-1);
+        }
+
+        .dashboard-react .events-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .dashboard-react .events-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto auto auto;
+          gap: 12px;
+          align-items: center;
+          padding: 12px;
+          border: none;
+          border-radius: 16px;
+          background: linear-gradient(160deg, rgba(16, 44, 34, 0.82), rgba(13, 35, 28, 0.84));
+          transition: transform 160ms ease, background 160ms ease;
+        }
+
+        .dashboard-react .events-row:hover {
+          transform: translateY(-1px);
+          background: linear-gradient(160deg, rgba(18, 48, 38, 0.84), rgba(14, 38, 30, 0.86));
+        }
+
+        .dashboard-react .events-row-main {
+          min-width: 0;
+        }
+
+        .dashboard-react .events-row-name {
+          font-weight: 700;
+          color: var(--text-1);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .dashboard-react .events-row-key,
+        .dashboard-react .events-row-last {
+          font-size: 11px;
+          color: var(--text-2);
+        }
+
+        .dashboard-react .events-row-count {
+          font-size: 12px;
+          color: rgba(210, 234, 223, 0.88);
+          white-space: nowrap;
+        }
+
+        .dashboard-react .events-row-actions {
+          display: inline-flex;
+          gap: 6px;
+        }
+
+        .dashboard-react .events-loading,
+        .dashboard-react .events-error {
+          padding: 14px;
+          text-align: center;
+          border: none;
+          border-radius: 14px;
+          color: var(--text-2);
+          background: rgba(16, 44, 34, 0.58);
+        }
+
+        .dashboard-react .events-empty {
+          text-align: center;
+          padding: 34px 20px;
+          color: var(--text-2);
+        }
+
+        .dashboard-react .events-empty-emoji {
+          width: 46px;
+          height: 46px;
+          display: block;
+          margin: 0 auto 14px;
+          opacity: 0.55;
+          background-color: var(--text-2);
+        }
+
+        .dashboard-react .custom-event-status {
+          font-size: 10px;
+          border-radius: 999px;
+          padding: 4px 8px;
+          border: none;
+          color: var(--text-2);
+          background: rgba(8, 24, 19, 0.52);
+          white-space: nowrap;
+        }
+
+        .dashboard-react .custom-event-status.active {
+          color: #dffceb;
+          background: rgba(var(--primary-rgb), 0.18);
+        }
+
+        .dashboard-react .custom-event-status.inactive {
+          color: var(--text-2);
+        }
+
+        .dashboard-react .stats-grid {
+          gap: 18px;
+          margin-bottom: 22px;
+        }
+
+        .dashboard-react .stat-card,
+        .dashboard-react .funnel-stage {
+          background: linear-gradient(160deg, rgba(16, 44, 34, 0.82), rgba(13, 35, 28, 0.84));
+          border: none;
+          border-radius: var(--radius-card);
+          transition: transform 180ms ease, background 180ms ease;
+        }
+
+        .dashboard-react .stat-card {
+          padding: 18px;
+        }
+
+        .dashboard-react .stat-card:hover,
+        .dashboard-react .funnel-stage:hover {
+          transform: translateY(-2px);
+          background: linear-gradient(160deg, rgba(18, 50, 39, 0.86), rgba(14, 40, 31, 0.88));
+        }
+
+        .dashboard-react .stat-icon {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+        }
+
+        .dashboard-react .stat-content {
+          display: grid;
+          justify-items: end;
+          gap: 4px;
+          text-align: right;
+        }
+
+        .dashboard-react .stat-value {
+          font-size: clamp(30px, 2.2vw, 36px);
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          color: var(--text-1);
+          line-height: 1;
+        }
+
+        .dashboard-react .stat-label {
+          font-size: 12px;
+          color: var(--text-2);
+          margin-top: 0;
+        }
+
+        .dashboard-react .stat-change {
+          margin-top: 2px;
+          font-size: 10px;
+          font-weight: 700;
+          padding: 3px 7px;
+          border-radius: 999px;
+          border: none;
+          box-shadow: inset 0 0 0 1px rgba(223, 255, 239, 0.12);
+        }
+
+        .dashboard-react .stat-change.positive {
+          color: #cdf8df;
+          background: rgba(34, 197, 94, 0.16);
+        }
+
+        .dashboard-react .stat-change.negative {
+          color: #ffd7db;
+          background: rgba(248, 113, 113, 0.16);
+        }
+
+        .dashboard-react .funnel-container {
+          margin-bottom: 22px;
+          padding: 22px;
+        }
+
+        .dashboard-react .funnel-stages {
+          gap: 12px;
+          padding-bottom: 6px;
+        }
+
+        .dashboard-react .funnel-stage {
+          min-width: 142px;
+          padding: 16px 14px;
+        }
+
+        .dashboard-react .funnel-value {
+          color: #7df0b2;
+          font-size: 30px;
+          font-weight: 800;
+        }
+
+        .dashboard-react .funnel-label {
+          color: var(--text-2);
+          font-size: 11px;
+          letter-spacing: 0.03em;
+          text-transform: uppercase;
+        }
+
+        .dashboard-react .funnel-percent {
+          color: rgba(208, 235, 222, 0.82);
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .dashboard-react .funnel-arrow {
+          color: rgba(156, 185, 172, 0.8);
+        }
+
+        .dashboard-react .table-container,
+        .dashboard-react .card {
+          border: none;
+          box-shadow: inset 0 0 0 1px var(--stroke-soft), 0 8px 20px rgba(0, 0, 0, 0.14);
+          border-radius: var(--radius-panel);
+          background: linear-gradient(170deg, rgba(11, 32, 25, 0.94), rgba(8, 22, 18, 0.92));
+        }
+
+        .dashboard-react .table-header,
+        .dashboard-react .card-header {
+          border-color: rgba(223, 255, 239, 0.08);
+          padding: 18px 20px;
+        }
+
+        .dashboard-react .table-title,
+        .dashboard-react .card-title {
+          color: var(--text-1);
+          font-size: 15px;
+        }
+
+        .dashboard-react .info-icon {
+          cursor: help;
+          opacity: 0.7;
+        }
+
+        @media (max-width: 900px) {
+          .dashboard-react .dashboard-botconversa {
+            grid-template-columns: 1fr;
+          }
+        }
+
         @media (max-width: 640px) {
-          .dashboard-botconversa { gap: 14px; margin-bottom: 16px; }
-          .stats-period-card, .stats-general-card, .events-personalized-card { padding: 12px; border-radius: 12px; }
-          .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin-bottom: 12px; font-size: 15px; }
-          .stats-period-controls { gap: 8px; }
-          .stats-period-controls .form-input, .stats-period-controls .form-select { width: 100%; min-width: 0; }
-          .chart-type-toggle { width: 100%; justify-content: flex-start; }
-          .chart-type-toggle .chart-btn { flex: 1 1 0; }
-          .stats-period-chart canvas { max-height: 150px !important; }
-          .stats-general-item { gap: 12px; }
-          .stats-general-label { font-size: 12px; }
-          .stats-general-value { font-size: 16px; }
-          .events-header { gap: 8px; margin-bottom: 12px; }
-          .events-controls { width: 100%; margin-left: 0; }
-          .events-controls .form-select, .events-controls .btn { width: 100%; }
-          .events-row { grid-template-columns: 1fr; gap: 8px; }
-          .events-row-count, .events-row-last { white-space: normal; }
-          .events-row-actions { justify-content: flex-end; }
-          .events-empty { padding: 20px 10px; }
-          .events-empty-emoji { width: 34px; height: 34px; margin-bottom: 10px; }
+          .dashboard-react .main-content {
+            padding: 72px 14px 16px;
+          }
+
+          .dashboard-react .dashboard-botconversa {
+            gap: 14px;
+            margin-bottom: 16px;
+          }
+
+          .dashboard-react .stats-period-card,
+          .dashboard-react .stats-general-card,
+          .dashboard-react .events-personalized-card,
+          .dashboard-react .funnel-container {
+            padding: 14px;
+            border-radius: 16px;
+          }
+
+          .dashboard-react .stats-period-card h3,
+          .dashboard-react .stats-general-card h3,
+          .dashboard-react .events-personalized-card h3 {
+            margin-bottom: 12px;
+            font-size: 15px;
+          }
+
+          .dashboard-react .stats-period-controls {
+            gap: 8px;
+          }
+
+          .dashboard-react .stats-period-controls .form-input,
+          .dashboard-react .stats-period-controls .form-select {
+            width: 100%;
+            min-width: 0;
+          }
+
+          .dashboard-react .chart-type-toggle {
+            width: 100%;
+          }
+
+          .dashboard-react .chart-type-toggle .chart-btn {
+            flex: 1 1 0;
+          }
+
+          .dashboard-react .stats-period-chart canvas {
+            max-height: 150px !important;
+          }
+
+          .dashboard-react .events-header {
+            gap: 8px;
+            margin-bottom: 12px;
+          }
+
+          .dashboard-react .events-controls {
+            width: 100%;
+            margin-left: 0;
+          }
+
+          .dashboard-react .events-controls .form-select,
+          .dashboard-react .events-controls .btn {
+            width: 100%;
+          }
+
+          .dashboard-react .events-row {
+            grid-template-columns: 1fr;
+            gap: 8px;
+          }
+
+          .dashboard-react .events-row-count,
+          .dashboard-react .events-row-last {
+            white-space: normal;
+          }
+
+          .dashboard-react .events-row-actions {
+            justify-content: flex-end;
+          }
         }
       `}</style>
   );
