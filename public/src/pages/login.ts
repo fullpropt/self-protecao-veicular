@@ -5,7 +5,14 @@ import { restoreAuthSessionFromPersistence, writePersistedAuthSessionFromSession
 type LoginResponse = {
     token?: string;
     refreshToken?: string;
-    user?: { id?: number | string; uuid?: string; name?: string; email?: string };
+    user?: {
+        id?: number | string;
+        uuid?: string;
+        name?: string;
+        email?: string;
+        role?: string;
+        is_application_admin?: boolean;
+    };
     error?: string;
     code?: string;
 };
@@ -53,8 +60,8 @@ function onReady(callback: () => void) {
     }
 }
 
-function getDashboardUrl() {
-    return '#/dashboard';
+function getDashboardUrl(isApplicationAdmin = false) {
+    return isApplicationAdmin ? '#/admin-dashboard' : '#/dashboard';
 }
 
 function getInputValue(id: string): string {
@@ -212,6 +219,11 @@ function saveSession(data: LoginResponse, fallbackName: string, rememberSession 
     } else {
         sessionStorage.removeItem('selfDashboardUserEmail');
     }
+    if (data?.user?.is_application_admin === true) {
+        sessionStorage.setItem('selfDashboardIsAppAdmin', '1');
+    } else {
+        sessionStorage.removeItem('selfDashboardIsAppAdmin');
+    }
     if (nextIdentity) {
         sessionStorage.setItem('selfDashboardIdentity', nextIdentity);
         localStorage.setItem(LAST_IDENTITY_STORAGE_KEY, nextIdentity);
@@ -257,7 +269,8 @@ async function handleLogin(e: Event) {
 
         saveSession(data, identifier, rememberSession);
 
-        window.location.href = getDashboardUrl();
+        const isApplicationAdmin = data?.user?.is_application_admin === true;
+        window.location.href = getDashboardUrl(isApplicationAdmin);
     } catch (error) {
         setErrorMessage(errorMsg, error instanceof Error ? error.message : 'Falha ao realizar login');
     }
@@ -312,7 +325,8 @@ async function handleRegister(e: Event) {
 
         if (data?.token) {
             saveSession(data, name);
-            window.location.href = getDashboardUrl();
+            const isApplicationAdmin = data?.user?.is_application_admin === true;
+            window.location.href = getDashboardUrl(isApplicationAdmin);
             return false;
         }
 
@@ -408,7 +422,8 @@ async function initLogin() {
     if (!hasPendingEmailConfirmation && sessionStorage.getItem('selfDashboardToken')) {
         const expiry = sessionStorage.getItem('selfDashboardExpiry');
         if (expiry && Date.now() < parseInt(expiry)) {
-            window.location.href = getDashboardUrl();
+            const isApplicationAdmin = sessionStorage.getItem('selfDashboardIsAppAdmin') === '1';
+            window.location.href = getDashboardUrl(isApplicationAdmin);
             return;
         }
     }

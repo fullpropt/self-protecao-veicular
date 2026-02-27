@@ -4,6 +4,22 @@ const EMAIL_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EXPIRES_IN_TEXT = '24 horas';
 const DEFAULT_APP_NAME = 'ZapVender';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
+const DEFAULT_EMAIL_SUBJECT_TEMPLATE = 'Confirme seu cadastro no {{app_name}}';
+const DEFAULT_EMAIL_TEXT_TEMPLATE = [
+    'Ola {{name}},',
+    '',
+    'Para concluir seu cadastro no {{app_name}}, confirme seu email no link abaixo:',
+    '{{confirmation_url}}',
+    '',
+    'Este link expira em {{expires_in_text}}.'
+].join('\n');
+const DEFAULT_EMAIL_HTML_TEMPLATE = [
+    '<p>Ola {{name}},</p>',
+    '<p>Para concluir seu cadastro no <strong>{{app_name}}</strong>, confirme seu email no link abaixo:</p>',
+    '<p><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer">Confirmar email</a></p>',
+    '<p>Este link expira em {{expires_in_text}}.</p>'
+].join('');
+const SUPPORTED_EMAIL_PROVIDERS = new Set(['sendgrid', 'mailmkt']);
 
 class MailMktIntegrationError extends Error {
     constructor(message, options = {}) {
@@ -15,8 +31,43 @@ class MailMktIntegrationError extends Error {
     }
 }
 
+function clampNumber(value, fallback, min = 1000, max = 60000) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
+
 function trimTrailingSlash(value) {
     return String(value || '').replace(/\/+$/, '');
+}
+
+function normalizeEmail(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function normalizeProvider(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return SUPPORTED_EMAIL_PROVIDERS.has(normalized) ? normalized : '';
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function applyTemplate(template, context = {}) {
+    const source = String(template || '');
+    if (!source) return '';
+
+    return source.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
+        if (!Object.prototype.hasOwnProperty.call(context, key)) return '';
+        const value = context[key];
+        return value === null || value === undefined ? '' : String(value);
+    });
 }
 
 function resolveAppUrl(req) {
@@ -24,18 +75,16 @@ function resolveAppUrl(req) {
     if (configuredAppUrl) return configuredAppUrl;
 
     const host = String(req?.get?.('host') || '').trim();
-    if (!host) {
-        return '';
-    }
+    if (!host) return '';
 
     const protocol = String(req?.protocol || 'https').trim() || 'https';
     return trimTrailingSlash(`${protocol}://${host}`);
 }
 
-function resolveMailMktEndpointUrl() {
-    const baseUrl = trimTrailingSlash(process.env.MAILMKT_URL || '');
-    if (!baseUrl) return '';
-    return `${baseUrl}/api/integrations/zapvender/send-email-confirmation`;
+function resolveMailMktEndpointUrl(baseUrl = '') {
+    const normalizedBaseUrl = trimTrailingSlash(baseUrl || process.env.MAILMKT_URL || '');
+    if (!normalizedBaseUrl) return '';
+    return `${normalizedBaseUrl}/api/integrations/zapvender/send-email-confirmation`;
 }
 
 function hashEmailConfirmationToken(token) {
@@ -83,10 +132,114 @@ function normalizePersonName(name, email) {
     return String(email || '').split('@')[0] || 'Cliente';
 }
 
-async function sendEmailConfirmationViaMailMkt(payload) {
-    const endpointUrl = resolveMailMktEndpointUrl();
-    const apiKey = String(process.env.MAILMKT_INTEGRATION_API_KEY || '').trim();
-    const timeoutMs = Number(process.env.MAILMKT_REQUEST_TIMEOUT_MS || DEFAULT_REQUEST_TIMEOUT_MS);
+function buildRuntimeEmailDeliveryConfig(overrides = {}) {
+    const options = overrides && typeof overrides === 'object' ? overrides : {};
+    const requestTimeoutMs = clampNumber(
+        options.requestTimeoutMs
+            || process.env.EMAIL_REQUEST_TIMEOUT_MS
+            || process.env.MAILMKT_REQUEST_TIMEOUT_MS,
+        DEFAULT_REQUEST_TIMEOUT_MS
+    );
+
+    const sendgridApiKey = String(options.sendgridApiKey || process.env.SENDGRID_API_KEY || '').trim();
+    const sendgridFromEmail = normalizeEmail(options.sendgridFromEmail || process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_FROM || '');
+    const sendgridFromName = String(options.sendgridFromName || process.env.SENDGRID_FROM_NAME || process.env.APP_NAME || DEFAULT_APP_NAME).trim();
+    const sendgridReplyToEmail = normalizeEmail(options.sendgridReplyToEmail || process.env.SENDGRID_REPLY_TO_EMAIL || '');
+    const sendgridReplyToName = String(options.sendgridReplyToName || process.env.SENDGRID_REPLY_TO_NAME || '').trim();
+    const mailmktUrl = String(options.mailmktUrl || process.env.MAILMKT_URL || '').trim();
+    const mailmktApiKey = String(options.mailmktApiKey || process.env.MAILMKT_INTEGRATION_API_KEY || '').trim();
+    const appName = String(options.appName || process.env.APP_NAME || DEFAULT_APP_NAME).trim() || DEFAULT_APP_NAME;
+    const subjectTemplate = String(
+        options.subjectTemplate
+        || process.env.EMAIL_CONFIRMATION_SUBJECT_TEMPLATE
+        || DEFAULT_EMAIL_SUBJECT_TEMPLATE
+    );
+    const htmlTemplate = String(
+        options.htmlTemplate
+        || process.env.EMAIL_CONFIRMATION_HTML_TEMPLATE
+        || DEFAULT_EMAIL_HTML_TEMPLATE
+    );
+    const textTemplate = String(
+        options.textTemplate
+        || process.env.EMAIL_CONFIRMATION_TEXT_TEMPLATE
+        || DEFAULT_EMAIL_TEXT_TEMPLATE
+    );
+
+    let provider = normalizeProvider(options.provider || process.env.EMAIL_DELIVERY_PROVIDER || process.env.EMAIL_PROVIDER);
+    if (!provider) {
+        if (sendgridApiKey && sendgridFromEmail) {
+            provider = 'sendgrid';
+        } else if (mailmktUrl && mailmktApiKey) {
+            provider = 'mailmkt';
+        } else {
+            provider = 'sendgrid';
+        }
+    }
+
+    return {
+        provider,
+        appName,
+        subjectTemplate,
+        htmlTemplate,
+        textTemplate,
+        requestTimeoutMs,
+        sendgridApiKey,
+        sendgridFromEmail,
+        sendgridFromName,
+        sendgridReplyToEmail,
+        sendgridReplyToName,
+        mailmktUrl,
+        mailmktApiKey
+    };
+}
+
+function buildEmailTemplateContext(user, confirmationUrl, options = {}) {
+    const appName = String(options.appName || DEFAULT_APP_NAME).trim() || DEFAULT_APP_NAME;
+    const name = normalizePersonName(user?.name, user?.email);
+    const email = normalizeEmail(user?.email);
+    const expiresInText = String(options.expiresInText || DEFAULT_EXPIRES_IN_TEXT).trim() || DEFAULT_EXPIRES_IN_TEXT;
+    return {
+        name,
+        email,
+        app_name: appName,
+        confirmation_url: String(confirmationUrl || ''),
+        expires_in_text: expiresInText
+    };
+}
+
+function buildRenderedEmailContent(context, config) {
+    const subject = applyTemplate(config.subjectTemplate, context).trim() || DEFAULT_EMAIL_SUBJECT_TEMPLATE;
+    const renderedHtml = applyTemplate(config.htmlTemplate, context).trim();
+    const renderedText = applyTemplate(config.textTemplate, context).trim();
+    const text = renderedText || [
+        `Ola ${context.name || 'Cliente'},`,
+        '',
+        `Para concluir seu cadastro no ${context.app_name || DEFAULT_APP_NAME}, confirme seu email no link abaixo:`,
+        context.confirmation_url || '',
+        '',
+        `Este link expira em ${context.expires_in_text || DEFAULT_EXPIRES_IN_TEXT}.`
+    ].join('\n');
+    const html = renderedHtml || (
+        '<p>'
+        + `Ola ${escapeHtml(context.name || 'Cliente')},`
+        + '</p><p>Para concluir seu cadastro no <strong>'
+        + `${escapeHtml(context.app_name || DEFAULT_APP_NAME)}`
+        + '</strong>, confirme seu email no link abaixo:</p>'
+        + '<p><a href="'
+        + `${escapeHtml(context.confirmation_url || '')}`
+        + '" target="_blank" rel="noopener noreferrer">Confirmar email</a></p>'
+        + '<p>Este link expira em '
+        + `${escapeHtml(context.expires_in_text || DEFAULT_EXPIRES_IN_TEXT)}`
+        + '.</p>'
+    );
+
+    return { subject, html, text };
+}
+
+async function sendEmailConfirmationViaMailMkt(payload, config) {
+    const endpointUrl = resolveMailMktEndpointUrl(config.mailmktUrl);
+    const apiKey = String(config.mailmktApiKey || '').trim();
+    const timeoutMs = clampNumber(config.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT_MS);
 
     if (!endpointUrl) {
         throw new MailMktIntegrationError('MAILMKT_URL nao configurada', {
@@ -103,7 +256,7 @@ async function sendEmailConfirmationViaMailMkt(payload) {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS));
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
         const response = await fetch(endpointUrl, {
@@ -153,28 +306,177 @@ async function sendEmailConfirmationViaMailMkt(payload) {
     }
 }
 
-async function sendRegistrationConfirmationEmail(req, user, tokenPayload) {
+async function sendEmailConfirmationViaSendGrid(payload, config) {
+    const endpointUrl = 'https://api.sendgrid.com/v3/mail/send';
+    const apiKey = String(config.sendgridApiKey || '').trim();
+    const fromEmail = normalizeEmail(config.sendgridFromEmail);
+    const fromName = String(config.sendgridFromName || '').trim();
+    const replyToEmail = normalizeEmail(config.sendgridReplyToEmail);
+    const replyToName = String(config.sendgridReplyToName || '').trim();
+    const timeoutMs = clampNumber(config.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT_MS);
+
+    if (!apiKey) {
+        throw new MailMktIntegrationError('SENDGRID_API_KEY nao configurada', {
+            statusCode: 500,
+            retryable: false
+        });
+    }
+
+    if (!fromEmail) {
+        throw new MailMktIntegrationError('SENDGRID_FROM_EMAIL nao configurada', {
+            statusCode: 500,
+            retryable: false
+        });
+    }
+
+    const recipientEmail = normalizeEmail(payload.email);
+    if (!recipientEmail) {
+        throw new MailMktIntegrationError('Email do destinatario nao informado', {
+            statusCode: 400,
+            retryable: false
+        });
+    }
+
+    const recipientName = String(payload.name || '').trim() || normalizePersonName('', recipientEmail);
+    const subject = String(payload.subject || '').trim() || DEFAULT_EMAIL_SUBJECT_TEMPLATE;
+    const text = String(payload.text || '').trim();
+    const html = String(payload.html || '').trim();
+
+    const content = [];
+    if (text) {
+        content.push({ type: 'text/plain', value: text });
+    }
+    if (html) {
+        content.push({ type: 'text/html', value: html });
+    }
+    if (!content.length) {
+        content.push({ type: 'text/plain', value: DEFAULT_EMAIL_TEXT_TEMPLATE });
+    }
+
+    const body = {
+        personalizations: [
+            {
+                to: [
+                    {
+                        email: recipientEmail,
+                        name: recipientName
+                    }
+                ],
+                subject
+            }
+        ],
+        from: {
+            email: fromEmail,
+            name: fromName || undefined
+        },
+        content
+    };
+
+    if (replyToEmail) {
+        body.reply_to = {
+            email: replyToEmail,
+            name: replyToName || undefined
+        };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const response = await fetch(endpointUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            const responseText = await response.text().catch(() => '');
+            const upstreamPreview = String(responseText || '').slice(0, 300);
+            const integrationError = new MailMktIntegrationError(
+                `SendGrid respondeu HTTP ${response.status}`,
+                {
+                    statusCode: response.status >= 500 ? 503 : 502,
+                    upstreamStatus: response.status,
+                    retryable: response.status >= 500 || response.status === 429
+                }
+            );
+            integrationError.upstreamBodyPreview = upstreamPreview || null;
+            throw integrationError;
+        }
+
+        return true;
+    } catch (error) {
+        if (error instanceof MailMktIntegrationError) {
+            throw error;
+        }
+
+        if (error?.name === 'AbortError') {
+            throw new MailMktIntegrationError('Timeout ao enviar confirmacao de email via SendGrid', {
+                statusCode: 503,
+                retryable: true
+            });
+        }
+
+        throw new MailMktIntegrationError(`Falha de rede ao enviar confirmacao via SendGrid: ${error.message}`, {
+            statusCode: 503,
+            retryable: true
+        });
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function sendRegistrationConfirmationEmail(req, user, tokenPayload, options = {}) {
+    const emailSettings = options && typeof options === 'object'
+        ? (options.emailSettings && typeof options.emailSettings === 'object' ? options.emailSettings : options)
+        : {};
+    const config = buildRuntimeEmailDeliveryConfig(emailSettings);
     const appUrl = resolveAppUrl(req);
     const confirmationUrl = buildEmailConfirmationUrl(appUrl, tokenPayload.token);
+    const expiresInText = String(tokenPayload?.expiresInText || DEFAULT_EXPIRES_IN_TEXT).trim() || DEFAULT_EXPIRES_IN_TEXT;
+    const context = buildEmailTemplateContext(user, confirmationUrl, {
+        appName: config.appName,
+        expiresInText
+    });
+    const content = buildRenderedEmailContent(context, config);
     const payload = {
-        email: String(user?.email || '').trim().toLowerCase(),
+        email: normalizeEmail(user?.email),
         name: normalizePersonName(user?.name, user?.email),
         confirmationUrl,
-        appName: process.env.APP_NAME || DEFAULT_APP_NAME,
-        expiresInText: tokenPayload.expiresInText || DEFAULT_EXPIRES_IN_TEXT
+        appName: config.appName,
+        expiresInText,
+        subject: content.subject,
+        text: content.text,
+        html: content.html
     };
 
     try {
-        await sendEmailConfirmationViaMailMkt(payload);
+        if (config.provider === 'mailmkt') {
+            await sendEmailConfirmationViaMailMkt(payload, config);
+        } else if (config.provider === 'sendgrid') {
+            await sendEmailConfirmationViaSendGrid(payload, config);
+        } else {
+            throw new MailMktIntegrationError('EMAIL_DELIVERY_PROVIDER invalido', {
+                statusCode: 500,
+                retryable: false
+            });
+        }
+
         console.log('[auth/register] Email de confirmacao enviado', JSON.stringify({
+            provider: config.provider,
             email: payload.email,
             userId: Number(user?.id || 0) || null,
             tokenFingerprint: tokenFingerprint(tokenPayload.token),
             expiresAt: tokenPayload.expiresAt
         }));
-        return { confirmationUrl };
+        return { confirmationUrl, provider: config.provider };
     } catch (error) {
-        console.error('[auth/register] Falha ao enviar email de confirmacao via MailMKT', JSON.stringify({
+        console.error('[auth/register] Falha ao enviar email de confirmacao', JSON.stringify({
+            provider: config.provider,
             email: payload.email,
             userId: Number(user?.id || 0) || null,
             tokenFingerprint: tokenFingerprint(tokenPayload.token),
@@ -201,9 +503,15 @@ function isEmailConfirmationExpired(user, now = Date.now()) {
 }
 
 module.exports = {
+    DEFAULT_APP_NAME,
+    DEFAULT_EMAIL_HTML_TEMPLATE,
+    DEFAULT_EMAIL_SUBJECT_TEMPLATE,
+    DEFAULT_EMAIL_TEXT_TEMPLATE,
     EMAIL_CONFIRMATION_TTL_MS,
     MailMktIntegrationError,
+    SUPPORTED_EMAIL_PROVIDERS,
     buildEmailConfirmationUrl,
+    buildRuntimeEmailDeliveryConfig,
     createEmailConfirmationTokenPayload,
     hashEmailConfirmationToken,
     isEmailConfirmed,

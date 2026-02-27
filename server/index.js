@@ -74,7 +74,12 @@ const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
 const {
+    DEFAULT_APP_NAME,
+    DEFAULT_EMAIL_HTML_TEMPLATE,
+    DEFAULT_EMAIL_SUBJECT_TEMPLATE,
+    DEFAULT_EMAIL_TEXT_TEMPLATE,
     MailMktIntegrationError,
+    buildRuntimeEmailDeliveryConfig,
     createEmailConfirmationTokenPayload,
     hashEmailConfirmationToken,
     isEmailConfirmed,
@@ -8499,8 +8504,8 @@ app.post('/api/auth/login', async (req, res) => {
         
 
         const token = generateToken(user);
-
         const refreshToken = generateRefreshToken(user);
+        const isApplicationAdmin = isApplicationAdminUser(user);
 
         
 
@@ -8523,7 +8528,8 @@ app.post('/api/auth/login', async (req, res) => {
                 email: user.email,
 
                 role: user.role,
-                owner_user_id: user.owner_user_id
+                owner_user_id: user.owner_user_id,
+                is_application_admin: isApplicationAdmin
 
             }
 
@@ -8635,7 +8641,10 @@ app.post('/api/auth/register', async (req, res) => {
         }
 
         try {
-            await sendRegistrationConfirmationEmail(req, user, confirmationTokenPayload);
+            const emailSettings = await getRegistrationEmailRuntimeConfig();
+            await sendRegistrationConfirmationEmail(req, user, confirmationTokenPayload, {
+                emailSettings
+            });
         } catch (error) {
             if (error instanceof MailMktIntegrationError) {
                 return res.status(error.statusCode || 502).json({
@@ -8717,7 +8726,10 @@ app.post('/api/auth/resend-confirmation', async (req, res) => {
         const targetUser = refreshedUser || user;
 
         try {
-            await sendRegistrationConfirmationEmail(req, targetUser, confirmationTokenPayload);
+            const emailSettings = await getRegistrationEmailRuntimeConfig();
+            await sendRegistrationConfirmationEmail(req, targetUser, confirmationTokenPayload, {
+                emailSettings
+            });
         } catch (error) {
             if (error instanceof MailMktIntegrationError) {
                 return res.status(error.statusCode || 502).json({
@@ -8944,6 +8956,241 @@ function isUserAdminRole(value) {
     return String(value || '').trim().toLowerCase() === 'admin';
 }
 
+const EMAIL_DELIVERY_SETTINGS_KEY = 'app:email_delivery';
+
+function parseCsvStringSet(value) {
+    return new Set(
+        String(value || '')
+            .split(',')
+            .map((item) => String(item || '').trim().toLowerCase())
+            .filter(Boolean)
+    );
+}
+
+function parseCsvIntegerSet(value) {
+    const result = new Set();
+    String(value || '')
+        .split(',')
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0)
+        .forEach((item) => result.add(item));
+    return result;
+}
+
+const APPLICATION_ADMIN_EMAIL_ALLOWLIST = parseCsvStringSet(
+    process.env.APP_ADMIN_EMAILS || process.env.APPLICATION_ADMIN_EMAILS
+);
+const APPLICATION_ADMIN_USER_ID_ALLOWLIST = parseCsvIntegerSet(
+    process.env.APP_ADMIN_USER_IDS || process.env.APPLICATION_ADMIN_USER_IDS
+);
+const APPLICATION_ADMIN_ALLOW_ALL = parseBooleanEnv(
+    process.env.APP_ADMIN_ALLOW_ALL || process.env.APPLICATION_ADMIN_ALLOW_ALL,
+    false
+);
+
+function isApplicationAdminAllowlistConfigured() {
+    return APPLICATION_ADMIN_EMAIL_ALLOWLIST.size > 0 || APPLICATION_ADMIN_USER_ID_ALLOWLIST.size > 0;
+}
+
+function isApplicationAdminUser(user) {
+    if (!user || !isUserAdminRole(user.role)) {
+        return false;
+    }
+
+    if (APPLICATION_ADMIN_ALLOW_ALL) {
+        return true;
+    }
+
+    if (!isApplicationAdminAllowlistConfigured()) {
+        return false;
+    }
+
+    const userId = Number(user.id || 0);
+    if (userId > 0 && APPLICATION_ADMIN_USER_ID_ALLOWLIST.has(userId)) {
+        return true;
+    }
+
+    const email = String(user.email || '').trim().toLowerCase();
+    if (email && APPLICATION_ADMIN_EMAIL_ALLOWLIST.has(email)) {
+        return true;
+    }
+
+    return false;
+}
+
+function ensureApplicationAdmin(req, res) {
+    if (isApplicationAdminUser(req?.user)) {
+        return true;
+    }
+
+    if (!APPLICATION_ADMIN_ALLOW_ALL && !isApplicationAdminAllowlistConfigured()) {
+        res.status(403).json({
+            success: false,
+            error: 'Dashboard admin nao configurado. Defina APP_ADMIN_EMAILS ou APP_ADMIN_USER_IDS.'
+        });
+        return false;
+    }
+
+    res.status(403).json({
+        success: false,
+        error: 'Sem permissao para acessar o dashboard administrativo da aplicacao'
+    });
+    return false;
+}
+
+function clampEmailRequestTimeoutMs(value, fallback = 10000) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(60000, Math.max(1000, Math.floor(parsed)));
+}
+
+function normalizeEmailDeliveryProvider(value, fallback = 'sendgrid') {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'sendgrid' || normalized === 'mailmkt') {
+        return normalized;
+    }
+    return fallback;
+}
+
+function maskApiKeyValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.length <= 8) return '*'.repeat(Math.max(4, raw.length));
+    return `${raw.slice(0, 4)}${'*'.repeat(Math.max(4, raw.length - 8))}${raw.slice(-4)}`;
+}
+
+function sanitizeEmailTemplateValue(value, fallback = '') {
+    const normalized = String(value || '');
+    if (!normalized.trim()) return fallback;
+    return normalized;
+}
+
+function normalizeEmailDeliverySettingsInput(payload = {}, currentSettings = {}) {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const current = currentSettings && typeof currentSettings === 'object' ? currentSettings : {};
+
+    const provider = normalizeEmailDeliveryProvider(source.provider ?? current.provider, 'sendgrid');
+    const fromEmail = String(source.sendgridFromEmail ?? current.sendgridFromEmail ?? '').trim().toLowerCase();
+    const fromName = String(source.sendgridFromName ?? current.sendgridFromName ?? DEFAULT_APP_NAME).trim() || DEFAULT_APP_NAME;
+    const replyToEmail = String(source.sendgridReplyToEmail ?? current.sendgridReplyToEmail ?? '').trim().toLowerCase();
+    const replyToName = String(source.sendgridReplyToName ?? current.sendgridReplyToName ?? '').trim();
+    const requestTimeoutMs = clampEmailRequestTimeoutMs(
+        source.requestTimeoutMs ?? current.requestTimeoutMs,
+        10000
+    );
+
+    const appName = String(source.appName ?? current.appName ?? process.env.APP_NAME ?? DEFAULT_APP_NAME).trim() || DEFAULT_APP_NAME;
+    const subjectTemplate = sanitizeEmailTemplateValue(
+        source.subjectTemplate ?? current.subjectTemplate,
+        DEFAULT_EMAIL_SUBJECT_TEMPLATE
+    );
+    const htmlTemplate = sanitizeEmailTemplateValue(
+        source.htmlTemplate ?? current.htmlTemplate,
+        DEFAULT_EMAIL_HTML_TEMPLATE
+    );
+    const textTemplate = sanitizeEmailTemplateValue(
+        source.textTemplate ?? current.textTemplate,
+        DEFAULT_EMAIL_TEXT_TEMPLATE
+    );
+
+    const hasApiKeyInPayload = Object.prototype.hasOwnProperty.call(source, 'sendgridApiKey');
+    const sendgridApiKey = hasApiKeyInPayload
+        ? String(source.sendgridApiKey || '').trim()
+        : String(current.sendgridApiKey || '').trim();
+
+    return {
+        provider,
+        appName,
+        requestTimeoutMs,
+        sendgridApiKey,
+        sendgridFromEmail: fromEmail,
+        sendgridFromName: fromName,
+        sendgridReplyToEmail: replyToEmail,
+        sendgridReplyToName: replyToName,
+        subjectTemplate,
+        htmlTemplate,
+        textTemplate
+    };
+}
+
+async function loadEmailDeliverySettings() {
+    const persisted = await Settings.get(EMAIL_DELIVERY_SETTINGS_KEY);
+    const raw = persisted && typeof persisted === 'object' ? persisted : {};
+    const encryptedApiKey = String(raw.sendgridApiKeyEncrypted || '').trim();
+    const decryptedApiKey = encryptedApiKey ? String(decrypt(encryptedApiKey) || '').trim() : '';
+
+    return normalizeEmailDeliverySettingsInput(
+        {
+            provider: raw.provider,
+            appName: raw.appName,
+            requestTimeoutMs: raw.requestTimeoutMs,
+            sendgridApiKey: decryptedApiKey,
+            sendgridFromEmail: raw.sendgridFromEmail,
+            sendgridFromName: raw.sendgridFromName,
+            sendgridReplyToEmail: raw.sendgridReplyToEmail,
+            sendgridReplyToName: raw.sendgridReplyToName,
+            subjectTemplate: raw.subjectTemplate,
+            htmlTemplate: raw.htmlTemplate,
+            textTemplate: raw.textTemplate
+        },
+        {
+            provider: process.env.EMAIL_DELIVERY_PROVIDER || 'sendgrid',
+            appName: process.env.APP_NAME || DEFAULT_APP_NAME,
+            requestTimeoutMs: process.env.EMAIL_REQUEST_TIMEOUT_MS || process.env.MAILMKT_REQUEST_TIMEOUT_MS || 10000,
+            sendgridApiKey: process.env.SENDGRID_API_KEY || '',
+            sendgridFromEmail: process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_FROM || '',
+            sendgridFromName: process.env.SENDGRID_FROM_NAME || process.env.APP_NAME || DEFAULT_APP_NAME,
+            sendgridReplyToEmail: process.env.SENDGRID_REPLY_TO_EMAIL || '',
+            sendgridReplyToName: process.env.SENDGRID_REPLY_TO_NAME || '',
+            subjectTemplate: process.env.EMAIL_CONFIRMATION_SUBJECT_TEMPLATE || DEFAULT_EMAIL_SUBJECT_TEMPLATE,
+            htmlTemplate: process.env.EMAIL_CONFIRMATION_HTML_TEMPLATE || DEFAULT_EMAIL_HTML_TEMPLATE,
+            textTemplate: process.env.EMAIL_CONFIRMATION_TEXT_TEMPLATE || DEFAULT_EMAIL_TEXT_TEMPLATE
+        }
+    );
+}
+
+function serializeEmailDeliverySettingsForStorage(settings = {}) {
+    const normalized = normalizeEmailDeliverySettingsInput(settings, settings);
+    const encryptedApiKey = normalized.sendgridApiKey ? encrypt(normalized.sendgridApiKey) : '';
+
+    return {
+        provider: normalizeEmailDeliveryProvider(normalized.provider, 'sendgrid'),
+        appName: normalized.appName,
+        requestTimeoutMs: normalized.requestTimeoutMs,
+        sendgridApiKeyEncrypted: encryptedApiKey || null,
+        sendgridFromEmail: normalized.sendgridFromEmail,
+        sendgridFromName: normalized.sendgridFromName,
+        sendgridReplyToEmail: normalized.sendgridReplyToEmail || null,
+        sendgridReplyToName: normalized.sendgridReplyToName || null,
+        subjectTemplate: normalized.subjectTemplate,
+        htmlTemplate: normalized.htmlTemplate,
+        textTemplate: normalized.textTemplate
+    };
+}
+
+function sanitizeEmailDeliverySettingsForResponse(settings = {}) {
+    const normalized = normalizeEmailDeliverySettingsInput(settings, settings);
+    return {
+        provider: normalizeEmailDeliveryProvider(normalized.provider, 'sendgrid'),
+        appName: normalized.appName,
+        requestTimeoutMs: normalized.requestTimeoutMs,
+        sendgridFromEmail: normalized.sendgridFromEmail,
+        sendgridFromName: normalized.sendgridFromName,
+        sendgridReplyToEmail: normalized.sendgridReplyToEmail,
+        sendgridReplyToName: normalized.sendgridReplyToName,
+        sendgridApiKeyMasked: maskApiKeyValue(normalized.sendgridApiKey),
+        hasSendgridApiKey: String(normalized.sendgridApiKey || '').trim().length > 0,
+        subjectTemplate: normalized.subjectTemplate,
+        htmlTemplate: normalized.htmlTemplate,
+        textTemplate: normalized.textTemplate
+    };
+}
+
+async function getRegistrationEmailRuntimeConfig() {
+    const settings = await loadEmailDeliverySettings();
+    return buildRuntimeEmailDeliveryConfig(settings);
+}
+
 function isUserActive(user) {
     return Number(user?.is_active) > 0;
 }
@@ -9010,6 +9257,8 @@ function sanitizeUserPayload(user, ownerUserId = 0) {
         email: user.email,
         role: user.role,
         is_active: Number(user.is_active) > 0 ? 1 : 0,
+        email_confirmed: Number(user.email_confirmed) > 0 ? 1 : 0,
+        email_confirmed_at: user.email_confirmed_at || null,
         is_online: isUserPresenceOnline(user.id),
         owner_user_id: resolvedOwnerUserId,
         is_primary_admin: isPrimaryOwnerAdminUser(user, resolvedOwnerUserId),
@@ -13432,6 +13681,246 @@ app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
 
     res.json({ success: true });
 
+});
+
+
+
+// ============================================
+
+// API ADMIN - DASHBOARD DA APLICACAO
+
+// ============================================
+
+function compareByTextAsc(a, b) {
+    return String(a || '').localeCompare(String(b || ''), 'pt-BR', { sensitivity: 'base' });
+}
+
+function isValidEmailAddress(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+async function buildApplicationAdminOverview() {
+    const allUsers = await User.listAll();
+    const users = Array.isArray(allUsers) ? allUsers : [];
+    const usersById = new Map();
+    const groupedByOwner = new Map();
+
+    for (const user of users) {
+        const userId = Number(user?.id || 0);
+        if (userId > 0) {
+            usersById.set(userId, user);
+        }
+
+        const ownerUserId = normalizeOwnerUserId(user?.owner_user_id) || userId;
+        if (!ownerUserId) continue;
+
+        if (!groupedByOwner.has(ownerUserId)) {
+            groupedByOwner.set(ownerUserId, []);
+        }
+        groupedByOwner.get(ownerUserId).push(user);
+    }
+
+    const ownerIds = Array.from(groupedByOwner.keys()).sort((a, b) => a - b);
+    const accountSummaries = [];
+    const planStatusBreakdown = {};
+
+    for (const ownerId of ownerIds) {
+        const ownerUser = usersById.get(ownerId) || await User.findById(ownerId);
+        let plan;
+        try {
+            plan = await buildOwnerPlanStatus(ownerId);
+        } catch (error) {
+            plan = {
+                name: 'Plano nao configurado',
+                code: '',
+                status: 'unknown',
+                status_label: 'Nao configurado',
+                renewal_date: null,
+                last_verified_at: null,
+                provider: 'Nao configurado',
+                source: 'settings',
+                api_configured: false,
+                external_reference: '',
+                message: 'Nao foi possivel carregar o status do plano.'
+            };
+        }
+
+        const usersInAccount = (groupedByOwner.get(ownerId) || [])
+            .map((item) => sanitizeUserPayload(item, ownerId))
+            .filter(Boolean)
+            .sort((a, b) => compareByTextAsc(a.name || a.email || '', b.name || b.email || ''));
+
+        const activeUsers = usersInAccount.filter((item) => Number(item.is_active) > 0).length;
+        const adminUsers = usersInAccount.filter((item) => isUserAdminRole(item.role)).length;
+        const pendingEmailConfirmation = usersInAccount.filter((item) => Number(item.email_confirmed) <= 0).length;
+
+        const normalizedPlanStatus = normalizePlanStatusForApi(plan?.status);
+        planStatusBreakdown[normalizedPlanStatus] = Number(planStatusBreakdown[normalizedPlanStatus] || 0) + 1;
+
+        accountSummaries.push({
+            owner_user_id: ownerId,
+            owner: ownerUser ? sanitizeUserPayload(ownerUser, ownerId) : null,
+            plan,
+            totals: {
+                total_users: usersInAccount.length,
+                active_users: activeUsers,
+                inactive_users: Math.max(0, usersInAccount.length - activeUsers),
+                admin_users: adminUsers,
+                pending_email_confirmation: pendingEmailConfirmation
+            },
+            users: usersInAccount
+        });
+    }
+
+    accountSummaries.sort((a, b) => {
+        const ownerA = a.owner || {};
+        const ownerB = b.owner || {};
+        return compareByTextAsc(ownerA.name || ownerA.email || String(a.owner_user_id), ownerB.name || ownerB.email || String(b.owner_user_id));
+    });
+
+    const totalUsers = users.length;
+    const totalActiveUsers = users.filter((item) => Number(item?.is_active) > 0).length;
+    const totalPendingEmailConfirmation = users.filter((item) => Number(item?.email_confirmed) <= 0).length;
+
+    return {
+        generated_at: new Date().toISOString(),
+        summary: {
+            total_accounts: accountSummaries.length,
+            total_users: totalUsers,
+            total_active_users: totalActiveUsers,
+            total_inactive_users: Math.max(0, totalUsers - totalActiveUsers),
+            total_pending_email_confirmation: totalPendingEmailConfirmation,
+            plan_status_breakdown: planStatusBreakdown
+        },
+        accounts: accountSummaries
+    };
+}
+
+app.get('/api/admin/dashboard/overview', authenticate, async (req, res) => {
+    if (!ensureApplicationAdmin(req, res)) return;
+
+    try {
+        const overview = await buildApplicationAdminOverview();
+        res.json({
+            success: true,
+            overview
+        });
+    } catch (error) {
+        console.error('[admin/dashboard/overview] falha:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Falha ao carregar dashboard administrativo'
+        });
+    }
+});
+
+app.get('/api/admin/dashboard/email-settings', authenticate, async (req, res) => {
+    if (!ensureApplicationAdmin(req, res)) return;
+
+    try {
+        const currentSettings = await loadEmailDeliverySettings();
+        res.json({
+            success: true,
+            settings: sanitizeEmailDeliverySettingsForResponse(currentSettings)
+        });
+    } catch (error) {
+        console.error('[admin/dashboard/email-settings:get] falha:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Falha ao carregar configuracoes de email'
+        });
+    }
+});
+
+app.put('/api/admin/dashboard/email-settings', authenticate, async (req, res) => {
+    if (!ensureApplicationAdmin(req, res)) return;
+
+    try {
+        const currentSettings = await loadEmailDeliverySettings();
+        const normalized = normalizeEmailDeliverySettingsInput(req.body, currentSettings);
+
+        if (normalized.provider === 'sendgrid') {
+            if (!normalized.sendgridFromEmail || !isValidEmailAddress(normalized.sendgridFromEmail)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Informe um email remetente valido para o SendGrid'
+                });
+            }
+
+            if (!String(normalized.sendgridApiKey || '').trim()) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Informe a SENDGRID_API_KEY para enviar emails'
+                });
+            }
+        }
+
+        const serialized = serializeEmailDeliverySettingsForStorage(normalized);
+        await Settings.set(EMAIL_DELIVERY_SETTINGS_KEY, serialized, 'json');
+
+        const refreshed = await loadEmailDeliverySettings();
+        res.json({
+            success: true,
+            settings: sanitizeEmailDeliverySettingsForResponse(refreshed)
+        });
+    } catch (error) {
+        console.error('[admin/dashboard/email-settings:put] falha:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Falha ao salvar configuracoes de email'
+        });
+    }
+});
+
+app.post('/api/admin/dashboard/email-settings/test', authenticate, async (req, res) => {
+    if (!ensureApplicationAdmin(req, res)) return;
+
+    try {
+        const targetEmail = String(req.body?.email || req.user?.email || '').trim().toLowerCase();
+        if (!targetEmail || !isValidEmailAddress(targetEmail)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Informe um email valido para o envio de teste'
+            });
+        }
+
+        const runtimeSettings = await getRegistrationEmailRuntimeConfig();
+        const tokenPayload = createEmailConfirmationTokenPayload();
+
+        await sendRegistrationConfirmationEmail(
+            req,
+            {
+                id: req.user?.id || null,
+                name: 'Teste de configuracao',
+                email: targetEmail
+            },
+            tokenPayload,
+            {
+                emailSettings: runtimeSettings
+            }
+        );
+
+        res.json({
+            success: true,
+            message: 'Email de teste enviado com sucesso',
+            email: targetEmail,
+            provider: runtimeSettings.provider
+        });
+    } catch (error) {
+        if (error instanceof MailMktIntegrationError) {
+            return res.status(error.statusCode || 502).json({
+                success: false,
+                error: error.message || 'Falha ao enviar email de teste',
+                retryable: error.retryable !== false
+            });
+        }
+
+        console.error('[admin/dashboard/email-settings:test] falha:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Falha ao enviar email de teste'
+        });
+    }
 });
 
 

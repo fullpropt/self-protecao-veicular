@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import Automacao from './pages/Automacao';
+import AdminDashboard from './pages/AdminDashboard';
 import Campanhas from './pages/Campanhas';
 import Configuracoes from './pages/Configuracoes';
 import Contatos from './pages/Contatos';
@@ -94,6 +95,7 @@ export default function App() {
       <Route path="/venda" element={<Planos />} />
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/admin-dashboard" element={<AdminDashboard />} />
       <Route path="/contatos" element={<Contatos />} />
       <Route path="/campanhas" element={<Campanhas />} />
       <Route path="/automacao" element={<Automacao />} />

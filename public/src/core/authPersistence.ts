@@ -8,6 +8,7 @@ type PersistedAuthSession = {
     userId?: string;
     userEmail?: string;
     identity?: string;
+    isAppAdmin?: boolean;
     expiry: number;
     savedAt: number;
 };
@@ -32,6 +33,7 @@ function readPersistedAuthSession(): PersistedAuthSession | null {
         const userId = toTrimmedString(parsed?.userId);
         const userEmail = toTrimmedString(parsed?.userEmail);
         const identity = toTrimmedString(parsed?.identity);
+        const isAppAdmin = parsed?.isAppAdmin === true;
         const expiry = parsePositiveNumber(parsed?.expiry, 0);
         const savedAt = parsePositiveNumber(parsed?.savedAt, Date.now());
 
@@ -45,6 +47,7 @@ function readPersistedAuthSession(): PersistedAuthSession | null {
             userId: userId || undefined,
             userEmail: userEmail || undefined,
             identity: identity || undefined,
+            isAppAdmin,
             expiry,
             savedAt
         };
@@ -68,6 +71,7 @@ function getSessionStorageAuthSnapshot(): PersistedAuthSession | null {
     const userId = toTrimmedString(sessionStorage.getItem('selfDashboardUserId'));
     const userEmail = toTrimmedString(sessionStorage.getItem('selfDashboardUserEmail'));
     const identity = toTrimmedString(sessionStorage.getItem('selfDashboardIdentity'));
+    const isAppAdmin = sessionStorage.getItem('selfDashboardIsAppAdmin') === '1';
     const expiry = parsePositiveNumber(sessionStorage.getItem('selfDashboardExpiry'), 0);
 
     if (!token || !expiry) return null;
@@ -79,6 +83,7 @@ function getSessionStorageAuthSnapshot(): PersistedAuthSession | null {
         userId: userId || undefined,
         userEmail: userEmail || undefined,
         identity: identity || undefined,
+        isAppAdmin,
         expiry,
         savedAt: Date.now()
     };
@@ -117,6 +122,12 @@ function applyAuthSnapshotToSessionStorage(snapshot: PersistedAuthSession) {
         sessionStorage.removeItem('selfDashboardIdentity');
     }
 
+    if (snapshot.isAppAdmin) {
+        sessionStorage.setItem('selfDashboardIsAppAdmin', '1');
+    } else {
+        sessionStorage.removeItem('selfDashboardIsAppAdmin');
+    }
+
     sessionStorage.setItem('selfDashboardExpiry', String(snapshot.expiry));
 }
 
@@ -148,6 +159,7 @@ export function clearSessionAuthStorage() {
     sessionStorage.removeItem('selfDashboardUserId');
     sessionStorage.removeItem('selfDashboardUserEmail');
     sessionStorage.removeItem('selfDashboardIdentity');
+    sessionStorage.removeItem('selfDashboardIsAppAdmin');
 }
 
 async function requestAccessTokenRefresh(refreshToken: string): Promise<string | null> {
