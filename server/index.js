@@ -69,6 +69,7 @@ const queueService = require('./services/queueService');
 
 const flowService = require('./services/flowService');
 const aiFlowDraftService = require('./services/aiFlowDraftService');
+const openAiFlowDraftService = require('./services/openAiFlowDraftService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
@@ -12756,7 +12757,7 @@ app.post('/api/ai/flows/generate', authenticate, async (req, res) => {
             });
         }
 
-        const generated = aiFlowDraftService.generateFlowDraft({
+        const generated = await openAiFlowDraftService.generateFlowDraft({
             prompt,
             preset: preset || null,
             businessContext: normalizedAiConfig
@@ -12764,14 +12765,18 @@ app.post('/api/ai/flows/generate', authenticate, async (req, res) => {
 
         res.json({
             success: true,
-            provider: generated.provider || 'heuristic',
+            provider: generated.provider || 'openai',
             intent: generated.intent || null,
             context: generated.context || {},
             draft: generated.draft || null
         });
     } catch (error) {
         console.error('Falha ao gerar rascunho de fluxo por IA:', error);
-        res.status(500).json({ success: false, error: 'Erro ao gerar fluxo com IA' });
+        const statusCode = Number(error?.statusCode) || 500;
+        res.status(statusCode).json({
+            success: false,
+            error: error?.publicMessage || error?.message || 'Erro ao gerar fluxo com IA'
+        });
     }
 
 });

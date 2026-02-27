@@ -527,7 +527,10 @@ async function sendFlowAiAssistantPrompt() {
             : `Rascunho gerado (${provider}). Revise, ajuste se necessário e salve.`;
         appendFlowAiAssistantMessage('assistant', summary);
     } catch (error) {
-        appendFlowAiAssistantMessage('assistant', `Não consegui gerar o fluxo agora: ${error instanceof Error ? error.message : 'Falha inesperada'}`);
+        await showFlowAlertDialog(
+            'Erro ao gerar fluxo com IA: ' + (error instanceof Error ? error.message : 'Falha inesperada'),
+            'Gerar fluxo com IA'
+        );
     } finally {
         flowAiAssistantLoading = false;
         renderFlowAiAssistantState();
