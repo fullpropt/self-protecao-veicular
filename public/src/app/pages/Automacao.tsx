@@ -12,7 +12,6 @@ type AutomacaoGlobals = {
   updateActionOptions?: () => void;
   updateTriggerOptions?: () => void;
   toggleAutomationAllSessions?: () => void;
-  toggleAutomationAllTags?: () => void;
   logout?: () => void;
 };
 
@@ -183,6 +182,54 @@ export default function Automacao() {
             border-radius: 10px;
             background: var(--surface);
             padding: 8px 10px;
+        }
+        .automation-tag-filter {
+            position: relative;
+        }
+        .automation-tag-filter-toggle {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--surface);
+            color: var(--dark);
+            min-height: 42px;
+            padding: 10px 38px 10px 12px;
+            text-align: left;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+        }
+        .automation-tag-filter-toggle::after {
+            content: '▾';
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray-500);
+            font-size: 12px;
+        }
+        .automation-tag-filter-menu[hidden] {
+            display: none;
+        }
+        .automation-tag-filter-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            z-index: 40;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--surface);
+            box-shadow: var(--shadow-lg);
+            padding: 10px;
+        }
+        .automation-tag-filter-list {
+            display: grid;
+            gap: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+            margin-top: 10px;
+            padding-right: 2px;
         }
       `}</style>
       <button className="mobile-menu-toggle" onClick={() => { document.querySelector('.sidebar')?.classList.toggle('open'); document.querySelector('.sidebar-overlay')?.classList.toggle('active'); }}>☰</button>
@@ -373,19 +420,29 @@ export default function Automacao() {
 
                           <div className="form-group">
                               <label className="form-label">Tags aplicaveis</label>
-                              <div className="automation-session-scope">
-                                  <label className="checkbox-wrapper" style={{ marginBottom: 0 }}>
-                                      <input
-                                          type="checkbox"
-                                          id="automationAllTags"
-                                          defaultChecked
-                                          onChange={() => globals.toggleAutomationAllTags?.()}
-                                      />
-                                      <span className="checkbox-custom"></span>
-                                      Aplicar para todas as tags (padrao)
-                                  </label>
-                                  <div className="automation-session-scope-list" id="automationTagFilterList">
-                                      <p style={{ color: 'var(--gray-500)', fontSize: '12px', margin: 0 }}>Carregando tags...</p>
+                              <div className="automation-tag-filter">
+                                  <button
+                                      type="button"
+                                      className="automation-tag-filter-toggle"
+                                      id="automationTagFilterToggle"
+                                      aria-haspopup="true"
+                                      aria-expanded="false"
+                                  >
+                                      Todas as tags
+                                  </button>
+                                  <div className="automation-tag-filter-menu" id="automationTagFilterMenu" hidden>
+                                      <label className="checkbox-wrapper" style={{ marginBottom: 0 }}>
+                                          <input
+                                              type="checkbox"
+                                              id="automationAllTags"
+                                              defaultChecked
+                                          />
+                                          <span className="checkbox-custom"></span>
+                                          Aplicar para todas as tags (padrao)
+                                      </label>
+                                      <div className="automation-tag-filter-list" id="automationTagFilterList">
+                                          <p style={{ color: 'var(--gray-500)', fontSize: '12px', margin: 0 }}>Carregando tags...</p>
+                                      </div>
                                   </div>
                               </div>
                           </div>

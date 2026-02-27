@@ -4359,6 +4359,7 @@ function parseMessageReceivedTriggerConfig(triggerValue = '') {
         Object.prototype.hasOwnProperty.call(parsed, 'mode') ||
         Object.prototype.hasOwnProperty.call(parsed, 'segment') ||
         Object.prototype.hasOwnProperty.call(parsed, 'tag_filter') ||
+        Object.prototype.hasOwnProperty.call(parsed, 'tag_filters') ||
         Object.prototype.hasOwnProperty.call(parsed, 'start_at') ||
         Object.prototype.hasOwnProperty.call(parsed, 'once_per_lead') ||
         Object.prototype.hasOwnProperty.call(parsed, 'delay_min_ms') ||
@@ -4369,7 +4370,11 @@ function parseMessageReceivedTriggerConfig(triggerValue = '') {
 
     const mode = String(parsed.mode || '').trim().toLowerCase();
     const segment = String(parsed.segment || 'all').trim() || 'all';
-    const tagFilter = String(parsed.tag_filter || '').trim() || null;
+    const tagFilters = parseCampaignTagFilters(
+        Object.prototype.hasOwnProperty.call(parsed, 'tag_filters')
+            ? parsed.tag_filters
+            : parsed.tag_filter
+    );
     const startAtMs = parseAutomationTimestampMs(parsed.start_at);
     const oncePerLead = parsed.once_per_lead === true || String(parsed.once_per_lead || '').trim().toLowerCase() === 'true';
     const sourceCampaignIdRaw = Number(parsed.source_campaign_id);
@@ -4392,7 +4397,8 @@ function parseMessageReceivedTriggerConfig(triggerValue = '') {
     return {
         mode,
         segment,
-        tagFilter,
+        tagFilter: tagFilters[0] || null,
+        tagFilters,
         startAtMs,
         oncePerLead,
         delayMinMs,
@@ -4422,7 +4428,7 @@ function matchesMessageReceivedTriggerConfig(config, context) {
     const lead = context?.lead;
     if (!lead?.id) return false;
     if (!leadMatchesSegmentStatus(lead, config.segment)) return false;
-    if (!leadMatchesCampaignTag(lead, config.tagFilter || '')) return false;
+    if (!leadMatchesCampaignTag(lead, config.tagFilters || config.tagFilter || '')) return false;
 
     return true;
 }
@@ -10593,6 +10599,81 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
 
 // ============================================
 
+async function listCampaignsWithTagFilterInScope(ownerScopeUserId = null) {
+    const normalizedOwnerScopeUserId = normalizeOwnerUserId(ownerScopeUserId);
+    const params = [];
+    let sql = `
+        SELECT c.id, c.tag_filter
+        FROM campaigns c
+        WHERE c.tag_filter IS NOT NULL
+          AND TRIM(c.tag_filter) <> ''
+    `;
+
+    if (normalizedOwnerScopeUserId) {
+        sql += `
+          AND (
+              c.created_by = ?
+              OR EXISTS (
+                  SELECT 1
+                  FROM users owner_scope
+                  WHERE owner_scope.id = c.created_by
+                    AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+              )
+          )
+        `;
+        params.push(normalizedOwnerScopeUserId, normalizedOwnerScopeUserId, normalizedOwnerScopeUserId);
+    }
+
+    return await query(sql, params);
+}
+
+async function rewriteCampaignTagFiltersByTagName(currentTagName, nextTagName = null, ownerScopeUserId = null) {
+    const currentTagKey = normalizeCampaignTag(currentTagName);
+    if (!currentTagKey) return;
+
+    const normalizedNextTagName = normalizeCampaignTagLabel(nextTagName);
+    const campaigns = await listCampaignsWithTagFilterInScope(ownerScopeUserId);
+
+    for (const campaign of campaigns || []) {
+        const existingFilters = parseCampaignTagFilters(campaign?.tag_filter);
+        if (!existingFilters.length) continue;
+
+        let hasChanges = false;
+        const seen = new Set();
+        const nextFilters = [];
+
+        for (const tagName of existingFilters) {
+            const tagKey = normalizeCampaignTag(tagName);
+            if (!tagKey) continue;
+
+            if (tagKey === currentTagKey) {
+                hasChanges = true;
+                if (normalizedNextTagName) {
+                    const normalizedNextTagKey = normalizeCampaignTag(normalizedNextTagName);
+                    if (normalizedNextTagKey && !seen.has(normalizedNextTagKey)) {
+                        seen.add(normalizedNextTagKey);
+                        nextFilters.push(normalizedNextTagName);
+                    }
+                }
+                continue;
+            }
+
+            if (seen.has(tagKey)) continue;
+            seen.add(tagKey);
+            nextFilters.push(tagName);
+        }
+
+        if (!hasChanges) continue;
+
+        await run(
+            `UPDATE campaigns
+             SET tag_filter = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [normalizeCampaignTagFilterInput(nextFilters), campaign.id]
+        );
+    }
+}
+
 app.get('/api/tags', authenticate, async (req, res) => {
     try {
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
@@ -10686,27 +10767,7 @@ app.put('/api/tags/:id', authenticate, async (req, res) => {
             normalizeTagNameInput(currentTag.name).toLowerCase() !== normalizeTagNameInput(updatedTag.name).toLowerCase()
         ) {
             await Tag.renameInLeads(currentTag.name, updatedTag.name, tagScope);
-            if (ownerScopeUserId) {
-                await run(`
-                    UPDATE campaigns
-                    SET tag_filter = ?
-                    WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))
-                      AND (
-                          created_by = ?
-                          OR EXISTS (
-                              SELECT 1
-                              FROM users owner_scope
-                              WHERE owner_scope.id = campaigns.created_by
-                                AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
-                          )
-                      )
-                `, [updatedTag.name, currentTag.name, ownerScopeUserId, ownerScopeUserId, ownerScopeUserId]);
-            } else {
-                await run(
-                    'UPDATE campaigns SET tag_filter = ? WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-                    [updatedTag.name, currentTag.name]
-                );
-            }
+            await rewriteCampaignTagFiltersByTagName(currentTag.name, updatedTag.name, ownerScopeUserId || null);
         }
 
         res.json({ success: true, tag: updatedTag });
@@ -10738,27 +10799,7 @@ app.delete('/api/tags/:id', authenticate, async (req, res) => {
         }
 
         await Tag.removeFromLeads(currentTag.name, tagScope);
-        if (ownerScopeUserId) {
-            await run(`
-                UPDATE campaigns
-                SET tag_filter = NULL
-                WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))
-                  AND (
-                      created_by = ?
-                      OR EXISTS (
-                          SELECT 1
-                          FROM users owner_scope
-                          WHERE owner_scope.id = campaigns.created_by
-                            AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
-                      )
-                  )
-            `, [currentTag.name, ownerScopeUserId, ownerScopeUserId, ownerScopeUserId]);
-        } else {
-            await run(
-                'UPDATE campaigns SET tag_filter = NULL WHERE LOWER(TRIM(tag_filter)) = LOWER(TRIM(?))',
-                [currentTag.name]
-            );
-        }
+        await rewriteCampaignTagFiltersByTagName(currentTag.name, null, ownerScopeUserId || null);
 
         res.json({ success: true });
     } catch (error) {
@@ -11696,6 +11737,12 @@ function sanitizeCampaignPayload(input = {}, options = {}) {
     if (!Object.prototype.hasOwnProperty.call(payload, 'send_window_end') && Object.prototype.hasOwnProperty.call(payload, 'sendWindowEnd')) {
         payload.send_window_end = payload.sendWindowEnd;
     }
+    if (!Object.prototype.hasOwnProperty.call(payload, 'tag_filter') && Object.prototype.hasOwnProperty.call(payload, 'tag_filters')) {
+        payload.tag_filter = payload.tag_filters;
+    }
+    if (!Object.prototype.hasOwnProperty.call(payload, 'tag_filter') && Object.prototype.hasOwnProperty.call(payload, 'tagFilters')) {
+        payload.tag_filter = payload.tagFilters;
+    }
     const hasDistributionStrategy = Object.prototype.hasOwnProperty.call(payload, 'distribution_strategy');
     if (hasDistributionStrategy) {
         const normalizedDistributionStrategy = normalizeCampaignDistributionStrategy(payload.distribution_strategy, applyDefaultType ? 'single' : 'round_robin');
@@ -11754,6 +11801,12 @@ function sanitizeCampaignPayload(input = {}, options = {}) {
     }
     if (Object.prototype.hasOwnProperty.call(payload, 'sendWindowEnd')) {
         delete payload.sendWindowEnd;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'tag_filters')) {
+        delete payload.tag_filters;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'tagFilters')) {
+        delete payload.tagFilters;
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'sender_accounts')) {
@@ -11840,8 +11893,7 @@ function sanitizeCampaignPayload(input = {}, options = {}) {
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'tag_filter')) {
-        const normalizedTagFilter = String(payload.tag_filter || '').trim();
-        payload.tag_filter = normalizedTagFilter || null;
+        payload.tag_filter = normalizeCampaignTagFilterInput(payload.tag_filter);
     }
 
 
@@ -12036,8 +12088,53 @@ function parseLeadTags(rawTags) {
         .filter(Boolean);
 }
 
+function normalizeCampaignTagLabel(value) {
+    return String(value || '').trim();
+}
+
 function normalizeCampaignTag(value) {
-    return String(value || '').trim().toLowerCase();
+    return normalizeCampaignTagLabel(value).toLowerCase();
+}
+
+function parseCampaignTagFilters(value) {
+    if (value === undefined || value === null || value === '') return [];
+
+    let parsed = value;
+    if (typeof parsed === 'string') {
+        const trimmed = parsed.trim();
+        if (!trimmed) return [];
+        try {
+            parsed = JSON.parse(trimmed);
+        } catch (_) {
+            parsed = trimmed
+                .split(',')
+                .map((item) => normalizeCampaignTagLabel(item))
+                .filter(Boolean);
+        }
+    }
+
+    if (!Array.isArray(parsed)) {
+        parsed = [parsed];
+    }
+
+    const seen = new Set();
+    const normalized = [];
+    for (const item of parsed) {
+        const label = normalizeCampaignTagLabel(item);
+        const key = normalizeCampaignTag(label);
+        if (!label || !key || seen.has(key)) continue;
+        seen.add(key);
+        normalized.push(label);
+    }
+
+    return normalized;
+}
+
+function normalizeCampaignTagFilterInput(value) {
+    if (value === undefined) return undefined;
+    const tags = parseCampaignTagFilters(value);
+    if (!tags.length) return null;
+    return JSON.stringify(tags);
 }
 
 function resolveCampaignSegmentStatus(segment) {
@@ -12074,17 +12171,27 @@ function resolveCampaignSegmentStatus(segment) {
 }
 
 function leadMatchesCampaignTag(lead, tagFilter = '') {
-    const normalizedTagFilter = normalizeCampaignTag(tagFilter);
-    if (!normalizedTagFilter) return true;
+    const tagFilters = parseCampaignTagFilters(tagFilter)
+        .map((tag) => normalizeCampaignTag(tag))
+        .filter(Boolean);
+    if (!tagFilters.length) return true;
 
-    const leadTags = parseLeadTags(lead?.tags);
-    return leadTags.some((tag) => normalizeCampaignTag(tag) === normalizedTagFilter);
+    const leadTagKeys = new Set(
+        parseLeadTags(lead?.tags)
+            .map((tag) => normalizeCampaignTag(tag))
+            .filter(Boolean)
+    );
+    if (!leadTagKeys.size) return false;
+
+    return tagFilters.some((tag) => leadTagKeys.has(tag));
 }
 
 async function resolveCampaignLeadIds(options = {}) {
 
     const segment = typeof options === 'string' ? options : options.segment;
-    const tagFilter = typeof options === 'string' ? '' : options.tagFilter;
+    const tagFilter = typeof options === 'string'
+        ? ''
+        : (options.tagFilters ?? options.tagFilter ?? options.tag_filter ?? '');
     const assignedTo = Number(typeof options === 'string' ? 0 : options.assignedTo);
     const ownerUserId = normalizeOwnerUserId(typeof options === 'string' ? null : (options.ownerUserId ?? options.owner_user_id));
     const segmentStatus = resolveCampaignSegmentStatus(segment);
@@ -12136,6 +12243,7 @@ function serializeCampaign(campaign, senderAccounts = []) {
         ...campaign,
         distribution_strategy: normalizeCampaignDistributionStrategy(campaign.distribution_strategy, 'single'),
         distribution_config: parsedDistributionConfig,
+        tag_filters: parseCampaignTagFilters(campaign.tag_filter),
         message_variations: messageVariations,
         sender_accounts: normalizeSenderAccountsPayload(senderAccounts || [])
     };
@@ -12208,13 +12316,14 @@ async function migrateLegacyTriggerCampaignsToAutomations() {
                 const delayMaxMs = Math.max(delayMinMs, Math.floor(maxMs || 0));
                 const delaySeconds = Math.max(0, Math.round(delayMinMs / 1000));
                 const normalizedSegment = String(campaign.segment || 'all').trim().toLowerCase() || 'all';
-                const normalizedTagFilter = String(campaign.tag_filter || '').trim() || null;
+                const normalizedTagFilters = parseCampaignTagFilters(campaign.tag_filter);
                 const normalizedStatus = String(campaign.status || '').trim().toLowerCase();
                 const isActive = normalizedStatus === 'active' ? 1 : 0;
                 const triggerValue = JSON.stringify({
                     mode: LEGACY_CAMPAIGN_TRIGGER_MODE,
                     segment: normalizedSegment,
-                    tag_filter: normalizedTagFilter,
+                    tag_filter: normalizedTagFilters.length === 1 ? normalizedTagFilters[0] : null,
+                    tag_filters: normalizedTagFilters,
                     start_at: campaign.start_at || null,
                     once_per_lead: true,
                     delay_min_ms: delayMinMs,
@@ -12573,6 +12682,7 @@ app.get('/api/campaigns/:id/recipients', authenticate, async (req, res) => {
             total: 0,
             segment: campaign.segment || 'all',
             tag_filter: campaign.tag_filter || null,
+            tag_filters: parseCampaignTagFilters(campaign.tag_filter),
             recipients: []
         });
     }
@@ -12643,6 +12753,7 @@ app.get('/api/campaigns/:id/recipients', authenticate, async (req, res) => {
         total: leadIds.length,
         segment: campaign.segment || 'all',
         tag_filter: campaign.tag_filter || null,
+        tag_filters: parseCampaignTagFilters(campaign.tag_filter),
         recipients: recipientsWithCampaignStatus
     });
 

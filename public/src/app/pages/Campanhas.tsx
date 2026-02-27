@@ -180,6 +180,54 @@ export default function Campanhas() {
             padding: 8px;
             background: var(--gray-50);
         }
+        .campaign-tag-filter {
+            position: relative;
+        }
+        .campaign-tag-filter-toggle {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--surface);
+            color: var(--dark);
+            min-height: 42px;
+            padding: 10px 38px 10px 12px;
+            text-align: left;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+        }
+        .campaign-tag-filter-toggle::after {
+            content: '▾';
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray-500);
+            font-size: 12px;
+        }
+        .campaign-tag-filter-menu[hidden] {
+            display: none;
+        }
+        .campaign-tag-filter-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            z-index: 40;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--surface);
+            box-shadow: var(--shadow-lg);
+            padding: 10px;
+        }
+        .campaign-tag-filter-list {
+            display: grid;
+            gap: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+            margin-top: 10px;
+            padding-right: 2px;
+        }
         .sender-account-item {
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius);
@@ -610,9 +658,27 @@ export default function Campanhas() {
 
                           <div className="form-group">
                               <label className="form-label">Filtrar por Tag (opcional)</label>
-                              <select className="form-select" id="campaignTagFilter" defaultValue="">
-                                  <option value="">Todas as tags</option>
-                              </select>
+                              <div className="campaign-tag-filter">
+                                  <button
+                                      type="button"
+                                      className="campaign-tag-filter-toggle"
+                                      id="campaignTagFilterToggle"
+                                      aria-haspopup="true"
+                                      aria-expanded="false"
+                                  >
+                                      Todas as tags
+                                  </button>
+                                  <div className="campaign-tag-filter-menu" id="campaignTagFilterMenu" hidden>
+                                      <label className="checkbox-wrapper" style={{ marginBottom: 0 }}>
+                                          <input type="checkbox" id="campaignAllTags" defaultChecked />
+                                          <span className="checkbox-custom"></span>
+                                          Todas as tags
+                                      </label>
+                                      <div className="campaign-tag-filter-list" id="campaignTagFilterList">
+                                          <p style={{ color: 'var(--gray-500)', fontSize: '12px', margin: 0 }}>Carregando tags...</p>
+                                      </div>
+                                  </div>
+                              </div>
                           </div>
 
                           <div className="form-group">

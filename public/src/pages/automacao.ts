@@ -42,6 +42,7 @@ let automationSessions: WhatsappSessionItem[] = [];
 let pendingAutomationSessionScope: string[] | null = null;
 let automationTags: TagItem[] = [];
 let pendingAutomationTagFilters: string[] | null = null;
+let automationTagFilterGlobalEventsBound = false;
 const RUNTIME_SUPPORTED_TRIGGER_TYPES: TriggerType[] = [
     'new_lead',
     'status_change',
@@ -198,6 +199,7 @@ function resetAutomationForm() {
     updateActionOptions();
     setAutomationSessionScopeSelection([]);
     setAutomationTagFilterSelection([]);
+    closeAutomationTagFilterMenu();
     setAutomationModalTitle('new');
 }
 
@@ -405,15 +407,66 @@ function setAutomationTagFilterSelection(tags: string[]) {
     renderAutomationTagFilterOptions();
 }
 
+function getAutomationTagFilterElements() {
+    const toggleButton = document.getElementById('automationTagFilterToggle') as HTMLButtonElement | null;
+    const menu = document.getElementById('automationTagFilterMenu') as HTMLElement | null;
+    return { toggleButton, menu };
+}
+
+function setAutomationTagFilterMenuOpen(isOpen: boolean) {
+    const { toggleButton, menu } = getAutomationTagFilterElements();
+    if (!menu) return;
+
+    menu.hidden = !isOpen;
+    if (toggleButton) {
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+}
+
+function closeAutomationTagFilterMenu() {
+    setAutomationTagFilterMenuOpen(false);
+}
+
+function toggleAutomationTagFilterMenu() {
+    const { menu } = getAutomationTagFilterElements();
+    if (!menu) return;
+    setAutomationTagFilterMenuOpen(menu.hidden);
+}
+
+function updateAutomationTagFilterToggleLabel() {
+    const toggleButton = document.getElementById('automationTagFilterToggle') as HTMLButtonElement | null;
+    if (!toggleButton) return;
+
+    const selected = getSelectedAutomationTagFilters();
+    if (!selected.length) {
+        toggleButton.textContent = 'Todas as tags';
+        return;
+    }
+
+    if (selected.length <= 2) {
+        toggleButton.textContent = selected.join(', ');
+        return;
+    }
+
+    toggleButton.textContent = `${selected.length} tags selecionadas`;
+}
+
 function updateAutomationTagFilterInputs() {
     const allCheckbox = document.getElementById('automationAllTags') as HTMLInputElement | null;
     const isAll = !!allCheckbox?.checked;
     document.querySelectorAll<HTMLInputElement>('.automation-tag-filter-checkbox').forEach((input) => {
         input.disabled = isAll;
     });
+    updateAutomationTagFilterToggleLabel();
 }
 
 function toggleAutomationAllTags() {
+    const allCheckbox = document.getElementById('automationAllTags') as HTMLInputElement | null;
+    if (allCheckbox?.checked) {
+        document.querySelectorAll<HTMLInputElement>('.automation-tag-filter-checkbox').forEach((input) => {
+            input.checked = false;
+        });
+    }
     updateAutomationTagFilterInputs();
 }
 
@@ -437,14 +490,28 @@ function renderAutomationTagFilterOptions() {
         allCheckbox.checked = !hasSpecificSelection;
     }
 
-    if (!automationTags.length) {
+    const tags = [...automationTags];
+    const knownKeys = new Set(
+        tags
+            .map((tag) => normalizeAutomationTagKey(tag?.name))
+            .filter(Boolean)
+    );
+
+    for (const selectedTag of pendingAutomationTagFilters || []) {
+        const selectedKey = normalizeAutomationTagKey(selectedTag);
+        if (!selectedKey || knownKeys.has(selectedKey)) continue;
+        knownKeys.add(selectedKey);
+        tags.push({ name: normalizeAutomationTagLabel(selectedTag) });
+    }
+
+    if (!tags.length) {
         container.innerHTML = '<p style="color: var(--gray-500); font-size: 12px; margin: 0;">Nenhuma tag cadastrada.</p>';
         if (allCheckbox) allCheckbox.checked = true;
         updateAutomationTagFilterInputs();
         return;
     }
 
-    container.innerHTML = automationTags.map((tag) => {
+    container.innerHTML = tags.map((tag) => {
         const tagName = normalizeAutomationTagLabel(tag.name);
         if (!tagName) return '';
         const normalizedKey = normalizeAutomationTagKey(tagName);
@@ -470,6 +537,66 @@ function renderAutomationTagFilterOptions() {
     }).join('');
 
     updateAutomationTagFilterInputs();
+}
+
+function bindAutomationTagFilterDropdown() {
+    const { toggleButton, menu } = getAutomationTagFilterElements();
+    if (!toggleButton || !menu) return;
+
+    if (toggleButton.dataset.bound !== '1') {
+        toggleButton.dataset.bound = '1';
+        toggleButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleAutomationTagFilterMenu();
+        });
+    }
+
+    if (menu.dataset.bound !== '1') {
+        menu.dataset.bound = '1';
+        menu.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+        menu.addEventListener('change', (event) => {
+            const target = event.target as HTMLInputElement | null;
+            if (!target) return;
+
+            if (target.id === 'automationAllTags') {
+                toggleAutomationAllTags();
+                return;
+            }
+
+            if (target.classList.contains('automation-tag-filter-checkbox')) {
+                const allCheckbox = document.getElementById('automationAllTags') as HTMLInputElement | null;
+                if (allCheckbox) {
+                    const hasSpecificSelection = Array.from(document.querySelectorAll<HTMLInputElement>('.automation-tag-filter-checkbox'))
+                        .some((input) => input.checked);
+                    allCheckbox.checked = !hasSpecificSelection;
+                }
+                updateAutomationTagFilterInputs();
+            }
+        });
+    }
+
+    if (!automationTagFilterGlobalEventsBound) {
+        automationTagFilterGlobalEventsBound = true;
+
+        document.addEventListener('click', (event) => {
+            const target = event.target;
+            if (target instanceof Element) {
+                if (target.closest('#automationTagFilterToggle') || target.closest('#automationTagFilterMenu')) {
+                    return;
+                }
+            }
+            closeAutomationTagFilterMenu();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeAutomationTagFilterMenu();
+            }
+        });
+    }
 }
 
 async function loadAutomationSessions() {
@@ -503,6 +630,7 @@ async function loadAutomationTags() {
 function initAutomacao() {
     pendingAutomationSessionScope = [];
     pendingAutomationTagFilters = [];
+    bindAutomationTagFilterDropdown();
     void loadAutomationSessions();
     void loadAutomationTags();
     loadAutomations();
@@ -969,7 +1097,6 @@ const windowAny = window as Window & {
     updateTriggerOptions?: () => void;
     updateActionOptions?: () => void;
     toggleAutomationAllSessions?: () => void;
-    toggleAutomationAllTags?: () => void;
     toggleAutomation?: (id: number, active: boolean) => Promise<void>;
     saveAutomation?: () => Promise<void>;
     editAutomation?: (id: number) => void;
@@ -981,7 +1108,6 @@ windowAny.openAutomationModal = openAutomationModal;
 windowAny.updateTriggerOptions = updateTriggerOptions;
 windowAny.updateActionOptions = updateActionOptions;
 windowAny.toggleAutomationAllSessions = toggleAutomationAllSessions;
-windowAny.toggleAutomationAllTags = toggleAutomationAllTags;
 windowAny.toggleAutomation = toggleAutomation;
 windowAny.saveAutomation = saveAutomation;
 windowAny.editAutomation = editAutomation;

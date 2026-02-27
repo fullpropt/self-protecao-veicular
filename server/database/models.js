@@ -2766,8 +2766,9 @@ async function listOwnerScopedTagNames(ownerUserId) {
     `, [normalizedOwnerUserId, normalizedOwnerUserId, normalizedOwnerUserId]);
 
     for (const row of campaignRows || []) {
-        const value = normalizeTagValue(row?.tag_filter);
-        if (value) discoveredTags.add(value);
+        for (const tag of parseTagList(row?.tag_filter)) {
+            discoveredTags.add(tag);
+        }
     }
 
     return uniqueTags(Array.from(discoveredTags));

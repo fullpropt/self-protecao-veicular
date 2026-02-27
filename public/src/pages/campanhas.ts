@@ -20,6 +20,7 @@ type Campaign = {
     created_at: string;
     segment?: string;
     tag_filter?: string;
+    tag_filters?: string[];
     message?: string;
     delay?: number;
     delay_min?: number;
@@ -84,6 +85,7 @@ type CampaignRecipientsResponse = {
     total?: number;
     segment?: string;
     tag_filter?: string;
+    tag_filters?: string[];
 };
 
 type ContactFieldDefinition = {
@@ -106,6 +108,8 @@ type CampaignMessageVariable = {
 let campaigns: Campaign[] = [];
 let senderSessions: WhatsappSenderSession[] = [];
 let campaignTagsCache: SettingsTag[] = [];
+let pendingCampaignTagFilters: string[] | null = null;
+let campaignTagFilterGlobalEventsBound = false;
 let campaignContactFieldsCache: ContactFieldDefinition[] = [];
 let campaignMessageVariableGlobalEventsBound = false;
 let campaignsRealtimeBindingsBound = false;
@@ -228,6 +232,60 @@ function parseTagsForDisplay(rawTags: unknown) {
     return raw.split(',').map(tag => tag.trim()).filter(Boolean);
 }
 
+function normalizeCampaignTagLabel(value: unknown) {
+    return String(value || '').trim();
+}
+
+function normalizeCampaignTagKey(value: unknown) {
+    return normalizeCampaignTagLabel(value).toLowerCase();
+}
+
+function parseCampaignTagFilters(value: unknown) {
+    if (Array.isArray(value)) {
+        const seen = new Set<string>();
+        const normalized: string[] = [];
+        for (const item of value) {
+            const label = normalizeCampaignTagLabel(item);
+            const key = normalizeCampaignTagKey(label);
+            if (!label || !key || seen.has(key)) continue;
+            seen.add(key);
+            normalized.push(label);
+        }
+        return normalized;
+    }
+
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        try {
+            const parsed = JSON.parse(trimmed);
+            return parseCampaignTagFilters(parsed);
+        } catch (_) {
+            return parseCampaignTagFilters(
+                trimmed
+                    .split(',')
+                    .map((item) => normalizeCampaignTagLabel(item))
+                    .filter(Boolean)
+            );
+        }
+    }
+
+    return [];
+}
+
+function getCampaignTagFilters(campaign: Partial<Campaign> | undefined) {
+    if (!campaign) return [];
+    const fromApi = parseCampaignTagFilters(campaign.tag_filters);
+    if (fromApi.length) return fromApi;
+    return parseCampaignTagFilters(campaign.tag_filter);
+}
+
+function getCampaignTagFilterSummary(campaign: Partial<Campaign> | undefined, allLabel = 'Todas as tags') {
+    const tags = getCampaignTagFilters(campaign);
+    if (!tags.length) return allLabel;
+    return tags.join(', ');
+}
+
 function formatCampaignPhone(phone?: string) {
     const digits = String(phone || '').replace(/\D/g, '');
     if (!digits) return '-';
@@ -272,25 +330,211 @@ function syncCampaignSegmentOptions() {
     setSelectValue(segmentSelect, currentValue);
 }
 
-function renderCampaignTagFilterOptions(selectedValue = '') {
-    const tagSelect = document.getElementById('campaignTagFilter') as HTMLSelectElement | null;
-    if (!tagSelect) return;
+function getCampaignTagFilterElements() {
+    const toggleButton = document.getElementById('campaignTagFilterToggle') as HTMLButtonElement | null;
+    const menu = document.getElementById('campaignTagFilterMenu') as HTMLElement | null;
+    return { toggleButton, menu };
+}
 
-    const normalizedSelectedValue = String(selectedValue || '').trim();
-    const tags = Array.isArray(campaignTagsCache) ? [...campaignTagsCache] : [];
-    tags.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+function setCampaignTagFilterMenuOpen(isOpen: boolean) {
+    const { toggleButton, menu } = getCampaignTagFilterElements();
+    if (!menu) return;
 
-    const options = [
-        '<option value="">Todas as tags</option>',
-        ...tags.map((tag) => `<option value="${escapeCampaignText(tag.name || '')}">${escapeCampaignText(tag.name || '')}</option>`)
-    ];
+    menu.hidden = !isOpen;
+    if (toggleButton) {
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+}
 
-    if (normalizedSelectedValue && !tags.some((tag) => String(tag.name || '').trim() === normalizedSelectedValue)) {
-        options.push(`<option value="${escapeCampaignText(normalizedSelectedValue)}">${escapeCampaignText(normalizedSelectedValue)}</option>`);
+function closeCampaignTagFilterMenu() {
+    setCampaignTagFilterMenuOpen(false);
+}
+
+function toggleCampaignTagFilterMenu() {
+    const { menu } = getCampaignTagFilterElements();
+    if (!menu) return;
+    setCampaignTagFilterMenuOpen(menu.hidden);
+}
+
+function getSelectedCampaignTagFilters() {
+    const allCheckbox = document.getElementById('campaignAllTags') as HTMLInputElement | null;
+    if (allCheckbox?.checked) return [];
+
+    return Array.from(document.querySelectorAll<HTMLInputElement>('.campaign-tag-filter-checkbox:checked'))
+        .map((input) => normalizeCampaignTagLabel(input.value))
+        .filter(Boolean);
+}
+
+function updateCampaignTagFilterToggleLabel() {
+    const toggleButton = document.getElementById('campaignTagFilterToggle') as HTMLButtonElement | null;
+    if (!toggleButton) return;
+
+    const selectedTags = getSelectedCampaignTagFilters();
+    if (!selectedTags.length) {
+        toggleButton.textContent = 'Todas as tags';
+        return;
     }
 
-    tagSelect.innerHTML = options.join('');
-    setSelectValue(tagSelect, normalizedSelectedValue);
+    if (selectedTags.length <= 2) {
+        toggleButton.textContent = selectedTags.join(', ');
+        return;
+    }
+
+    toggleButton.textContent = `${selectedTags.length} tags selecionadas`;
+}
+
+function updateCampaignTagFilterInputs() {
+    const allCheckbox = document.getElementById('campaignAllTags') as HTMLInputElement | null;
+    const isAll = !!allCheckbox?.checked;
+    document.querySelectorAll<HTMLInputElement>('.campaign-tag-filter-checkbox').forEach((input) => {
+        input.disabled = isAll;
+    });
+    updateCampaignTagFilterToggleLabel();
+}
+
+function toggleCampaignAllTags() {
+    const allCheckbox = document.getElementById('campaignAllTags') as HTMLInputElement | null;
+    if (allCheckbox?.checked) {
+        document.querySelectorAll<HTMLInputElement>('.campaign-tag-filter-checkbox').forEach((input) => {
+            input.checked = false;
+        });
+    }
+    updateCampaignTagFilterInputs();
+}
+
+function setCampaignTagFilterSelection(tags: string[]) {
+    pendingCampaignTagFilters = Array.from(new Set(
+        (tags || [])
+            .map((item) => normalizeCampaignTagLabel(item))
+            .filter(Boolean)
+    ));
+    renderCampaignTagFilterOptions();
+}
+
+function renderCampaignTagFilterOptions() {
+    const allCheckbox = document.getElementById('campaignAllTags') as HTMLInputElement | null;
+    const container = document.getElementById('campaignTagFilterList') as HTMLElement | null;
+    if (!container) return;
+
+    const selectedSet = new Set((pendingCampaignTagFilters || []).map((tag) => normalizeCampaignTagKey(tag)));
+    const hasSpecificSelection = selectedSet.size > 0;
+    if (allCheckbox) {
+        allCheckbox.checked = !hasSpecificSelection;
+    }
+
+    const tags = Array.isArray(campaignTagsCache) ? [...campaignTagsCache] : [];
+    tags.sort((a, b) => normalizeCampaignTagLabel(a?.name).localeCompare(normalizeCampaignTagLabel(b?.name), 'pt-BR'));
+
+    const knownKeys = new Set(
+        tags
+            .map((tag) => normalizeCampaignTagKey(tag?.name))
+            .filter(Boolean)
+    );
+
+    for (const selectedTag of pendingCampaignTagFilters || []) {
+        const selectedKey = normalizeCampaignTagKey(selectedTag);
+        if (!selectedKey || knownKeys.has(selectedKey)) continue;
+        knownKeys.add(selectedKey);
+        tags.push({
+            id: 0,
+            name: normalizeCampaignTagLabel(selectedTag),
+            color: '#178c49'
+        });
+    }
+
+    if (!tags.length) {
+        container.innerHTML = '<p style="color: var(--gray-500); font-size: 12px; margin: 0;">Nenhuma tag cadastrada.</p>';
+        if (allCheckbox) allCheckbox.checked = true;
+        updateCampaignTagFilterInputs();
+        return;
+    }
+
+    container.innerHTML = tags.map((tag) => {
+        const tagName = normalizeCampaignTagLabel(tag?.name);
+        if (!tagName) return '';
+        const normalizedKey = normalizeCampaignTagKey(tagName);
+        const checked = selectedSet.has(normalizedKey);
+        const safeName = escapeCampaignText(tagName);
+        const color = String(tag?.color || '').trim() || '#178c49';
+
+        return `
+            <label class="checkbox-wrapper">
+                <input
+                    type="checkbox"
+                    class="campaign-tag-filter-checkbox"
+                    value="${safeName}"
+                    ${checked ? 'checked' : ''}
+                >
+                <span class="checkbox-custom"></span>
+                <span style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span style="width: 10px; height: 10px; border-radius: 999px; background: ${escapeCampaignText(color)};"></span>
+                    <strong>${safeName}</strong>
+                </span>
+            </label>
+        `;
+    }).join('');
+
+    updateCampaignTagFilterInputs();
+}
+
+function bindCampaignTagFilterDropdown() {
+    const { toggleButton, menu } = getCampaignTagFilterElements();
+    if (!toggleButton || !menu) return;
+
+    if (toggleButton.dataset.bound !== '1') {
+        toggleButton.dataset.bound = '1';
+        toggleButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleCampaignTagFilterMenu();
+        });
+    }
+
+    if (menu.dataset.bound !== '1') {
+        menu.dataset.bound = '1';
+        menu.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+        menu.addEventListener('change', (event) => {
+            const target = event.target as HTMLInputElement | null;
+            if (!target) return;
+
+            if (target.id === 'campaignAllTags') {
+                toggleCampaignAllTags();
+                return;
+            }
+
+            if (target.classList.contains('campaign-tag-filter-checkbox')) {
+                const allCheckbox = document.getElementById('campaignAllTags') as HTMLInputElement | null;
+                if (allCheckbox) {
+                    const hasSpecificSelection = Array.from(document.querySelectorAll<HTMLInputElement>('.campaign-tag-filter-checkbox'))
+                        .some((input) => input.checked);
+                    allCheckbox.checked = !hasSpecificSelection;
+                }
+                updateCampaignTagFilterInputs();
+            }
+        });
+    }
+
+    if (!campaignTagFilterGlobalEventsBound) {
+        campaignTagFilterGlobalEventsBound = true;
+
+        document.addEventListener('click', (event) => {
+            const target = event.target;
+            if (target instanceof Element) {
+                if (target.closest('#campaignTagFilterToggle') || target.closest('#campaignTagFilterMenu')) {
+                    return;
+                }
+            }
+            closeCampaignTagFilterMenu();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeCampaignTagFilterMenu();
+            }
+        });
+    }
 }
 
 async function loadCampaignTags() {
@@ -300,7 +544,7 @@ async function loadCampaignTags() {
     } catch (error) {
         campaignTagsCache = [];
     }
-    renderCampaignTagFilterOptions((document.getElementById('campaignTagFilter') as HTMLSelectElement | null)?.value || '');
+    renderCampaignTagFilterOptions();
 }
 
 function normalizeCampaignVariableKey(value: unknown) {
@@ -1017,7 +1261,7 @@ function renderCampaignOverviewContent(campaign: Campaign) {
         <p><strong>Distribuição:</strong> ${escapeCampaignText(getDistributionStrategyLabel(campaign.distribution_strategy || 'single'))}</p>
         <p><strong>Contas de envio:</strong> ${escapeCampaignText(renderCampaignSenderAccountsSummary(campaign))}</p>
         <p><strong>Horário de envio:</strong> ${escapeCampaignText(formatCampaignSendWindowLabel(campaign))}</p>
-        <p><strong>Tag:</strong> ${campaign.tag_filter || 'Todas'}</p>
+        <p><strong>Tags:</strong> ${escapeCampaignText(getCampaignTagFilterSummary(campaign))}</p>
         <p><strong>Criada em:</strong> ${formatDate(campaign.created_at, 'datetime')}</p>
     `;
 }
@@ -1162,12 +1406,15 @@ async function loadCampaignRecipients(campaign: Campaign) {
         const recipients = response.recipients || [];
         const total = Number(response.total || recipients.length);
         const segmentLabel = getCampaignSegmentLabel(response.segment || campaign.segment);
-        const tagLabel = String(response.tag_filter || campaign.tag_filter || 'Todas');
+        const tagLabel = getCampaignTagFilterSummary({
+            tag_filter: response.tag_filter ?? campaign.tag_filter,
+            tag_filters: response.tag_filters ?? campaign.tag_filters
+        });
 
         if (!recipients.length) {
             campaignRecipients.innerHTML = `
                 <p style="margin-bottom: 8px;"><strong>Segmentação:</strong> ${escapeCampaignText(segmentLabel)}</p>
-                <p style="margin-bottom: 8px;"><strong>Tag:</strong> ${escapeCampaignText(tagLabel)}</p>
+                <p style="margin-bottom: 8px;"><strong>Tags:</strong> ${escapeCampaignText(tagLabel)}</p>
                 <p style="color: var(--gray-500);">Nenhum contato encontrado com esses filtros.</p>
             `;
             return;
@@ -1189,7 +1436,7 @@ async function loadCampaignRecipients(campaign: Campaign) {
 
         campaignRecipients.innerHTML = `
             <p style="margin-bottom: 8px;"><strong>Segmentação:</strong> ${escapeCampaignText(segmentLabel)}</p>
-            <p style="margin-bottom: 8px;"><strong>Tag:</strong> ${escapeCampaignText(tagLabel)}</p>
+            <p style="margin-bottom: 8px;"><strong>Tags:</strong> ${escapeCampaignText(tagLabel)}</p>
             <p style="margin-bottom: 12px;"><strong>Total filtrado:</strong> ${formatNumber(total)}</p>
             <div style="overflow-x: auto;">
                 <table class="table" style="min-width: 560px;">
@@ -1237,7 +1484,8 @@ function resetCampaignForm() {
     const idInput = document.getElementById('campaignId') as HTMLInputElement | null;
     if (idInput) idInput.value = '';
     syncCampaignSegmentOptions();
-    renderCampaignTagFilterOptions('');
+    setCampaignTagFilterSelection([]);
+    closeCampaignTagFilterMenu();
     setSelectValue(document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null, 'single');
     renderCampaignSenderAccountsSelector([]);
     setDelayRangeInputs(DEFAULT_DELAY_MIN_SECONDS, DEFAULT_DELAY_MAX_SECONDS);
@@ -1375,7 +1623,9 @@ function openBroadcastModal() {
 }
 
 async function initCampanhas() {
+    pendingCampaignTagFilters = [];
     syncCampaignSegmentOptions();
+    bindCampaignTagFilterDropdown();
     bindCampaignMessageVariablePicker();
     bindCampaignMessageVariationsUi();
     bindCampaignsRealtimeUpdates();
@@ -1618,7 +1868,7 @@ async function saveCampaign(statusOverride?: CampaignStatus) {
         distribution_strategy: ((document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null)?.value || 'single') as Campaign['distribution_strategy'],
         status,
         segment: (document.getElementById('campaignSegment') as HTMLSelectElement | null)?.value || '',
-        tag_filter: (document.getElementById('campaignTagFilter') as HTMLSelectElement | null)?.value || '',
+        tag_filters: getSelectedCampaignTagFilters(),
         message: (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)?.value.trim() || '',
         message_variations: [...campaignMessageVariationsDrafts],
         delay: delayMinMs,
@@ -1706,7 +1956,7 @@ function editCampaign(id: number) {
     const campaign = campaigns.find(c => c.id === id);
     if (!campaign) return;
     syncCampaignSegmentOptions();
-    renderCampaignTagFilterOptions(campaign.tag_filter || '');
+    setCampaignTagFilterSelection(getCampaignTagFilters(campaign));
 
     const idInput = document.getElementById('campaignId') as HTMLInputElement | null;
     if (idInput) idInput.value = String(campaign.id);
@@ -1723,8 +1973,6 @@ function editCampaign(id: number) {
         String(campaign.distribution_strategy || 'single')
     );
     setSelectValue(document.getElementById('campaignSegment') as HTMLSelectElement | null, campaign.segment || 'all');
-    const tagFilterInput = document.getElementById('campaignTagFilter') as HTMLSelectElement | null;
-    if (tagFilterInput) setSelectValue(tagFilterInput, campaign.tag_filter || '');
 
     const messageInput = document.getElementById('campaignMessage') as HTMLTextAreaElement | null;
     if (messageInput) messageInput.value = campaign.message || '';
