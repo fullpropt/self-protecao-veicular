@@ -424,9 +424,9 @@ export default function Planos() {
     };
   }, []);
 
-  const highlightSwapOutDuration = 150;
-  const highlightSwapInDuration = 300;
-  const highlightSwapCooldown = 360;
+  const highlightSwapOutDuration = 210;
+  const highlightSwapInDuration = 420;
+  const highlightSwapCooldown = 480;
 
   const lockHighlightSwitch = () => {
     highlightSwitchLockedRef.current = true;
@@ -496,19 +496,27 @@ export default function Planos() {
     return nextIndex >= 0 && nextIndex < highlightTabOrder.length;
   };
 
+  const isHighlightLockZone = () => {
+    const section = highlightSectionRef.current;
+    if (!section) return false;
+
+    const rect = section.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const activationTop = 96;
+    const activationWindow = 220;
+    const activationBottom = Math.max(
+      activationTop + 40,
+      Math.min(viewportHeight - 48, activationTop + 180)
+    );
+
+    // Mantém o lock somente numa faixa próxima ao topo da seção, evitando ativar cedo ao voltar de baixo para cima.
+    const topWithinLockBand = rect.top <= activationTop && rect.top >= activationTop - activationWindow;
+    return topWithinLockBand && rect.bottom >= activationBottom;
+  };
+
   useEffect(() => {
-    const isHighlightInViewport = () => {
-      const section = highlightSectionRef.current;
-      if (!section) return false;
-
-      const rect = section.getBoundingClientRect();
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-      return rect.bottom > 0 && rect.top < viewportHeight;
-    };
-
     const updateHighlightFocus = () => {
-      // Ativa o lock assim que o highlight entra na área visível.
-      setIsHighlightFocused(isHighlightInViewport());
+      setIsHighlightFocused(isHighlightLockZone());
     };
 
     updateHighlightFocus();
@@ -522,17 +530,8 @@ export default function Planos() {
   }, []);
 
   useEffect(() => {
-    const isHighlightInViewport = () => {
-      const section = highlightSectionRef.current;
-      if (!section) return false;
-
-      const rect = section.getBoundingClientRect();
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-      return rect.bottom > 0 && rect.top < viewportHeight;
-    };
-
     const handleGlobalWheel = (event: globalThis.WheelEvent) => {
-      if (!isHighlightFocused && !isHighlightInViewport()) return;
+      if (!isHighlightLockZone()) return;
       if (event.deltaY === 0) return;
 
       const step: 1 | -1 = event.deltaY > 0 ? 1 : -1;
@@ -553,7 +552,7 @@ export default function Planos() {
     };
 
     const handleGlobalTouchStart = (event: globalThis.TouchEvent) => {
-      if (!isHighlightFocused && !isHighlightInViewport()) return;
+      if (!isHighlightLockZone()) return;
       const touch = event.touches[0];
       if (!touch) return;
       highlightTouchStartYRef.current = touch.clientY;
@@ -561,7 +560,7 @@ export default function Planos() {
     };
 
     const handleGlobalTouchMove = (event: globalThis.TouchEvent) => {
-      if (!isHighlightFocused && !isHighlightInViewport()) return;
+      if (!isHighlightLockZone()) return;
       if (highlightTouchStartYRef.current === null) return;
 
       const touch = event.touches[0];
@@ -2399,59 +2398,54 @@ export default function Planos() {
           box-shadow:
             inset 0 1px 0 rgba(255, 255, 255, 0.64),
             0 24px 44px rgba(0, 0, 0, 0.24);
-          will-change: transform, opacity, filter;
+          will-change: transform, opacity;
           transform-origin: 50% 50%;
           backface-visibility: hidden;
           touch-action: auto;
         }
 
         .highlight-model-shell.is-transition-out-next {
-          animation: highlight-card-out-next 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+          animation: highlight-card-out-next 210ms cubic-bezier(0.4, 0, 0.2, 1) both;
         }
 
         .highlight-model-shell.is-transition-in-next {
-          animation: highlight-card-in-next 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation: highlight-card-in-next 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
         }
 
         .highlight-model-shell.is-transition-out-prev {
-          animation: highlight-card-out-prev 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+          animation: highlight-card-out-prev 210ms cubic-bezier(0.4, 0, 0.2, 1) both;
         }
 
         .highlight-model-shell.is-transition-in-prev {
-          animation: highlight-card-in-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+          animation: highlight-card-in-prev 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
         }
 
         @keyframes highlight-card-out-next {
           from {
             opacity: 1;
             transform: translate3d(0, 0, 0) scale(1);
-            filter: blur(0);
           }
 
           to {
-            opacity: 0.95;
-            transform: translate3d(0, -7px, 0) scale(0.997);
-            filter: blur(0.32px);
+            opacity: 0.965;
+            transform: translate3d(0, -4px, 0) scale(0.998);
           }
         }
 
         @keyframes highlight-card-in-next {
           from {
-            opacity: 0.92;
-            transform: translate3d(0, 7px, 0) scale(0.997);
-            filter: blur(0.32px);
+            opacity: 0.935;
+            transform: translate3d(0, 6px, 0) scale(0.996);
           }
 
-          62% {
+          58% {
             opacity: 0.985;
-            transform: translate3d(0, -1px, 0) scale(1);
-            filter: blur(0.08px);
+            transform: translate3d(0, 0.5px, 0) scale(0.999);
           }
 
           to {
             opacity: 1;
             transform: translate3d(0, 0, 0) scale(1);
-            filter: blur(0);
           }
         }
 
@@ -2459,33 +2453,28 @@ export default function Planos() {
           from {
             opacity: 1;
             transform: translate3d(0, 0, 0) scale(1);
-            filter: blur(0);
           }
 
           to {
-            opacity: 0.95;
-            transform: translate3d(0, 7px, 0) scale(0.997);
-            filter: blur(0.32px);
+            opacity: 0.965;
+            transform: translate3d(0, 4px, 0) scale(0.998);
           }
         }
 
         @keyframes highlight-card-in-prev {
           from {
-            opacity: 0.92;
-            transform: translate3d(0, -7px, 0) scale(0.997);
-            filter: blur(0.32px);
+            opacity: 0.935;
+            transform: translate3d(0, -6px, 0) scale(0.996);
           }
 
-          62% {
+          58% {
             opacity: 0.985;
-            transform: translate3d(0, 1px, 0) scale(1);
-            filter: blur(0.08px);
+            transform: translate3d(0, -0.5px, 0) scale(0.999);
           }
 
           to {
             opacity: 1;
             transform: translate3d(0, 0, 0) scale(1);
-            filter: blur(0);
           }
         }
 
