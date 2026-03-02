@@ -5236,8 +5236,8 @@ export default function Planos() {
 
         .highlight-model-shell.is-dashboard .hero-real-nav-item.is-active,
         .highlight-model-shell.is-dashboard .hero-real-toggle.is-active {
-          background: linear-gradient(120deg, rgba(35, 198, 111, 0.28), rgba(21, 163, 74, 0.22));
-          border-color: rgba(35, 198, 111, 0.44);
+          background: linear-gradient(90deg, rgba(30, 117, 83, 0.46), rgba(22, 60, 72, 0.32));
+          border-color: rgba(58, 214, 130, 0.36);
         }
 
         @media (min-width: 981px) {
