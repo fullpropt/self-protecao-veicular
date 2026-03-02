@@ -26,6 +26,9 @@
   display: grid;
   grid-template-columns: 178px 1fr;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
   box-shadow:
     0 16px 28px rgba(10, 26, 22, 0.14),
     0 6px 12px rgba(10, 26, 22, 0.1),
@@ -43,6 +46,7 @@
   display: grid;
   align-content: start;
   gap: 10px;
+  min-width: 0;
 }
 
 .platform-mock__brand {
@@ -220,13 +224,15 @@
   display: grid;
   align-content: start;
   gap: 10px;
+  min-width: 0;
 }
 
 .platform-mock__topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .platform-mock__search {
@@ -240,12 +246,21 @@
   color: #2d5e50;
   font-size: 11px;
   font-weight: 700;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .platform-mock__status-list {
   display: flex;
   align-items: center;
   gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .platform-mock__status {
@@ -309,8 +324,9 @@
 
 .platform-mock__workspace {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   gap: 8px;
+  min-width: 0;
 }
 
 .platform-mock__workspace--dashboard {
@@ -320,6 +336,7 @@
 .platform-mock__stack {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .platform-mock__module {
@@ -329,6 +346,7 @@
   padding: 9px;
   display: grid;
   gap: 7px;
+  min-width: 0;
 }
 
 .platform-mock__module--featured {
@@ -343,6 +361,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .platform-mock__module-badge {
@@ -368,6 +387,8 @@
   font-size: 14px;
   line-height: 1.2;
   letter-spacing: -0.01em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .platform-mock__chart-meta {

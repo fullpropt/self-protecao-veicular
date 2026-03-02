@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import FooterPremium from '../components/FooterPremium';
 import PlatformMock from '../components/PlatformMock';
@@ -389,7 +389,237 @@ export default function Planos() {
   };
 
   const [activeHighlightTab, setActiveHighlightTab] = useState<HighlightTabId>('dashboard');
+  const [highlightTransition, setHighlightTransition] = useState<
+    'idle' | 'out-next' | 'in-next' | 'out-prev' | 'in-prev'
+  >('idle');
+  const [isHighlightFocused, setIsHighlightFocused] = useState(false);
+  const highlightSectionRef = useRef<HTMLElement | null>(null);
+  const highlightSwitchLockedRef = useRef(false);
+  const highlightSwitchUnlockTimeoutRef = useRef<number | null>(null);
+  const highlightTransitionOutTimeoutRef = useRef<number | null>(null);
+  const highlightTransitionInTimeoutRef = useRef<number | null>(null);
+  const highlightTouchStartYRef = useRef<number | null>(null);
+  const highlightTouchStartXRef = useRef<number | null>(null);
   const activeHighlightView = highlightViews.find((view) => view.id === activeHighlightTab) ?? highlightViews[0];
+  const highlightTabOrder = highlightViews.map((view) => view.id);
+  const activeHighlightIndex = Math.max(0, highlightTabOrder.indexOf(activeHighlightTab));
+  const highlightNavProgress = highlightTabOrder.length > 1
+    ? (activeHighlightIndex / (highlightTabOrder.length - 1)) * 100
+    : 0;
+  const highlightNavThumbTop = `clamp(0px, calc(${highlightNavProgress}% - 17px), calc(100% - 34px))`;
+
+  useEffect(() => {
+    return () => {
+      if (highlightSwitchUnlockTimeoutRef.current !== null) {
+        window.clearTimeout(highlightSwitchUnlockTimeoutRef.current);
+      }
+
+      if (highlightTransitionOutTimeoutRef.current !== null) {
+        window.clearTimeout(highlightTransitionOutTimeoutRef.current);
+      }
+
+      if (highlightTransitionInTimeoutRef.current !== null) {
+        window.clearTimeout(highlightTransitionInTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const highlightSwapOutDuration = 150;
+  const highlightSwapInDuration = 300;
+  const highlightSwapCooldown = 360;
+
+  const lockHighlightSwitch = () => {
+    highlightSwitchLockedRef.current = true;
+
+    if (highlightSwitchUnlockTimeoutRef.current !== null) {
+      window.clearTimeout(highlightSwitchUnlockTimeoutRef.current);
+    }
+
+    highlightSwitchUnlockTimeoutRef.current = window.setTimeout(() => {
+      highlightSwitchLockedRef.current = false;
+    }, highlightSwapCooldown);
+  };
+
+  const startHighlightSwap = (nextTab: HighlightTabId, direction: 'next' | 'prev') => {
+    if (nextTab === activeHighlightTab) return false;
+
+    if (highlightTransitionOutTimeoutRef.current !== null) {
+      window.clearTimeout(highlightTransitionOutTimeoutRef.current);
+    }
+
+    if (highlightTransitionInTimeoutRef.current !== null) {
+      window.clearTimeout(highlightTransitionInTimeoutRef.current);
+    }
+
+    setHighlightTransition(direction === 'next' ? 'out-next' : 'out-prev');
+
+    highlightTransitionOutTimeoutRef.current = window.setTimeout(() => {
+      setActiveHighlightTab(nextTab);
+      setHighlightTransition(direction === 'next' ? 'in-next' : 'in-prev');
+
+      highlightTransitionInTimeoutRef.current = window.setTimeout(() => {
+        setHighlightTransition('idle');
+      }, highlightSwapInDuration);
+    }, highlightSwapOutDuration);
+
+    return true;
+  };
+
+  const changeHighlightToTab = (nextTab: HighlightTabId) => {
+    if (nextTab === activeHighlightTab) return false;
+
+    const currentIndex = highlightTabOrder.indexOf(activeHighlightTab);
+    const nextIndex = highlightTabOrder.indexOf(nextTab);
+    const direction = nextIndex > currentIndex ? 'next' : 'prev';
+
+    return startHighlightSwap(nextTab, direction);
+  };
+
+  const changeHighlightByStep = (step: 1 | -1) => {
+    const currentIndex = highlightTabOrder.indexOf(activeHighlightTab);
+    if (currentIndex === -1) return false;
+
+    const nextIndex = currentIndex + step;
+    if (nextIndex < 0 || nextIndex >= highlightTabOrder.length) return false;
+
+    const nextTab = highlightTabOrder[nextIndex];
+    const direction = step > 0 ? 'next' : 'prev';
+
+    return startHighlightSwap(nextTab, direction);
+  };
+
+  const canMoveHighlightByStep = (step: 1 | -1) => {
+    const currentIndex = highlightTabOrder.indexOf(activeHighlightTab);
+    if (currentIndex === -1) return false;
+
+    const nextIndex = currentIndex + step;
+    return nextIndex >= 0 && nextIndex < highlightTabOrder.length;
+  };
+
+  useEffect(() => {
+    const isHighlightInViewport = () => {
+      const section = highlightSectionRef.current;
+      if (!section) return false;
+
+      const rect = section.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      return rect.bottom > 0 && rect.top < viewportHeight;
+    };
+
+    const updateHighlightFocus = () => {
+      // Ativa o lock assim que o highlight entra na área visível.
+      setIsHighlightFocused(isHighlightInViewport());
+    };
+
+    updateHighlightFocus();
+    window.addEventListener('scroll', updateHighlightFocus, { passive: true });
+    window.addEventListener('resize', updateHighlightFocus);
+
+    return () => {
+      window.removeEventListener('scroll', updateHighlightFocus);
+      window.removeEventListener('resize', updateHighlightFocus);
+    };
+  }, []);
+
+  useEffect(() => {
+    const isHighlightInViewport = () => {
+      const section = highlightSectionRef.current;
+      if (!section) return false;
+
+      const rect = section.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      return rect.bottom > 0 && rect.top < viewportHeight;
+    };
+
+    const handleGlobalWheel = (event: globalThis.WheelEvent) => {
+      if (!isHighlightFocused && !isHighlightInViewport()) return;
+      if (event.deltaY === 0) return;
+
+      const step: 1 | -1 = event.deltaY > 0 ? 1 : -1;
+      const canMove = canMoveHighlightByStep(step);
+      if (!canMove) return;
+
+      // Enquanto existir card para trocar, bloqueia o scroll global da página.
+      if (event.cancelable) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (highlightSwitchLockedRef.current) return;
+      if (Math.abs(event.deltaY) < 18) return;
+
+      const changed = changeHighlightByStep(step);
+      if (!changed) return;
+      lockHighlightSwitch();
+    };
+
+    const handleGlobalTouchStart = (event: globalThis.TouchEvent) => {
+      if (!isHighlightFocused && !isHighlightInViewport()) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      highlightTouchStartYRef.current = touch.clientY;
+      highlightTouchStartXRef.current = touch.clientX;
+    };
+
+    const handleGlobalTouchMove = (event: globalThis.TouchEvent) => {
+      if (!isHighlightFocused && !isHighlightInViewport()) return;
+      if (highlightTouchStartYRef.current === null) return;
+
+      const touch = event.touches[0];
+      if (!touch) return;
+
+      const deltaY = highlightTouchStartYRef.current - touch.clientY;
+      if (Math.abs(deltaY) < 2) return;
+      const deltaX = highlightTouchStartXRef.current === null ? 0 : Math.abs(highlightTouchStartXRef.current - touch.clientX);
+      const step: 1 | -1 = deltaY > 0 ? 1 : -1;
+      const canMove = canMoveHighlightByStep(step);
+
+      if (canMove && event.cancelable) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      if (highlightSwitchLockedRef.current) return;
+      if (Math.abs(deltaY) < 34 || deltaX > Math.abs(deltaY)) return;
+      if (!canMove) return;
+
+      const changed = changeHighlightByStep(step);
+      if (!changed) return;
+
+      highlightTouchStartYRef.current = touch.clientY;
+      highlightTouchStartXRef.current = touch.clientX;
+      lockHighlightSwitch();
+    };
+
+    const handleGlobalTouchEnd = () => {
+      highlightTouchStartYRef.current = null;
+      highlightTouchStartXRef.current = null;
+    };
+
+    window.addEventListener('wheel', handleGlobalWheel, { passive: false, capture: true });
+    window.addEventListener('touchstart', handleGlobalTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false, capture: true });
+    window.addEventListener('touchend', handleGlobalTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', handleGlobalTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('wheel', handleGlobalWheel, { capture: true });
+      window.removeEventListener('touchstart', handleGlobalTouchStart);
+      window.removeEventListener('touchmove', handleGlobalTouchMove, { capture: true });
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+      window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+    };
+  }, [activeHighlightTab, isHighlightFocused]);
+
+  const highlightShellClassName = [
+    'highlight-model-shell',
+    `is-${activeHighlightView.id.toLowerCase()}`,
+    highlightTransition === 'out-next' ? 'is-transition-out-next' : '',
+    highlightTransition === 'in-next' ? 'is-transition-in-next' : '',
+    highlightTransition === 'out-prev' ? 'is-transition-out-prev' : '',
+    highlightTransition === 'in-prev' ? 'is-transition-in-prev' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div className="sales-page">
@@ -949,6 +1179,8 @@ export default function Planos() {
           display: grid;
           grid-template-columns: 186px 1fr;
           gap: 9px;
+          width: 100%;
+          min-width: 0;
           padding: 9px;
           min-height: 404px;
           border-radius: 14px;
@@ -967,6 +1199,7 @@ export default function Planos() {
           display: grid;
           align-content: space-between;
           gap: 8px;
+          min-width: 0;
         }
 
         .hero-real-sidebar-main {
@@ -983,7 +1216,7 @@ export default function Planos() {
         }
 
         .hero-real-sidebar-brand img {
-          width: 108px;
+          width: 92px;
           height: auto;
           display: block;
           filter: drop-shadow(0 8px 18px rgba(35, 198, 111, 0.2));
@@ -1092,6 +1325,7 @@ export default function Planos() {
           display: grid;
           align-content: start;
           gap: 8px;
+          min-width: 0;
         }
 
         .hero-real-header h3 {
@@ -1111,8 +1345,9 @@ export default function Planos() {
 
         .hero-real-top-grid {
           display: grid;
-          grid-template-columns: 1.5fr 0.9fr;
+          grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.9fr);
           gap: 8px;
+          min-width: 0;
         }
 
         .hero-real-card {
@@ -1120,6 +1355,7 @@ export default function Planos() {
           border: 1px solid rgba(67, 123, 107, 0.22);
           background: rgba(11, 31, 35, 0.52);
           padding: 8px;
+          min-width: 0;
         }
 
         .hero-real-card-title {
@@ -2096,6 +2332,7 @@ export default function Planos() {
 
         .feature-highlight-section {
           scroll-margin-top: 92px;
+          overscroll-behavior-y: contain;
           --hl-green: #35d989;
           --hl-cyan: #53d1ff;
           --hl-amber: #f3c164;
@@ -2162,6 +2399,103 @@ export default function Planos() {
           box-shadow:
             inset 0 1px 0 rgba(255, 255, 255, 0.64),
             0 24px 44px rgba(0, 0, 0, 0.24);
+          will-change: transform, opacity, filter;
+          transform-origin: 50% 50%;
+          backface-visibility: hidden;
+          touch-action: auto;
+        }
+
+        .highlight-model-shell.is-transition-out-next {
+          animation: highlight-card-out-next 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+
+        .highlight-model-shell.is-transition-in-next {
+          animation: highlight-card-in-next 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .highlight-model-shell.is-transition-out-prev {
+          animation: highlight-card-out-prev 150ms cubic-bezier(0.4, 0, 0.2, 1) both;
+        }
+
+        .highlight-model-shell.is-transition-in-prev {
+          animation: highlight-card-in-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        @keyframes highlight-card-out-next {
+          from {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+            filter: blur(0);
+          }
+
+          to {
+            opacity: 0.95;
+            transform: translate3d(0, -7px, 0) scale(0.997);
+            filter: blur(0.32px);
+          }
+        }
+
+        @keyframes highlight-card-in-next {
+          from {
+            opacity: 0.92;
+            transform: translate3d(0, 7px, 0) scale(0.997);
+            filter: blur(0.32px);
+          }
+
+          62% {
+            opacity: 0.985;
+            transform: translate3d(0, -1px, 0) scale(1);
+            filter: blur(0.08px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+            filter: blur(0);
+          }
+        }
+
+        @keyframes highlight-card-out-prev {
+          from {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+            filter: blur(0);
+          }
+
+          to {
+            opacity: 0.95;
+            transform: translate3d(0, 7px, 0) scale(0.997);
+            filter: blur(0.32px);
+          }
+        }
+
+        @keyframes highlight-card-in-prev {
+          from {
+            opacity: 0.92;
+            transform: translate3d(0, -7px, 0) scale(0.997);
+            filter: blur(0.32px);
+          }
+
+          62% {
+            opacity: 0.985;
+            transform: translate3d(0, 1px, 0) scale(1);
+            filter: blur(0.08px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0) scale(1);
+            filter: blur(0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .highlight-model-shell.is-transition-out-next,
+          .highlight-model-shell.is-transition-in-next,
+          .highlight-model-shell.is-transition-out-prev,
+          .highlight-model-shell.is-transition-in-prev {
+            animation: none;
+          }
         }
 
         .highlight-model-shell.is-dashboard {
@@ -2382,8 +2716,31 @@ export default function Planos() {
           border-radius: 16px;
           border: 1px solid rgba(255, 255, 255, 0.74);
           background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 246, 0.94));
-          padding: 12px;
+          padding: 12px 12px 12px 24px;
           min-height: 100%;
+          position: relative;
+        }
+
+        .highlight-model-nav-rail {
+          position: absolute;
+          left: 8px;
+          top: 12px;
+          bottom: 12px;
+          width: 4px;
+          border-radius: 999px;
+          background: rgba(119, 160, 140, 0.18);
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+        }
+
+        .highlight-model-nav-rail-thumb {
+          position: absolute;
+          left: 0;
+          width: 4px;
+          height: 34px;
+          border-radius: 999px;
+          background: linear-gradient(180deg, rgba(149, 229, 177, 0.96), rgba(107, 206, 146, 0.96));
+          box-shadow: 0 0 0 1px rgba(127, 196, 150, 0.44), 0 8px 16px rgba(76, 153, 112, 0.28);
+          transition: top 300ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .highlight-model-nav-list {
@@ -2469,39 +2826,23 @@ export default function Planos() {
           position: relative;
         }
 
-        .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-icon {
-          border-color: rgba(123, 180, 128, 0.5);
-          background: rgba(27, 70, 51, 0.82);
+        .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-icon,
+        .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-icon,
+        .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon,
+        .highlight-model-nav-list li:nth-child(4) .highlight-model-nav-icon {
+          border-color: rgba(96, 171, 132, 0.34);
+          background: linear-gradient(180deg, rgba(235, 250, 242, 0.96), rgba(223, 245, 233, 0.94));
         }
 
         .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-icon::before,
-        .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-icon::after {
-          background: rgba(239, 255, 246, 0.94);
-        }
-
+        .highlight-model-nav-list li:nth-child(1) .highlight-model-nav-icon::after,
         .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-icon::before,
-        .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-icon::after {
-          background: rgba(239, 255, 246, 0.94);
-        }
-
-        .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-icon {
-          border-color: rgba(139, 202, 152, 0.5);
-          background: rgba(26, 70, 50, 0.82);
-        }
-
-        .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon {
-          border-color: rgba(68, 119, 95, 0.22);
-          background: rgba(255, 255, 255, 0.72);
-        }
-
+        .highlight-model-nav-list li:nth-child(2) .highlight-model-nav-icon::after,
         .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon::before,
-        .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon::after {
-          background: rgba(27, 73, 58, 0.88);
-        }
-
-        .highlight-model-nav-list li:nth-child(4) .highlight-model-nav-icon {
-          border-color: rgba(67, 110, 92, 0.18);
-          background: rgba(255, 255, 255, 0.9);
+        .highlight-model-nav-list li:nth-child(3) .highlight-model-nav-icon::after,
+        .highlight-model-nav-list li:nth-child(4) .highlight-model-nav-icon::before,
+        .highlight-model-nav-list li:nth-child(4) .highlight-model-nav-icon::after {
+          background: rgba(56, 137, 100, 0.96);
         }
 
         .highlight-model-nav-icon::before,
@@ -2701,14 +3042,16 @@ export default function Planos() {
           display: grid;
           gap: 10px;
           min-height: 340px;
+          width: 100%;
+          min-width: 0;
         }
 
         .highlight-operation-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          align-items: start;
           gap: 10px;
-          flex-wrap: wrap;
+          min-width: 0;
         }
 
         .highlight-operation-pill {
@@ -2736,10 +3079,13 @@ export default function Planos() {
         }
 
         .highlight-operation-status {
-          display: inline-flex;
+          display: flex;
           align-items: center;
+          justify-content: flex-end;
           gap: 7px;
           flex-wrap: wrap;
+          min-width: 0;
+          max-width: 100%;
         }
 
         .highlight-operation-status span {
@@ -2755,10 +3101,12 @@ export default function Planos() {
 
         .highlight-operation-layout {
           display: grid;
-          grid-template-columns: 186px 1fr;
+          grid-template-columns: minmax(0, 186px) minmax(0, 1fr);
           gap: 10px;
           flex: 1;
+          width: 100%;
           min-height: 0;
+          min-width: 0;
         }
 
         .highlight-operation-sidebar {
@@ -2769,6 +3117,7 @@ export default function Planos() {
           display: grid;
           align-content: start;
           gap: 7px;
+          min-width: 0;
         }
 
         .highlight-operation-sidebar-head {
@@ -2792,6 +3141,7 @@ export default function Planos() {
           display: flex;
           align-items: center;
           gap: 7px;
+          min-width: 0;
         }
 
         .highlight-operation-nav-item .icon {
@@ -2817,6 +3167,7 @@ export default function Planos() {
           display: grid;
           gap: 9px;
           align-content: start;
+          min-width: 0;
         }
 
         .highlight-operation-main-head {
@@ -2824,6 +3175,7 @@ export default function Planos() {
           align-items: center;
           justify-content: space-between;
           gap: 9px;
+          min-width: 0;
         }
 
         .highlight-operation-main-head h4 {
@@ -2845,6 +3197,7 @@ export default function Planos() {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 7px;
+          min-width: 0;
         }
 
         .highlight-operation-kpi {
@@ -2854,6 +3207,7 @@ export default function Planos() {
           padding: 7px;
           display: grid;
           gap: 2px;
+          min-width: 0;
         }
 
         .highlight-operation-kpi strong {
@@ -2870,8 +3224,9 @@ export default function Planos() {
 
         .highlight-operation-modules {
           display: grid;
-          grid-template-columns: 1.18fr 0.82fr;
+          grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
           gap: 8px;
+          min-width: 0;
         }
 
         .highlight-operation-module {
@@ -2882,6 +3237,7 @@ export default function Planos() {
           display: grid;
           gap: 7px;
           align-content: start;
+          min-width: 0;
         }
 
         .highlight-operation-module.is-inbox {
@@ -2906,6 +3262,7 @@ export default function Planos() {
           color: #efffec;
           font-size: 13px;
           line-height: 1.2;
+          overflow-wrap: anywhere;
         }
 
         .highlight-operation-list {
@@ -2924,16 +3281,25 @@ export default function Planos() {
           display: flex;
           align-items: center;
           justify-content: space-between;
+          flex-wrap: wrap;
           gap: 8px;
           color: #b9d4b5;
           font-size: 10px;
           line-height: 1.2;
+          min-width: 0;
         }
 
         .highlight-operation-list li strong {
           color: #efffec;
           font-size: 11px;
           font-weight: 700;
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+
+        .highlight-operation-list li span {
+          min-width: 0;
+          overflow-wrap: anywhere;
         }
 
         .highlight-operation-stage-list {
@@ -3419,8 +3785,8 @@ export default function Planos() {
         .highlight-model-shell.is-chatinterno .highlight-model-nav-icon,
         .highlight-model-shell.is-integracao .highlight-model-nav-icon,
         .highlight-model-shell.is-meta .highlight-model-nav-icon {
-          border-color: rgba(24, 58, 49, 0.18);
-          background: rgba(255, 255, 255, 0.96);
+          border-color: rgba(96, 171, 132, 0.34);
+          background: linear-gradient(180deg, rgba(235, 250, 242, 0.96), rgba(223, 245, 233, 0.94));
         }
 
         .highlight-model-shell.is-dashboard .highlight-model-nav-icon::before,
@@ -3431,7 +3797,7 @@ export default function Planos() {
         .highlight-model-shell.is-integracao .highlight-model-nav-icon::after,
         .highlight-model-shell.is-meta .highlight-model-nav-icon::before,
         .highlight-model-shell.is-meta .highlight-model-nav-icon::after {
-          background: rgba(30, 66, 55, 0.9);
+          background: rgba(56, 137, 100, 0.96);
         }
 
         /* Progressive gradient by tab: Dashboard -> Recursos -> Operação -> Estratégia */
@@ -3465,8 +3831,8 @@ export default function Planos() {
         }
 
         .highlight-model-shell.is-dashboard .highlight-model-nav-icon {
-          border-color: rgba(24, 58, 49, 0.18);
-          background: rgba(255, 255, 255, 0.96);
+          border-color: rgba(96, 171, 132, 0.34);
+          background: linear-gradient(180deg, rgba(235, 250, 242, 0.96), rgba(223, 245, 233, 0.94));
         }
 
         .highlight-model-shell.is-dashboard .hero-real-sidebar,
@@ -3515,8 +3881,8 @@ export default function Planos() {
         }
 
         .highlight-model-shell.is-chatinterno .highlight-model-nav-icon {
-          border-color: rgba(24, 58, 49, 0.18);
-          background: rgba(255, 255, 255, 0.96);
+          border-color: rgba(96, 171, 132, 0.34);
+          background: linear-gradient(180deg, rgba(235, 250, 242, 0.96), rgba(223, 245, 233, 0.94));
         }
 
         .highlight-model-shell.is-chatinterno .platform-mock__sidebar {
@@ -3592,8 +3958,8 @@ export default function Planos() {
         }
 
         .highlight-model-shell.is-integracao .highlight-model-nav-icon {
-          border-color: rgba(44, 86, 68, 0.18);
-          background: rgba(255, 255, 255, 0.82);
+          border-color: rgba(96, 171, 132, 0.34);
+          background: linear-gradient(180deg, rgba(235, 250, 242, 0.96), rgba(223, 245, 233, 0.94));
         }
 
         .highlight-model-shell.is-integracao .highlight-integration-title,
@@ -4731,9 +5097,9 @@ export default function Planos() {
           --operation-text-2: #d2e0d7;
           --operation-text-3: #c2d4ca;
           background:
-            radial-gradient(560px 250px at 8% 0%, rgba(156, 253, 132, 0.2), rgba(156, 253, 132, 0) 74%),
-            radial-gradient(540px 240px at 88% 0%, rgba(45, 109, 82, 0.26), rgba(45, 109, 82, 0) 74%),
-            linear-gradient(145deg, #1a4a39, #153b2d);
+            radial-gradient(560px 250px at 8% 0%, rgba(214, 242, 224, 0.07), rgba(214, 242, 224, 0) 74%),
+            radial-gradient(540px 240px at 88% 0%, rgba(147, 200, 169, 0.08), rgba(147, 200, 169, 0) 74%),
+            linear-gradient(145deg, #3d8460, #356f52);
         }
 
         .highlight-model-shell.is-integracao .highlight-integration-copy {
@@ -4819,7 +5185,7 @@ export default function Planos() {
 
         /* Final override: Dashboard com paleta da landing */
         .highlight-model-shell.is-dashboard {
-          --dashboard-base: linear-gradient(180deg, #050d0a 0%, var(--bg) 48%, var(--bg-2) 100%);
+          --dashboard-base: linear-gradient(90deg, #001319 0%, #001a21 52%, #00141a 100%);
           --dashboard-surface: linear-gradient(160deg, rgba(5, 13, 10, 0.96), rgba(4, 11, 9, 0.95) 58%, rgba(2, 6, 5, 0.98));
           --dashboard-panel-surface: linear-gradient(155deg, rgba(9, 22, 17, 0.92), rgba(7, 17, 13, 0.9));
           --dashboard-card-surface: linear-gradient(155deg, rgba(19, 42, 33, 0.93), rgba(16, 35, 28, 0.9));
@@ -4874,10 +5240,18 @@ export default function Planos() {
           border-color: rgba(35, 198, 111, 0.44);
         }
 
+        @media (min-width: 981px) {
+          .highlight-model-shell.is-dashboard,
+          .highlight-model-shell.is-chatinterno,
+          .highlight-model-shell.is-integracao,
+          .highlight-model-shell.is-meta {
+            --hl-main-card-height: 726px;
+          }
+        }
+
         /* Final override: Dashboard + Recursos com a mesma geometria */
         .highlight-model-shell.is-dashboard,
         .highlight-model-shell.is-chatinterno {
-          --hl-main-card-height: clamp(500px, 36vw, 620px);
           grid-template-columns: 252px minmax(280px, 420px) minmax(360px, 1fr);
           gap: clamp(1.5rem, 2.1vw, 2rem);
           padding: clamp(1.5rem, 2.2vw, 2rem);
@@ -5367,6 +5741,10 @@ export default function Planos() {
             padding: 10px;
           }
 
+          .highlight-model-nav-rail {
+            display: none;
+          }
+
           .highlight-model-nav-list {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
@@ -5640,6 +6018,10 @@ export default function Planos() {
             grid-template-columns: 1fr;
           }
 
+          .highlight-model-nav-rail {
+            display: none;
+          }
+
           .highlight-model-title {
             font-size: 32px;
           }
@@ -5684,6 +6066,10 @@ export default function Planos() {
           .highlight-operation-sidebar,
           .highlight-operation-main {
             padding: 9px;
+          }
+
+          .highlight-strategy-tab {
+            padding: 10px;
           }
 
           .highlight-strategy-panel {
@@ -5888,10 +6274,6 @@ export default function Planos() {
                     <div className="hero-illustration hero-real-mock" role="img" aria-label="Mock do painel real ZapVender com dashboard, eventos e funil">
                       <aside className="hero-real-sidebar">
                         <div className="hero-real-sidebar-main">
-                          <div className="hero-real-sidebar-brand">
-                            <img src={brandFullLogoUrl} alt="ZapVender" />
-                          </div>
-
                           <div className="hero-real-sidebar-groups">
                             <div className="hero-real-sidebar-group">
                               <div className="hero-real-nav-item is-active">
@@ -6114,18 +6496,28 @@ export default function Planos() {
               </div>
             </div>
           </section>
-          <section className="feature-highlight-section section-variant-left" id="solucao" aria-labelledby="titulo-destaque">
+          <section
+            ref={highlightSectionRef}
+            className="feature-highlight-section section-variant-left"
+            id="solucao"
+            aria-labelledby="titulo-destaque"
+          >
             <span id="recursos" className="section-anchor" aria-hidden="true" />
 
-            <div className={`highlight-model-shell is-${activeHighlightView.id.toLowerCase()}`}>
+            <div className={highlightShellClassName}>
               <aside className="highlight-model-nav" aria-label="Navegação de benefícios">
+                <span className="highlight-model-nav-rail" aria-hidden="true">
+                  <span className="highlight-model-nav-rail-thumb" style={{ top: highlightNavThumbTop }} />
+                </span>
                 <ul className="highlight-model-nav-list">
                   {highlightViews.map((view) => (
                     <li key={view.id}>
                       <button
                         type="button"
                         className={`highlight-model-nav-item ${activeHighlightView.id === view.id ? 'is-active' : ''}`}
-                        onClick={() => setActiveHighlightTab(view.id)}
+                        onClick={() => {
+                          changeHighlightToTab(view.id);
+                        }}
                         aria-pressed={activeHighlightView.id === view.id}
                       >
                         <span className="highlight-model-nav-icon" aria-hidden="true" />
@@ -6327,10 +6719,6 @@ export default function Planos() {
                           <div className="hero-illustration hero-real-mock" role="img" aria-label="Mock do painel real ZapVender com dashboard, eventos e funil">
                             <aside className="hero-real-sidebar">
                               <div className="hero-real-sidebar-main">
-                                <div className="hero-real-sidebar-brand">
-                                  <img src={brandFullLogoUrl} alt="ZapVender" />
-                                </div>
-
                                 <div className="hero-real-sidebar-groups">
                                   <div className="hero-real-sidebar-group">
                                     <div className="hero-real-nav-item is-active">
@@ -6554,17 +6942,6 @@ export default function Planos() {
 
             </div>
 
-            <article className={`highlight-model-resource-card is-${activeHighlightView.id.toLowerCase()}`} aria-label={`Resumo de recursos da aba ${activeHighlightView.navLabel}`}>
-              <div className="highlight-model-resource-grid cardsContainer">
-                {activeHighlightView.resourceItems.slice(0, 4).map((item) => (
-                  <article className="highlight-model-resource-item card" key={`${activeHighlightView.id}-${item.title}`}>
-                    <span className="highlight-model-resource-kicker">{item.subtitle}</span>
-                    <h4>{item.title}</h4>
-                    <p>{item.description}</p>
-                  </article>
-                ))}
-              </div>
-            </article>
           </section>
 
           <section className="plans-section section-variant-frame" id="planos-lista" aria-labelledby="titulo-planos">
