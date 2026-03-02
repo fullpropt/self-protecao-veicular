@@ -5185,14 +5185,14 @@ export default function Planos() {
 
         /* Final override: Dashboard com paleta da landing */
         .highlight-model-shell.is-dashboard {
-          --dashboard-base: linear-gradient(90deg, #001319 0%, #001a21 52%, #00141a 100%);
-          --dashboard-surface: linear-gradient(160deg, rgba(5, 13, 10, 0.96), rgba(4, 11, 9, 0.95) 58%, rgba(2, 6, 5, 0.98));
-          --dashboard-panel-surface: linear-gradient(155deg, rgba(9, 22, 17, 0.92), rgba(7, 17, 13, 0.9));
-          --dashboard-card-surface: linear-gradient(155deg, rgba(19, 42, 33, 0.93), rgba(16, 35, 28, 0.9));
-          --dashboard-sidebar-surface: linear-gradient(155deg, rgba(21, 46, 36, 0.95), rgba(17, 38, 30, 0.93));
+          --dashboard-base: linear-gradient(90deg, #07142b 0%, #0a1f3d 52%, #0a1932 100%);
+          --dashboard-surface: linear-gradient(160deg, rgba(11, 24, 49, 0.96), rgba(9, 19, 40, 0.95) 58%, rgba(7, 15, 33, 0.98));
+          --dashboard-panel-surface: linear-gradient(155deg, rgba(24, 41, 69, 0.92), rgba(18, 33, 59, 0.9));
+          --dashboard-card-surface: linear-gradient(155deg, rgba(36, 57, 89, 0.9), rgba(30, 49, 78, 0.88));
+          --dashboard-sidebar-surface: linear-gradient(155deg, rgba(13, 29, 56, 0.95), rgba(10, 24, 47, 0.93));
           background:
-            radial-gradient(620px 280px at 14% 0%, rgba(35, 198, 111, 0.09), rgba(35, 198, 111, 0) 74%),
-            radial-gradient(520px 240px at 90% 4%, rgba(21, 163, 74, 0.07), rgba(21, 163, 74, 0) 74%),
+            radial-gradient(620px 280px at 14% 0%, rgba(71, 124, 220, 0.2), rgba(71, 124, 220, 0) 74%),
+            radial-gradient(520px 240px at 90% 4%, rgba(34, 83, 163, 0.18), rgba(34, 83, 163, 0) 74%),
             var(--dashboard-base);
         }
 
@@ -5202,25 +5202,25 @@ export default function Planos() {
           border: none;
           box-shadow: none;
           background:
-            radial-gradient(440px 220px at 12% 0%, rgba(35, 198, 111, 0.14), rgba(35, 198, 111, 0) 72%),
-            radial-gradient(360px 180px at 96% 8%, rgba(21, 163, 74, 0.12), rgba(21, 163, 74, 0) 74%),
+            radial-gradient(440px 220px at 12% 0%, rgba(89, 137, 225, 0.2), rgba(89, 137, 225, 0) 72%),
+            radial-gradient(360px 180px at 96% 8%, rgba(54, 98, 179, 0.16), rgba(54, 98, 179, 0) 74%),
             var(--dashboard-surface);
         }
 
         .highlight-model-shell.is-dashboard .highlight-model-copy {
           background:
-            radial-gradient(420px 220px at 10% 0%, rgba(35, 198, 111, 0.12), rgba(35, 198, 111, 0) 72%),
-            linear-gradient(145deg, #123c2f, #0f2e23);
+            radial-gradient(420px 220px at 10% 0%, rgba(89, 137, 225, 0.18), rgba(89, 137, 225, 0) 72%),
+            linear-gradient(145deg, #101f3c, #0b1730);
         }
 
         .highlight-model-shell.is-dashboard .hero-real-main {
           background: var(--dashboard-panel-surface);
-          border-color: rgba(35, 198, 111, 0.22);
+          border-color: rgba(92, 137, 213, 0.28);
         }
 
         .highlight-model-shell.is-dashboard .hero-real-sidebar {
           background: var(--dashboard-sidebar-surface);
-          border-color: rgba(35, 198, 111, 0.3);
+          border-color: rgba(92, 137, 213, 0.34);
         }
 
         .highlight-model-shell.is-dashboard .hero-real-card,
@@ -5231,13 +5231,13 @@ export default function Planos() {
         .highlight-model-shell.is-dashboard .hero-real-chip,
         .highlight-model-shell.is-dashboard .hero-real-toggle {
           background: var(--dashboard-card-surface);
-          border-color: rgba(35, 198, 111, 0.26);
+          border-color: rgba(92, 137, 213, 0.3);
         }
 
         .highlight-model-shell.is-dashboard .hero-real-nav-item.is-active,
         .highlight-model-shell.is-dashboard .hero-real-toggle.is-active {
-          background: linear-gradient(90deg, rgba(30, 117, 83, 0.46), rgba(22, 60, 72, 0.32));
-          border-color: rgba(58, 214, 130, 0.36);
+          background: linear-gradient(90deg, rgba(21, 90, 85, 0.86), rgba(17, 75, 91, 0.72));
+          border-color: rgba(58, 202, 161, 0.42);
         }
 
         @media (min-width: 981px) {
