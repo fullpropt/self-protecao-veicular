@@ -353,6 +353,18 @@ export default function Login() {
           </div>
 
           <div className="form-group">
+            <label className="form-label">Nome da empresa</label>
+            <input
+              type="text"
+              className="form-input"
+              id="registerCompanyName"
+              placeholder="Digite o nome da empresa"
+              required
+              autoComplete="organization"
+            />
+          </div>
+
+          <div className="form-group">
             <label className="form-label">E-mail</label>
             <input
               type="email"

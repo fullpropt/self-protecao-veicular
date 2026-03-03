@@ -303,6 +303,7 @@ async function handleRegister(e: Event) {
     e.preventDefault();
 
     const name = getInputValue('registerName').trim();
+    const companyName = getInputValue('registerCompanyName').trim();
     const email = getInputValue('registerEmail').trim();
     const password = getInputValue('registerPassword');
     const confirm = getInputValue('registerConfirm');
@@ -310,7 +311,7 @@ async function handleRegister(e: Event) {
     const infoMsg = getAuthInfoElement();
     hideInfoMessage();
 
-    if (!name || !email || !password || !confirm) {
+    if (!name || !companyName || !email || !password || !confirm) {
         setErrorMessage(errorMsg, 'Preencha todos os campos');
         return false;
     }
@@ -333,6 +334,7 @@ async function handleRegister(e: Event) {
             },
             body: JSON.stringify({
                 name,
+                companyName,
                 email,
                 password
             })

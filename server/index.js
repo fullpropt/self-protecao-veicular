@@ -8853,13 +8853,13 @@ app.post('/api/auth/register', async (req, res) => {
 
     try {
 
-        const { name, email, password } = req.body;
+        const { name, companyName, email, password } = req.body;
 
 
 
-        if (!name || !email || !password) {
+        if (!name || !companyName || !email || !password) {
 
-            return res.status(400).json({ error: 'Nome, email e senha sao obrigatorios' });
+            return res.status(400).json({ error: 'Nome, nome da empresa, email e senha sao obrigatorios' });
 
         }
 
@@ -8876,6 +8876,7 @@ app.post('/api/auth/register', async (req, res) => {
         const { hashPassword } = require('./middleware/auth');
 
         const normalizedName = String(name || '').trim();
+        const normalizedCompanyName = String(companyName || '').trim();
         const normalizedEmail = String(email || '').trim().toLowerCase();
         const existing = await User.findActiveByEmail(normalizedEmail);
         const registrationPasswordHash = hashPassword(String(password));
@@ -8942,6 +8943,15 @@ app.post('/api/auth/register', async (req, res) => {
 
             return res.status(500).json({ error: 'Falha ao preparar cadastro do usuario' });
 
+        }
+
+        const ownerUserId = normalizeOwnerUserId(user?.owner_user_id) || Number(user?.id || 0);
+        if (ownerUserId > 0) {
+            await Settings.set(
+                buildScopedSettingsKey('company_name', ownerUserId),
+                normalizedCompanyName || normalizedName || 'ZapVender',
+                'string'
+            );
         }
 
         try {
@@ -14079,6 +14089,12 @@ async function buildApplicationAdminOverview() {
 
     for (const ownerId of ownerIds) {
         const ownerUser = usersById.get(ownerId) || await User.findById(ownerId);
+        let companyName = '';
+        try {
+            companyName = String(await Settings.get(buildScopedSettingsKey('company_name', ownerId)) || '').trim();
+        } catch (_) {
+            companyName = '';
+        }
         let plan;
         try {
             plan = await buildOwnerPlanStatus(ownerId);
@@ -14112,6 +14128,7 @@ async function buildApplicationAdminOverview() {
 
         accountSummaries.push({
             owner_user_id: ownerId,
+            company_name: companyName || String(ownerUser?.name || ownerUser?.email || `Conta ${ownerId}`),
             owner: ownerUser ? sanitizeUserPayload(ownerUser, ownerId) : null,
             plan,
             totals: {
@@ -14126,9 +14143,10 @@ async function buildApplicationAdminOverview() {
     }
 
     accountSummaries.sort((a, b) => {
-        const ownerA = a.owner || {};
-        const ownerB = b.owner || {};
-        return compareByTextAsc(ownerA.name || ownerA.email || String(a.owner_user_id), ownerB.name || ownerB.email || String(b.owner_user_id));
+        return compareByTextAsc(
+            a.company_name || a.owner?.name || a.owner?.email || String(a.owner_user_id),
+            b.company_name || b.owner?.name || b.owner?.email || String(b.owner_user_id)
+        );
     });
 
     const totalUsers = users.length;
@@ -14622,6 +14640,20 @@ app.put('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (req, 
                     error: 'Nao e possivel desativar a propria conta de administrador'
                 });
             }
+        }
+
+        const hasCompanyNamePayload =
+            Object.prototype.hasOwnProperty.call(body, 'company_name')
+            || Object.prototype.hasOwnProperty.call(body, 'companyName');
+        if (hasCompanyNamePayload) {
+            const companyName = String(body.company_name ?? body.companyName ?? '').trim();
+            if (!companyName) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Nome da empresa é obrigatório'
+                });
+            }
+            await Settings.set(buildScopedSettingsKey('company_name', ownerUserId), companyName, 'string');
         }
 
         userPayload.role = 'admin';

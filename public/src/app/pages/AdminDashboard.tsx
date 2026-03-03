@@ -27,6 +27,7 @@ type AppAdminPlan = {
 
 type AppAdminAccount = {
   owner_user_id: number;
+  company_name?: string;
   owner?: AppAdminUser | null;
   plan?: AppAdminPlan;
   totals?: {
@@ -86,6 +87,7 @@ type AdminApiResponse = {
 
 type AccountEditDraft = {
   ownerUserId: number;
+  companyName: string;
   name: string;
   email: string;
   isActive: boolean;
@@ -117,7 +119,7 @@ type ActiveTab = 'accounts' | 'email';
 
 const DEFAULT_SUBJECT_TEMPLATE = 'Confirme seu cadastro no {{app_name}}';
 const DEFAULT_TEXT_TEMPLATE = [
-  'Ola {{name}},',
+  'Olá {{name}},',
   '',
   'Para concluir seu cadastro no {{app_name}}, confirme seu email no link abaixo:',
   '{{confirmation_url}}',
@@ -125,7 +127,7 @@ const DEFAULT_TEXT_TEMPLATE = [
   'Este link expira em {{expires_in_text}}.'
 ].join('\n');
 const DEFAULT_HTML_TEMPLATE = [
-  '<p>Ola {{name}},</p>',
+  '<p>Olá {{name}},</p>',
   '<p>Para concluir seu cadastro no <strong>{{app_name}}</strong>, confirme seu email no link abaixo:</p>',
   '<p><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer">Confirmar email</a></p>',
   '<p>Este link expira em {{expires_in_text}}.</p>'
@@ -138,7 +140,7 @@ const PLAN_STATUS_OPTIONS = [
   { value: 'suspended', label: 'Suspenso' },
   { value: 'expired', label: 'Expirado' },
   { value: 'canceled', label: 'Cancelado' },
-  { value: 'unknown', label: 'Nao configurado' }
+  { value: 'unknown', label: 'Não configurado' }
 ];
 
 const USER_ROLE_OPTIONS = [
@@ -172,7 +174,7 @@ function normalizePlanStatus(value: unknown) {
 
 function planStatusLabel(value: unknown) {
   const normalized = normalizePlanStatus(value);
-  return PLAN_STATUS_OPTIONS.find((item) => item.value === normalized)?.label || 'Nao configurado';
+  return PLAN_STATUS_OPTIONS.find((item) => item.value === normalized)?.label || 'Não configurado';
 }
 
 function normalizeRole(value: unknown) {
@@ -210,11 +212,11 @@ async function adminApiRequest(endpoint: string, options: RequestInit = {}): Pro
     clearSessionAuthStorage();
     clearPersistedAuthSession();
     window.location.hash = '#/login';
-    throw new Error('Sessao expirada');
+    throw new Error('Sessão expirada');
   }
 
   if (!response.ok) {
-    throw new Error(String(data?.error || 'Falha na requisicao'));
+    throw new Error(String(data?.error || 'Falha na requisição'));
   }
 
   return data as AdminApiResponse;
@@ -274,7 +276,7 @@ export default function AdminDashboard() {
       setOverview(response?.overview || null);
       if (!silent) setOverviewError('');
     } catch (error) {
-      setOverviewError(error instanceof Error ? error.message : 'Falha ao carregar dashboard');
+      setOverviewError(error instanceof Error ? error.message : 'Falha ao carregar o dashboard');
     } finally {
       if (!silent) setLoadingOverview(false);
     }
@@ -314,7 +316,7 @@ export default function AdminDashboard() {
       setHtmlTemplate(String(settings.htmlTemplate || DEFAULT_HTML_TEMPLATE));
       setTextTemplate(String(settings.textTemplate || DEFAULT_TEXT_TEMPLATE));
     } catch (error) {
-      setEmailError(error instanceof Error ? error.message : 'Falha ao carregar configuracoes');
+      setEmailError(error instanceof Error ? error.message : 'Falha ao carregar configurações');
     } finally {
       setLoadingEmailSettings(false);
     }
@@ -358,6 +360,7 @@ export default function AdminDashboard() {
     setOverviewMessage('');
     setAccountDraft({
       ownerUserId: Number(account.owner_user_id || 0),
+      companyName: String(account.company_name || account.owner?.name || ''),
       name: String(account.owner?.name || ''),
       email: String(account.owner?.email || ''),
       isActive: Number(account.owner?.is_active) > 0,
@@ -372,12 +375,16 @@ export default function AdminDashboard() {
 
   const submitAccountEdit = async () => {
     if (!accountDraft) return;
+    if (!accountDraft.companyName.trim()) {
+      setOverviewError('Informe o nome da empresa da conta');
+      return;
+    }
     if (!accountDraft.name.trim()) {
       setOverviewError('Informe o nome do admin principal da conta');
       return;
     }
     if (!isValidEmailAddress(accountDraft.email)) {
-      setOverviewError('Informe um e-mail valido para a conta');
+      setOverviewError('Informe um e-mail válido para a conta');
       return;
     }
 
@@ -389,6 +396,7 @@ export default function AdminDashboard() {
       await adminApiRequest(`/api/admin/dashboard/accounts/${accountDraft.ownerUserId}`, {
         method: 'PUT',
         body: JSON.stringify({
+          company_name: accountDraft.companyName.trim(),
           name: accountDraft.name.trim(),
           email: accountDraft.email.trim().toLowerCase(),
           is_active: accountDraft.isActive ? 1 : 0,
@@ -415,7 +423,7 @@ export default function AdminDashboard() {
 
   const deactivateAccount = async (ownerUserId: number) => {
     if (!ownerUserId) return;
-    const confirmed = window.confirm('Desativar esta conta vai bloquear todos os usuarios vinculados. Deseja continuar?');
+    const confirmed = window.confirm('Desativar esta conta vai bloquear todos os usuários vinculados. Deseja continuar?');
     if (!confirmed) return;
 
     const busyKey = `account-delete-${ownerUserId}`;
@@ -425,7 +433,7 @@ export default function AdminDashboard() {
     try {
       const response = await adminApiRequest(`/api/admin/dashboard/accounts/${ownerUserId}`, { method: 'DELETE' });
       const disabledUsers = Number(response?.disabled_users || 0);
-      setOverviewMessage(disabledUsers > 0 ? `Conta desativada. ${disabledUsers} usuario(s) bloqueados.` : 'Conta desativada com sucesso.');
+      setOverviewMessage(disabledUsers > 0 ? `Conta desativada. ${disabledUsers} usuário(s) bloqueados.` : 'Conta desativada com sucesso.');
       await loadOverview({ silent: true });
     } catch (error) {
       setOverviewError(error instanceof Error ? error.message : 'Falha ao desativar conta');
@@ -460,7 +468,7 @@ export default function AdminDashboard() {
     setOverviewMessage('');
     setUserActionConfirmDraft({
       userId,
-      name: String(user.name || user.email || `Usuario ${userId}`),
+      name: String(user.name || user.email || `Usuário ${userId}`),
       isActive: Number(user.is_active) > 0
     });
   };
@@ -468,11 +476,11 @@ export default function AdminDashboard() {
   const submitUserEdit = async () => {
     if (!userDraft) return;
     if (!userDraft.name.trim()) {
-      setOverviewError('Informe o nome do usuario');
+      setOverviewError('Informe o nome do usuário');
       return;
     }
     if (!isValidEmailAddress(userDraft.email)) {
-      setOverviewError('Informe um e-mail valido para o usuario');
+      setOverviewError('Informe um e-mail válido para o usuário');
       return;
     }
 
@@ -493,10 +501,10 @@ export default function AdminDashboard() {
       });
 
       setUserDraft(null);
-      setOverviewMessage('Usuario atualizado com sucesso.');
+      setOverviewMessage('Usuário atualizado com sucesso.');
       await loadOverview({ silent: true });
     } catch (error) {
-      setOverviewError(error instanceof Error ? error.message : 'Falha ao atualizar usuario');
+      setOverviewError(error instanceof Error ? error.message : 'Falha ao atualizar usuário');
     } finally {
       setOverviewBusyKey('');
     }
@@ -515,11 +523,11 @@ export default function AdminDashboard() {
         : `/api/admin/dashboard/users/${userId}?mode=delete`;
       await adminApiRequest(endpoint, { method: 'DELETE' });
       setUserActionConfirmDraft(null);
-      setOverviewMessage(isActive ? 'Usuario desativado com sucesso.' : 'Usuario excluido com sucesso.');
+      setOverviewMessage(isActive ? 'Usuário desativado com sucesso.' : 'Usuário excluído com sucesso.');
       await loadOverview({ silent: true });
     } catch (error) {
       setUserActionConfirmDraft(null);
-      setOverviewError(error instanceof Error ? error.message : (isActive ? 'Falha ao desativar usuario' : 'Falha ao excluir usuario'));
+      setOverviewError(error instanceof Error ? error.message : (isActive ? 'Falha ao desativar usuário' : 'Falha ao excluir usuário'));
     } finally {
       setOverviewBusyKey('');
     }
@@ -539,10 +547,10 @@ export default function AdminDashboard() {
         method: 'PUT',
         body: JSON.stringify({ is_active: 1 })
       });
-      setOverviewMessage('Usuario reativado com sucesso.');
+      setOverviewMessage('Usuário reativado com sucesso.');
       await loadOverview({ silent: true });
     } catch (error) {
-      setOverviewError(error instanceof Error ? error.message : 'Falha ao reativar usuario');
+      setOverviewError(error instanceof Error ? error.message : 'Falha ao reativar usuário');
     } finally {
       setOverviewBusyKey('');
     }
@@ -615,9 +623,9 @@ export default function AdminDashboard() {
       setSubjectTemplate(String(settings.subjectTemplate || DEFAULT_SUBJECT_TEMPLATE));
       setHtmlTemplate(String(settings.htmlTemplate || DEFAULT_HTML_TEMPLATE));
       setTextTemplate(String(settings.textTemplate || DEFAULT_TEXT_TEMPLATE));
-      setEmailSuccess('Configuracoes salvas com sucesso.');
+      setEmailSuccess('Configurações salvas com sucesso.');
     } catch (error) {
-      setEmailError(error instanceof Error ? error.message : 'Falha ao salvar configuracoes');
+      setEmailError(error instanceof Error ? error.message : 'Falha ao salvar configurações');
     } finally {
       setSavingEmailSettings(false);
     }
@@ -720,13 +728,13 @@ export default function AdminDashboard() {
         <div className="page-header">
           <div className="page-title">
             <h1>Dashboard Administrativo</h1>
-            <p>Gestao central de contas, usuarios e configuracao de email da plataforma.</p>
+            <p>Gestão central de contas, usuários e configuração de e-mail da plataforma.</p>
           </div>
         </div>
 
         <div className="admin-tabs">
           <button className={`admin-tab-btn ${activeTab === 'accounts' ? 'active' : ''}`} onClick={() => setActiveTab('accounts')} type="button">Contas e Planos</button>
-          <button className={`admin-tab-btn ${activeTab === 'email' ? 'active' : ''}`} onClick={() => setActiveTab('email')} type="button">Configuracao de Email</button>
+          <button className={`admin-tab-btn ${activeTab === 'email' ? 'active' : ''}`} onClick={() => setActiveTab('email')} type="button">Configuração de E-mail</button>
         </div>
 
         {activeTab === 'accounts' && (
@@ -741,8 +749,8 @@ export default function AdminDashboard() {
                 <div className="admin-overview-hero">
                   <div className="admin-grid">
                     <div className="admin-stat"><div className="admin-stat-label">Contas</div><div className="admin-stat-value">{Number(summary.total_accounts || 0)}</div></div>
-                    <div className="admin-stat"><div className="admin-stat-label">Usuarios</div><div className="admin-stat-value">{Number(summary.total_users || 0)}</div></div>
-                    <div className="admin-stat"><div className="admin-stat-label">Usuarios ativos</div><div className="admin-stat-value">{Number(summary.total_active_users || 0)}</div></div>
+                    <div className="admin-stat"><div className="admin-stat-label">Usuários</div><div className="admin-stat-value">{Number(summary.total_users || 0)}</div></div>
+                    <div className="admin-stat"><div className="admin-stat-label">Usuários ativos</div><div className="admin-stat-value">{Number(summary.total_active_users || 0)}</div></div>
                     <div className="admin-stat"><div className="admin-stat-label">Emails pendentes</div><div className="admin-stat-value">{Number(summary.total_pending_email_confirmation || 0)}</div></div>
                   </div>
                   <div className="admin-breakdown">
@@ -750,7 +758,7 @@ export default function AdminDashboard() {
                       <span className="admin-badge" key={status}>{planStatusLabel(status)} <strong>{Number(total || 0)}</strong></span>
                     ))}
                   </div>
-                  <div className="admin-muted" style={{ marginTop: 10 }}>Ultima atualizacao: {formatDateTime(overview?.generated_at)}</div>
+                  <div className="admin-muted" style={{ marginTop: 10 }}>Última atualização: {formatDateTime(overview?.generated_at)}</div>
                 </div>
 
                 {accounts.length === 0 && <div className="admin-empty">Nenhuma conta encontrada para gerenciamento.</div>}
@@ -762,12 +770,12 @@ export default function AdminDashboard() {
                     <div className="admin-account-card" key={account.owner_user_id}>
                       <div className="admin-account-head">
                         <div>
-                          <h3 className="admin-account-name">{String(account.owner?.name || account.owner?.email || `Conta ${account.owner_user_id}`)}</h3>
+                          <h3 className="admin-account-name">{String(account.company_name || account.owner?.name || account.owner?.email || `Conta ${account.owner_user_id}`)}</h3>
                           <div className="admin-account-meta">Owner ID: {account.owner_user_id} | Email: {String(account.owner?.email || '-')}</div>
                           <div className="admin-account-tags">
                             <span className={`admin-pill ${ownerActive ? 'is-active' : 'is-inactive'}`}>{ownerActive ? 'Conta ativa' : 'Conta inativa'}</span>
                             <span className="admin-pill">Plano: {String(account.plan?.status_label || planStatusLabel(account.plan?.status))}</span>
-                            <span className="admin-pill">Usuarios: {Number(account.totals?.total_users || 0)}</span>
+                            <span className="admin-pill">Usuários: {Number(account.totals?.total_users || 0)}</span>
                             <span className="admin-pill">Pendentes: {Number(account.totals?.pending_email_confirmation || 0)}</span>
                           </div>
                         </div>
@@ -778,18 +786,18 @@ export default function AdminDashboard() {
                       </div>
 
                       <div className="admin-plan-grid">
-                        <div className="admin-plan-card"><div className="admin-plan-label">Nome do plano</div><div className="admin-plan-value">{String(account.plan?.name || 'Nao configurado')}</div></div>
+                        <div className="admin-plan-card"><div className="admin-plan-label">Nome do plano</div><div className="admin-plan-value">{String(account.plan?.name || 'Não configurado')}</div></div>
                         <div className="admin-plan-card"><div className="admin-plan-label">Status</div><div className="admin-plan-value">{String(account.plan?.status_label || planStatusLabel(account.plan?.status))}</div></div>
                         <div className="admin-plan-card"><div className="admin-plan-label">Provider</div><div className="admin-plan-value">{String(account.plan?.provider || '-')}</div></div>
-                        <div className="admin-plan-card"><div className="admin-plan-label">Renovacao</div><div className="admin-plan-value">{formatDateTime(account.plan?.renewal_date)}</div></div>
+                        <div className="admin-plan-card"><div className="admin-plan-label">Renovação</div><div className="admin-plan-value">{formatDateTime(account.plan?.renewal_date)}</div></div>
                       </div>
 
                       <div className="admin-account-users">
-                        <div className="admin-section-title">Usuarios da conta</div>
+                        <div className="admin-section-title">Usuários da conta</div>
                         <div className="admin-table-wrap">
                           <table className="admin-table">
                             <thead>
-                              <tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Status</th><th>Email</th><th>Ultimo login</th><th>Acoes</th></tr>
+                              <tr><th>Nome</th><th>Email</th><th>Perfil</th><th>Status</th><th>Email</th><th>Último login</th><th>Ações</th></tr>
                             </thead>
                             <tbody>
                               {(Array.isArray(account.users) ? account.users : []).map((item) => {
@@ -823,7 +831,7 @@ export default function AdminDashboard() {
                                           <>
                                             <button
                                               type="button"
-                                              className="btn btn-outline btn-sm"
+                                              className="btn btn-success btn-sm"
                                               onClick={() => reactivateUser(item)}
                                               disabled={isDeleting || isReactivating}
                                             >
@@ -860,13 +868,13 @@ export default function AdminDashboard() {
         {activeTab === 'email' && (
           <div className="admin-settings-card">
             {loadingEmailSettings ? (
-              <div className="admin-muted">Carregando configuracoes...</div>
+              <div className="admin-muted">Carregando configurações...</div>
             ) : (
               <>
                 <div className="admin-settings-grid">
                   <div className="admin-form-group"><label>Provider</label><select value={provider} onChange={(event) => setProvider(event.target.value)}><option value="mailgun">Mailgun</option><option value="sendgrid">SendGrid</option></select></div>
-                  <div className="admin-form-group"><label>Nome da aplicacao</label><input value={appName} onChange={(event) => setAppName(event.target.value)} /></div>
-                  <div className="admin-form-group"><label>Timeout da requisicao (ms)</label><input type="number" min={1000} max={60000} value={requestTimeoutMs} onChange={(event) => setRequestTimeoutMs(Number(event.target.value || 10000))} /></div>
+                  <div className="admin-form-group"><label>Nome da aplicação</label><input value={appName} onChange={(event) => setAppName(event.target.value)} /></div>
+                  <div className="admin-form-group"><label>Timeout da requisição (ms)</label><input type="number" min={1000} max={60000} value={requestTimeoutMs} onChange={(event) => setRequestTimeoutMs(Number(event.target.value || 10000))} /></div>
 
                   {provider === 'mailgun' && (
                     <>
@@ -878,8 +886,8 @@ export default function AdminDashboard() {
                       <div className="admin-form-group"><label>MAILGUN_REPLY_TO_NAME (opcional)</label><input value={mailgunReplyToName} onChange={(event) => setMailgunReplyToName(event.target.value)} /></div>
                       <div className="admin-form-group">
                         <label>MAILGUN_API_KEY</label>
-                        <input type="password" value={mailgunApiKeyInput} onChange={(event) => setMailgunApiKeyInput(event.target.value)} placeholder={hasMailgunApiKey ? 'Chave ja configurada. Preencha apenas se quiser substituir.' : 'Cole a API key do Mailgun'} />
-                        <div className="admin-muted">Atual: {hasMailgunApiKey ? mailgunApiKeyMasked || 'Configurada' : 'Nao configurada'}</div>
+                        <input type="password" value={mailgunApiKeyInput} onChange={(event) => setMailgunApiKeyInput(event.target.value)} placeholder={hasMailgunApiKey ? 'Chave já configurada. Preencha apenas se quiser substituir.' : 'Cole a API key do Mailgun'} />
+                        <div className="admin-muted">Atual: {hasMailgunApiKey ? mailgunApiKeyMasked || 'Configurada' : 'Não configurada'}</div>
                         <label style={{ marginTop: 8, display: 'inline-flex', gap: 8, alignItems: 'center', fontWeight: 400 }}><input type="checkbox" checked={removeMailgunApiKey} onChange={(event) => setRemoveMailgunApiKey(event.target.checked)} />Remover chave salva</label>
                       </div>
                     </>
@@ -893,8 +901,8 @@ export default function AdminDashboard() {
                       <div className="admin-form-group"><label>Reply-To nome (opcional)</label><input value={sendgridReplyToName} onChange={(event) => setSendgridReplyToName(event.target.value)} /></div>
                       <div className="admin-form-group">
                         <label>SENDGRID_API_KEY</label>
-                        <input type="password" value={sendgridApiKeyInput} onChange={(event) => setSendgridApiKeyInput(event.target.value)} placeholder={hasSendgridApiKey ? 'Chave ja configurada. Preencha apenas se quiser substituir.' : 'Cole a API key do SendGrid'} />
-                        <div className="admin-muted">Atual: {hasSendgridApiKey ? sendgridApiKeyMasked || 'Configurada' : 'Nao configurada'}</div>
+                        <input type="password" value={sendgridApiKeyInput} onChange={(event) => setSendgridApiKeyInput(event.target.value)} placeholder={hasSendgridApiKey ? 'Chave já configurada. Preencha apenas se quiser substituir.' : 'Cole a API key do SendGrid'} />
+                        <div className="admin-muted">Atual: {hasSendgridApiKey ? sendgridApiKeyMasked || 'Configurada' : 'Não configurada'}</div>
                         <label style={{ marginTop: 8, display: 'inline-flex', gap: 8, alignItems: 'center', fontWeight: 400 }}><input type="checkbox" checked={removeSendgridApiKey} onChange={(event) => setRemoveSendgridApiKey(event.target.checked)} />Remover chave salva</label>
                       </div>
                     </>
@@ -904,10 +912,10 @@ export default function AdminDashboard() {
                 <div className="admin-form-group"><label>Template - Assunto</label><input value={subjectTemplate} onChange={(event) => setSubjectTemplate(event.target.value)} /></div>
                 <div className="admin-form-group"><label>Template - HTML</label><textarea value={htmlTemplate} onChange={(event) => setHtmlTemplate(event.target.value)} /></div>
                 <div className="admin-form-group"><label>Template - Texto</label><textarea value={textTemplate} onChange={(event) => setTextTemplate(event.target.value)} /></div>
-                <div className="admin-muted">Variaveis disponiveis: {'{{name}}'}, {'{{email}}'}, {'{{confirmation_url}}'}, {'{{app_name}}'}, {'{{expires_in_text}}'}</div>
+                <div className="admin-muted">Variáveis disponíveis: {'{{name}}'}, {'{{email}}'}, {'{{confirmation_url}}'}, {'{{app_name}}'}, {'{{expires_in_text}}'}</div>
 
                 <div className="admin-actions">
-                  <button type="button" className="btn btn-primary" onClick={saveEmailSettings} disabled={savingEmailSettings}>{savingEmailSettings ? 'Salvando...' : 'Salvar configuracoes'}</button>
+                  <button type="button" className="btn btn-primary" onClick={saveEmailSettings} disabled={savingEmailSettings}>{savingEmailSettings ? 'Salvando...' : 'Salvar configurações'}</button>
                   <input type="email" className="form-input" style={{ maxWidth: 320 }} placeholder="email@destino.com" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} />
                   <button type="button" className="btn btn-outline" onClick={sendTestEmail} disabled={sendingTestEmail}>{sendingTestEmail ? 'Enviando teste...' : 'Enviar teste'}</button>
                 </div>
@@ -927,6 +935,12 @@ export default function AdminDashboard() {
               <button type="button" className="modal-close" onClick={() => setAccountDraft(null)}>{'\u00D7'}</button>
             </div>
             <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Nome da empresa</label>
+                  <input className="form-input" value={accountDraft.companyName} onChange={(event) => setAccountDraft({ ...accountDraft, companyName: event.target.value })} />
+                </div>
+              </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Nome do admin principal</label>
@@ -960,7 +974,7 @@ export default function AdminDashboard() {
                   <input className="form-input" value={accountDraft.planName} onChange={(event) => setAccountDraft({ ...accountDraft, planName: event.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Codigo do plano</label>
+                  <label className="form-label">Código do plano</label>
                   <input className="form-input" value={accountDraft.planCode} onChange={(event) => setAccountDraft({ ...accountDraft, planCode: event.target.value })} />
                 </div>
               </div>
@@ -970,7 +984,7 @@ export default function AdminDashboard() {
                   <input className="form-input" value={accountDraft.planProvider} onChange={(event) => setAccountDraft({ ...accountDraft, planProvider: event.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Data de renovacao</label>
+                  <label className="form-label">Data de renovação</label>
                   <input className="form-input" type="date" value={accountDraft.planRenewalDate} onChange={(event) => setAccountDraft({ ...accountDraft, planRenewalDate: event.target.value })} />
                 </div>
               </div>
@@ -992,7 +1006,7 @@ export default function AdminDashboard() {
         <div className="modal-overlay active">
           <div className="modal">
             <div className="modal-header">
-              <h3 className="modal-title">Editar usuario</h3>
+              <h3 className="modal-title">Editar usuário</h3>
               <button type="button" className="modal-close" onClick={() => setUserDraft(null)}>{'\u00D7'}</button>
             </div>
             <div className="modal-body">
@@ -1028,11 +1042,11 @@ export default function AdminDashboard() {
                   Email confirmado
                 </label>
               </div>
-              {userDraft.isPrimaryAdmin && <div className="admin-modal-note">Este usuario e o admin principal da conta. Algumas alteracoes ficam bloqueadas por seguranca.</div>}
+              {userDraft.isPrimaryAdmin && <div className="admin-modal-note">Este usuário é o admin principal da conta. Algumas alterações ficam bloqueadas por segurança.</div>}
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-outline" onClick={() => setUserDraft(null)}>Cancelar</button>
-              <button type="button" className="btn btn-primary" onClick={submitUserEdit} disabled={Boolean(userEditBusy)}>{userEditBusy ? 'Salvando...' : 'Salvar usuario'}</button>
+              <button type="button" className="btn btn-primary" onClick={submitUserEdit} disabled={Boolean(userEditBusy)}>{userEditBusy ? 'Salvando...' : 'Salvar usuário'}</button>
             </div>
           </div>
         </div>
@@ -1041,23 +1055,23 @@ export default function AdminDashboard() {
         <div className="modal-overlay active">
           <div className="modal">
             <div className="modal-header">
-              <h3 className="modal-title">{userActionConfirmDraft.isActive ? 'Confirmar desativacao' : 'Confirmar exclusao'}</h3>
+              <h3 className="modal-title">{userActionConfirmDraft.isActive ? 'Confirmar desativação' : 'Confirmar exclusão'}</h3>
               <button type="button" className="modal-close" onClick={() => setUserActionConfirmDraft(null)} disabled={Boolean(userActionBusy)}>{'\u00D7'}</button>
             </div>
             <div className="modal-body">
               <p className="admin-muted" style={{ margin: 0 }}>
                 {userActionConfirmDraft.isActive
-                  ? `Deseja desativar o usuario "${userActionConfirmDraft.name}"?`
-                  : `Deseja excluir permanentemente o usuario "${userActionConfirmDraft.name}"?`}
+                  ? `Deseja desativar o usuário "${userActionConfirmDraft.name}"?`
+                  : `Deseja excluir permanentemente o usuário "${userActionConfirmDraft.name}"?`}
               </p>
               {!userActionConfirmDraft.isActive && (
-                <div className="admin-modal-note">Esta acao nao pode ser desfeita.</div>
+                <div className="admin-modal-note">Esta ação não pode ser desfeita.</div>
               )}
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-outline" onClick={() => setUserActionConfirmDraft(null)} disabled={Boolean(userActionBusy)}>Cancelar</button>
               <button type="button" className="btn btn-outline-danger" onClick={confirmUserAction} disabled={Boolean(userActionBusy)}>
-                {userActionBusy ? (userActionConfirmDraft.isActive ? 'Desativando...' : 'Excluindo...') : (userActionConfirmDraft.isActive ? 'Desativar usuario' : 'Excluir usuario')}
+                {userActionBusy ? (userActionConfirmDraft.isActive ? 'Desativando...' : 'Excluindo...') : (userActionConfirmDraft.isActive ? 'Desativar usuário' : 'Excluir usuário')}
               </button>
             </div>
           </div>
