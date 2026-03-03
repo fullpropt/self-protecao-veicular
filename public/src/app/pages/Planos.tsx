@@ -1134,12 +1134,10 @@ export default function Planos() {
           line-height: 1;
         }
 
-        .hero-proof-chip::before {
-          content: '';
-          width: 4px;
-          height: 4px;
-          border-radius: 999px;
-          background: rgba(107, 246, 171, 0.95);
+        .hero-proof-chip::before,
+        .hero-proof-chip::after {
+          content: none !important;
+          display: none !important;
         }
 
         .hero-note {
@@ -3550,12 +3548,13 @@ export default function Planos() {
         }
 
         .highlight-model-preview.is-dashboard-preview .hero-screen-brand {
-          font-size: 12px;
+          gap: 12px;
+          font-size: 14.4px;
         }
 
         .highlight-model-preview.is-dashboard-preview .hero-screen-brand img {
-          width: 22px;
-          height: 22px;
+          width: 26.4px;
+          height: 26.4px;
         }
 
         .highlight-model-preview.is-dashboard-preview .hero-real-mock {
