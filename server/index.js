@@ -14780,22 +14780,6 @@ app.delete('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (re
         }
 
         if (hardDelete) {
-            const requesterId = Number(req.user?.id || 0);
-            if (usersById.has(requesterId)) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Nao e possivel excluir a propria conta de administrador'
-                });
-            }
-
-            const hasActiveUsers = usersInAccount.some((user) => Number(user?.is_active) > 0);
-            if (hasActiveUsers) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Desative a conta antes de excluir'
-                });
-            }
-
             const userIds = usersInAccount
                 .map((user) => Number(user?.id || 0))
                 .filter((id) => Number.isInteger(id) && id > 0);
