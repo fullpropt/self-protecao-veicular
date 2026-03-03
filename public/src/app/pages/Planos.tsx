@@ -4705,6 +4705,7 @@ export default function Planos() {
             radial-gradient(320px 170px at 100% 0%, rgba(35, 198, 111, 0.16), rgba(35, 198, 111, 0)),
             linear-gradient(160deg, rgba(5, 13, 16, 0.99), rgba(3, 9, 12, 0.99));
           border-color: rgba(35, 198, 111, 0.38);
+          padding-top: 34px;
           box-shadow:
             0 14px 36px rgba(35, 198, 111, 0.2),
             0 0 0 1px rgba(35, 198, 111, 0.14);
@@ -4712,9 +4713,10 @@ export default function Planos() {
 
         .pricing-popular-badge {
           position: absolute;
-          top: -12px;
+          top: 8px;
           left: 50%;
           transform: translateX(-50%);
+          z-index: 2;
           border-radius: 999px;
           border: 1px solid rgba(35, 198, 111, 0.35);
           background: linear-gradient(180deg, rgba(35, 198, 111, 0.26), rgba(35, 198, 111, 0.16));
@@ -6210,8 +6212,12 @@ export default function Planos() {
             gap: 10px;
           }
 
+          .pricing-card.is-featured {
+            padding-top: 30px;
+          }
+
           .pricing-popular-badge {
-            top: -10px;
+            top: 7px;
             font-size: 10px;
             padding: 4px 10px;
           }
