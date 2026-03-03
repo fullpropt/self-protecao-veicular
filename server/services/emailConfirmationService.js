@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const EMAIL_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EXPIRES_IN_TEXT = '24 horas';
@@ -63,6 +65,32 @@ function clampNumber(value, fallback, min = 1000, max = 60000) {
 
 function trimTrailingSlash(value) {
     return String(value || '').replace(/\/+$/, '');
+}
+
+function resolveLogoPathname() {
+    const envLogoPath = String(process.env.EMAIL_LOGO_PATH || '').trim();
+    if (envLogoPath && envLogoPath.startsWith('/')) {
+        return envLogoPath;
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        try {
+            const assetsDir = path.join(__dirname, '..', '..', 'dist', 'assets');
+            if (fs.existsSync(assetsDir)) {
+                const candidates = fs.readdirSync(assetsDir)
+                    .filter((fileName) => /^zapvender-logo-.*\.svg$/i.test(String(fileName || '')));
+                if (candidates.length > 0) {
+                    candidates.sort();
+                    const latest = candidates[candidates.length - 1];
+                    return `/assets/${latest}`;
+                }
+            }
+        } catch (_) {
+            // noop
+        }
+    }
+
+    return '/img/logo-zapvender.svg';
 }
 
 function normalizeEmail(value) {
@@ -259,8 +287,9 @@ function buildEmailTemplateContext(user, confirmationUrl, options = {}) {
     } catch (_) {
         // noop
     }
-    const logoUrl = String(options.logoUrl || '').trim()
-        || (appUrl ? `${appUrl}/img/logo-zapvender.svg` : 'https://zapvender.com/img/logo-zapvender.svg');
+    const logoPathname = resolveLogoPathname();
+    const logoUrl = String(options.logoUrl || process.env.COMPANY_LOGO_URL || process.env.EMAIL_LOGO_URL || '').trim()
+        || (appUrl ? `${trimTrailingSlash(appUrl)}${logoPathname}` : `https://zapvender.com${logoPathname}`);
 
     return {
         name,
