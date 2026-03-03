@@ -14428,11 +14428,16 @@ app.delete('/api/admin/dashboard/users/:id', authenticate, async (req, res) => {
             });
         }
 
+        const modeRaw = String(req.query?.mode || '').trim().toLowerCase();
+        const hardDelete = ['delete', 'hard', 'purge', 'remove', 'excluir'].includes(modeRaw);
+
         const requesterId = Number(req.user?.id || 0);
         if (requesterId === targetId) {
             return res.status(400).json({
                 success: false,
-                error: 'Nao e possivel desativar o proprio usuario'
+                error: hardDelete
+                    ? 'Nao e possivel excluir o proprio usuario'
+                    : 'Nao e possivel desativar o proprio usuario'
             });
         }
 
@@ -14452,18 +14457,105 @@ app.delete('/api/admin/dashboard/users/:id', authenticate, async (req, res) => {
             });
         }
 
-        await User.update(targetId, { is_active: 0 });
+        if (!hardDelete) {
+            await User.update(targetId, { is_active: 0 });
+            markUserPresenceOffline(targetId);
+            const updated = await User.findById(targetId);
+            return res.json({
+                success: true,
+                user: sanitizeUserPayload(updated, ownerUserId)
+            });
+        }
+
+        const fallbackOwnerUserId = ownerUserId && ownerUserId !== targetId ? ownerUserId : null;
+        const fallbackAssignedUserId = Number.isInteger(fallbackOwnerUserId) && fallbackOwnerUserId > 0
+            ? fallbackOwnerUserId
+            : null;
+
+        const runSafeReferenceUpdate = async (sql, params = []) => {
+            try {
+                await run(sql, params);
+            } catch (error) {
+                const message = String(error?.message || '').toLowerCase();
+                if (
+                    message.includes('does not exist') ||
+                    message.includes('undefined table') ||
+                    message.includes('undefined column')
+                ) {
+                    return;
+                }
+                throw error;
+            }
+        };
+
+        await run('BEGIN');
+        try {
+            await run(
+                'UPDATE users SET owner_user_id = ? WHERE owner_user_id = ? AND id <> ?',
+                [fallbackAssignedUserId, targetId, targetId]
+            );
+            await run(
+                'UPDATE leads SET assigned_to = ? WHERE assigned_to = ?',
+                [fallbackAssignedUserId, targetId]
+            );
+            await run(
+                'UPDATE leads SET owner_user_id = ? WHERE owner_user_id = ?',
+                [fallbackAssignedUserId, targetId]
+            );
+            await run(
+                'UPDATE conversations SET assigned_to = ? WHERE assigned_to = ?',
+                [fallbackAssignedUserId, targetId]
+            );
+
+            const createdByTables = [
+                'flows',
+                'templates',
+                'campaigns',
+                'automations',
+                'custom_events',
+                'webhooks',
+                'whatsapp_sessions',
+                'tags'
+            ];
+
+            for (const tableName of createdByTables) {
+                await runSafeReferenceUpdate(
+                    `UPDATE ${tableName} SET created_by = ? WHERE created_by = ?`,
+                    [fallbackAssignedUserId, targetId]
+                );
+            }
+
+            await runSafeReferenceUpdate(
+                'UPDATE tenant_integrity_audit_runs SET owner_user_id = ? WHERE owner_user_id = ?',
+                [fallbackAssignedUserId, targetId]
+            );
+            await runSafeReferenceUpdate(
+                'UPDATE audit_logs SET user_id = NULL WHERE user_id = ?',
+                [targetId]
+            );
+
+            await run('DELETE FROM users WHERE id = ?', [targetId]);
+            await run('COMMIT');
+        } catch (error) {
+            try {
+                await run('ROLLBACK');
+            } catch (_) {
+                // ignore rollback failure
+            }
+            throw error;
+        }
+
         markUserPresenceOffline(targetId);
-        const updated = await User.findById(targetId);
         return res.json({
             success: true,
-            user: sanitizeUserPayload(updated, ownerUserId)
+            deleted: true,
+            user_id: targetId
         });
     } catch (error) {
         console.error('[admin/dashboard/users:delete] falha:', error);
         return res.status(500).json({
             success: false,
-            error: 'Falha ao desativar usuario'
+            error: 'Falha ao remover usuario'
         });
     }
 });

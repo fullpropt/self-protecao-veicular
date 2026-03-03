@@ -486,7 +486,12 @@ export default function AdminDashboard() {
       return;
     }
 
-    const confirmed = window.confirm('Deseja desativar este usuario?');
+    const isActive = Number(user.is_active) > 0;
+    const confirmed = window.confirm(
+      isActive
+        ? 'Deseja desativar este usuario?'
+        : 'Deseja excluir permanentemente este usuario inativo? Esta acao nao pode ser desfeita.'
+    );
     if (!confirmed) return;
 
     const busyKey = `user-delete-${userId}`;
@@ -494,11 +499,14 @@ export default function AdminDashboard() {
     setOverviewError('');
     setOverviewMessage('');
     try {
-      await adminApiRequest(`/api/admin/dashboard/users/${userId}`, { method: 'DELETE' });
-      setOverviewMessage('Usuario desativado com sucesso.');
+      const endpoint = isActive
+        ? `/api/admin/dashboard/users/${userId}`
+        : `/api/admin/dashboard/users/${userId}?mode=delete`;
+      await adminApiRequest(endpoint, { method: 'DELETE' });
+      setOverviewMessage(isActive ? 'Usuario desativado com sucesso.' : 'Usuario excluido com sucesso.');
       await loadOverview({ silent: true });
     } catch (error) {
-      setOverviewError(error instanceof Error ? error.message : 'Falha ao desativar usuario');
+      setOverviewError(error instanceof Error ? error.message : (isActive ? 'Falha ao desativar usuario' : 'Falha ao excluir usuario'));
     } finally {
       setOverviewBusyKey('');
     }
@@ -751,7 +759,7 @@ export default function AdminDashboard() {
                                 const userId = Number(item.id || 0);
                                 const isActive = Number(item.is_active) > 0;
                                 const isDeleting = overviewBusyKey === `user-delete-${userId}`;
-                                const disableDelete = item.is_primary_admin === true || !isActive;
+                                const disableDelete = item.is_primary_admin === true;
                                 return (
                                   <tr key={`${account.owner_user_id}-${item.id || item.email}`}>
                                     <td>{String(item.name || '-')}</td>
@@ -763,7 +771,15 @@ export default function AdminDashboard() {
                                     <td>
                                       <div className="admin-user-actions">
                                         <button type="button" className="btn btn-outline btn-sm" onClick={() => openUserEditor(item)}>Editar</button>
-                                        <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => deactivateUser(item)} disabled={disableDelete || isDeleting} title={item.is_primary_admin ? 'Admin principal deve ser gerenciado na conta' : ''}>{isDeleting ? 'Desativando...' : 'Desativar'}</button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-outline-danger btn-sm"
+                                          onClick={() => deactivateUser(item)}
+                                          disabled={disableDelete || isDeleting}
+                                          title={item.is_primary_admin ? 'Admin principal deve ser gerenciado na conta' : ''}
+                                        >
+                                          {isDeleting ? (isActive ? 'Desativando...' : 'Excluindo...') : (isActive ? 'Desativar' : 'Excluir')}
+                                        </button>
                                       </div>
                                     </td>
                                   </tr>
