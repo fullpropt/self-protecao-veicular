@@ -770,6 +770,11 @@ app.use('/api', (req, res, next) => {
 
 // Arquivos estáticos
 
+const PUBLIC_IMG_DIR = path.join(__dirname, '..', 'public', 'img');
+if (fs.existsSync(PUBLIC_IMG_DIR)) {
+    app.use('/img', express.static(PUBLIC_IMG_DIR));
+}
+
 app.use(express.static(STATIC_DIR, {
 
     setHeaders: (res, filePath) => {

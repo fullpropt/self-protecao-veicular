@@ -67,6 +67,30 @@ function trimTrailingSlash(value) {
     return String(value || '').replace(/\/+$/, '');
 }
 
+function isLocalHostname(hostname = '') {
+    const normalized = String(hostname || '').trim().toLowerCase();
+    return (
+        normalized === 'localhost'
+        || normalized === '127.0.0.1'
+        || normalized === '::1'
+        || normalized.endsWith('.local')
+    );
+}
+
+function normalizePublicAppUrl(rawUrl) {
+    const normalized = trimTrailingSlash(rawUrl || '');
+    if (!normalized) return '';
+    try {
+        const parsed = new URL(normalized);
+        if (parsed.protocol === 'http:' && !isLocalHostname(parsed.hostname)) {
+            parsed.protocol = 'https:';
+        }
+        return trimTrailingSlash(parsed.toString());
+    } catch (_) {
+        return normalized;
+    }
+}
+
 function resolveLogoPathname() {
     const envLogoPath = String(process.env.EMAIL_LOGO_PATH || '').trim();
     if (envLogoPath && envLogoPath.startsWith('/')) {
@@ -123,14 +147,14 @@ function applyTemplate(template, context = {}) {
 }
 
 function resolveAppUrl(req) {
-    const configuredAppUrl = trimTrailingSlash(process.env.APP_URL || process.env.FRONTEND_URL || '');
+    const configuredAppUrl = normalizePublicAppUrl(process.env.APP_URL || process.env.FRONTEND_URL || '');
     if (configuredAppUrl) return configuredAppUrl;
 
     const host = String(req?.get?.('host') || '').trim();
     if (!host) return '';
 
     const protocol = String(req?.protocol || 'https').trim() || 'https';
-    return trimTrailingSlash(`${protocol}://${host}`);
+    return normalizePublicAppUrl(`${protocol}://${host}`);
 }
 
 function resolveMailMktEndpointUrl(baseUrl = '') {
@@ -280,10 +304,10 @@ function buildEmailTemplateContext(user, confirmationUrl, options = {}) {
     const resolvedCompanyEmail = normalizeEmail(
         options.companyEmail || process.env.COMPANY_SUPPORT_EMAIL || 'suporte@zapvender.com'
     );
-    let appUrl = String(options.appUrl || '').trim();
+    let appUrl = normalizePublicAppUrl(options.appUrl || '');
     try {
         const parsedConfirmationUrl = new URL(String(confirmationUrl || ''));
-        appUrl = `${parsedConfirmationUrl.protocol}//${parsedConfirmationUrl.host}`;
+        appUrl = normalizePublicAppUrl(`${parsedConfirmationUrl.protocol}//${parsedConfirmationUrl.host}`);
     } catch (_) {
         // noop
     }
