@@ -14601,6 +14601,10 @@ app.put('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (req, 
         const requesterId = Number(req.user?.id || 0);
         const body = req.body && typeof req.body === 'object' ? req.body : {};
         const userPayload = {};
+        const shouldReactivateAllUsers = normalizeUserActiveInput(
+            body.reactivate_all_users ?? body.reactivateAllUsers,
+            0
+        ) === 1;
 
         if (Object.prototype.hasOwnProperty.call(body, 'name')) {
             const name = String(body.name || '').trim();
@@ -14662,6 +14666,30 @@ app.put('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (req, 
         if (Number(userPayload.is_active) === 0) {
             markUserPresenceOffline(ownerUserId);
         }
+        let reactivatedUsers = 0;
+        if (Number(userPayload.is_active) === 1 && shouldReactivateAllUsers) {
+            const usersInAccount = await User.listByOwner(ownerUserId, { includeInactive: true });
+            const usersById = new Map();
+
+            for (const user of Array.isArray(usersInAccount) ? usersInAccount : []) {
+                const userId = Number(user?.id || 0);
+                if (userId > 0) usersById.set(userId, user);
+            }
+            if (!usersById.has(ownerUserId)) {
+                usersById.set(ownerUserId, ownerUser);
+            }
+
+            for (const user of usersById.values()) {
+                const userId = Number(user?.id || 0);
+                if (!userId) continue;
+                await User.update(userId, { is_active: 1 });
+                reactivatedUsers += 1;
+            }
+
+            await Settings.set(buildScopedSettingsKey('plan_status', ownerUserId), 'active', 'string');
+            await Settings.set(buildScopedSettingsKey('plan_message', ownerUserId), 'Conta reativada pelo administrador da aplicacao.', 'string');
+            await Settings.set(buildScopedSettingsKey('plan_last_verified_at', ownerUserId), new Date().toISOString(), 'string');
+        }
 
         const hasPlanPayload = Object.prototype.hasOwnProperty.call(body, 'plan') && body.plan && typeof body.plan === 'object';
         if (hasPlanPayload) {
@@ -14694,7 +14722,8 @@ app.put('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (req, 
 
         return res.json({
             success: true,
-            account
+            account,
+            reactivated_users: reactivatedUsers
         });
     } catch (error) {
         console.error('[admin/dashboard/accounts:put] falha:', error);
@@ -14725,6 +14754,8 @@ app.delete('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (re
             });
         }
 
+        const modeRaw = String(req.query?.mode || '').trim().toLowerCase();
+        const hardDelete = ['delete', 'hard', 'purge', 'remove', 'excluir'].includes(modeRaw);
         const users = await User.listByOwner(ownerUserId, { includeInactive: true });
         const usersById = new Map();
 
@@ -14740,16 +14771,148 @@ app.delete('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (re
             usersById.set(ownerUserId, ownerUser);
         }
 
-        const usersToDisable = Array.from(usersById.values());
-        if (usersToDisable.length === 0) {
+        const usersInAccount = Array.from(usersById.values());
+        if (usersInAccount.length === 0) {
             return res.status(404).json({
                 success: false,
                 error: 'Conta nao encontrada'
             });
         }
 
+        if (hardDelete) {
+            const requesterId = Number(req.user?.id || 0);
+            if (usersById.has(requesterId)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Nao e possivel excluir a propria conta de administrador'
+                });
+            }
+
+            const hasActiveUsers = usersInAccount.some((user) => Number(user?.is_active) > 0);
+            if (hasActiveUsers) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Desative a conta antes de excluir'
+                });
+            }
+
+            const userIds = usersInAccount
+                .map((user) => Number(user?.id || 0))
+                .filter((id) => Number.isInteger(id) && id > 0);
+
+            const runSafeReferenceUpdate = async (sql, params = []) => {
+                try {
+                    await run(sql, params);
+                } catch (error) {
+                    const message = String(error?.message || '').toLowerCase();
+                    if (
+                        message.includes('does not exist')
+                        || message.includes('undefined table')
+                        || message.includes('undefined column')
+                    ) {
+                        return;
+                    }
+                    throw error;
+                }
+            };
+
+            await run('BEGIN');
+            try {
+                if (userIds.length > 0) {
+                    const placeholders = userIds.map(() => '?').join(', ');
+                    await runSafeReferenceUpdate(
+                        'UPDATE users SET owner_user_id = NULL WHERE owner_user_id = ?',
+                        [ownerUserId]
+                    );
+                    await runSafeReferenceUpdate(
+                        `UPDATE leads SET assigned_to = NULL WHERE assigned_to IN (${placeholders})`,
+                        userIds
+                    );
+                    await runSafeReferenceUpdate(
+                        'UPDATE leads SET owner_user_id = NULL WHERE owner_user_id = ?',
+                        [ownerUserId]
+                    );
+                    await runSafeReferenceUpdate(
+                        `UPDATE conversations SET assigned_to = NULL WHERE assigned_to IN (${placeholders})`,
+                        userIds
+                    );
+
+                    const createdByTables = [
+                        'flows',
+                        'templates',
+                        'campaigns',
+                        'automations',
+                        'custom_events',
+                        'webhooks',
+                        'whatsapp_sessions',
+                        'tags'
+                    ];
+
+                    for (const tableName of createdByTables) {
+                        await runSafeReferenceUpdate(
+                            `UPDATE ${tableName} SET created_by = NULL WHERE created_by IN (${placeholders})`,
+                            userIds
+                        );
+                    }
+
+                    await runSafeReferenceUpdate(
+                        `UPDATE audit_logs SET user_id = NULL WHERE user_id IN (${placeholders})`,
+                        userIds
+                    );
+                    await runSafeReferenceUpdate(
+                        `DELETE FROM users WHERE id IN (${placeholders})`,
+                        userIds
+                    );
+                }
+
+                const ownerScopedTables = [
+                    'flows',
+                    'templates',
+                    'campaigns',
+                    'automations',
+                    'custom_events',
+                    'webhooks',
+                    'whatsapp_sessions',
+                    'tags',
+                    'tenant_integrity_audit_runs'
+                ];
+
+                for (const tableName of ownerScopedTables) {
+                    await runSafeReferenceUpdate(
+                        `DELETE FROM ${tableName} WHERE owner_user_id = ?`,
+                        [ownerUserId]
+                    );
+                }
+
+                await runSafeReferenceUpdate(
+                    'DELETE FROM settings WHERE key LIKE ?',
+                    [`user:${ownerUserId}:%`]
+                );
+
+                await run('COMMIT');
+            } catch (error) {
+                try {
+                    await run('ROLLBACK');
+                } catch (_) {
+                    // ignore rollback failure
+                }
+                throw error;
+            }
+
+            for (const userId of userIds) {
+                markUserPresenceOffline(userId);
+            }
+
+            return res.json({
+                success: true,
+                owner_user_id: ownerUserId,
+                deleted_account: true,
+                deleted_users: userIds.length
+            });
+        }
+
         let disabledUsers = 0;
-        for (const user of usersToDisable) {
+        for (const user of usersInAccount) {
             const userId = Number(user?.id || 0);
             if (!userId) continue;
             await User.update(userId, { is_active: 0 });

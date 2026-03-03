@@ -83,6 +83,9 @@ type AdminApiResponse = {
   settings?: EmailSettingsResponse;
   message?: string;
   disabled_users?: number;
+  reactivated_users?: number;
+  deleted_users?: number;
+  deleted_account?: boolean;
 };
 
 type AccountEditDraft = {
@@ -115,6 +118,12 @@ type UserActionConfirmDraft = {
   isActive: boolean;
 };
 
+type AccountActionConfirmDraft = {
+  ownerUserId: number;
+  companyName: string;
+  mode: 'deactivate' | 'delete';
+};
+
 type ActiveTab = 'accounts' | 'email';
 
 const DEFAULT_SUBJECT_TEMPLATE = 'Confirme seu cadastro no {{app_name}}';
@@ -145,8 +154,7 @@ const PLAN_STATUS_OPTIONS = [
 
 const USER_ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
-  { value: 'supervisor', label: 'Supervisor' },
-  { value: 'agent', label: 'Agente' }
+  { value: 'agent', label: 'Usuário' }
 ];
 
 function formatDateTime(value?: string | null) {
@@ -179,12 +187,11 @@ function planStatusLabel(value: unknown) {
 
 function normalizeRole(value: unknown) {
   const normalized = String(value || '').trim().toLowerCase();
-  return USER_ROLE_OPTIONS.some((item) => item.value === normalized) ? normalized : 'agent';
+  return normalized === 'admin' ? 'admin' : 'agent';
 }
 
 function roleLabel(value: unknown) {
-  const normalized = normalizeRole(value);
-  return USER_ROLE_OPTIONS.find((item) => item.value === normalized)?.label || 'Agente';
+  return normalizeRole(value) === 'admin' ? 'Admin' : 'Usuário';
 }
 
 function isValidEmailAddress(value: string) {
@@ -264,6 +271,7 @@ export default function AdminDashboard() {
   const [accountDraft, setAccountDraft] = useState<AccountEditDraft | null>(null);
   const [userDraft, setUserDraft] = useState<UserEditDraft | null>(null);
   const [userActionConfirmDraft, setUserActionConfirmDraft] = useState<UserActionConfirmDraft | null>(null);
+  const [accountActionConfirmDraft, setAccountActionConfirmDraft] = useState<AccountActionConfirmDraft | null>(null);
 
   const summary = useMemo(() => overview?.summary || {}, [overview]);
   const accounts = useMemo(() => (Array.isArray(overview?.accounts) ? overview.accounts : []), [overview]);
@@ -420,26 +428,98 @@ export default function AdminDashboard() {
       setOverviewBusyKey('');
     }
   };
+  const openAccountActionConfirm = (account: AppAdminAccount, mode: 'deactivate' | 'delete') => {
+    const ownerUserId = Number(account.owner_user_id || 0);
+    if (!ownerUserId) return;
+    setOverviewError('');
+    setOverviewMessage('');
+    setAccountActionConfirmDraft({
+      ownerUserId,
+      companyName: String(account.company_name || account.owner?.name || account.owner?.email || `Conta ${ownerUserId}`),
+      mode
+    });
+  };
 
   const deactivateAccount = async (ownerUserId: number) => {
     if (!ownerUserId) return;
-    const confirmed = window.confirm('Desativar esta conta vai bloquear todos os usuários vinculados. Deseja continuar?');
-    if (!confirmed) return;
 
-    const busyKey = `account-delete-${ownerUserId}`;
+    const busyKey = `account-deactivate-${ownerUserId}`;
     setOverviewBusyKey(busyKey);
     setOverviewError('');
     setOverviewMessage('');
     try {
       const response = await adminApiRequest(`/api/admin/dashboard/accounts/${ownerUserId}`, { method: 'DELETE' });
       const disabledUsers = Number(response?.disabled_users || 0);
-      setOverviewMessage(disabledUsers > 0 ? `Conta desativada. ${disabledUsers} usuário(s) bloqueados.` : 'Conta desativada com sucesso.');
+      setOverviewMessage(disabledUsers > 0 ? `Conta desativada. ${disabledUsers} usuario(s) bloqueados.` : 'Conta desativada com sucesso.');
       await loadOverview({ silent: true });
     } catch (error) {
       setOverviewError(error instanceof Error ? error.message : 'Falha ao desativar conta');
     } finally {
       setOverviewBusyKey('');
     }
+  };
+
+  const reactivateAccount = async (ownerUserId: number) => {
+    if (!ownerUserId) return;
+
+    const busyKey = `account-reactivate-${ownerUserId}`;
+    setOverviewBusyKey(busyKey);
+    setOverviewError('');
+    setOverviewMessage('');
+    try {
+      const response = await adminApiRequest(`/api/admin/dashboard/accounts/${ownerUserId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          is_active: 1,
+          reactivate_all_users: 1
+        })
+      });
+      const reactivatedUsers = Number(response?.reactivated_users || 0);
+      setOverviewMessage(
+        reactivatedUsers > 0
+          ? `Conta reativada. ${reactivatedUsers} usuario(s) reativados.`
+          : 'Conta reativada com sucesso.'
+      );
+      await loadOverview({ silent: true });
+    } catch (error) {
+      setOverviewError(error instanceof Error ? error.message : 'Falha ao reativar conta');
+    } finally {
+      setOverviewBusyKey('');
+    }
+  };
+
+  const deleteAccount = async (ownerUserId: number) => {
+    if (!ownerUserId) return;
+
+    const busyKey = `account-delete-${ownerUserId}`;
+    setOverviewBusyKey(busyKey);
+    setOverviewError('');
+    setOverviewMessage('');
+    try {
+      const response = await adminApiRequest(`/api/admin/dashboard/accounts/${ownerUserId}?mode=delete`, { method: 'DELETE' });
+      const deletedUsers = Number(response?.deleted_users || 0);
+      setOverviewMessage(
+        deletedUsers > 0
+          ? `Conta excluida com sucesso. ${deletedUsers} usuario(s) removidos.`
+          : 'Conta excluida com sucesso.'
+      );
+      await loadOverview({ silent: true });
+    } catch (error) {
+      setOverviewError(error instanceof Error ? error.message : 'Falha ao excluir conta');
+    } finally {
+      setOverviewBusyKey('');
+    }
+  };
+
+  const confirmAccountAction = async () => {
+    if (!accountActionConfirmDraft) return;
+    const { ownerUserId, mode } = accountActionConfirmDraft;
+    if (mode === 'deactivate') {
+      await deactivateAccount(ownerUserId);
+    } else {
+      await deleteAccount(ownerUserId);
+    }
+    setAccountActionConfirmDraft(null);
   };
 
   const openUserEditor = (user: AppAdminUser) => {
@@ -649,6 +729,8 @@ export default function AdminDashboard() {
   };
 
   const accountEditBusy = accountDraft && overviewBusyKey === `account-edit-${accountDraft.ownerUserId}`;
+  const accountActionBusy = accountActionConfirmDraft
+    && overviewBusyKey === `account-${accountActionConfirmDraft.mode}-${accountActionConfirmDraft.ownerUserId}`;
   const userEditBusy = userDraft && overviewBusyKey === `user-edit-${userDraft.userId}`;
   const userActionBusy = userActionConfirmDraft && overviewBusyKey === `user-delete-${userActionConfirmDraft.userId}`;
 
@@ -765,7 +847,11 @@ export default function AdminDashboard() {
 
                 {accounts.map((account) => {
                   const ownerActive = Number(account.owner?.is_active) > 0;
-                  const accountBusy = overviewBusyKey === `account-edit-${account.owner_user_id}` || overviewBusyKey === `account-delete-${account.owner_user_id}`;
+                  const accountIsEditing = overviewBusyKey === `account-edit-${account.owner_user_id}`;
+                  const accountIsDeactivating = overviewBusyKey === `account-deactivate-${account.owner_user_id}`;
+                  const accountIsReactivating = overviewBusyKey === `account-reactivate-${account.owner_user_id}`;
+                  const accountIsDeleting = overviewBusyKey === `account-delete-${account.owner_user_id}`;
+                  const accountBusy = accountIsEditing || accountIsDeactivating || accountIsReactivating || accountIsDeleting;
                   return (
                     <div className="admin-account-card" key={account.owner_user_id}>
                       <div className="admin-account-head">
@@ -781,7 +867,14 @@ export default function AdminDashboard() {
                         </div>
                         <div className="admin-account-actions">
                           <button type="button" className="btn btn-outline btn-sm" onClick={() => openAccountEditor(account)} disabled={accountBusy}>Editar conta</button>
-                          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => deactivateAccount(account.owner_user_id)} disabled={accountBusy}>{overviewBusyKey === `account-delete-${account.owner_user_id}` ? 'Desativando...' : 'Desativar conta'}</button>
+                          {ownerActive ? (
+                            <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => openAccountActionConfirm(account, 'deactivate')} disabled={accountBusy}>{accountIsDeactivating ? 'Desativando...' : 'Desativar conta'}</button>
+                          ) : (
+                            <>
+                              <button type="button" className="btn btn-success btn-sm" onClick={() => reactivateAccount(account.owner_user_id)} disabled={accountBusy}>{accountIsReactivating ? 'Reativando...' : 'Reativar conta'}</button>
+                              <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => openAccountActionConfirm(account, 'delete')} disabled={accountBusy}>{accountIsDeleting ? 'Excluindo...' : 'Excluir conta'}</button>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -1051,6 +1144,34 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+      {accountActionConfirmDraft && (
+        <div className="modal-overlay active">
+          <div className="modal">
+            <div className="modal-header">
+              <h3 className="modal-title">{accountActionConfirmDraft.mode === 'deactivate' ? 'Confirmar desativação da conta' : 'Confirmar exclusão da conta'}</h3>
+              <button type="button" className="modal-close" onClick={() => setAccountActionConfirmDraft(null)} disabled={Boolean(accountActionBusy)}>{'\u00D7'}</button>
+            </div>
+            <div className="modal-body">
+              <p className="admin-muted" style={{ margin: 0 }}>
+                {accountActionConfirmDraft.mode === 'deactivate'
+                  ? `Deseja desativar a conta "${accountActionConfirmDraft.companyName}"? Todos os usuários vinculados serão bloqueados.`
+                  : `Deseja excluir permanentemente a conta "${accountActionConfirmDraft.companyName}"?`}
+              </p>
+              {accountActionConfirmDraft.mode === 'delete' && (
+                <div className="admin-modal-note">Esta ação não pode ser desfeita.</div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline" onClick={() => setAccountActionConfirmDraft(null)} disabled={Boolean(accountActionBusy)}>Cancelar</button>
+              <button type="button" className="btn btn-outline-danger" onClick={confirmAccountAction} disabled={Boolean(accountActionBusy)}>
+                {accountActionBusy
+                  ? (accountActionConfirmDraft.mode === 'deactivate' ? 'Desativando...' : 'Excluindo...')
+                  : (accountActionConfirmDraft.mode === 'deactivate' ? 'Desativar conta' : 'Excluir conta')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {userActionConfirmDraft && (
         <div className="modal-overlay active">
           <div className="modal">
@@ -1080,3 +1201,5 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+

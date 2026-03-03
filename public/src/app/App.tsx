@@ -76,7 +76,7 @@ export default function App() {
         link = document.createElement('a');
         link.href = '#/admin-dashboard';
         link.className = 'nav-link sidebar-admin-link';
-        link.innerHTML = '<span class="icon icon-building"></span>Admin da Aplicacao';
+        link.innerHTML = '<span class="icon icon-building"></span>Admin da Aplicação';
         wrapper.appendChild(link);
       }
 
