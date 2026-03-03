@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const EMAIL_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EXPIRES_IN_TEXT = '24 horas';
@@ -6,18 +8,42 @@ const DEFAULT_APP_NAME = 'ZapVender';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 const DEFAULT_EMAIL_SUBJECT_TEMPLATE = 'Confirme seu cadastro no {{app_name}}';
 const DEFAULT_EMAIL_TEXT_TEMPLATE = [
-    'Ola {{name}},',
+    'Olá {{name}},',
     '',
-    'Para concluir seu cadastro no {{app_name}}, confirme seu email no link abaixo:',
+    'Recebemos seu cadastro no {{app_name}}.',
+    'Para ativar sua conta, confirme seu e-mail no link abaixo:',
     '{{confirmation_url}}',
     '',
-    'Este link expira em {{expires_in_text}}.'
+    'Este link expira em {{expires_in_text}}.',
+    '',
+    '---',
+    'ZapVender | Plataforma de atendimento e automação para WhatsApp',
+    'Suporte: {{company_email}}'
 ].join('\n');
 const DEFAULT_EMAIL_HTML_TEMPLATE = [
-    '<p>Ola {{name}},</p>',
-    '<p>Para concluir seu cadastro no <strong>{{app_name}}</strong>, confirme seu email no link abaixo:</p>',
-    '<p><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer">Confirmar email</a></p>',
-    '<p>Este link expira em {{expires_in_text}}.</p>'
+    '<!doctype html>',
+    '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>',
+    '<body style="margin:0;padding:0;background:#f3f5f9;font-family:Arial,Helvetica,sans-serif;color:#142033;">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f5f9;padding:24px 12px;">',
+    '<tr><td align="center">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e9f1;">',
+    '<tr><td style="background:#0f2e23;padding:20px 24px;" align="left">',
+    '<img src="{{logo_url}}" alt="ZapVender" style="display:block;height:36px;width:auto;max-width:180px;">',
+    '</td></tr>',
+    '<tr><td style="padding:28px 24px;">',
+    '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.5;color:#142033;">Olá {{name}},</p>',
+    '<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#344054;">Recebemos seu cadastro no <strong>{{app_name}}</strong>. Para ativar sua conta, confirme seu e-mail clicando no botão abaixo.</p>',
+    '<p style="margin:0 0 20px 0;"><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#1dbf73;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px;">Confirmar e-mail</a></p>',
+    '<p style="margin:0;font-size:13px;line-height:1.6;color:#667085;">Este link expira em {{expires_in_text}}.</p>',
+    '</td></tr>',
+    '<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;">',
+    '<p style="margin:0 0 6px 0;font-size:12px;line-height:1.5;color:#667085;"><strong>ZapVender</strong> | Plataforma de atendimento e automação para WhatsApp.</p>',
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#667085;">Suporte: <a href="mailto:{{company_email}}" style="color:#0f766e;text-decoration:none;">{{company_email}}</a></p>',
+    '</td></tr>',
+    '</table>',
+    '</td></tr>',
+    '</table>',
+    '</body></html>'
 ].join('');
 const SUPPORTED_EMAIL_PROVIDERS = new Set(['mailgun', 'sendgrid', 'mailmkt']);
 
@@ -39,6 +65,65 @@ function clampNumber(value, fallback, min = 1000, max = 60000) {
 
 function trimTrailingSlash(value) {
     return String(value || '').replace(/\/+$/, '');
+}
+
+function isLocalHostname(hostname = '') {
+    const normalized = String(hostname || '').trim().toLowerCase();
+    return (
+        normalized === 'localhost'
+        || normalized === '127.0.0.1'
+        || normalized === '::1'
+        || normalized.endsWith('.local')
+    );
+}
+
+function normalizePublicAppUrl(rawUrl) {
+    const normalized = trimTrailingSlash(rawUrl || '');
+    if (!normalized) return '';
+    try {
+        const parsed = new URL(normalized);
+        if (parsed.protocol === 'http:' && !isLocalHostname(parsed.hostname)) {
+            parsed.protocol = 'https:';
+        }
+        return trimTrailingSlash(parsed.toString());
+    } catch (_) {
+        return normalized;
+    }
+}
+
+function resolveLogoPathname() {
+    const envLogoPath = String(process.env.EMAIL_LOGO_PATH || '').trim();
+    if (envLogoPath && envLogoPath.startsWith('/')) {
+        return envLogoPath;
+    }
+
+    try {
+        const publicPngLogoFile = path.join(__dirname, '..', '..', 'public', 'img', 'logo-zapvender.png');
+        if (fs.existsSync(publicPngLogoFile)) {
+            return '/img/logo-zapvender.png';
+        }
+    } catch (_) {
+        // noop
+    }
+
+    if (process.env.NODE_ENV === 'production') {
+        try {
+            const assetsDir = path.join(__dirname, '..', '..', 'dist', 'assets');
+            if (fs.existsSync(assetsDir)) {
+                const candidates = fs.readdirSync(assetsDir)
+                    .filter((fileName) => /^zapvender-logo-.*\.svg$/i.test(String(fileName || '')));
+                if (candidates.length > 0) {
+                    candidates.sort();
+                    const latest = candidates[candidates.length - 1];
+                    return `/assets/${latest}`;
+                }
+            }
+        } catch (_) {
+            // noop
+        }
+    }
+
+    return '/img/logo-zapvender.svg';
 }
 
 function normalizeEmail(value) {
@@ -71,14 +156,14 @@ function applyTemplate(template, context = {}) {
 }
 
 function resolveAppUrl(req) {
-    const configuredAppUrl = trimTrailingSlash(process.env.APP_URL || process.env.FRONTEND_URL || '');
+    const configuredAppUrl = normalizePublicAppUrl(process.env.APP_URL || process.env.FRONTEND_URL || '');
     if (configuredAppUrl) return configuredAppUrl;
 
     const host = String(req?.get?.('host') || '').trim();
     if (!host) return '';
 
     const protocol = String(req?.protocol || 'https').trim() || 'https';
-    return trimTrailingSlash(`${protocol}://${host}`);
+    return normalizePublicAppUrl(`${protocol}://${host}`);
 }
 
 function resolveMailMktEndpointUrl(baseUrl = '') {
@@ -222,10 +307,32 @@ function buildEmailTemplateContext(user, confirmationUrl, options = {}) {
     const name = normalizePersonName(user?.name, user?.email);
     const email = normalizeEmail(user?.email);
     const expiresInText = String(options.expiresInText || DEFAULT_EXPIRES_IN_TEXT).trim() || DEFAULT_EXPIRES_IN_TEXT;
+    const resolvedCompanyWebsite = String(
+        options.companyWebsite || process.env.COMPANY_WEBSITE || 'https://zapvender.com'
+    ).trim();
+    const resolvedCompanyEmail = normalizeEmail(
+        options.companyEmail || process.env.COMPANY_SUPPORT_EMAIL || 'suporte@zapvender.com'
+    );
+    let appUrl = normalizePublicAppUrl(options.appUrl || '');
+    try {
+        const parsedConfirmationUrl = new URL(String(confirmationUrl || ''));
+        appUrl = normalizePublicAppUrl(`${parsedConfirmationUrl.protocol}//${parsedConfirmationUrl.host}`);
+    } catch (_) {
+        // noop
+    }
+    const logoPathname = resolveLogoPathname();
+    const logoUrl = String(options.logoUrl || process.env.COMPANY_LOGO_URL || process.env.EMAIL_LOGO_URL || '').trim()
+        || (appUrl ? `${trimTrailingSlash(appUrl)}${logoPathname}` : `https://zapvender.com${logoPathname}`);
+
     return {
         name,
         email,
         app_name: appName,
+        app_url: appUrl,
+        logo_url: logoUrl,
+        company_name: 'ZapVender',
+        company_website: resolvedCompanyWebsite,
+        company_email: resolvedCompanyEmail,
         confirmation_url: String(confirmationUrl || ''),
         expires_in_text: expiresInText
     };
@@ -236,22 +343,22 @@ function buildRenderedEmailContent(context, config) {
     const renderedHtml = applyTemplate(config.htmlTemplate, context).trim();
     const renderedText = applyTemplate(config.textTemplate, context).trim();
     const text = renderedText || [
-        `Ola ${context.name || 'Cliente'},`,
+        `Olá ${context.name || 'Cliente'},`,
         '',
-        `Para concluir seu cadastro no ${context.app_name || DEFAULT_APP_NAME}, confirme seu email no link abaixo:`,
+        `Para concluir seu cadastro no ${context.app_name || DEFAULT_APP_NAME}, confirme seu e-mail no link abaixo:`,
         context.confirmation_url || '',
         '',
         `Este link expira em ${context.expires_in_text || DEFAULT_EXPIRES_IN_TEXT}.`
     ].join('\n');
     const html = renderedHtml || (
         '<p>'
-        + `Ola ${escapeHtml(context.name || 'Cliente')},`
+        + `Olá ${escapeHtml(context.name || 'Cliente')},`
         + '</p><p>Para concluir seu cadastro no <strong>'
         + `${escapeHtml(context.app_name || DEFAULT_APP_NAME)}`
-        + '</strong>, confirme seu email no link abaixo:</p>'
+        + '</strong>, confirme seu e-mail no link abaixo:</p>'
         + '<p><a href="'
         + `${escapeHtml(context.confirmation_url || '')}`
-        + '" target="_blank" rel="noopener noreferrer">Confirmar email</a></p>'
+        + '" target="_blank" rel="noopener noreferrer">Confirmar e-mail</a></p>'
         + '<p>Este link expira em '
         + `${escapeHtml(context.expires_in_text || DEFAULT_EXPIRES_IN_TEXT)}`
         + '.</p>'
@@ -650,7 +757,9 @@ module.exports = {
     EMAIL_CONFIRMATION_TTL_MS,
     MailMktIntegrationError,
     SUPPORTED_EMAIL_PROVIDERS,
+    buildEmailTemplateContext,
     buildEmailConfirmationUrl,
+    buildRenderedEmailContent,
     buildRuntimeEmailDeliveryConfig,
     createEmailConfirmationTokenPayload,
     hashEmailConfirmationToken,

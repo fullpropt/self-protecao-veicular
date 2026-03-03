@@ -79,11 +79,15 @@ const {
     DEFAULT_EMAIL_SUBJECT_TEMPLATE,
     DEFAULT_EMAIL_TEXT_TEMPLATE,
     MailMktIntegrationError,
+    buildEmailConfirmationUrl,
+    buildEmailTemplateContext,
+    buildRenderedEmailContent,
     buildRuntimeEmailDeliveryConfig,
     createEmailConfirmationTokenPayload,
     hashEmailConfirmationToken,
     isEmailConfirmed,
     isEmailConfirmationExpired,
+    resolveAppUrl,
     sendRegistrationConfirmationEmail,
     tokenFingerprint
 } = require('./services/emailConfirmationService');
@@ -765,6 +769,11 @@ app.use('/api', (req, res, next) => {
 
 
 // Arquivos estáticos
+
+const PUBLIC_IMG_DIR = path.join(__dirname, '..', 'public', 'img');
+if (fs.existsSync(PUBLIC_IMG_DIR)) {
+    app.use('/img', express.static(PUBLIC_IMG_DIR));
+}
 
 app.use(express.static(STATIC_DIR, {
 
@@ -9379,6 +9388,73 @@ function sanitizeEmailTemplateValue(value, fallback = '') {
     return normalized;
 }
 
+const LEGACY_EMAIL_TEXT_TEMPLATE = [
+    'Ola {{name}},',
+    '',
+    'Para concluir seu cadastro no {{app_name}}, confirme seu email no link abaixo:',
+    '{{confirmation_url}}',
+    '',
+    'Este link expira em {{expires_in_text}}.'
+].join('\n');
+const LEGACY_EMAIL_HTML_TEMPLATE = [
+    '<p>Ola {{name}},</p>',
+    '<p>Para concluir seu cadastro no <strong>{{app_name}}</strong>, confirme seu email no link abaixo:</p>',
+    '<p><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer">Confirmar email</a></p>',
+    '<p>Este link expira em {{expires_in_text}}.</p>'
+].join('');
+const PREVIOUS_EMAIL_TEXT_TEMPLATE = [
+    'Ola {{name}},',
+    '',
+    'Recebemos seu cadastro no {{app_name}}.',
+    'Para ativar sua conta, confirme seu e-mail no link abaixo:',
+    '{{confirmation_url}}',
+    '',
+    'Este link expira em {{expires_in_text}}.',
+    '',
+    '---',
+    'ZapVender | Plataforma de atendimento e automacao para WhatsApp',
+    'Site: {{company_website}}',
+    'Suporte: {{company_email}}'
+].join('\n');
+const PREVIOUS_EMAIL_HTML_TEMPLATE = [
+    '<!doctype html>',
+    '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>',
+    '<body style="margin:0;padding:0;background:#f3f5f9;font-family:Arial,Helvetica,sans-serif;color:#142033;">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f5f9;padding:24px 12px;">',
+    '<tr><td align="center">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e9f1;">',
+    '<tr><td style="background:#0f2e23;padding:20px 24px;" align="left">',
+    '<img src="{{logo_url}}" alt="ZapVender" style="display:block;height:36px;width:auto;max-width:180px;">',
+    '</td></tr>',
+    '<tr><td style="padding:28px 24px;">',
+    '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.5;color:#142033;">Ola {{name}},</p>',
+    '<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#344054;">Recebemos seu cadastro no <strong>{{app_name}}</strong>. Para ativar sua conta, confirme seu e-mail clicando no botao abaixo.</p>',
+    '<p style="margin:0 0 20px 0;"><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#1dbf73;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px;">Confirmar e-mail</a></p>',
+    '<p style="margin:0;font-size:13px;line-height:1.6;color:#667085;">Este link expira em {{expires_in_text}}.</p>',
+    '</td></tr>',
+    '<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;">',
+    '<p style="margin:0 0 6px 0;font-size:12px;line-height:1.5;color:#667085;"><strong>ZapVender</strong> | Plataforma de atendimento e automacao para WhatsApp.</p>',
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#667085;">Site: <a href="{{company_website}}" target="_blank" rel="noopener noreferrer" style="color:#0f766e;text-decoration:none;">{{company_website}}</a> | Suporte: <a href="mailto:{{company_email}}" style="color:#0f766e;text-decoration:none;">{{company_email}}</a></p>',
+    '</td></tr>',
+    '</table>',
+    '</td></tr>',
+    '</table>',
+    '</body></html>'
+].join('');
+
+function normalizeLegacyEmailTemplateValue(value, currentDefault, legacyDefault) {
+    const normalized = String(value || '');
+    if (!normalized.trim()) return normalized;
+    const candidates = Array.isArray(legacyDefault) ? legacyDefault : [legacyDefault];
+    const matchesLegacy = candidates.some((candidate) => (
+        normalized.trim() === String(candidate || '').trim()
+    ));
+    if (matchesLegacy) {
+        return currentDefault;
+    }
+    return normalized;
+}
+
 function normalizeEmailDeliverySettingsInput(payload = {}, currentSettings = {}) {
     const source = payload && typeof payload === 'object' ? payload : {};
     const current = currentSettings && typeof currentSettings === 'object' ? currentSettings : {};
@@ -9405,11 +9481,19 @@ function normalizeEmailDeliverySettingsInput(payload = {}, currentSettings = {})
         DEFAULT_EMAIL_SUBJECT_TEMPLATE
     );
     const htmlTemplate = sanitizeEmailTemplateValue(
-        source.htmlTemplate ?? current.htmlTemplate,
+        normalizeLegacyEmailTemplateValue(
+            source.htmlTemplate ?? current.htmlTemplate,
+            DEFAULT_EMAIL_HTML_TEMPLATE,
+            [LEGACY_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE]
+        ),
         DEFAULT_EMAIL_HTML_TEMPLATE
     );
     const textTemplate = sanitizeEmailTemplateValue(
-        source.textTemplate ?? current.textTemplate,
+        normalizeLegacyEmailTemplateValue(
+            source.textTemplate ?? current.textTemplate,
+            DEFAULT_EMAIL_TEXT_TEMPLATE,
+            [LEGACY_EMAIL_TEXT_TEMPLATE, PREVIOUS_EMAIL_TEXT_TEMPLATE]
+        ),
         DEFAULT_EMAIL_TEXT_TEMPLATE
     );
 
@@ -14262,6 +14346,54 @@ app.put('/api/admin/dashboard/email-settings', authenticate, async (req, res) =>
         res.status(500).json({
             success: false,
             error: 'Falha ao salvar configuracoes de email'
+        });
+    }
+});
+
+app.post('/api/admin/dashboard/email-settings/preview', authenticate, async (req, res) => {
+    if (!ensureApplicationAdmin(req, res)) return;
+
+    try {
+        const currentSettings = await loadEmailDeliverySettings();
+        const normalized = normalizeEmailDeliverySettingsInput(req.body, currentSettings);
+        const runtimeSettings = buildRuntimeEmailDeliveryConfig(normalized);
+
+        const tokenPayload = createEmailConfirmationTokenPayload();
+        const baseAppUrl = resolveAppUrl(req) || String(process.env.APP_URL || 'https://zapvender.com').trim();
+        const confirmationUrl = buildEmailConfirmationUrl(baseAppUrl, tokenPayload.token);
+
+        const rawPreviewEmail = String(req.body?.previewEmail || req.body?.email || req.user?.email || '').trim().toLowerCase();
+        const previewEmail = isValidEmailAddress(rawPreviewEmail) ? rawPreviewEmail : 'contato@empresa.com';
+        const previewName = String(req.body?.previewName || req.body?.name || 'Usuario').trim() || 'Usuario';
+
+        const context = buildEmailTemplateContext(
+            {
+                id: req.user?.id || null,
+                name: previewName,
+                email: previewEmail
+            },
+            confirmationUrl,
+            {
+                appName: runtimeSettings.appName,
+                expiresInText: tokenPayload.expiresInText,
+                appUrl: baseAppUrl
+            }
+        );
+        const content = buildRenderedEmailContent(context, runtimeSettings);
+
+        return res.json({
+            success: true,
+            preview: {
+                subject: content.subject,
+                html: content.html,
+                text: content.text
+            }
+        });
+    } catch (error) {
+        console.error('[admin/dashboard/email-settings:preview] falha:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Falha ao gerar pre-visualizacao do email'
         });
     }
 });
