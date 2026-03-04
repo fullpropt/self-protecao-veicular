@@ -117,20 +117,47 @@ function normalizeSessionToken(value: string) {
         .replace(/^_+|_+$/g, '');
 }
 
-function buildCompanyDefaultSessionId(companyName: unknown) {
+function getOwnerUserIdFromSessionToken() {
+    const token = String(sessionStorage.getItem('selfDashboardToken') || '').trim();
+    if (!token) return 0;
+
+    try {
+        const parts = token.split('.');
+        if (parts.length < 2) return 0;
+        const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const padded = payloadBase64 + '='.repeat((4 - (payloadBase64.length % 4)) % 4);
+        const payload = JSON.parse(atob(padded));
+        const ownerUserId = Number(payload?.owner_user_id || payload?.id || 0);
+        return Number.isFinite(ownerUserId) && ownerUserId > 0 ? Math.floor(ownerUserId) : 0;
+    } catch (_) {
+        return 0;
+    }
+}
+
+function buildOwnerFallbackSessionId(ownerUserId: unknown, fallback = CONFIG.DEFAULT_SESSION_ID) {
+    const parsedOwnerUserId = Number(ownerUserId || 0);
+    if (!Number.isFinite(parsedOwnerUserId) || parsedOwnerUserId <= 0) {
+        return fallback;
+    }
+    return `owner_${Math.floor(parsedOwnerUserId)}_session`;
+}
+
+function buildCompanyDefaultSessionId(companyName: unknown, ownerUserId: unknown = 0) {
     const normalized = normalizeSessionToken(String(companyName || ''));
-    if (!normalized) return CONFIG.DEFAULT_SESSION_ID;
+    if (!normalized) return buildOwnerFallbackSessionId(ownerUserId, CONFIG.DEFAULT_SESSION_ID);
     if (normalized.endsWith('_session')) return normalized;
     return `${normalized}_session`;
 }
 
 async function resolvePreferredDefaultSessionId() {
+    const ownerUserId = getOwnerUserIdFromSessionToken();
+    preferredDefaultSessionId = buildOwnerFallbackSessionId(ownerUserId, CONFIG.DEFAULT_SESSION_ID);
     try {
         if (!api?.get) throw new Error('API indisponivel');
         const response = await api.get('/api/settings');
-        preferredDefaultSessionId = buildCompanyDefaultSessionId(response?.settings?.company_name);
+        preferredDefaultSessionId = buildCompanyDefaultSessionId(response?.settings?.company_name, ownerUserId);
     } catch (_) {
-        preferredDefaultSessionId = CONFIG.DEFAULT_SESSION_ID;
+        preferredDefaultSessionId = buildOwnerFallbackSessionId(ownerUserId, CONFIG.DEFAULT_SESSION_ID);
     }
 }
 

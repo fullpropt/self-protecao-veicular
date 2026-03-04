@@ -91,6 +91,31 @@ function normalizeIdentityPart(value: unknown): string {
     return String(value || '').trim().toLowerCase();
 }
 
+function getOwnerUserIdFromSessionToken() {
+    const token = sanitizeSessionId(sessionStorage.getItem('selfDashboardToken'));
+    if (!token) return 0;
+
+    try {
+        const parts = token.split('.');
+        if (parts.length < 2) return 0;
+        const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const padded = payloadBase64 + '='.repeat((4 - (payloadBase64.length % 4)) % 4);
+        const payload = JSON.parse(atob(padded));
+        const ownerUserId = Number(payload?.owner_user_id || payload?.id || 0);
+        return Number.isFinite(ownerUserId) && ownerUserId > 0 ? Math.floor(ownerUserId) : 0;
+    } catch {
+        return 0;
+    }
+}
+
+function buildOwnerFallbackSessionId(ownerUserId: unknown, fallback = DEFAULT_SESSION_ID) {
+    const parsedOwnerUserId = Number(ownerUserId || 0);
+    if (!Number.isFinite(parsedOwnerUserId) || parsedOwnerUserId <= 0) {
+        return fallback;
+    }
+    return `owner_${Math.floor(parsedOwnerUserId)}_session`;
+}
+
 function clearAppLocalStorageState() {
     const toRemove: string[] = [];
     for (let index = 0; index < localStorage.length; index += 1) {
@@ -133,7 +158,8 @@ function ensureStorageIdentityConsistency() {
 
 function resolveInitialSessionId() {
     const stored = sanitizeSessionId(localStorage.getItem('zapvender_active_whatsapp_session'));
-    return stored || DEFAULT_SESSION_ID;
+    if (stored) return stored;
+    return buildOwnerFallbackSessionId(getOwnerUserIdFromSessionToken(), DEFAULT_SESSION_ID);
 }
 
 function isPayloadForCurrentSession(payload: any) {

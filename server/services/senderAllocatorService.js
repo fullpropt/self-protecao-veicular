@@ -33,6 +33,50 @@ class SenderAllocatorService {
         return String(value || '').trim();
     }
 
+    buildOwnerBootstrapSessionId(ownerUserId) {
+        const ownerId = this.toPositiveInt(ownerUserId, 0);
+        if (!ownerId) return '';
+        return this.sanitizeSessionId(`owner_${ownerId}_session`);
+    }
+
+    buildPlaceholderSession(sessionId, runtime = null) {
+        const normalizedSessionId = this.sanitizeSessionId(sessionId);
+        if (!normalizedSessionId) return null;
+
+        const connected = Boolean(runtime?.isConnected);
+        const reconnecting = Boolean(runtime?.reconnecting);
+        const nowMs = Date.now();
+        const sendReadyAtMs = Number(runtime?.sendReadyAtMs || 0);
+        const dispatchBlockedUntilMs = Number(runtime?.dispatchBlockedUntilMs || 0);
+        const runtimeStatus = connected
+            ? (sendReadyAtMs > nowMs ? 'warming_up' : 'connected')
+            : (reconnecting ? 'reconnecting' : 'disconnected');
+
+        return {
+            id: null,
+            session_id: normalizedSessionId,
+            phone: runtime?.user?.phone || null,
+            name: runtime?.user?.name || runtime?.user?.pushName || null,
+            status: runtimeStatus,
+            runtime_status: runtimeStatus,
+            connected,
+            reconnecting,
+            campaign_enabled: true,
+            daily_limit: 0,
+            dispatch_weight: 1,
+            hourly_limit: 0,
+            cooldown_until: dispatchBlockedUntilMs > nowMs ? new Date(dispatchBlockedUntilMs).toISOString() : null,
+            dispatch_blocked_until: dispatchBlockedUntilMs > nowMs ? new Date(dispatchBlockedUntilMs).toISOString() : null,
+            send_ready_at: sendReadyAtMs > 0 ? new Date(sendReadyAtMs).toISOString() : null,
+            last_disconnect_reason: runtime?.lastDisconnectReason || null,
+            qr_code: null,
+            last_connected_at: null,
+            created_by: null,
+            created_at: null,
+            updated_at: null
+        };
+    }
+
     normalizeStrategy(value, fallback = 'round_robin') {
         const normalized = String(value || '').trim().toLowerCase();
         if (!normalized) return fallback;
@@ -188,44 +232,26 @@ class SenderAllocatorService {
             const normalizedSessionId = this.sanitizeSessionId(sessionId);
             if (!normalizedSessionId || seen.has(normalizedSessionId)) continue;
             if (hasOwnerScope) continue;
-            const connected = Boolean(runtime?.isConnected);
-            const reconnecting = Boolean(runtime?.reconnecting);
-            const nowMs = Date.now();
-            const sendReadyAtMs = Number(runtime?.sendReadyAtMs || 0);
-            const dispatchBlockedUntilMs = Number(runtime?.dispatchBlockedUntilMs || 0);
-            const runtimeStatus = connected
-                ? (sendReadyAtMs > nowMs ? 'warming_up' : 'connected')
-                : (reconnecting ? 'reconnecting' : 'disconnected');
-            merged.push({
-                id: null,
-                session_id: normalizedSessionId,
-                phone: runtime?.user?.phone || null,
-                name: runtime?.user?.name || runtime?.user?.pushName || null,
-                status: runtimeStatus,
-                runtime_status: runtimeStatus,
-                connected,
-                reconnecting,
-                campaign_enabled: true,
-                daily_limit: 0,
-                dispatch_weight: 1,
-                hourly_limit: 0,
-                cooldown_until: dispatchBlockedUntilMs > nowMs ? new Date(dispatchBlockedUntilMs).toISOString() : null,
-                dispatch_blocked_until: dispatchBlockedUntilMs > nowMs ? new Date(dispatchBlockedUntilMs).toISOString() : null,
-                send_ready_at: sendReadyAtMs > 0 ? new Date(sendReadyAtMs).toISOString() : null,
-                last_disconnect_reason: runtime?.lastDisconnectReason || null,
-                qr_code: null,
-                last_connected_at: null,
-                created_by: null,
-                created_at: null,
-                updated_at: null
-            });
+            const placeholder = this.buildPlaceholderSession(normalizedSessionId, runtime);
+            if (placeholder) {
+                merged.push(placeholder);
+            }
         }
 
+        let result = merged;
         if (!includeDisabled) {
-            return merged.filter((row) => row.campaign_enabled);
+            result = merged.filter((row) => row.campaign_enabled);
         }
 
-        return merged;
+        if (hasOwnerScope && result.length === 0) {
+            const bootstrapSessionId = this.buildOwnerBootstrapSessionId(ownerUserId);
+            const placeholder = this.buildPlaceholderSession(bootstrapSessionId, runtimeSessions.get(bootstrapSessionId) || null);
+            if (placeholder) {
+                result = [placeholder];
+            }
+        }
+
+        return result;
     }
 
     async getCampaignSenderAccounts(campaignId, options = {}) {
