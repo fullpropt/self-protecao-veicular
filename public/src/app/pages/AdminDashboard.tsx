@@ -154,8 +154,8 @@ const DEFAULT_HTML_TEMPLATE = [
   '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f5f9;padding:24px 12px;">',
   '<tr><td align="center">',
   '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e9f1;">',
-  '<tr><td style="background:#0f2e23;padding:20px 24px;" align="left">',
-  '<img src="{{logo_url}}" alt="ZapVender" style="display:block;height:36px;width:auto;max-width:180px;">',
+  '<tr><td style="background:#040b09;background-image:radial-gradient(520px 180px at 50% -22%, rgba(35,198,111,0.22), rgba(35,198,111,0) 72%),linear-gradient(135deg,#061511 0%,#0b2a22 52%,#07130f 100%);padding:24px 20px;" align="center">',
+  '<img src="{{logo_url}}" alt="ZapVender" style="display:block;height:52px;width:auto;max-width:240px;margin:0 auto;">',
   '</td></tr>',
   '<tr><td style="padding:28px 24px;">',
   '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.5;color:#142033;">Olá {{name}},</p>',
@@ -1309,6 +1309,5 @@ export default function AdminDashboard() {
     </div>
   );
 }
-
 
 
