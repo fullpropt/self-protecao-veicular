@@ -1281,7 +1281,7 @@ function updateCampaignDetailsActionButton(campaign: Campaign) {
         return;
     }
 
-    if (campaign.status === 'paused' || campaign.status === 'draft') {
+    if (campaign.status === 'paused' || campaign.status === 'draft' || campaign.status === 'completed') {
         actionBtn.disabled = false;
         actionBtn.innerHTML = '<span class="icon icon-play icon-sm"></span> Iniciar';
         actionBtn.classList.remove('btn-warning');
@@ -1827,7 +1827,7 @@ function renderCampaigns() {
                         <button class="btn btn-sm btn-outline" onclick="editCampaign(${c.id})"><span class="icon icon-edit icon-sm"></span> Editar</button>
                         ${c.status === 'active' ? 
                             `<button class="btn btn-sm btn-warning" onclick="pauseCampaign(${c.id})"><span class="icon icon-pause icon-sm"></span> Pausar</button>` :
-                            c.status === 'paused' || c.status === 'draft' ?
+                            c.status === 'paused' || c.status === 'draft' || c.status === 'completed' ?
                             `<button class="btn btn-sm btn-success" onclick="startCampaign(${c.id})"><span class="icon icon-play icon-sm"></span> Iniciar</button>` : ''
                         }
                         <button class="btn btn-sm btn-outline-danger" onclick="deleteCampaign(${c.id})"><span class="icon icon-delete icon-sm"></span></button>

@@ -561,7 +561,11 @@ class QueueService extends EventEmitter {
         this.isProcessing = true;
 
         try {
-            const pendingMessages = await MessageQueue.getPending({ limit: 100, ready_only: true });
+            const pendingMessages = await MessageQueue.getPending({
+                limit: 100,
+                ready_only: true,
+                only_active_campaigns: true
+            });
             if (!pendingMessages || pendingMessages.length === 0) return;
 
             let selected = null;
@@ -969,7 +973,7 @@ class QueueService extends EventEmitter {
 
             const campaignType = String(campaign.type || '').trim().toLowerCase();
             const campaignStatus = String(campaign.status || '').trim().toLowerCase();
-            if (campaignType !== 'broadcast' || campaignStatus !== 'active') {
+            if (!['broadcast', 'drip'].includes(campaignType) || campaignStatus !== 'active') {
                 return;
             }
 
@@ -979,14 +983,14 @@ class QueueService extends EventEmitter {
 
             await Campaign.refreshMetrics(normalizedCampaignId);
             await Campaign.update(normalizedCampaignId, {
-                status: 'completed'
+                status: 'paused'
             });
 
             this.emit('campaign:completed', {
                 campaignId: normalizedCampaignId,
                 progress
             });
-            console.log(`[QueueDebug][campaign:${normalizedCampaignId}] AUTO_COMPLETE broadcast total=${progress.total} sent=${progress.sent} failed=${progress.failed} cancelled=${progress.cancelled}`);
+            console.log(`[QueueDebug][campaign:${normalizedCampaignId}] AUTO_PAUSE broadcast total=${progress.total} sent=${progress.sent} failed=${progress.failed} cancelled=${progress.cancelled}`);
         } catch (error) {
             console.error(`[QueueDebug][campaign:${campaignId || 'unknown'}] Falha ao auto-concluir campanha: ${error.message}`);
         }

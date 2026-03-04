@@ -2616,6 +2616,7 @@ const MessageQueue = {
     async getPending(options = {}) {
         const params = [];
         const readyOnly = options?.ready_only === true || options?.readyOnly === true;
+        const onlyActiveCampaigns = options?.only_active_campaigns === true || options?.onlyActiveCampaigns === true;
         const limit = Number(options?.limit || 0);
 
         let sql = `
@@ -2627,6 +2628,20 @@ const MessageQueue = {
             sql += `
                 AND (scheduled_at IS NULL OR scheduled_at <= CURRENT_TIMESTAMP)
                 AND attempts < max_attempts
+            `;
+        }
+
+        if (onlyActiveCampaigns) {
+            sql += `
+                AND (
+                    campaign_id IS NULL
+                    OR EXISTS (
+                        SELECT 1
+                        FROM campaigns
+                        WHERE campaigns.id = message_queue.campaign_id
+                          AND campaigns.status = 'active'
+                    )
+                )
             `;
         }
 

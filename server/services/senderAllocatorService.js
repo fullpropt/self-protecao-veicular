@@ -290,14 +290,27 @@ class SenderAllocatorService {
         const placeholders = normalized.map(() => '?').join(', ');
         const { startIso, endIso } = this.getTodayWindow();
         const rows = await query(`
-            SELECT session_id, COUNT(*) AS total
-            FROM message_queue
-            WHERE session_id IN (${placeholders})
-              AND COALESCE(is_first_contact, 1) = 1
-              AND status IN ('pending', 'processing', 'sent')
-              AND COALESCE(processed_at, created_at) >= ?
-              AND COALESCE(processed_at, created_at) < ?
-            GROUP BY session_id
+            SELECT mq.session_id, COUNT(*) AS total
+            FROM message_queue mq
+            WHERE mq.session_id IN (${placeholders})
+              AND COALESCE(mq.is_first_contact, 1) = 1
+              AND (
+                  mq.status IN ('processing', 'sent')
+                  OR (
+                      mq.status = 'pending'
+                      AND (
+                          mq.campaign_id IS NULL
+                          OR EXISTS (
+                              SELECT 1
+                              FROM campaigns c
+                              WHERE c.id = mq.campaign_id
+                          )
+                      )
+                  )
+              )
+              AND COALESCE(mq.processed_at, mq.created_at) >= ?
+              AND COALESCE(mq.processed_at, mq.created_at) < ?
+            GROUP BY mq.session_id
         `, [...normalized, startIso, endIso]);
 
         for (const row of rows) {

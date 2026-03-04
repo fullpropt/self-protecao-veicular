@@ -14222,7 +14222,13 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
             : null;
         const payload = sanitizeCampaignPayload(req.body, { applyDefaultType: false });
         const requestedStatus = String(payload?.status || '').trim().toLowerCase();
-        const shouldQueue = campaign.status !== 'active' && requestedStatus === 'active';
+        const shouldActivate = campaign.status !== 'active' && requestedStatus === 'active';
+        let shouldQueue = false;
+        if (shouldActivate) {
+            const progress = await MessageQueue.getCampaignProgress(campaign.id);
+            const hasPendingOrProcessing = Number(progress?.pending || 0) > 0 || Number(progress?.processing || 0) > 0;
+            shouldQueue = !hasPendingOrProcessing;
+        }
         const payloadBeforeQueue = { ...payload };
         if (shouldQueue) {
             // Evita deixar campanha "ativa" quando o enfileiramento falha.
