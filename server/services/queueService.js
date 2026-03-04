@@ -565,6 +565,7 @@ class QueueService extends EventEmitter {
             if (!pendingMessages || pendingMessages.length === 0) return;
 
             let selected = null;
+            const allocationUnavailableByOwner = new Map();
             for (const candidate of pendingMessages) {
                 const lead = await Lead.findById(candidate.lead_id);
                 if (!lead) {
@@ -593,75 +594,140 @@ class QueueService extends EventEmitter {
                     continue;
                 }
 
+                const ownerScopeKey = this.buildOwnerCacheKey(ownerUserId || null);
+                const cachedAllocationUnavailable = allocationUnavailableByOwner.get(ownerScopeKey);
+                if (cachedAllocationUnavailable) {
+                    await MessageQueue.setAssignment(candidate.id, null, null);
+                    await MessageQueue.requeueTransient(
+                        candidate.id,
+                        cachedAllocationUnavailable.errorMessage,
+                        cachedAllocationUnavailable.retryAt
+                    );
+                    this.emit('message:deferred', {
+                        id: candidate.id,
+                        leadId: candidate.lead_id,
+                        sessionId: null,
+                        reason: cachedAllocationUnavailable.reason,
+                        retryAt: cachedAllocationUnavailable.retryAt
+                    });
+                    continue;
+                }
+
+                let assignedSessionId = String(candidate.session_id || '').trim();
+                if (!assignedSessionId && this.resolveSessionForMessage) {
+                    try {
+                        const allocation = await this.resolveSessionForMessage({
+                            message: candidate,
+                            lead
+                        });
+                        assignedSessionId = String(allocation?.sessionId || '').trim();
+                        if (assignedSessionId) {
+                            await MessageQueue.setAssignment(
+                                candidate.id,
+                                assignedSessionId,
+                                allocation?.assignmentMeta || null
+                            );
+                        }
+                    } catch (allocationError) {
+                        const normalizedAllocationError = String(allocationError?.message || '')
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .toLowerCase();
+                        const isNoConnectedSender =
+                            normalizedAllocationError.includes('nenhuma conta de whatsapp conectada para envio') ||
+                            normalizedAllocationError.includes('nenhuma conta de whatsapp habilitada para envio');
+
+                        if (isNoConnectedSender) {
+                            const retryDelayMs = Math.max(60000, this.sessionDisconnectedRetryMs);
+                            const retryAt = new Date(Date.now() + retryDelayMs).toISOString();
+                            const reason = 'Nenhuma conta de WhatsApp conectada para envio no owner';
+                            const errorMessage = `[Q_REQUEUE_ALLOC] ${String(allocationError?.message || reason)}`;
+
+                            allocationUnavailableByOwner.set(ownerScopeKey, {
+                                retryAt,
+                                reason,
+                                errorMessage
+                            });
+
+                            await MessageQueue.setAssignment(candidate.id, null, null);
+                            await MessageQueue.requeueTransient(candidate.id, errorMessage, retryAt);
+                            this.emit('message:deferred', {
+                                id: candidate.id,
+                                leadId: candidate.lead_id,
+                                sessionId: null,
+                                reason,
+                                retryAt
+                            });
+                            continue;
+                        }
+
+                        allocationError.messageId = candidate.id;
+                        allocationError.leadId = candidate.lead_id;
+                        allocationError.conversationId = candidate.conversation_id;
+                        allocationError.campaignId = candidate.campaign_id || null;
+                        throw allocationError;
+                    }
+                }
+
+                if (!assignedSessionId) {
+                    const retryAt = new Date(Date.now() + Math.max(60000, this.sessionDisconnectedRetryMs)).toISOString();
+                    const reason = 'Nenhuma conta de WhatsApp disponivel para envio';
+                    await MessageQueue.requeueTransient(candidate.id, `[Q_REQUEUE_ALLOC] ${reason}`, retryAt);
+                    this.emit('message:deferred', {
+                        id: candidate.id,
+                        leadId: candidate.lead_id,
+                        sessionId: null,
+                        reason,
+                        retryAt
+                    });
+                    continue;
+                }
+
+                if (this.getSessionDispatchState) {
+                    const runtimeSessionState = this.normalizeSessionDispatchState(
+                        await this.getSessionDispatchState(assignedSessionId)
+                    );
+                    if (!runtimeSessionState.available) {
+                        const retryDelayMs = this.computeUnavailableSessionRetryMs(runtimeSessionState);
+                        const retryAt = new Date(Date.now() + retryDelayMs).toISOString();
+                        const reason = runtimeSessionState.reason || (
+                            runtimeSessionState.status === 'warming_up'
+                                ? 'Sessao em aquecimento apos reconexao'
+                                : runtimeSessionState.status === 'reconnecting'
+                                    ? 'Sessao reconectando'
+                                    : 'Sessao nao conectada'
+                        );
+                        // Quando a sessao atribuida esta desconectada, libera a mensagem para
+                        // ser realocada automaticamente em uma conta conectada no proximo ciclo.
+                        if (runtimeSessionState.status === 'disconnected') {
+                            await MessageQueue.setAssignment(candidate.id, null, null);
+                        }
+                        console.log(`[QueueDebug][${assignedSessionId}] QUEUE_TRANSIENT_REQUEUE pre-send messageId=${candidate.id} leadId=${candidate.lead_id} sessionStatus=${runtimeSessionState.status || ''} retryAt=${retryAt} reason=${reason}`);
+                        await MessageQueue.requeueTransient(candidate.id, `[Q_REQUEUE_PRE] ${reason}`, retryAt);
+                        this.emit('message:deferred', {
+                            id: candidate.id,
+                            leadId: candidate.lead_id,
+                            sessionId: assignedSessionId,
+                            reason,
+                            retryAt
+                        });
+                        continue;
+                    }
+                }
+
                 selected = {
                     message: candidate,
                     lead,
                     ownerUserId: ownerUserId || null,
-                    queueSettings
+                    queueSettings,
+                    assignedSessionId
                 };
                 break;
             }
 
             if (!selected) return;
 
-            const { message, lead, ownerUserId, queueSettings } = selected;
-
-            let assignedSessionId = String(message.session_id || '').trim();
-            if (!assignedSessionId && this.resolveSessionForMessage) {
-                const allocation = await this.resolveSessionForMessage({
-                    message,
-                    lead
-                });
-                assignedSessionId = String(allocation?.sessionId || '').trim();
-                if (assignedSessionId) {
-                    await MessageQueue.setAssignment(
-                        message.id,
-                        assignedSessionId,
-                        allocation?.assignmentMeta || null
-                    );
-                }
-            }
-
-            if (!assignedSessionId) {
-                const sendError = new Error('Nenhuma conta de WhatsApp disponivel para envio');
-                sendError.messageId = message.id;
-                sendError.leadId = message.lead_id;
-                sendError.conversationId = message.conversation_id;
-                sendError.campaignId = message.campaign_id || null;
-                throw sendError;
-            }
-
-            if (this.getSessionDispatchState) {
-                const runtimeSessionState = this.normalizeSessionDispatchState(
-                    await this.getSessionDispatchState(assignedSessionId)
-                );
-                if (!runtimeSessionState.available) {
-                    const retryDelayMs = this.computeUnavailableSessionRetryMs(runtimeSessionState);
-                    const retryAt = new Date(Date.now() + retryDelayMs).toISOString();
-                    const reason = runtimeSessionState.reason || (
-                        runtimeSessionState.status === 'warming_up'
-                            ? 'Sessao em aquecimento apos reconexao'
-                            : runtimeSessionState.status === 'reconnecting'
-                                ? 'Sessao reconectando'
-                                : 'Sessao nao conectada'
-                    );
-                    // Quando a sessao atribuida esta desconectada, libera a mensagem para
-                    // ser realocada automaticamente em uma conta conectada no proximo ciclo.
-                    if (runtimeSessionState.status === 'disconnected') {
-                        await MessageQueue.setAssignment(message.id, null, null);
-                    }
-                    console.log(`[QueueDebug][${assignedSessionId}] QUEUE_TRANSIENT_REQUEUE pre-send messageId=${message.id} leadId=${message.lead_id} sessionStatus=${runtimeSessionState.status || ''} retryAt=${retryAt} reason=${reason}`);
-                    await MessageQueue.requeueTransient(message.id, `[Q_REQUEUE_PRE] ${reason}`, retryAt);
-                    this.emit('message:deferred', {
-                        id: message.id,
-                        leadId: message.lead_id,
-                        sessionId: assignedSessionId,
-                        reason,
-                        retryAt
-                    });
-                    return;
-                }
-            }
+            const { message, lead, ownerUserId, queueSettings, assignedSessionId } = selected;
 
             await MessageQueue.markProcessing(message.id);
 
