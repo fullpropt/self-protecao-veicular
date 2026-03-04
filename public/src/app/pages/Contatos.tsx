@@ -403,6 +403,16 @@ export default function Contatos() {
                     </select>
                   </div>
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Tags</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    id="editContactTags"
+                    placeholder="Ex.: VIP, Renovacao"
+                  />
+                  <p className="form-help">Separe multiplas tags por virgula.</p>
+                </div>
                 <div className="form-row" id="editContactCustomFields"></div>
                 <div className="form-group">
                   <label className="form-label">Observações</label>

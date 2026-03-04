@@ -1160,6 +1160,7 @@ function editContact(id: number) {
     const editContactPhone = document.getElementById('editContactPhone') as HTMLInputElement | null;
     const editContactEmail = document.getElementById('editContactEmail') as HTMLInputElement | null;
     const editContactStatus = document.getElementById('editContactStatus') as HTMLSelectElement | null;
+    const editContactTags = document.getElementById('editContactTags') as HTMLInputElement | null;
     const editContactNotes = document.getElementById('editContactNotes') as HTMLTextAreaElement | null;
 
     if (editContactId) editContactId.value = String(contact.id);
@@ -1167,6 +1168,7 @@ function editContact(id: number) {
     if (editContactPhone) editContactPhone.value = contact.phone || '';
     if (editContactEmail) editContactEmail.value = contact.email || '';
     if (editContactStatus) editContactStatus.value = String(contact.status || 1);
+    if (editContactTags) editContactTags.value = parseLeadTags(contact.tags).join(', ');
     const currentCustomFields = parseLeadCustomFields(contact.custom_fields);
     if (editContactNotes) {
         editContactNotes.value = String(contact.notes || '').trim() || extractLeadNotesFromCustomFields(currentCustomFields);
@@ -1201,6 +1203,14 @@ async function updateContact() {
 
     const name = (document.getElementById('editContactName') as HTMLInputElement | null)?.value.trim() || '';
     const phone = (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
+    const editTagsInput = document.getElementById('editContactTags') as HTMLInputElement | null;
+    const nextTags = editTagsInput
+        ? Array.from(new Set(
+            parseLeadTags(editTagsInput.value || '')
+                .map((tag) => String(tag || '').trim())
+                .filter(Boolean)
+        ))
+        : parseLeadTags(existingContact?.tags);
     if (!name || !phone) {
         showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
         return;
@@ -1211,6 +1221,7 @@ async function updateContact() {
         phone,
         email: (document.getElementById('editContactEmail') as HTMLInputElement | null)?.value.trim() || '',
         status: parseInt((document.getElementById('editContactStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus,
+        tags: nextTags,
         custom_fields: mergedCustomFields
     };
 
