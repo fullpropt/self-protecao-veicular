@@ -956,23 +956,57 @@ class FlowService extends EventEmitter {
      */
     async continueFlow(execution, message) {
         const currentNode = this.findNode(execution.flow, execution.currentNode);
+        const messageText = String(message?.text || '').trim();
 
         if (!currentNode) {
             await this.endFlow(execution, 'completed');
             return null;
         }
 
-        if (currentNode.type === 'intent') {
-            execution.variables.last_response = message.text;
-            const selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, message.text);
+        const currentSubtype = String(currentNode?.subtype || '').trim().toLowerCase();
+        const isIntentNode = currentNode.type === 'intent'
+            || (currentNode.type === 'trigger' && (currentSubtype === 'keyword' || currentSubtype === 'intent'));
+
+        if (isIntentNode) {
+            execution.variables.last_response = messageText;
+            const selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, messageText);
+
+            if (!selectedHandle) {
+                const outgoingEdges = (execution.flow?.edges || []).filter((edge) => edge.source === currentNode.id);
+                const hasDefaultRoute = outgoingEdges.some((edge) => {
+                    const handle = String(edge?.sourceHandle || '').trim().toLowerCase();
+                    return !handle || handle === 'default';
+                });
+                const hasSpecificRoutes = outgoingEdges.some((edge) => {
+                    const handle = String(edge?.sourceHandle || '').trim().toLowerCase();
+                    return Boolean(handle) && handle !== 'default';
+                });
+
+                // Sem match e sem rota padrao: mantem aguardando nova resposta em vez de encerrar.
+                if (hasSpecificRoutes && !hasDefaultRoute) {
+                    await run(`
+                        UPDATE flow_executions
+                        SET variables = ?
+                        WHERE id = ?
+                    `, [JSON.stringify(execution.variables), execution.id]);
+
+                    console.info(
+                        `[flow-intent] Nenhuma rota correspondeu no no ${currentNode?.id || 'desconhecido'} `
+                        + `(fluxo ${execution?.flow?.id || 'n/a'}, conversa ${execution?.conversation?.id || 'n/a'}). `
+                        + 'Execucao mantida aguardando nova resposta.'
+                    );
+                    return execution;
+                }
+            }
+
             await this.goToNextNode(execution, currentNode, selectedHandle);
             return execution;
         }
 
         if (currentNode.type === 'wait' || currentNode.type === 'condition') {
-            execution.variables.last_response = message.text;
+            execution.variables.last_response = messageText;
 
-            const nextNodeId = this.evaluateCondition(execution.flow, currentNode, message.text);
+            const nextNodeId = this.evaluateCondition(execution.flow, currentNode, messageText);
 
             if (nextNodeId) {
                 await this.executeNode(execution, nextNodeId);
@@ -1375,7 +1409,14 @@ class FlowService extends EventEmitter {
             edge = outgoingEdges.find((item) => {
                 const edgeRaw = rawHandle(item.sourceHandle);
                 const edgeCanonical = canonicalHandle(item.sourceHandle);
-                return acceptedHandles.has(edgeRaw) || acceptedHandles.has(edgeCanonical);
+                const edgeLabelRaw = rawHandle(item.label);
+                const edgeLabelCanonical = canonicalHandle(item.label);
+                return (
+                    acceptedHandles.has(edgeRaw)
+                    || acceptedHandles.has(edgeCanonical)
+                    || acceptedHandles.has(edgeLabelRaw)
+                    || acceptedHandles.has(edgeLabelCanonical)
+                );
             });
         }
 
