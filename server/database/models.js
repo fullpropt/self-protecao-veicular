@@ -92,17 +92,19 @@ function mergeLeadCustomFields(baseValue, overrideValue) {
     return merged;
 }
 
-function lockLeadNameAsManual(customFields) {
+function lockLeadNameAsManual(customFields, manualName = '') {
     const merged = mergeLeadCustomFields(customFields);
     const currentSystem = merged.__system && typeof merged.__system === 'object' && !Array.isArray(merged.__system)
         ? merged.__system
         : {};
+    const sanitizedManualName = sanitizeLeadName(manualName);
 
     merged.__system = {
         ...currentSystem,
         manual_name_locked: true,
         manual_name_source: 'manual',
-        manual_name_updated_at: new Date().toISOString()
+        manual_name_updated_at: new Date().toISOString(),
+        ...(sanitizedManualName ? { manual_name_value: sanitizedManualName } : {})
     };
 
     return merged;
@@ -407,7 +409,7 @@ const Lead = {
         const incomingName = sanitizedName || normalizedPhone;
         const initialCustomFields = parseLeadCustomFields(data.custom_fields);
         const customFields = normalizedSource !== 'whatsapp' && sanitizedName
-            ? lockLeadNameAsManual(initialCustomFields)
+            ? lockLeadNameAsManual(initialCustomFields, sanitizedName)
             : initialCustomFields;
         const ownerUserId = await resolveLeadOwnerUserIdInput(data);
         
@@ -540,6 +542,9 @@ const Lead = {
     },
     
     async update(id, data) {
+        const currentLead = await this.findById(id);
+        if (!currentLead) return null;
+
         const fields = [];
         const values = [];
         
@@ -547,6 +552,51 @@ const Lead = {
         
         for (const [key, value] of Object.entries(data)) {
             if (allowedFields.includes(key)) {
+                if (key === 'name') {
+                    const sanitizedName = sanitizeLeadName(value);
+                    if (!sanitizedName) continue;
+                    fields.push('name = ?');
+                    values.push(sanitizedName);
+                    continue;
+                }
+
+                if (key === 'custom_fields') {
+                    const incomingCustomFields = parseLeadCustomFields(value);
+                    const currentCustomFields = parseLeadCustomFields(currentLead.custom_fields);
+                    const currentSystem = currentCustomFields.__system
+                        && typeof currentCustomFields.__system === 'object'
+                        && !Array.isArray(currentCustomFields.__system)
+                        ? currentCustomFields.__system
+                        : {};
+                    const incomingSystem = incomingCustomFields.__system
+                        && typeof incomingCustomFields.__system === 'object'
+                        && !Array.isArray(incomingCustomFields.__system)
+                        ? incomingCustomFields.__system
+                        : {};
+
+                    if (currentSystem.manual_name_locked === true) {
+                        const preservedSystem = {
+                            ...incomingSystem,
+                            manual_name_locked: true,
+                            manual_name_source: incomingSystem.manual_name_source || currentSystem.manual_name_source || 'manual',
+                            manual_name_updated_at: incomingSystem.manual_name_updated_at || currentSystem.manual_name_updated_at || new Date().toISOString()
+                        };
+
+                        const preservedManualName = sanitizeLeadName(
+                            incomingSystem.manual_name_value || currentSystem.manual_name_value || currentLead.name || ''
+                        );
+                        if (preservedManualName) {
+                            preservedSystem.manual_name_value = preservedManualName;
+                        }
+
+                        incomingCustomFields.__system = preservedSystem;
+                    }
+
+                    fields.push('custom_fields = ?');
+                    values.push(JSON.stringify(incomingCustomFields));
+                    continue;
+                }
+
                 fields.push(`${key} = ?`);
                 values.push(typeof value === 'object' ? JSON.stringify(value) : value);
             }

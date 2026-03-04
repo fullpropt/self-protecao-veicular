@@ -611,6 +611,7 @@ async function bootstrapDatabase() {
         await cleanupEmptyWhatsappLeads();
         await cleanupDuplicatePhoneSuffixLeads();
         await cleanupBrokenLeadNames();
+        await cleanupMissingLeadNames();
         await migrateLegacyTriggerCampaignsToAutomations();
     } catch (error) {
         console.error('Erro ao inicializar banco de dados:', error.message);
@@ -1611,20 +1612,28 @@ function mergeLeadCustomFields(baseValue, overrideValue) {
     return merged;
 }
 
-function lockLeadNameAsManual(customFields) {
+function lockLeadNameAsManual(customFields, manualName = '') {
     const merged = mergeLeadCustomFields(customFields);
     const system = merged.__system && typeof merged.__system === 'object' && !Array.isArray(merged.__system)
         ? merged.__system
         : {};
+    const sanitizedManualName = sanitizeAutoName(manualName);
 
     merged.__system = {
         ...system,
         manual_name_locked: true,
         manual_name_source: 'manual',
-        manual_name_updated_at: new Date().toISOString()
+        manual_name_updated_at: new Date().toISOString(),
+        ...(sanitizedManualName ? { manual_name_value: sanitizedManualName } : {})
     };
 
     return merged;
+}
+
+function resolveManualNameSnapshotFromLead(lead) {
+    const customFields = parseLeadCustomFields(lead?.custom_fields);
+    const snapshot = sanitizeAutoName(customFields?.__system?.manual_name_value);
+    return snapshot || '';
 }
 
 function isLeadNameManuallyLocked(lead) {
@@ -1811,8 +1820,8 @@ function normalizeLeadSource(source) {
 }
 
 function resolvePreferredLeadName(primaryLead, duplicateLead) {
-    const primaryName = sanitizeAutoName(primaryLead?.name);
-    const duplicateName = sanitizeAutoName(duplicateLead?.name);
+    const primaryName = sanitizeAutoName(primaryLead?.name) || resolveManualNameSnapshotFromLead(primaryLead);
+    const duplicateName = sanitizeAutoName(duplicateLead?.name) || resolveManualNameSnapshotFromLead(duplicateLead);
 
     if (!primaryName && duplicateName) return duplicateName;
     if (primaryName && !duplicateName) return primaryName;
@@ -1844,7 +1853,7 @@ function resolveMostRecentTimestamp(first, second) {
 function getLeadMergeScore(lead) {
     let score = 0;
 
-    if (sanitizeAutoName(lead?.name)) score += 4;
+    if (sanitizeAutoName(lead?.name) || resolveManualNameSnapshotFromLead(lead)) score += 4;
     if (isLeadNameManuallyLocked(lead)) score += 3;
     const source = normalizeLeadSource(lead?.source);
     if (source && source !== 'whatsapp') score += 2;
@@ -2552,10 +2561,11 @@ async function updateLeadIdentity(lead, jid, phone) {
     if (!hasChanges) return lead;
 
     const oldPhone = String(lead.phone || '').replace(/\D/g, '');
-    const nameDigits = String(lead.name || '').replace(/\D/g, '');
+    const currentSafeName = sanitizeAutoName(lead.name) || resolveManualNameSnapshotFromLead(lead);
+    const nameDigits = String(currentSafeName || '').replace(/\D/g, '');
     const nextName = nameDigits && nameDigits === oldPhone && nameDigits !== cleanedPhone
         ? cleanedPhone
-        : lead.name;
+        : (currentSafeName || cleanedPhone);
 
     try {
         await run(
@@ -2853,6 +2863,42 @@ async function cleanupBrokenLeadNames() {
         }
     } catch (error) {
         console.warn('Falha ao corrigir nomes de leads:', error.message);
+    }
+}
+
+async function cleanupMissingLeadNames() {
+    try {
+        const leads = await query(`
+            SELECT id, name, phone, custom_fields
+            FROM leads
+            WHERE name IS NULL
+               OR TRIM(name) = ''
+               OR LOWER(TRIM(name)) IN ('sem nome', 'unknown', 'undefined', 'null')
+        `);
+        if (!leads || leads.length === 0) return;
+
+        let repaired = 0;
+        for (const lead of leads) {
+            const snapshotName = resolveManualNameSnapshotFromLead(lead);
+            const safeCurrentName = sanitizeAutoName(lead?.name);
+            const safePhone = String(lead?.phone || '').replace(/\D/g, '');
+            const nextName = snapshotName || safeCurrentName || safePhone;
+            if (!nextName) continue;
+
+            if (String(lead?.name || '').trim() === nextName) continue;
+
+            await run(
+                'UPDATE leads SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [nextName, lead.id]
+            );
+            repaired += 1;
+        }
+
+        if (repaired > 0) {
+            console.log(`Recuperados ${repaired} leads com nome ausente`);
+        }
+    } catch (error) {
+        console.warn('Falha ao recuperar nomes ausentes de leads:', error.message);
     }
 }
 async function persistWhatsappSession(sessionId, status, options = {}) {
@@ -7598,6 +7644,14 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         }
     }
 
+    if (!sanitizeAutoName(lead?.name)) {
+        const manualSnapshotName = resolveManualNameSnapshotFromLead(lead);
+        if (manualSnapshotName) {
+            await Lead.update(lead.id, { name: manualSnapshotName });
+            lead.name = manualSnapshotName;
+        }
+    }
+
 
 
     if (isSelfChat) {
@@ -11873,7 +11927,8 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
         if (manualName) {
             updateData.name = manualName;
             updateData.custom_fields = lockLeadNameAsManual(
-                mergeLeadCustomFields(lead.custom_fields, updateData.custom_fields)
+                mergeLeadCustomFields(lead.custom_fields, updateData.custom_fields),
+                manualName
             );
         } else {
             delete updateData.name;
