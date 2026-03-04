@@ -5,7 +5,6 @@ import { brandLogoUrl, brandName } from '../lib/brand';
 type FunilGlobals = {
   initFunil?: () => void;
   loadFunnel?: (options?: { forceRefresh?: boolean; silent?: boolean }) => void;
-  toggleView?: () => void;
   filterByStage?: (stage: number | string) => void;
   openModal?: (id: string) => void;
   closeModal?: (id: string) => void;
@@ -299,9 +298,6 @@ export default function Funil() {
                   </div>
                   <div className="page-actions">
                       <button className="btn btn-outline" onClick={() => globals.loadFunnel?.({ forceRefresh: true })}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
-                      <button className="btn btn-outline" onClick={() => globals.toggleView?.()}>
-                          <span id="viewIcon"><span className="icon icon-chart-bar icon-sm"></span></span> <span id="viewText">Kanban</span>
-                      </button>
                       <button className="btn btn-primary" onClick={() => globals.openModal?.('configModal')}><span className="icon icon-settings icon-sm"></span> Configurar Etapas</button>
                   </div>
               </div>
