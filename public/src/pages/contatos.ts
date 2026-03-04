@@ -648,7 +648,8 @@ function initContacts() {
         });
         contactsBootstrappedOnce = true;
     });
-    loadTags();
+    bindEditContactTagsSuggestions();
+    void loadTags();
     loadTemplates();
 }
 
@@ -775,20 +776,118 @@ async function loadContacts(options: LoadContactsOptions = {}) {
     }
 }
 
+function getUniqueTagNames() {
+    const seen = new Set<string>();
+    const names: string[] = [];
+
+    for (const tag of tags) {
+        const name = String(tag?.name || '').trim();
+        const key = name.toLowerCase();
+        if (!name || seen.has(key)) continue;
+        seen.add(key);
+        names.push(name);
+    }
+
+    return names.sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+}
+
+function getNormalizedUniqueLeadTags(value: unknown) {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+
+    for (const tag of parseLeadTags(value)) {
+        const name = String(tag || '').trim();
+        const key = name.toLowerCase();
+        if (!name || seen.has(key)) continue;
+        seen.add(key);
+        normalized.push(name);
+    }
+
+    return normalized;
+}
+
+function renderEditContactTagSuggestions() {
+    const tagNames = getUniqueTagNames();
+    const datalist = document.getElementById('editContactTagsOptions') as HTMLDataListElement | null;
+    const suggestions = document.getElementById('editContactTagsSuggestions') as HTMLElement | null;
+    const editTagsInput = document.getElementById('editContactTags') as HTMLInputElement | null;
+
+    if (datalist) {
+        datalist.innerHTML = tagNames
+            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+            .join('');
+    }
+
+    if (!suggestions) return;
+
+    if (!tagNames.length) {
+        suggestions.innerHTML = '';
+        return;
+    }
+
+    const selectedTagKeys = new Set(
+        getNormalizedUniqueLeadTags(editTagsInput?.value || '').map((tag) => tag.toLowerCase())
+    );
+
+    suggestions.innerHTML = tagNames
+        .map((name) => {
+            const selected = selectedTagKeys.has(name.toLowerCase());
+            const buttonClassName = selected ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
+            return `<button type="button" class="${buttonClassName}" data-edit-contact-tag-option="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+        })
+        .join('');
+}
+
+function bindEditContactTagsSuggestions() {
+    const editTagsInput = document.getElementById('editContactTags') as HTMLInputElement | null;
+    const suggestions = document.getElementById('editContactTagsSuggestions') as HTMLElement | null;
+
+    if (editTagsInput && editTagsInput.dataset.tagSuggestionsBound !== '1') {
+        editTagsInput.dataset.tagSuggestionsBound = '1';
+        editTagsInput.addEventListener('input', () => {
+            renderEditContactTagSuggestions();
+        });
+    }
+
+    if (suggestions && suggestions.dataset.tagSuggestionsBound !== '1') {
+        suggestions.dataset.tagSuggestionsBound = '1';
+        suggestions.addEventListener('click', (event) => {
+            const target = event.target as HTMLElement | null;
+            const button = target?.closest('[data-edit-contact-tag-option]') as HTMLElement | null;
+            if (!button || !editTagsInput) return;
+
+            event.preventDefault();
+
+            const clickedTag = String(button.getAttribute('data-edit-contact-tag-option') || '').trim();
+            if (!clickedTag) return;
+
+            const currentTags = getNormalizedUniqueLeadTags(editTagsInput.value || '');
+            const hasTag = currentTags.some((tag) => tag.toLowerCase() === clickedTag.toLowerCase());
+            const nextTags = hasTag
+                ? currentTags.filter((tag) => tag.toLowerCase() !== clickedTag.toLowerCase())
+                : [...currentTags, clickedTag];
+
+            editTagsInput.value = nextTags.join(', ');
+            renderEditContactTagSuggestions();
+        });
+    }
+}
+
 async function loadTags() {
     try {
         const response: TagsResponse = await api.get('/api/tags');
         tags = response.tags || [];
         const filterSelect = document.getElementById('filterTag') as HTMLSelectElement | null;
         const importSelect = document.getElementById('importTag') as HTMLSelectElement | null;
-        const tagOptions = tags
-            .map((tag) => `<option value="${escapeHtml(tag.name)}">${escapeHtml(tag.name)}</option>`)
+        const tagNames = getUniqueTagNames();
+        const tagOptions = tagNames
+            .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
             .join('');
 
         if (filterSelect) {
             const currentFilterValue = String(filterSelect.value || '').trim();
             filterSelect.innerHTML = `<option value="">Todas as Tags</option>${tagOptions}`;
-            if (currentFilterValue && tags.some((tag) => tag.name === currentFilterValue)) {
+            if (currentFilterValue && tagNames.includes(currentFilterValue)) {
                 filterSelect.value = currentFilterValue;
             }
         }
@@ -796,11 +895,15 @@ async function loadTags() {
         if (importSelect) {
             const currentImportValue = String(importSelect.value || '').trim();
             importSelect.innerHTML = `<option value="">Sem etiqueta</option>${tagOptions}`;
-            if (currentImportValue && tags.some((tag) => tag.name === currentImportValue)) {
+            if (currentImportValue && tagNames.includes(currentImportValue)) {
                 importSelect.value = currentImportValue;
             }
         }
-    } catch (e) {}
+    } catch (e) {
+        // ignore
+    } finally {
+        renderEditContactTagSuggestions();
+    }
 }
 
 async function loadTemplates() {
@@ -1169,6 +1272,8 @@ function editContact(id: number) {
     if (editContactEmail) editContactEmail.value = contact.email || '';
     if (editContactStatus) editContactStatus.value = String(contact.status || 1);
     if (editContactTags) editContactTags.value = parseLeadTags(contact.tags).join(', ');
+    renderEditContactTagSuggestions();
+    void loadTags();
     const currentCustomFields = parseLeadCustomFields(contact.custom_fields);
     if (editContactNotes) {
         editContactNotes.value = String(contact.notes || '').trim() || extractLeadNotesFromCustomFields(currentCustomFields);
