@@ -645,6 +645,11 @@ class QueueService extends EventEmitter {
                                 ? 'Sessao reconectando'
                                 : 'Sessao nao conectada'
                     );
+                    // Quando a sessao atribuida esta desconectada, libera a mensagem para
+                    // ser realocada automaticamente em uma conta conectada no proximo ciclo.
+                    if (runtimeSessionState.status === 'disconnected') {
+                        await MessageQueue.setAssignment(message.id, null, null);
+                    }
                     console.log(`[QueueDebug][${assignedSessionId}] QUEUE_TRANSIENT_REQUEUE pre-send messageId=${message.id} leadId=${message.lead_id} sessionStatus=${runtimeSessionState.status || ''} retryAt=${retryAt} reason=${reason}`);
                     await MessageQueue.requeueTransient(message.id, `[Q_REQUEUE_PRE] ${reason}`, retryAt);
                     this.emit('message:deferred', {
