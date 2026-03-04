@@ -1487,15 +1487,23 @@ function parseLeadCustomFields(value) {
 
     if (typeof value !== 'string') return {};
 
-    try {
-        const parsed = JSON.parse(value);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    let current = value;
+    for (let depth = 0; depth < 3; depth += 1) {
+        if (typeof current !== 'string') break;
+        const trimmed = current.trim();
+        if (!trimmed) return {};
+        try {
+            current = JSON.parse(trimmed);
+        } catch (_) {
             return {};
         }
-        return parsed;
-    } catch (_) {
+    }
+
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
         return {};
     }
+
+    return { ...current };
 }
 
 function mergeLeadCustomFields(baseValue, overrideValue) {
@@ -9441,6 +9449,31 @@ const PREVIOUS_EMAIL_HTML_TEMPLATE = [
     '</table>',
     '</body></html>'
 ].join('');
+const PREVIOUS_EMAIL_HTML_TEMPLATE_V2 = [
+    '<!doctype html>',
+    '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>',
+    '<body style="margin:0;padding:0;background:#f3f5f9;font-family:Arial,Helvetica,sans-serif;color:#142033;">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f5f9;padding:24px 12px;">',
+    '<tr><td align="center">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e9f1;">',
+    '<tr><td style="background:#0f2e23;padding:20px 24px;" align="left">',
+    '<img src="{{logo_url}}" alt="ZapVender" style="display:block;height:36px;width:auto;max-width:180px;">',
+    '</td></tr>',
+    '<tr><td style="padding:28px 24px;">',
+    '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.5;color:#142033;">Olá {{name}},</p>',
+    '<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#344054;">Recebemos seu cadastro no <strong>{{app_name}}</strong>. Para ativar sua conta, confirme seu e-mail clicando no botão abaixo.</p>',
+    '<p style="margin:0 0 20px 0;"><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#1dbf73;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px;">Confirmar e-mail</a></p>',
+    '<p style="margin:0;font-size:13px;line-height:1.6;color:#667085;">Este link expira em {{expires_in_text}}.</p>',
+    '</td></tr>',
+    '<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;">',
+    '<p style="margin:0 0 6px 0;font-size:12px;line-height:1.5;color:#667085;"><strong>ZapVender</strong> | Plataforma de atendimento e automação para WhatsApp.</p>',
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#667085;">Suporte: <a href="mailto:{{company_email}}" style="color:#0f766e;text-decoration:none;">{{company_email}}</a></p>',
+    '</td></tr>',
+    '</table>',
+    '</td></tr>',
+    '</table>',
+    '</body></html>'
+].join('');
 
 function normalizeLegacyEmailTemplateValue(value, currentDefault, legacyDefault) {
     const normalized = String(value || '');
@@ -9484,7 +9517,7 @@ function normalizeEmailDeliverySettingsInput(payload = {}, currentSettings = {})
         normalizeLegacyEmailTemplateValue(
             source.htmlTemplate ?? current.htmlTemplate,
             DEFAULT_EMAIL_HTML_TEMPLATE,
-            [LEGACY_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE]
+            [LEGACY_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE_V2]
         ),
         DEFAULT_EMAIL_HTML_TEMPLATE
     );
@@ -11279,9 +11312,12 @@ app.put('/api/leads/:id', authenticate, async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(updateData, 'name')) {
         const manualName = sanitizeAutoName(updateData.name);
         if (manualName) {
+            updateData.name = manualName;
             updateData.custom_fields = lockLeadNameAsManual(
                 mergeLeadCustomFields(lead.custom_fields, updateData.custom_fields)
             );
+        } else {
+            delete updateData.name;
         }
     }
 

@@ -81,6 +81,9 @@ type LoadContactsOptions = {
     bypassMinRevalidate?: boolean;
 };
 
+const CONTACT_NOTES_FALLBACK_KEY = 'observacoes';
+const CONTACT_NOTES_KEYS = ['observacoes', 'observacoes_contato', 'notes', 'note'];
+
 let allContacts: Contact[] = [];
 let filteredContacts: Contact[] = [];
 let selectedContacts: number[] = [];
@@ -222,11 +225,49 @@ function parseLeadCustomFields(value: unknown) {
     if (!value) return {};
     if (typeof value === 'object') return Array.isArray(value) ? {} : { ...(value as Record<string, any>) };
     if (typeof value !== 'string') return {};
-    try {
-        const parsed = JSON.parse(value);
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-    } catch {
-        return {};
+    let current: unknown = value;
+    for (let depth = 0; depth < 3; depth += 1) {
+        if (typeof current !== 'string') break;
+        const trimmed = current.trim();
+        if (!trimmed) return {};
+        try {
+            current = JSON.parse(trimmed);
+        } catch {
+            return {};
+        }
+    }
+    return current && typeof current === 'object' && !Array.isArray(current)
+        ? { ...(current as Record<string, any>) }
+        : {};
+}
+
+function extractLeadNotesFromCustomFields(customFields: Record<string, any>) {
+    for (const rawKey of CONTACT_NOTES_KEYS) {
+        const key = normalizeContactFieldKey(rawKey);
+        const value = customFields?.[key];
+        if (value === undefined || value === null) continue;
+        const text = String(value).trim();
+        if (text) return text;
+    }
+    return '';
+}
+
+function applyLeadNotesToCustomFields(customFields: Record<string, any>, notesValue: unknown) {
+    const notes = String(notesValue || '').trim();
+    const normalizedKeys = CONTACT_NOTES_KEYS.map((key) => normalizeContactFieldKey(key)).filter(Boolean);
+    const existingKey = normalizedKeys.find((key) => Object.prototype.hasOwnProperty.call(customFields, key));
+    const targetKey = existingKey || CONTACT_NOTES_FALLBACK_KEY;
+
+    for (const key of normalizedKeys) {
+        if (key !== targetKey && Object.prototype.hasOwnProperty.call(customFields, key)) {
+            delete customFields[key];
+        }
+    }
+
+    if (notes) {
+        customFields[targetKey] = notes;
+    } else {
+        delete customFields[targetKey];
     }
 }
 
@@ -670,7 +711,16 @@ async function fetchAllContacts() {
 }
 
 function applyContactsSnapshot(nextContacts: Contact[]) {
-    allContacts = Array.isArray(nextContacts) ? nextContacts : [];
+    allContacts = Array.isArray(nextContacts)
+        ? nextContacts.map((contact) => {
+            const customFields = parseLeadCustomFields(contact.custom_fields);
+            const notes = String((contact as Record<string, any>).notes || '').trim() || extractLeadNotesFromCustomFields(customFields);
+            return {
+                ...contact,
+                notes
+            };
+        })
+        : [];
     pruneSelectedContactsByCurrentDataset();
     filteredContacts = [...allContacts];
     updateStats();
@@ -1075,6 +1125,8 @@ async function saveContact() {
         source: (document.getElementById('contactSource') as HTMLSelectElement | null)?.value || ''
     };
     const customFields = collectCustomFieldsValues('contact-custom-field');
+    const contactNotes = (document.getElementById('contactNotes') as HTMLTextAreaElement | null)?.value || '';
+    applyLeadNotesToCustomFields(customFields, contactNotes);
     if (Object.keys(customFields).length > 0) {
         (data as Record<string, any>).custom_fields = customFields;
     }
@@ -1115,8 +1167,10 @@ function editContact(id: number) {
     if (editContactPhone) editContactPhone.value = contact.phone || '';
     if (editContactEmail) editContactEmail.value = contact.email || '';
     if (editContactStatus) editContactStatus.value = String(contact.status || 1);
-    if (editContactNotes) editContactNotes.value = contact.notes || '';
     const currentCustomFields = parseLeadCustomFields(contact.custom_fields);
+    if (editContactNotes) {
+        editContactNotes.value = String(contact.notes || '').trim() || extractLeadNotesFromCustomFields(currentCustomFields);
+    }
     applyCustomFieldsValues('edit-contact-custom-field', currentCustomFields);
     if (!customContactFieldsCache.length) {
         loadContactFields().then(() => applyCustomFieldsValues('edit-contact-custom-field', currentCustomFields));
@@ -1142,10 +1196,19 @@ async function updateContact() {
             delete mergedCustomFields[key];
         }
     }
+    const editNotes = (document.getElementById('editContactNotes') as HTMLTextAreaElement | null)?.value || '';
+    applyLeadNotesToCustomFields(mergedCustomFields, editNotes);
+
+    const name = (document.getElementById('editContactName') as HTMLInputElement | null)?.value.trim() || '';
+    const phone = (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
+    if (!name || !phone) {
+        showToast('error', 'Erro', 'Nome e telefone são obrigatórios');
+        return;
+    }
 
     const data = {
-        name: (document.getElementById('editContactName') as HTMLInputElement | null)?.value.trim() || '',
-        phone: (document.getElementById('editContactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '',
+        name,
+        phone,
         email: (document.getElementById('editContactEmail') as HTMLInputElement | null)?.value.trim() || '',
         status: parseInt((document.getElementById('editContactStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus,
         custom_fields: mergedCustomFields
