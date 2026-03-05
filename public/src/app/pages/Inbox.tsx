@@ -1364,6 +1364,12 @@ export default function Inbox() {
             box-sizing: border-box;
             min-width: 0;
         }
+        html.inbox-route-lock,
+        body.inbox-route-lock {
+            overflow: hidden;
+            height: var(--inbox-mobile-vh, 100dvh);
+            overscroll-behavior: none;
+        }
         .chat-header-actions { display: flex; gap: 8px; align-items: center; }
         .chat-back-btn {
             display: none;

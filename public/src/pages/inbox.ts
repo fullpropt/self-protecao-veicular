@@ -757,8 +757,24 @@ function syncInboxMobileViewportHeight() {
     root.style.setProperty('--inbox-mobile-vh', `${viewportHeight}px`);
 }
 
+function syncInboxRouteScrollLock() {
+    const hash = String(window.location.hash || '').toLowerCase();
+    const isInboxRoute = hash.startsWith('#/inbox');
+    document.body.classList.toggle('inbox-route-lock', isInboxRoute);
+    document.documentElement.classList.toggle('inbox-route-lock', isInboxRoute);
+
+    if (isInboxRoute) {
+        if ((window.scrollY || 0) > 0) {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        }
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    }
+}
+
 function syncInboxMobileViewportState() {
     syncInboxMobileViewportHeight();
+    syncInboxRouteScrollLock();
     syncInboxBodyScrollLock();
 }
 
@@ -1246,6 +1262,8 @@ function bindInboxLifecycle() {
 
     window.addEventListener('app:logout', () => {
         stopInboxAutoRefresh();
+        document.body.classList.remove('inbox-route-lock');
+        document.documentElement.classList.remove('inbox-route-lock');
         document.body.classList.remove('inbox-mobile-chat-lock');
         document.documentElement.classList.remove('inbox-mobile-chat-lock');
     });
@@ -1253,6 +1271,8 @@ function bindInboxLifecycle() {
     window.addEventListener('hashchange', () => {
         const hash = String(window.location.hash || '').toLowerCase();
         if (!hash.startsWith('#/inbox')) {
+            document.body.classList.remove('inbox-route-lock');
+            document.documentElement.classList.remove('inbox-route-lock');
             document.body.classList.remove('inbox-mobile-chat-lock');
             document.documentElement.classList.remove('inbox-mobile-chat-lock');
             return;
