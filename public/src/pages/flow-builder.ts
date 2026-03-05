@@ -2,6 +2,17 @@
 
 // Estado do construtor
 type NodeType = 'trigger' | 'intent' | 'message' | 'message_once' | 'wait' | 'condition' | 'delay' | 'transfer' | 'tag' | 'status' | 'webhook' | 'event' | 'end';
+type OutputActionType = 'event' | 'status' | 'tag' | 'webhook';
+type OutputActionItem = {
+    id: string;
+    type: OutputActionType;
+    tag?: string;
+    status?: number;
+    url?: string;
+    eventId?: number | null;
+    eventKey?: string;
+    eventName?: string;
+};
 type NodeData = {
     label: string;
     collapsed?: boolean;
@@ -22,6 +33,7 @@ type NodeData = {
     eventId?: number | null;
     eventKey?: string;
     eventName?: string;
+    outputActions?: Record<string, OutputActionItem[]>;
 };
 
 type FlowNode = {
@@ -105,6 +117,8 @@ type FlowWhatsappSessionOption = {
 let nodes: FlowNode[] = [];
 let edges: Edge[] = [];
 let selectedNode: FlowNode | null = null;
+let selectedOutputActionContext: { nodeId: string; handle: string; label: string } | null = null;
+let outputActionMenuOpen = false;
 let currentFlowId: number | null = null;
 let currentFlowName = '';
 let currentFlowIsActive = true;
@@ -170,6 +184,13 @@ const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'telefone', label: 'Telefone', source: 'phone', is_default: true, required: true, placeholder: 'Somente números com DDD' },
     { key: 'email', label: 'Email', source: 'email', is_default: true, required: false, placeholder: 'email@exemplo.com' }
 ];
+const OUTPUT_ACTION_TYPES: OutputActionType[] = ['event', 'status', 'tag', 'webhook'];
+const OUTPUT_ACTION_TYPE_LABELS: Record<OutputActionType, string> = {
+    event: 'Registrar Evento',
+    status: 'Alterar Status',
+    tag: 'Adicionar Tag',
+    webhook: 'Webhook'
+};
 
 let activeFlowDialogDismiss: (() => void) | null = null;
 let flowAiAssistantOpen = false;
@@ -916,7 +937,7 @@ async function loadCustomEventsCatalog(options: { silent?: boolean } = {}) {
         }
     }
 
-    if (selectedNode?.type === 'event') {
+    if (selectedNode?.type === 'event' || (selectedNode && selectedOutputActionContext?.nodeId === selectedNode.id)) {
         renderProperties();
     }
 }
@@ -1420,8 +1441,8 @@ function addNode(type: NodeType, subtype: string, x: number, y: number) {
 // Dados padrao do no
 function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
     const defaults = {
-        trigger: { label: subtype === 'keyword' || subtype === 'intent' ? 'Intenção' : 'Novo Contato', collapsed: false, keyword: '', intentRoutes: [] },
-        intent: { label: 'Intenção', collapsed: false, keyword: '', intentRoutes: [] },
+        trigger: { label: subtype === 'keyword' || subtype === 'intent' ? 'Intenção' : 'Novo Contato', collapsed: false, keyword: '', intentRoutes: [], outputActions: {} },
+        intent: { label: 'Intenção', collapsed: false, keyword: '', intentRoutes: [], outputActions: {} },
         message: {
             label: 'Mensagem',
             collapsed: false,
@@ -1429,7 +1450,8 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             delaySeconds: 0,
             isOnceMessage: false,
             onceRepeatMode: 'always',
-            onceRepeatValue: 1
+            onceRepeatValue: 1,
+            outputActions: {}
         },
         message_once: {
             label: 'Mensagem',
@@ -1438,12 +1460,13 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             delaySeconds: 0,
             isOnceMessage: true,
             onceRepeatMode: 'always',
-            onceRepeatValue: 1
+            onceRepeatValue: 1,
+            outputActions: {}
         },
-        wait: { label: 'Aguardar Resposta', collapsed: false, timeout: 300 },
-        condition: { label: 'Condição', collapsed: false, conditions: [] },
-        delay: { label: 'Delay', collapsed: false, seconds: 5 },
-        transfer: { label: 'Transferir', collapsed: false, message: 'Transferindo para um atendente...' },
+        wait: { label: 'Aguardar Resposta', collapsed: false, timeout: 300, outputActions: {} },
+        condition: { label: 'Condição', collapsed: false, conditions: [], outputActions: {} },
+        delay: { label: 'Delay', collapsed: false, seconds: 5, outputActions: {} },
+        transfer: { label: 'Transferir', collapsed: false, message: 'Transferindo para um atendente...', outputActions: {} },
         tag: { label: 'Adicionar Tag', collapsed: false, tag: '' },
         status: { label: 'Alterar Status', collapsed: false, status: 2 },
         webhook: { label: 'Webhook', collapsed: false, url: '' },
@@ -1462,6 +1485,24 @@ function getNodeOutputPortsMarkup(node: FlowNode) {
             ${handles.map((item) => `
                 <div class="node-output-port">
                     ${item.label ? `<span class="node-output-label" title="${escapeHtml(item.label)}">${escapeHtml(truncateLabel(item.label))}</span>` : ''}
+                    <button
+                        type="button"
+                        class="output-action-trigger${
+                            selectedOutputActionContext
+                            && selectedOutputActionContext.nodeId === node.id
+                            && edgeHandle(selectedOutputActionContext.handle) === edgeHandle(item.handle)
+                                ? ' active'
+                                : ''
+                        }${
+                            getOutputActionsForNodeHandle(node, item.handle).length > 0
+                                ? ' has-actions'
+                                : ''
+                        }"
+                        data-action-handle="${escapeHtml(edgeHandle(item.handle))}"
+                        title="Configurar ações desta saída"
+                        onmousedown="event.preventDefault(); event.stopPropagation();"
+                        onclick="openOutputActionEditor('${node.id}', '${encodeURIComponent(edgeHandle(item.handle))}', '${encodeURIComponent(String(item.label || ''))}', event)"
+                    >+</button>
                     <div class="port output" data-port="output" data-handle="${escapeHtml(item.handle)}" data-label="${escapeHtml(item.label || '')}" title="${escapeHtml(item.label || 'Saída')}"></div>
                 </div>
             `).join('')}
@@ -1566,6 +1607,7 @@ function renderNode(node: FlowNode) {
             target?.classList.contains('delete-btn')
             || target?.classList.contains('collapse-btn')
             || target?.classList.contains('duplicate-btn')
+            || target?.classList.contains('output-action-trigger')
         ) return;
         
         isDragging = true;
@@ -1668,6 +1710,196 @@ function getLeadStatusLabel(value: unknown) {
     return labels[status] || 'Etapa não definida';
 }
 
+function buildOutputActionId() {
+    return `action_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+}
+
+function normalizeOutputActionType(value: unknown): OutputActionType | null {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (OUTPUT_ACTION_TYPES.includes(normalized as OutputActionType)) {
+        return normalized as OutputActionType;
+    }
+    return null;
+}
+
+function getOutputActionTypeLabel(type: unknown) {
+    const normalizedType = normalizeOutputActionType(type);
+    if (!normalizedType) return 'Ação';
+    return OUTPUT_ACTION_TYPE_LABELS[normalizedType];
+}
+
+function buildDefaultOutputAction(type: OutputActionType): OutputActionItem {
+    const base: OutputActionItem = {
+        id: buildOutputActionId(),
+        type
+    };
+
+    if (type === 'status') {
+        base.status = 2;
+        return base;
+    }
+
+    if (type === 'tag') {
+        base.tag = '';
+        return base;
+    }
+
+    if (type === 'webhook') {
+        base.url = '';
+        return base;
+    }
+
+    base.eventId = null;
+    base.eventKey = '';
+    base.eventName = '';
+    return base;
+}
+
+function sanitizeOutputActionItem(value: unknown): OutputActionItem | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+
+    const raw = value as Record<string, any>;
+    const type = normalizeOutputActionType(raw.type);
+    if (!type) return null;
+
+    const item: OutputActionItem = {
+        id: String(raw.id || buildOutputActionId()),
+        type
+    };
+
+    if (type === 'status') {
+        const statusValue = Number(raw.status);
+        item.status = Number.isFinite(statusValue) && statusValue > 0
+            ? Math.trunc(statusValue)
+            : 2;
+    }
+
+    if (type === 'tag') {
+        item.tag = String(raw.tag || '').trim();
+    }
+
+    if (type === 'webhook') {
+        item.url = String(raw.url || '').trim();
+    }
+
+    if (type === 'event') {
+        const eventId = Number(raw.eventId);
+        const legacyEventId = Number(raw.event_id);
+        const normalizedEventId = Number.isFinite(eventId) && eventId > 0
+            ? Math.trunc(eventId)
+            : (Number.isFinite(legacyEventId) && legacyEventId > 0 ? Math.trunc(legacyEventId) : null);
+        item.eventId = normalizedEventId;
+        item.eventKey = String(raw.eventKey || raw.event_key || '').trim();
+        item.eventName = String(raw.eventName || raw.event_name || '').trim();
+    }
+
+    return item;
+}
+
+function sanitizeOutputActionsMap(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {} as Record<string, OutputActionItem[]>;
+    }
+
+    const rawMap = value as Record<string, unknown>;
+    const normalizedMap: Record<string, OutputActionItem[]> = {};
+
+    Object.entries(rawMap).forEach(([rawHandle, rawActions]) => {
+        const handle = edgeHandle(rawHandle);
+        if (!Array.isArray(rawActions)) return;
+
+        const normalizedActions = rawActions
+            .map((item) => sanitizeOutputActionItem(item))
+            .filter(Boolean) as OutputActionItem[];
+
+        if (normalizedActions.length > 0) {
+            normalizedMap[handle] = normalizedActions;
+        }
+    });
+
+    return normalizedMap;
+}
+
+function setPropertiesPanelTitle(title: string) {
+    const titleElement = document.getElementById('propertiesPanelTitle') as HTMLElement | null;
+    if (titleElement) {
+        titleElement.textContent = title;
+    }
+}
+
+function getOutputActionsMapForNode(node: FlowNode) {
+    const rawMap = node?.data?.outputActions || {};
+    return sanitizeOutputActionsMap(rawMap);
+}
+
+function getOutputActionsForNodeHandle(node: FlowNode | null, handle: string) {
+    if (!node) return [];
+    const map = getOutputActionsMapForNode(node);
+    return map[edgeHandle(handle)] || [];
+}
+
+function getSelectedOutputActionHandle() {
+    if (!selectedOutputActionContext) return DEFAULT_HANDLE;
+    return edgeHandle(selectedOutputActionContext.handle);
+}
+
+function getSelectedOutputActions() {
+    if (!selectedNode) return [];
+    const rawMap = getNodePropValue('outputActions', selectedNode.data.outputActions || {});
+    const map = sanitizeOutputActionsMap(rawMap);
+    return map[getSelectedOutputActionHandle()] || [];
+}
+
+function updateSelectedOutputActions(actions: OutputActionItem[]) {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode) return;
+    if (!selectedOutputActionContext || selectedOutputActionContext.nodeId !== selectedNode.id) return;
+
+    const currentMapRaw = getNodePropValue('outputActions', selectedNode.data.outputActions || {});
+    const map = sanitizeOutputActionsMap(currentMapRaw);
+    const handle = getSelectedOutputActionHandle();
+
+    if (actions.length === 0) {
+        delete map[handle];
+    } else {
+        map[handle] = actions.map((item) => ({
+            ...item,
+            id: String(item.id || buildOutputActionId())
+        }));
+    }
+
+    updateNodeProperty('outputActions', map);
+}
+
+function clearSelectedOutputActionContext() {
+    selectedOutputActionContext = null;
+    outputActionMenuOpen = false;
+    refreshOutputActionTriggerState();
+}
+
+function decodeOutputActionParam(value: string) {
+    try {
+        return decodeURIComponent(String(value || '').trim());
+    } catch (_) {
+        return String(value || '').trim();
+    }
+}
+
+function refreshOutputActionTriggerState() {
+    document.querySelectorAll('.output-action-trigger.active').forEach((element) => {
+        element.classList.remove('active');
+    });
+
+    if (!selectedOutputActionContext) return;
+    const nodeEl = document.getElementById(selectedOutputActionContext.nodeId);
+    if (!nodeEl) return;
+
+    const targetHandle = edgeHandle(selectedOutputActionContext.handle);
+    const buttons = Array.from(nodeEl.querySelectorAll('.output-action-trigger')) as HTMLElement[];
+    const targetButton = buttons.find((button) => edgeHandle(button.dataset.actionHandle) === targetHandle);
+    targetButton?.classList.add('active');
+}
+
 // Preview do no
 function getNodePreview(node: FlowNode) {
     switch (node.type) {
@@ -1705,6 +1937,7 @@ function selectNode(id: string) {
     deselectNode();
     selectedNode = nodes.find(n => n.id === id);
     resetPendingNodeDraft();
+    clearSelectedOutputActionContext();
     
     const nodeEl = document.getElementById(id);
     if (nodeEl) nodeEl.classList.add('selected');
@@ -1720,9 +1953,11 @@ function deselectNode() {
     }
     selectedNode = null;
     resetPendingNodeDraft();
+    clearSelectedOutputActionContext();
+    setPropertiesPanelTitle('Ação');
     const propertiesContent = document.getElementById('propertiesContent') as HTMLElement | null;
     if (propertiesContent) {
-        propertiesContent.innerHTML = '<p style="color: var(--gray); font-size: 14px;">Selecione um bloco para editar suas propriedades</p>';
+        propertiesContent.innerHTML = '<p style="color: var(--gray); font-size: 14px;">Selecione um bloco para editar ou clique no círculo "+" de uma saída para configurar ações.</p>';
     }
 }
 
@@ -1821,10 +2056,129 @@ function renderProperties() {
     let html = '';
     const selectedTypeLabel = getNodeTypeLabel(selectedNode);
     const nodeLabelValue = String(getNodePropValue('label', selectedNode.data.label || ''));
+    const isOutputActionMode = Boolean(
+        selectedOutputActionContext
+        && selectedOutputActionContext.nodeId === selectedNode.id
+    );
+
+    setPropertiesPanelTitle('Ação');
+
+    if (isOutputActionMode && selectedOutputActionContext) {
+        const selectedHandle = getSelectedOutputActionHandle();
+        const outputLabel = String(selectedOutputActionContext.label || '').trim();
+        const outputActions = getSelectedOutputActions();
+
+        html += `
+            <div class="property-type-summary">
+                <h4 class="property-type-summary-value">Saída ${escapeHtml(outputLabel || selectedHandle)}</h4>
+                <p class="hint" style="margin-top: 6px;">${escapeHtml(selectedTypeLabel)} • ${escapeHtml(String(nodeLabelValue || '').trim() || selectedTypeLabel)}</p>
+            </div>
+            <div class="property-group">
+                <div class="output-action-toolbar">
+                    <button class="add-condition-btn output-action-add-btn" onclick="toggleOutputActionTypeMenu(event)">+ Adicionar ação</button>
+                    <div class="output-action-type-menu${outputActionMenuOpen ? ' is-open' : ''}">
+                        <button type="button" onclick="addOutputActionByType('event')">Registrar Evento</button>
+                        <button type="button" onclick="addOutputActionByType('status')">Alterar Status</button>
+                        <button type="button" onclick="addOutputActionByType('tag')">Adicionar Tag</button>
+                        <button type="button" onclick="addOutputActionByType('webhook')">Webhook</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (outputActions.length === 0) {
+            html += `
+                <div class="output-actions-empty">
+                    Nenhuma ação configurada para essa saída.
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="output-actions-list">
+                    ${outputActions.map((actionItem, index) => {
+                        const actionType = normalizeOutputActionType(actionItem.type) || 'tag';
+                        const actionTypeLabel = getOutputActionTypeLabel(actionType);
+                        const statusValue = Number(actionItem.status);
+                        const safeStatus = Number.isFinite(statusValue) ? statusValue : 2;
+                        const availableEvents = getAvailableCustomEvents();
+                        const selectedEventId = Number(actionItem.eventId);
+
+                        let contentHtml = '';
+                        if (actionType === 'tag') {
+                            contentHtml = `
+                                <div class="property-group" style="margin-bottom: 0;">
+                                    <label>Nome da Tag</label>
+                                    <input type="text" value="${escapeHtml(String(actionItem.tag || ''))}" onchange="updateOutputActionField(${index}, 'tag', this.value)">
+                                </div>
+                            `;
+                        } else if (actionType === 'status') {
+                            contentHtml = `
+                                <div class="property-group" style="margin-bottom: 0;">
+                                    <label>Novo Status</label>
+                                    <select onchange="updateOutputActionField(${index}, 'status', parseInt(this.value, 10) || 2)">
+                                        <option value="1" ${safeStatus === 1 ? 'selected' : ''}>Etapa 1 - Novo</option>
+                                        <option value="2" ${safeStatus === 2 ? 'selected' : ''}>Etapa 2 - Em Negociação</option>
+                                        <option value="3" ${safeStatus === 3 ? 'selected' : ''}>Etapa 3 - Fechado</option>
+                                        <option value="4" ${safeStatus === 4 ? 'selected' : ''}>Etapa 4 - Perdido</option>
+                                    </select>
+                                </div>
+                            `;
+                        } else if (actionType === 'webhook') {
+                            contentHtml = `
+                                <div class="property-group" style="margin-bottom: 0;">
+                                    <label>URL do Webhook</label>
+                                    <input type="url" value="${escapeHtml(String(actionItem.url || ''))}" onchange="updateOutputActionField(${index}, 'url', this.value)" placeholder="https://...">
+                                </div>
+                            `;
+                        } else {
+                            contentHtml = `
+                                <div class="property-group" style="margin-bottom: 10px;">
+                                    <label>Evento Personalizado</label>
+                                    <select onchange="updateOutputActionEventSelection(${index}, this.value)">
+                                        <option value="">Selecione um evento</option>
+                                        ${availableEvents.map((eventItem) => `
+                                            <option value="${eventItem.id}" ${Number(eventItem.id) === selectedEventId ? 'selected' : ''}>
+                                                ${escapeHtml(eventItem.name)}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                                <button class="add-condition-btn" type="button" onclick="reloadCustomEventsCatalog()">Atualizar lista</button>
+                            `;
+                        }
+
+                        return `
+                            <div class="output-action-card">
+                                <div class="output-action-card-header">
+                                    <span class="output-action-card-type">${escapeHtml(actionTypeLabel)}</span>
+                                    <button class="remove-btn" type="button" title="Remover ação" onclick="removeOutputAction(${index})">×</button>
+                                </div>
+                                <div class="output-action-card-content">
+                                    ${contentHtml}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        html += `
+            <div class="property-group">
+                <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
+                    Confirmar alterações
+                </button>
+            </div>
+        `;
+
+        container.innerHTML = html;
+        return;
+    }
     
     html += `
         <div class="property-type-summary">
             <h4 class="property-type-summary-value">${escapeHtml(selectedTypeLabel)}</h4>
+            <p class="hint" style="margin-top: 6px;">Clique no círculo "+" ao lado de uma saída para configurar ações.</p>
         </div>
         <div class="property-group">
             <label>Nome do Bloco</label>
@@ -2050,6 +2404,93 @@ function renderProperties() {
     container.innerHTML = html;
 }
 
+function openOutputActionEditor(nodeId: string, encodedHandle: string, encodedLabel = '', event?: Event) {
+    if (isFlowReadOnlyMode()) return;
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    const node = nodes.find((item) => item.id === nodeId);
+    if (!node || node.type === 'end') return;
+
+    selectNode(nodeId);
+    selectedOutputActionContext = {
+        nodeId,
+        handle: edgeHandle(decodeOutputActionParam(encodedHandle)),
+        label: decodeOutputActionParam(encodedLabel)
+    };
+    outputActionMenuOpen = false;
+    refreshOutputActionTriggerState();
+    renderProperties();
+}
+
+function toggleOutputActionTypeMenu(event?: Event) {
+    if (isFlowReadOnlyMode()) return;
+    event?.preventDefault();
+    event?.stopPropagation();
+    outputActionMenuOpen = !outputActionMenuOpen;
+    renderProperties();
+}
+
+function addOutputActionByType(type: string) {
+    if (isFlowReadOnlyMode()) return;
+    const actionType = normalizeOutputActionType(type);
+    if (!actionType) return;
+
+    const currentActions = getSelectedOutputActions();
+    const nextActions = [
+        ...currentActions.map((item) => ({ ...item })),
+        buildDefaultOutputAction(actionType)
+    ];
+    updateSelectedOutputActions(nextActions);
+    outputActionMenuOpen = false;
+    renderProperties();
+}
+
+function updateOutputActionField(index: number, field: 'tag' | 'status' | 'url', value: any) {
+    if (isFlowReadOnlyMode()) return;
+    const currentActions = getSelectedOutputActions();
+    if (!currentActions[index]) return;
+
+    const nextActions = currentActions.map((item) => ({ ...item }));
+    (nextActions[index] as any)[field] = value;
+    updateSelectedOutputActions(nextActions);
+}
+
+function updateOutputActionEventSelection(index: number, value: string) {
+    if (isFlowReadOnlyMode()) return;
+    const currentActions = getSelectedOutputActions();
+    if (!currentActions[index]) return;
+
+    const nextActions = currentActions.map((item) => ({ ...item }));
+    const parsedEventId = Number.parseInt(String(value || '').trim(), 10);
+    const actionItem = nextActions[index];
+
+    if (!Number.isFinite(parsedEventId) || parsedEventId <= 0) {
+        actionItem.eventId = null;
+        actionItem.eventKey = '';
+        actionItem.eventName = '';
+        updateSelectedOutputActions(nextActions);
+        renderProperties();
+        return;
+    }
+
+    const selectedEvent = customEventsCache.find((item) => Number(item.id) === parsedEventId);
+    actionItem.eventId = parsedEventId;
+    actionItem.eventKey = String(selectedEvent?.event_key || '').trim();
+    actionItem.eventName = String(selectedEvent?.name || '').trim();
+    updateSelectedOutputActions(nextActions);
+    renderProperties();
+}
+
+function removeOutputAction(index: number) {
+    if (isFlowReadOnlyMode()) return;
+    const currentActions = getSelectedOutputActions();
+    if (!currentActions[index]) return;
+    const nextActions = currentActions.filter((_, itemIndex) => itemIndex !== index);
+    updateSelectedOutputActions(nextActions);
+    renderProperties();
+}
+
 // Atualizar propriedade do no
 function updateNodeProperty(key: keyof NodeData, value: any) {
     if (isFlowReadOnlyMode()) return;
@@ -2059,7 +2500,7 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
     if (!draft) return;
     (draft as any)[key] = value;
 
-    if (key === 'onceRepeatMode' || key === 'isOnceMessage') {
+    if (key === 'onceRepeatMode' || key === 'isOnceMessage' || key === 'outputActions') {
         renderProperties();
     }
 }
@@ -2076,6 +2517,11 @@ function confirmNodePropertyChanges() {
     }
 
     for (const [key, value] of changedEntries) {
+        if (key === 'outputActions') {
+            selectedNode.data.outputActions = sanitizeOutputActionsMap(value);
+            continue;
+        }
+
         (selectedNode.data as any)[key] = value;
         if (key === 'keyword' && isIntentTrigger(selectedNode)) {
             selectedNode.data.intentRoutes = parsePhraseList(String(value || '')).map((phrase, index) => ({
@@ -2130,6 +2576,7 @@ function rerenderNode(nodeId: string) {
 
     cleanupInvalidEdgesForNode(nodeId);
     renderConnections();
+    refreshOutputActionTriggerState();
 }
 
 function getNodeSize(nodeId: string) {
@@ -2704,6 +3151,9 @@ function normalizeLoadedFlowData() {
         if (typeof node.data?.collapsed !== 'boolean') {
             node.data.collapsed = false;
         }
+        node.data.outputActions = sanitizeOutputActionsMap(
+            node.data?.outputActions || (node.data as any)?.output_actions || {}
+        );
         if (!String(node.data?.label || '').trim()) {
             node.data.label = getNodeTypeLabel(node);
         }
@@ -3412,6 +3862,12 @@ const windowAny = window as Window & {
     updateNodeProperty?: (key: keyof NodeData, value: any) => void;
     confirmNodePropertyChanges?: () => void;
     updateEventNodeSelection?: (value: string) => void;
+    openOutputActionEditor?: (nodeId: string, encodedHandle: string, encodedLabel?: string, event?: Event) => void;
+    toggleOutputActionTypeMenu?: (event?: Event) => void;
+    addOutputActionByType?: (type: string) => void;
+    updateOutputActionField?: (index: number, field: 'tag' | 'status' | 'url', value: any) => void;
+    updateOutputActionEventSelection?: (index: number, value: string) => void;
+    removeOutputAction?: (index: number) => void;
     reloadCustomEventsCatalog?: () => void;
     reloadFlowSessionOptions?: () => void;
     updateFlowSessionScopeFromSelect?: () => void;
@@ -3454,6 +3910,12 @@ windowAny.insertVariable = insertVariable;
 windowAny.updateNodeProperty = updateNodeProperty;
 windowAny.confirmNodePropertyChanges = confirmNodePropertyChanges;
 windowAny.updateEventNodeSelection = updateEventNodeSelection;
+windowAny.openOutputActionEditor = openOutputActionEditor;
+windowAny.toggleOutputActionTypeMenu = toggleOutputActionTypeMenu;
+windowAny.addOutputActionByType = addOutputActionByType;
+windowAny.updateOutputActionField = updateOutputActionField;
+windowAny.updateOutputActionEventSelection = updateOutputActionEventSelection;
+windowAny.removeOutputAction = removeOutputAction;
 windowAny.reloadCustomEventsCatalog = reloadCustomEventsCatalog;
 windowAny.reloadFlowSessionOptions = reloadFlowSessionOptions;
 windowAny.updateFlowSessionScopeFromSelect = updateFlowSessionScopeFromSelect;

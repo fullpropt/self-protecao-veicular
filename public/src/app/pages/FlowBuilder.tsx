@@ -1102,6 +1102,48 @@ export default function FlowBuilder() {
             gap: 6px;
         }
 
+        .output-action-trigger {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            border: 1px dashed rgba(var(--primary-rgb), 0.55);
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--primary);
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            padding: 0;
+        }
+
+        .output-action-trigger:hover {
+            background: rgba(var(--primary-rgb), 0.2);
+            border-color: rgba(var(--primary-rgb), 0.85);
+        }
+
+        .output-action-trigger.active {
+            background: rgba(var(--primary-rgb), 0.28);
+            border-color: rgba(var(--primary-rgb), 0.95);
+            box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.18);
+        }
+
+        .output-action-trigger.has-actions {
+            color: #1d4ed8;
+            border-color: rgba(29, 78, 216, 0.75);
+            background: rgba(59, 130, 246, 0.14);
+        }
+
+        .flow-node.event-circle .output-action-trigger {
+            width: 16px;
+            height: 16px;
+            font-size: 11px;
+            margin-right: 2px;
+        }
+
         .node-output-label {
             font-size: 10px;
             color: var(--gray);
@@ -1260,6 +1302,90 @@ export default function FlowBuilder() {
             font-size: 12px;
             color: var(--gray);
             margin-top: 5px;
+        }
+
+        .output-action-toolbar {
+            position: relative;
+        }
+
+        .output-action-add-btn {
+            width: 100%;
+        }
+
+        .output-action-type-menu {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 10px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px;
+        }
+
+        .output-action-type-menu.is-open {
+            display: flex;
+        }
+
+        .output-action-type-menu button {
+            border: 1px solid var(--border);
+            background: #fff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: left;
+            font-size: 13px;
+            color: var(--dark);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .output-action-type-menu button:hover {
+            border-color: rgba(var(--primary-rgb), 0.5);
+            background: rgba(var(--primary-rgb), 0.08);
+        }
+
+        .output-actions-empty {
+            border: 1px dashed var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 13px;
+            color: var(--gray);
+            margin-bottom: 18px;
+            background: #f8fafc;
+        }
+
+        .output-actions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .output-action-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .output-action-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 12px;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .output-action-card-type {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .output-action-card-content {
+            padding: 12px;
         }
 
         .flow-toggle-row {
@@ -2503,34 +2629,6 @@ export default function FlowBuilder() {
                                   <div className="desc">Passa para atendente</div>
                               </div>
                           </div>
-                          <div className="node-item" draggable="true" data-type="tag">
-                              <div className="icon action icon-tag"></div>
-                              <div className="info">
-                                  <div className="name">Adicionar Tag</div>
-                                  <div className="desc">Marca o lead com tag</div>
-                              </div>
-                          </div>
-                          <div className="node-item" draggable="true" data-type="status">
-                              <div className="icon action icon-chart-bar"></div>
-                              <div className="info">
-                                  <div className="name">Alterar Status</div>
-                                  <div className="desc">Muda status do lead</div>
-                              </div>
-                          </div>
-                          <div className="node-item" draggable="true" data-type="webhook">
-                              <div className="icon action icon-link"></div>
-                              <div className="info">
-                                  <div className="name">Webhook</div>
-                                  <div className="desc">Envia dados para URL</div>
-                              </div>
-                          </div>
-                          <div className="node-item" draggable="true" data-type="event">
-                              <div className="icon action icon-target"></div>
-                              <div className="info">
-                                  <div className="name">Registrar Evento</div>
-                                  <div className="desc">Conta métricas de conversão no dashboard</div>
-                              </div>
-                          </div>
                           <div className="node-item" draggable="true" data-type="end">
                               <div className="icon action icon-check"></div>
                               <div className="info">
@@ -2626,9 +2724,9 @@ export default function FlowBuilder() {
                   </div>
                   
                   <div className="properties-panel" id="propertiesPanel">
-                      <h3>Propriedades</h3>
+                      <h3 id="propertiesPanelTitle">Ação</h3>
                       <div id="propertiesContent">
-                          <p style={{ color: 'var(--gray)', fontSize: '14px' }}>Selecione um bloco para editar suas propriedades</p>
+                          <p style={{ color: 'var(--gray)', fontSize: '14px' }}>Selecione um bloco para editar ou clique no círculo "+" de uma saída para configurar ações.</p>
                       </div>
                       
                       <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>

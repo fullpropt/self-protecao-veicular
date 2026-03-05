@@ -197,6 +197,94 @@ describe('FlowService intent routing compatibility', () => {
         endSpy.mockRestore();
     });
 
+    test('goToNextNode executes output actions configured for the chosen handle', async () => {
+        const service = new FlowService();
+        const currentNode = {
+            id: 'message-root',
+            type: 'message',
+            data: {
+                outputActions: {
+                    'path-2': [
+                        { type: 'tag', tag: 'vip' }
+                    ]
+                }
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 99,
+                edges: [
+                    { source: 'message-root', target: 'next-node', sourceHandle: 'path-2', targetHandle: 'path-2' }
+                ]
+            },
+            conversation: { id: 79 },
+            variables: {
+                node_entry_handle_by_node: {
+                    'message-root': 'path-2'
+                }
+            }
+        };
+
+        const outputActionsSpy = jest.spyOn(service, 'executeOutputActions').mockResolvedValue();
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
+
+        await service.goToNextNode(execution, currentNode);
+
+        expect(outputActionsSpy).toHaveBeenCalledWith(execution, currentNode, 'path-2');
+        expect(executeSpy).toHaveBeenCalledWith(execution, 'next-node', 'path-2');
+        expect(outputActionsSpy.mock.invocationCallOrder[0]).toBeLessThan(executeSpy.mock.invocationCallOrder[0]);
+
+        outputActionsSpy.mockRestore();
+        executeSpy.mockRestore();
+    });
+
+    test('continueFlow on wait node executes output actions for evaluated edge', async () => {
+        const service = new FlowService();
+        const waitNode = {
+            id: 'wait-mid',
+            type: 'wait',
+            data: {
+                timeout: 30,
+                outputActions: {
+                    default: [
+                        { type: 'status', status: 3 }
+                    ]
+                }
+            }
+        };
+        const nextNode = {
+            id: 'next-mid',
+            type: 'message',
+            data: {}
+        };
+
+        const execution = {
+            id: 123,
+            currentNode: 'wait-mid',
+            flow: {
+                id: 55,
+                nodes: [waitNode, nextNode],
+                edges: [
+                    { source: 'wait-mid', target: 'next-mid', sourceHandle: 'default', targetHandle: 'default' }
+                ]
+            },
+            conversation: { id: 45 },
+            variables: {}
+        };
+
+        const outputActionsSpy = jest.spyOn(service, 'executeOutputActions').mockResolvedValue();
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
+
+        await service.continueFlow(execution, { text: 'ok, continue' });
+
+        expect(outputActionsSpy).toHaveBeenCalledWith(execution, waitNode, 'default');
+        expect(executeSpy).toHaveBeenCalledWith(execution, 'next-mid', 'default');
+
+        outputActionsSpy.mockRestore();
+        executeSpy.mockRestore();
+    });
+
     test('goToNextNode marks trigger default -> message_once edge as intent reentry bridge', async () => {
         const service = new FlowService();
         const currentNode = {

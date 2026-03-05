@@ -1677,8 +1677,10 @@ class FlowService extends EventEmitter {
             const nextEdge = this.evaluateConditionEdge(execution.flow, currentNode, messageText, currentEntryHandle);
             const nextNodeId = nextEdge?.target || null;
             const nextTargetHandle = this.normalizeFlowHandle(nextEdge?.targetHandle);
+            const nextSourceHandle = this.normalizeFlowHandle(nextEdge?.sourceHandle);
 
             if (nextNodeId) {
+                await this.executeOutputActions(execution, currentNode, nextSourceHandle);
                 await this.executeNode(execution, nextNodeId, nextTargetHandle);
             } else {
                 await this.endFlow(execution, 'completed');
@@ -1877,79 +1879,25 @@ class FlowService extends EventEmitter {
                     break;
                     
                 case 'tag':
-                    // Adicionar tag ao lead
-                    const currentTags = JSON.parse(execution.lead.tags || '[]');
-                    if (!currentTags.includes(node.data.tag)) {
-                        currentTags.push(node.data.tag);
-                        await Lead.update(execution.lead.id, { tags: currentTags });
-                    }
+                    await this.executeLeadTagAction(execution, node?.data || {});
                     await this.goToNextNode(execution, node);
                     break;
                     
                 case 'status':
-                    // Alterar status do lead
-                    await Lead.update(execution.lead.id, { status: node.data.status });
+                    await this.executeLeadStatusAction(execution, node?.data || {});
                     await this.goToNextNode(execution, node);
                     break;
                     
                 case 'webhook':
-                    // Disparar webhook
-                    this.emit('flow:webhook', {
-                        url: node.data.url,
-                        data: {
-                            lead: execution.lead,
-                            variables: execution.variables,
-                            flowId: execution.flow.id
-                        }
-                    });
+                    await this.executeWebhookAction(execution, node?.data || {});
                     await this.goToNextNode(execution, node);
                     break;
 
                 case 'event': {
-                    const rawEventId = Number(node?.data?.eventId);
-                    const eventKey = String(node?.data?.eventKey || '').trim();
-                    const eventName = String(node?.data?.eventName || '').trim();
-                    const ownerScopeUserId = await resolveOwnerScopeUserIdFromAssignee(
-                        execution?.flow?.created_by,
-                        execution?.conversation?.assigned_to,
-                        execution?.lead?.assigned_to
-                    );
-                    const customEventScopeOptions = ownerScopeUserId
-                        ? { owner_user_id: ownerScopeUserId }
-                        : {};
-
-                    let customEvent = null;
-                    if (Number.isFinite(rawEventId) && rawEventId > 0) {
-                        customEvent = await CustomEvent.findById(rawEventId, customEventScopeOptions);
-                    }
-                    if (!customEvent && eventKey) {
-                        customEvent = await CustomEvent.findByKey(eventKey, customEventScopeOptions);
-                    }
-                    if (!customEvent && eventName) {
-                        customEvent = await CustomEvent.findByName(eventName, customEventScopeOptions);
-                    }
-
-                    if (customEvent) {
-                        await CustomEvent.logOccurrence({
-                            event_id: customEvent.id,
-                            flow_id: execution.flow?.id || null,
-                            node_id: node.id || null,
-                            lead_id: execution.lead?.id || null,
-                            conversation_id: execution.conversation?.id || null,
-                            execution_id: execution.id || null,
-                            metadata: {
-                                source: 'flow',
-                                flowName: execution.flow?.name || '',
-                                nodeLabel: node?.data?.label || '',
-                                triggerMessage: execution.triggerMessageText || ''
-                            }
-                        });
-                        execution.variables.last_custom_event = customEvent.name;
-                        execution.variables.last_custom_event_key = customEvent.event_key;
-                    } else {
-                        console.warn(`Evento personalizado nao encontrado para o no ${node.id}`);
-                    }
-
+                    await this.executeCustomEventAction(execution, node?.data || {}, {
+                        nodeId: node?.id || null,
+                        nodeLabel: node?.data?.label || ''
+                    });
                     await this.goToNextNode(execution, node);
                     break;
                 }
@@ -2101,6 +2049,184 @@ class FlowService extends EventEmitter {
         await this.goToNextNode(execution, node, selectedHandle);
     }
 
+    normalizeOutputActionType(value = '') {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (normalized === 'tag' || normalized === 'status' || normalized === 'webhook' || normalized === 'event') {
+            return normalized;
+        }
+        return '';
+    }
+
+    resolveOutputActionsForHandle(node = null, sourceHandle = 'default') {
+        const outputActions = node?.data?.outputActions;
+        if (!outputActions || typeof outputActions !== 'object' || Array.isArray(outputActions)) {
+            return [];
+        }
+
+        const handle = this.normalizeFlowHandle(sourceHandle);
+        const rawActions = outputActions[handle];
+        if (!Array.isArray(rawActions)) return [];
+
+        return rawActions
+            .map((item, index) => {
+                if (!item || typeof item !== 'object' || Array.isArray(item)) {
+                    return null;
+                }
+                const type = this.normalizeOutputActionType(item.type);
+                if (!type) return null;
+                return {
+                    ...item,
+                    id: String(item.id || `${handle}-${index + 1}`),
+                    type
+                };
+            })
+            .filter(Boolean);
+    }
+
+    readLeadTags(value = null) {
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => String(item || '').trim())
+                .filter(Boolean);
+        }
+
+        if (!value) return [];
+
+        try {
+            const parsed = JSON.parse(value);
+            if (Array.isArray(parsed)) {
+                return parsed
+                    .map((item) => String(item || '').trim())
+                    .filter(Boolean);
+            }
+        } catch (_) {
+            // ignore parse failure
+        }
+
+        return [];
+    }
+
+    async executeLeadTagAction(execution, payload = {}) {
+        const nextTag = String(payload?.tag || '').trim();
+        if (!nextTag) return;
+
+        const currentTags = this.readLeadTags(execution?.lead?.tags);
+        if (currentTags.includes(nextTag)) return;
+
+        const nextTags = [...currentTags, nextTag];
+        await Lead.update(execution.lead.id, { tags: nextTags });
+        execution.lead.tags = JSON.stringify(nextTags);
+    }
+
+    async executeLeadStatusAction(execution, payload = {}) {
+        const rawStatus = Number(payload?.status);
+        if (!Number.isFinite(rawStatus) || rawStatus <= 0) return;
+        const nextStatus = Math.trunc(rawStatus);
+        await Lead.update(execution.lead.id, { status: nextStatus });
+        execution.lead.status = nextStatus;
+    }
+
+    async executeWebhookAction(execution, payload = {}) {
+        const url = String(payload?.url || '').trim();
+        if (!url) return;
+
+        this.emit('flow:webhook', {
+            url,
+            data: {
+                lead: execution.lead,
+                variables: execution.variables,
+                flowId: execution.flow.id
+            }
+        });
+    }
+
+    async executeCustomEventAction(execution, payload = {}, options = {}) {
+        const rawEventId = Number(payload?.eventId);
+        const eventKey = String(payload?.eventKey || '').trim();
+        const eventName = String(payload?.eventName || '').trim();
+        const ownerScopeUserId = await resolveOwnerScopeUserIdFromAssignee(
+            execution?.flow?.created_by,
+            execution?.conversation?.assigned_to,
+            execution?.lead?.assigned_to
+        );
+        const customEventScopeOptions = ownerScopeUserId
+            ? { owner_user_id: ownerScopeUserId }
+            : {};
+
+        let customEvent = null;
+        if (Number.isFinite(rawEventId) && rawEventId > 0) {
+            customEvent = await CustomEvent.findById(rawEventId, customEventScopeOptions);
+        }
+        if (!customEvent && eventKey) {
+            customEvent = await CustomEvent.findByKey(eventKey, customEventScopeOptions);
+        }
+        if (!customEvent && eventName) {
+            customEvent = await CustomEvent.findByName(eventName, customEventScopeOptions);
+        }
+
+        if (!customEvent) {
+            if (options?.nodeId) {
+                console.warn(`Evento personalizado nao encontrado para o no ${options.nodeId}`);
+            }
+            return;
+        }
+
+        await CustomEvent.logOccurrence({
+            event_id: customEvent.id,
+            flow_id: execution.flow?.id || null,
+            node_id: options?.nodeId || null,
+            lead_id: execution.lead?.id || null,
+            conversation_id: execution.conversation?.id || null,
+            execution_id: execution.id || null,
+            metadata: {
+                source: 'flow',
+                flowName: execution.flow?.name || '',
+                nodeLabel: options?.nodeLabel || '',
+                triggerMessage: execution.triggerMessageText || ''
+            }
+        });
+
+        execution.variables.last_custom_event = customEvent.name;
+        execution.variables.last_custom_event_key = customEvent.event_key;
+    }
+
+    async executeOutputActions(execution, currentNode, sourceHandle = 'default') {
+        const actions = this.resolveOutputActionsForHandle(currentNode, sourceHandle);
+        if (actions.length === 0) return;
+
+        for (const action of actions) {
+            try {
+                if (action.type === 'tag') {
+                    await this.executeLeadTagAction(execution, action);
+                    continue;
+                }
+
+                if (action.type === 'status') {
+                    await this.executeLeadStatusAction(execution, action);
+                    continue;
+                }
+
+                if (action.type === 'webhook') {
+                    await this.executeWebhookAction(execution, action);
+                    continue;
+                }
+
+                if (action.type === 'event') {
+                    await this.executeCustomEventAction(execution, action, {
+                        nodeId: currentNode?.id || null,
+                        nodeLabel: currentNode?.data?.label || ''
+                    });
+                }
+            } catch (error) {
+                console.error(
+                    `[flow-actions] Falha ao executar acao de saida (${action.type || 'desconhecida'}) `
+                    + `no no ${currentNode?.id || 'n/a'}:`,
+                    error?.message || error
+                );
+            }
+        }
+    }
+
     async goToNextNode(execution, currentNode, preferredSourceHandle = null) {
         const outgoingEdges = (execution.flow.edges || []).filter((edge) => edge.source === currentNode.id);
         if (outgoingEdges.length === 0) {
@@ -2194,6 +2320,7 @@ class FlowService extends EventEmitter {
         }
 
         if (edge) {
+            const selectedSourceHandle = rawHandle(edge.sourceHandle);
             const nextTargetHandle = rawHandle(edge.targetHandle);
             if (this.isIntentDefaultToMessageOnceBridge(execution.flow, currentNode, edge)) {
                 this.setIntentDefaultMessageOnceReentry(execution, {
@@ -2205,6 +2332,8 @@ class FlowService extends EventEmitter {
             } else {
                 this.clearIntentDefaultMessageOnceReentry(execution);
             }
+
+            await this.executeOutputActions(execution, currentNode, selectedSourceHandle);
             this.setNodeEntryHandle(execution, edge.target, nextTargetHandle);
             await this.executeNode(execution, edge.target, nextTargetHandle);
         } else {
