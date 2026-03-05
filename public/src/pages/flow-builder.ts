@@ -1901,11 +1901,14 @@ function renderProperties() {
                 html += `
                     <div class="property-group">
                         <label>Mensagem Única</label>
-                        <select onchange="updateNodeProperty('isOnceMessage', this.value === '1')">
-                            <option value="0" ${isOnceMessageNode ? '' : 'selected'}>Não</option>
-                            <option value="1" ${isOnceMessageNode ? 'selected' : ''}>Sim</option>
-                        </select>
-                        <div class="hint">Quando ativado, controla o intervalo de reenvio por lead.</div>
+                        <div class="flow-toggle-row">
+                            <span class="flow-toggle-label">${isOnceMessageNode ? 'Ativada' : 'Desativada'}</span>
+                            <label class="flow-toggle-switch" title="Ativar mensagem única">
+                                <input type="checkbox" ${isOnceMessageNode ? 'checked' : ''} onchange="updateNodeProperty('isOnceMessage', this.checked)">
+                                <span class="flow-toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="hint">As opções abaixo aparecem somente quando estiver ativada.</div>
                     </div>
                 `;
             }

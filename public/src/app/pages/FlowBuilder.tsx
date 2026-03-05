@@ -1261,6 +1261,64 @@ export default function FlowBuilder() {
             color: var(--gray);
             margin-top: 5px;
         }
+
+        .flow-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .flow-toggle-label {
+            font-size: 13px;
+            color: var(--dark);
+            font-weight: 600;
+        }
+
+        .flow-toggle-switch {
+            position: relative;
+            display: inline-flex;
+            width: 46px;
+            height: 26px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .flow-toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            position: absolute;
+        }
+
+        .flow-toggle-slider {
+            position: absolute;
+            inset: 0;
+            border-radius: 999px;
+            background: #cbd5e1;
+            transition: background 0.2s ease;
+        }
+
+        .flow-toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            left: 3px;
+            top: 3px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+            transition: transform 0.2s ease;
+        }
+
+        .flow-toggle-switch input:checked + .flow-toggle-slider {
+            background: #14b8a6;
+        }
+
+        .flow-toggle-switch input:checked + .flow-toggle-slider::before {
+            transform: translateX(20px);
+        }
         
         .variables-list {
             display: flex;
