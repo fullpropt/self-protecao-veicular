@@ -235,7 +235,8 @@ describe('FlowService intent routing compatibility', () => {
         expect(execution.variables.intent_default_message_once_reentry).toEqual({
             triggerNodeId: 'trigger-intent',
             messageOnceNodeId: 'welcome-once',
-            targetHandle: 'path-2'
+            targetHandle: 'path-2',
+            fallbackReady: false
         });
 
         executeSpy.mockRestore();
@@ -355,6 +356,56 @@ describe('FlowService intent routing compatibility', () => {
         activeSpy.mockRestore();
         newContactSpy.mockRestore();
         startFlowSpy.mockRestore();
+    });
+
+    test('continueFlow routes second unmatched reply through message_once output after reentry', async () => {
+        const service = new FlowService();
+        const triggerNode = {
+            id: 'trigger-intent',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                intentRoutes: [
+                    { id: 'route-buy', label: 'Comprar', phrases: 'comprar' }
+                ]
+            }
+        };
+        const messageOnceNode = {
+            id: 'welcome-once',
+            type: 'message_once',
+            data: {}
+        };
+
+        const execution = {
+            id: 700,
+            flow: {
+                id: 21,
+                nodes: [triggerNode, messageOnceNode],
+                edges: []
+            },
+            conversation: { id: 70 },
+            lead: { id: 26 },
+            currentNode: 'trigger-intent',
+            variables: {
+                intent_default_message_once_reentry: {
+                    triggerNodeId: 'trigger-intent',
+                    messageOnceNodeId: 'welcome-once',
+                    targetHandle: 'path-4',
+                    fallbackReady: true
+                }
+            }
+        };
+
+        const pickSpy = jest.spyOn(service, 'pickTriggerIntentHandle').mockResolvedValue(null);
+        const goToNextSpy = jest.spyOn(service, 'goToNextNode').mockResolvedValue();
+
+        await service.continueFlow(execution, { text: 'oi novamente' });
+
+        expect(goToNextSpy).toHaveBeenCalledWith(execution, messageOnceNode);
+        expect(execution.variables.intent_default_message_once_reentry).toBeUndefined();
+
+        pickSpy.mockRestore();
+        goToNextSpy.mockRestore();
     });
 
     test('intent node waits one extra message before default route and reuses context', async () => {

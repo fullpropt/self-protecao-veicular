@@ -1004,7 +1004,8 @@ class FlowService extends EventEmitter {
         return {
             triggerNodeId,
             messageOnceNodeId,
-            targetHandle
+            targetHandle,
+            fallbackReady: Boolean(value?.fallbackReady)
         };
     }
 
@@ -1019,7 +1020,8 @@ class FlowService extends EventEmitter {
         const normalized = {
             triggerNodeId,
             messageOnceNodeId,
-            targetHandle: this.normalizeFlowHandle(payload?.targetHandle)
+            targetHandle: this.normalizeFlowHandle(payload?.targetHandle),
+            fallbackReady: Boolean(payload?.fallbackReady)
         };
 
         const variables = this.ensureExecutionVariables(execution);
@@ -1042,6 +1044,26 @@ class FlowService extends EventEmitter {
         }
 
         return context;
+    }
+
+    resolveIntentDefaultMessageOnceFallbackForTrigger(execution, node = null) {
+        const context = this.readIntentDefaultMessageOnceReentry(execution);
+        if (!context || !context.fallbackReady) return null;
+
+        const triggerNodeId = String(node?.id || '').trim();
+        if (!triggerNodeId || context.triggerNodeId !== triggerNodeId) {
+            return null;
+        }
+
+        const messageOnceNode = this.findNode(execution?.flow, context.messageOnceNodeId);
+        if (!messageOnceNode || String(messageOnceNode?.type || '').trim().toLowerCase() !== 'message_once') {
+            return null;
+        }
+
+        return {
+            ...context,
+            messageOnceNode
+        };
     }
 
     isIntentTriggerNode(node = null) {
@@ -1548,7 +1570,22 @@ class FlowService extends EventEmitter {
             if (selectedHandle) {
                 this.clearIntentNoMatchCounter(execution, currentNode.id);
                 this.clearIntentHistory(execution, currentNode.id);
+                this.clearIntentDefaultMessageOnceReentry(execution);
             } else {
+                const readyFallback = this.resolveIntentDefaultMessageOnceFallbackForTrigger(execution, currentNode);
+                if (readyFallback) {
+                    this.clearIntentNoMatchCounter(execution, currentNode.id);
+                    this.clearIntentHistory(execution, currentNode.id);
+                    this.clearIntentDefaultMessageOnceReentry(execution);
+                    this.setNodeEntryHandle(
+                        execution,
+                        readyFallback.messageOnceNode.id,
+                        readyFallback.targetHandle
+                    );
+                    await this.goToNextNode(execution, readyFallback.messageOnceNode);
+                    return execution;
+                }
+
                 const outgoingEdges = (execution.flow?.edges || []).filter((edge) => edge.source === currentNode.id);
                 const hasDefaultRoute = outgoingEdges.some((edge) => {
                     const handle = String(edge?.sourceHandle || '').trim().toLowerCase();
@@ -1653,7 +1690,22 @@ class FlowService extends EventEmitter {
                     const alreadySent = isOnceMessage && this.hasLeadSeenOnceMessageNode(execution, node);
                     if (alreadySent) {
                         if (onceReentryContext) {
-                            this.clearIntentDefaultMessageOnceReentry(execution);
+                            this.setIntentDefaultMessageOnceReentry(execution, {
+                                ...onceReentryContext,
+                                fallbackReady: true
+                            });
+                            execution.currentNode = onceReentryContext.triggerNodeId;
+                            this.setNodeEntryHandle(
+                                execution,
+                                onceReentryContext.triggerNodeId,
+                                onceReentryContext.targetHandle
+                            );
+                            await run(`
+                                UPDATE flow_executions
+                                SET current_node = ?, variables = ?
+                                WHERE id = ?
+                            `, [onceReentryContext.triggerNodeId, JSON.stringify(execution.variables), execution.id]);
+                            break;
                         }
                         await this.goToNextNode(execution, node);
                         break;
@@ -1697,6 +1749,10 @@ class FlowService extends EventEmitter {
                     }
 
                     if (onceReentryContext) {
+                        this.setIntentDefaultMessageOnceReentry(execution, {
+                            ...onceReentryContext,
+                            fallbackReady: true
+                        });
                         execution.currentNode = onceReentryContext.triggerNodeId;
                         this.setNodeEntryHandle(
                             execution,
@@ -2094,7 +2150,8 @@ class FlowService extends EventEmitter {
                 this.setIntentDefaultMessageOnceReentry(execution, {
                     triggerNodeId: currentNode?.id,
                     messageOnceNodeId: edge.target,
-                    targetHandle: nextTargetHandle
+                    targetHandle: nextTargetHandle,
+                    fallbackReady: false
                 });
             } else {
                 this.clearIntentDefaultMessageOnceReentry(execution);
