@@ -1316,8 +1316,10 @@ function renderFlowSaveButtonVisibility() {
     const saveBtn = document.getElementById('flowCanvasSaveBtn') as HTMLButtonElement | null;
     if (!saveBtn) return;
 
-    saveBtn.classList.toggle('is-hidden', !flowHasUnsavedChanges);
-    saveBtn.toggleAttribute('hidden', !flowHasUnsavedChanges);
+    saveBtn.classList.remove('is-hidden');
+    saveBtn.removeAttribute('hidden');
+    saveBtn.disabled = !flowHasUnsavedChanges;
+    saveBtn.setAttribute('aria-disabled', (!flowHasUnsavedChanges).toString());
 }
 
 function setFlowDirtyState(nextDirty: boolean) {

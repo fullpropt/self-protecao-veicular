@@ -1563,6 +1563,12 @@ export default function FlowBuilder() {
             background: var(--border);
         }
 
+        .toolbar-btn[disabled] {
+            opacity: 0.55;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
         .toolbar-btn.ai-highlight {
             position: relative;
             background: linear-gradient(135deg, #16a34a 0%, #10b981 48%, #0ea5e9 100%);
@@ -2846,7 +2852,7 @@ export default function FlowBuilder() {
                       </div>
                       
                       <div className="flow-canvas-toolbar" id="flowCanvasToolbar">
-                          <button className="toolbar-btn secondary is-hidden" id="flowCanvasSaveBtn" onClick={() => globals.saveFlow?.()}>
+                          <button className="toolbar-btn secondary" id="flowCanvasSaveBtn" onClick={() => globals.saveFlow?.()}>
                               <span className="icon icon-save icon-sm"></span>
                               <span className="toolbar-btn-label">Salvar</span>
                           </button>
