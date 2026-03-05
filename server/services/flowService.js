@@ -931,8 +931,7 @@ class FlowService extends EventEmitter {
             if (this.normalizeFlowHandle(edge?.sourceHandle) !== 'default') return false;
 
             const targetNode = nodeMap.get(String(edge?.target || '').trim());
-            const targetType = String(targetNode?.type || '').trim().toLowerCase();
-            return targetType === 'message_once';
+            return this.isOnceMessageNode(targetNode);
         });
     }
 
@@ -1060,7 +1059,7 @@ class FlowService extends EventEmitter {
         }
 
         const messageOnceNode = this.findNode(execution?.flow, context.messageOnceNodeId);
-        if (!messageOnceNode || String(messageOnceNode?.type || '').trim().toLowerCase() !== 'message_once') {
+        if (!this.isOnceMessageNode(messageOnceNode)) {
             return null;
         }
 
@@ -1076,6 +1075,13 @@ class FlowService extends EventEmitter {
         return nodeType === 'trigger' && (subtype === 'keyword' || subtype === 'intent');
     }
 
+    isOnceMessageNode(node = null) {
+        const nodeType = String(node?.type || '').trim().toLowerCase();
+        if (nodeType === 'message_once') return true;
+        if (nodeType !== 'message') return false;
+        return Boolean(node?.data?.isOnceMessage);
+    }
+
     isIntentDefaultToMessageOnceBridge(flow, currentNode, edge) {
         if (!this.isIntentTriggerNode(currentNode)) {
             return false;
@@ -1085,8 +1091,7 @@ class FlowService extends EventEmitter {
         }
 
         const targetNode = this.findNode(flow, edge?.target);
-        const targetType = String(targetNode?.type || '').trim().toLowerCase();
-        return targetType === 'message_once';
+        return this.isOnceMessageNode(targetNode);
     }
 
     resolveIntentContextWindowSize() {
@@ -1727,7 +1732,7 @@ class FlowService extends EventEmitter {
                     
                 case 'message':
                 case 'message_once': {
-                    const isOnceMessage = node.type === 'message_once';
+                    const isOnceMessage = this.isOnceMessageNode(node);
                     const onceReentryContext = isOnceMessage
                         ? this.resolveIntentDefaultMessageOnceReentryForNode(execution, node)
                         : null;

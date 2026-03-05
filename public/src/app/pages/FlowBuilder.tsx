@@ -1531,6 +1531,22 @@ export default function FlowBuilder() {
             border-color: var(--primary);
             color: var(--primary);
         }
+
+        .btn-confirm-flow-block {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #0f766e;
+            background: #14b8a6;
+            border-radius: 8px;
+            color: #ffffff;
+            font-weight: 700;
+            cursor: pointer;
+            transition: filter 0.2s;
+        }
+
+        .btn-confirm-flow-block:hover {
+            filter: brightness(0.95);
+        }
         
         /* Flow List Modal */
         .modal-overlay {
@@ -2390,14 +2406,7 @@ export default function FlowBuilder() {
                               <div className="icon message icon-message"></div>
                               <div className="info">
                                   <div className="name">Enviar Mensagem</div>
-                                  <div className="desc">Envia texto ou mídia</div>
-                              </div>
-                          </div>
-                          <div className="node-item" draggable="true" data-type="message_once">
-                              <div className="icon message icon-message"></div>
-                              <div className="info">
-                                  <div className="name">Mensagem Única</div>
-                                  <div className="desc">Envia apenas 1 vez por lead</div>
+                                  <div className="desc">Envia texto ou mídia (opcionalmente única)</div>
                               </div>
                           </div>
                           <div className="node-item" draggable="true" data-type="wait">

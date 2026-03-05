@@ -211,8 +211,10 @@ describe('FlowService intent routing compatibility', () => {
         };
         const onceNode = {
             id: 'welcome-once',
-            type: 'message_once',
-            data: {}
+            type: 'message',
+            data: {
+                isOnceMessage: true
+            }
         };
 
         const execution = {

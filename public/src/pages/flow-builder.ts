@@ -9,6 +9,7 @@ type NodeData = {
     intentRoutes?: Array<{ id: string; label: string; phrases: string }>;
     content?: string;
     delaySeconds?: number;
+    isOnceMessage?: boolean;
     onceRepeatMode?: string;
     onceRepeatValue?: number;
     timeout?: number;
@@ -109,6 +110,8 @@ let currentFlowName = '';
 let currentFlowIsActive = true;
 let currentFlowSessionId = '';
 let flowHasUnsavedChanges = false;
+let pendingNodeDraft: Partial<NodeData> | null = null;
+let pendingNodeDraftId: string | null = null;
 let flowsCache: FlowSummary[] = [];
 let renamingFlowId: number | null = null;
 let renamingFlowDraft = '';
@@ -674,7 +677,7 @@ function getInputHandles(node: FlowNode) {
         const isLast = index === totalInputs;
         return {
             handle: pathHandleFromIndex(index),
-            label: `Entrada ${index}`,
+            label: `${index}`,
             isConnected,
             isExtra: isLast && !isConnected && index > 1
         };
@@ -693,7 +696,7 @@ function getPassThroughOutputHandles(node: FlowNode) {
         const index = offset + 1;
         return {
             handle: pathHandleFromIndex(index),
-            label: showLabels ? `Caminho ${index}` : ''
+            label: showLabels ? `${index}` : ''
         };
     });
 }
@@ -743,7 +746,9 @@ function isIntentDefaultToMessageOnceEdge(edge: Edge) {
 
     if (sourceType !== 'trigger') return false;
     if (sourceSubtype !== 'keyword' && sourceSubtype !== 'intent') return false;
-    if (targetType !== 'message_once') return false;
+    const targetIsOnceMessage = targetType === 'message_once'
+        || (targetType === 'message' && Boolean(targetNode?.data?.isOnceMessage));
+    if (!targetIsOnceMessage) return false;
     return edgeHandle(edge.sourceHandle) === DEFAULT_HANDLE;
 }
 
@@ -934,7 +939,7 @@ function getNodeTypeLabel(node: FlowNode) {
         trigger: 'Gatilho',
         intent: 'Intenção',
         message: 'Enviar Mensagem',
-        message_once: 'Mensagem Única',
+        message_once: 'Enviar Mensagem',
         wait: 'Aguardar Resposta',
         condition: 'Condição',
         delay: 'Delay',
@@ -1417,12 +1422,21 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
     const defaults = {
         trigger: { label: subtype === 'keyword' || subtype === 'intent' ? 'Intenção' : 'Novo Contato', collapsed: false, keyword: '', intentRoutes: [] },
         intent: { label: 'Intenção', collapsed: false, keyword: '', intentRoutes: [] },
-        message: { label: 'Mensagem', collapsed: false, content: 'Olá! Como posso ajudar?', delaySeconds: 0 },
-        message_once: {
-            label: 'Mensagem Única',
+        message: {
+            label: 'Mensagem',
             collapsed: false,
             content: 'Olá! Como posso ajudar?',
             delaySeconds: 0,
+            isOnceMessage: false,
+            onceRepeatMode: 'always',
+            onceRepeatValue: 1
+        },
+        message_once: {
+            label: 'Mensagem',
+            collapsed: false,
+            content: 'Olá! Como posso ajudar?',
+            delaySeconds: 0,
+            isOnceMessage: true,
             onceRepeatMode: 'always',
             onceRepeatValue: 1
         },
@@ -1690,6 +1704,7 @@ function getNodePreview(node: FlowNode) {
 function selectNode(id: string) {
     deselectNode();
     selectedNode = nodes.find(n => n.id === id);
+    resetPendingNodeDraft();
     
     const nodeEl = document.getElementById(id);
     if (nodeEl) nodeEl.classList.add('selected');
@@ -1704,6 +1719,7 @@ function deselectNode() {
         if (nodeEl) nodeEl.classList.remove('selected');
     }
     selectedNode = null;
+    resetPendingNodeDraft();
     const propertiesContent = document.getElementById('propertiesContent') as HTMLElement | null;
     if (propertiesContent) {
         propertiesContent.innerHTML = '<p style="color: var(--gray); font-size: 14px;">Selecione um bloco para editar suas propriedades</p>';
@@ -1767,6 +1783,35 @@ function duplicateNode(id: string, event?: Event) {
     markFlowDirty();
 }
 
+function resetPendingNodeDraft() {
+    pendingNodeDraft = null;
+    pendingNodeDraftId = null;
+}
+
+function ensurePendingNodeDraft() {
+    if (!selectedNode) return null;
+    if (!pendingNodeDraft || pendingNodeDraftId !== selectedNode.id) {
+        pendingNodeDraft = {};
+        pendingNodeDraftId = selectedNode.id;
+    }
+    return pendingNodeDraft;
+}
+
+function getNodePropValue<T = any>(key: keyof NodeData, fallback: T): T {
+    if (!selectedNode) return fallback;
+    if (pendingNodeDraft && pendingNodeDraftId === selectedNode.id && Object.prototype.hasOwnProperty.call(pendingNodeDraft, key)) {
+        return (pendingNodeDraft as any)[key];
+    }
+    const currentValue = (selectedNode.data as any)[key];
+    return (currentValue === undefined ? fallback : currentValue) as T;
+}
+
+function hasPendingNodeDraftChanges() {
+    if (!selectedNode) return false;
+    if (!pendingNodeDraft || pendingNodeDraftId !== selectedNode.id) return false;
+    return Object.keys(pendingNodeDraft).length > 0;
+}
+
 // Renderizar propriedades
 function renderProperties() {
     if (!selectedNode) return;
@@ -1775,6 +1820,7 @@ function renderProperties() {
     if (!container) return;
     let html = '';
     const selectedTypeLabel = getNodeTypeLabel(selectedNode);
+    const nodeLabelValue = String(getNodePropValue('label', selectedNode.data.label || ''));
     
     html += `
         <div class="property-type-summary">
@@ -1782,7 +1828,7 @@ function renderProperties() {
         </div>
         <div class="property-group">
             <label>Nome do Bloco</label>
-            <input type="text" value="${selectedNode.data.label}" onchange="updateNodeProperty('label', this.value)">
+            <input type="text" value="${escapeHtml(nodeLabelValue)}" onchange="updateNodeProperty('label', this.value)">
         </div>
     `;
     
@@ -1790,8 +1836,10 @@ function renderProperties() {
         case 'trigger':
         case 'intent':
             if (isIntentTrigger(selectedNode)) {
-                syncIntentRoutesFromNode(selectedNode);
-                const routes = getIntentRoutes(selectedNode);
+                const draftRoutes = getNodePropValue('intentRoutes', null as any);
+                const routes = Array.isArray(draftRoutes) && draftRoutes.length > 0
+                    ? draftRoutes
+                    : getIntentRoutes(selectedNode);
                 html += `
                     <div class="property-group">
                         <label>Intenções</label>
@@ -1824,21 +1872,23 @@ function renderProperties() {
             
         case 'message':
         case 'message_once':
-            const messageDelaySeconds = Number.isFinite(Number(selectedNode.data.delaySeconds))
-                ? Math.max(0, Number(selectedNode.data.delaySeconds))
+            const messageDelaySeconds = Number.isFinite(Number(getNodePropValue('delaySeconds', selectedNode.data.delaySeconds)))
+                ? Math.max(0, Number(getNodePropValue('delaySeconds', selectedNode.data.delaySeconds)))
                 : 0;
-            const isOnceMessageNode = selectedNode.type === 'message_once';
-            const onceRepeatModeRaw = String(selectedNode.data.onceRepeatMode || 'always').trim().toLowerCase();
+            const isLegacyOnceType = selectedNode.type === 'message_once';
+            const isOnceMessageNode = isLegacyOnceType || Boolean(getNodePropValue('isOnceMessage', selectedNode.data.isOnceMessage));
+            const onceRepeatModeRaw = String(getNodePropValue('onceRepeatMode', selectedNode.data.onceRepeatMode || 'always')).trim().toLowerCase();
             const onceRepeatMode = ['always', 'hours', 'days'].includes(onceRepeatModeRaw)
                 ? onceRepeatModeRaw
                 : 'always';
-            const onceRepeatValue = Number.isFinite(Number(selectedNode.data.onceRepeatValue))
-                ? Math.max(1, Math.trunc(Number(selectedNode.data.onceRepeatValue)))
+            const onceRepeatValue = Number.isFinite(Number(getNodePropValue('onceRepeatValue', selectedNode.data.onceRepeatValue)))
+                ? Math.max(1, Math.trunc(Number(getNodePropValue('onceRepeatValue', selectedNode.data.onceRepeatValue))))
                 : 1;
+            const messageContent = String(getNodePropValue('content', selectedNode.data.content || ''));
             html += `
                 <div class="property-group">
-                    <label>${isOnceMessageNode ? 'Conteúdo da Mensagem Única' : 'Conteúdo da Mensagem'}</label>
-                    <textarea id="messageContent" onchange="updateNodeProperty('content', this.value)">${selectedNode.data.content || ''}</textarea>
+                    <label>${isOnceMessageNode ? 'Conteúdo da Mensagem' : 'Conteúdo da Mensagem'}</label>
+                    <textarea id="messageContent" onchange="updateNodeProperty('content', this.value)">${escapeHtml(messageContent)}</textarea>
                     <div class="hint">${isOnceMessageNode ? 'Controle por lead: você define por quanto tempo a mensagem não pode ser reenviada.' : 'Use as variáveis de Campos Dinâmicos para personalizar'}</div>
                 </div>
                 <div class="property-group">
@@ -1847,6 +1897,18 @@ function renderProperties() {
                     <div class="hint">Use 0 para envio imediato</div>
                 </div>
             `;
+            if (!isLegacyOnceType) {
+                html += `
+                    <div class="property-group">
+                        <label>Mensagem Única</label>
+                        <select onchange="updateNodeProperty('isOnceMessage', this.value === '1')">
+                            <option value="0" ${isOnceMessageNode ? '' : 'selected'}>Não</option>
+                            <option value="1" ${isOnceMessageNode ? 'selected' : ''}>Sim</option>
+                        </select>
+                        <div class="hint">Quando ativado, controla o intervalo de reenvio por lead.</div>
+                    </div>
+                `;
+            }
             if (isOnceMessageNode) {
                 html += `
                     <div class="property-group">
@@ -1872,21 +1934,27 @@ function renderProperties() {
             break;
             
         case 'wait':
+            const waitTimeout = Number.isFinite(Number(getNodePropValue('timeout', selectedNode.data.timeout || 300)))
+                ? Math.max(1, Number(getNodePropValue('timeout', selectedNode.data.timeout || 300)))
+                : 300;
             html += `
                 <div class="property-group">
                     <label>Timeout (segundos)</label>
-                    <input type="number" value="${selectedNode.data.timeout || 300}" onchange="updateNodeProperty('timeout', parseInt(this.value))">
+                    <input type="number" value="${waitTimeout}" onchange="updateNodeProperty('timeout', Math.max(1, parseInt(this.value || '300', 10) || 300))">
                     <div class="hint">Tempo máximo de espera pela resposta</div>
                 </div>
             `;
             break;
             
         case 'condition':
+            const conditionItems = Array.isArray(getNodePropValue('conditions', selectedNode.data.conditions || []))
+                ? (getNodePropValue('conditions', selectedNode.data.conditions || []) as Array<{ value: string; next?: string }>)
+                : [];
             html += `
                 <div class="property-group">
                     <label>Condições</label>
                     <div class="conditions-editor" id="conditionsEditor">
-                        ${(selectedNode.data.conditions || []).map((c, i) => `
+                        ${conditionItems.map((c, i) => `
                             <div class="condition-row">
                                 <input type="text" value="${c.value}" placeholder="Valor" onchange="updateCondition(${i}, 'value', this.value)">
                                 <button class="remove-btn" onclick="removeCondition(${i})">×</button>
@@ -1899,41 +1967,47 @@ function renderProperties() {
             break;
             
         case 'delay':
+            const delaySeconds = Number.isFinite(Number(getNodePropValue('seconds', selectedNode.data.seconds || 5)))
+                ? Math.max(0, Number(getNodePropValue('seconds', selectedNode.data.seconds || 5)))
+                : 5;
             html += `
                 <div class="property-group">
                     <label>Tempo de Espera (segundos)</label>
-                    <input type="number" value="${selectedNode.data.seconds || 5}" onchange="updateNodeProperty('seconds', parseInt(this.value))">
+                    <input type="number" value="${delaySeconds}" onchange="updateNodeProperty('seconds', Math.max(0, parseInt(this.value || '5', 10) || 5))">
                 </div>
             `;
             break;
             
         case 'transfer':
+            const transferMessage = String(getNodePropValue('message', selectedNode.data.message || ''));
             html += `
                 <div class="property-group">
                     <label>Mensagem de Transferência</label>
-                    <textarea onchange="updateNodeProperty('message', this.value)">${selectedNode.data.message || ''}</textarea>
+                    <textarea onchange="updateNodeProperty('message', this.value)">${escapeHtml(transferMessage)}</textarea>
                 </div>
             `;
             break;
             
         case 'tag':
+            const tagName = String(getNodePropValue('tag', selectedNode.data.tag || ''));
             html += `
                 <div class="property-group">
                     <label>Nome da Tag</label>
-                    <input type="text" value="${selectedNode.data.tag || ''}" onchange="updateNodeProperty('tag', this.value)">
+                    <input type="text" value="${escapeHtml(tagName)}" onchange="updateNodeProperty('tag', this.value)">
                 </div>
             `;
             break;
             
         case 'status':
+            const statusValue = Number(getNodePropValue('status', selectedNode.data.status));
             html += `
                 <div class="property-group">
                     <label>Novo Status</label>
                     <select onchange="updateNodeProperty('status', parseInt(this.value))">
-                        <option value="1" ${selectedNode.data.status === 1 ? 'selected' : ''}>Etapa 1 - Novo</option>
-                        <option value="2" ${selectedNode.data.status === 2 ? 'selected' : ''}>Etapa 2 - Em Negociação</option>
-                        <option value="3" ${selectedNode.data.status === 3 ? 'selected' : ''}>Etapa 3 - Fechado</option>
-                        <option value="4" ${selectedNode.data.status === 4 ? 'selected' : ''}>Etapa 4 - Perdido</option>
+                        <option value="1" ${statusValue === 1 ? 'selected' : ''}>Etapa 1 - Novo</option>
+                        <option value="2" ${statusValue === 2 ? 'selected' : ''}>Etapa 2 - Em Negociação</option>
+                        <option value="3" ${statusValue === 3 ? 'selected' : ''}>Etapa 3 - Fechado</option>
+                        <option value="4" ${statusValue === 4 ? 'selected' : ''}>Etapa 4 - Perdido</option>
                     </select>
                 </div>
             `;
@@ -1941,7 +2015,7 @@ function renderProperties() {
 
         case 'event':
             const availableEvents = getAvailableCustomEvents();
-            const selectedEventId = Number(selectedNode.data.eventId);
+            const selectedEventId = Number(getNodePropValue('eventId', selectedNode.data.eventId));
             const selectedEvent = availableEvents.find((item) => Number(item.id) === selectedEventId) || null;
 
             html += `
@@ -1971,15 +2045,25 @@ function renderProperties() {
             break;
             
         case 'webhook':
+            const webhookUrl = String(getNodePropValue('url', selectedNode.data.url || ''));
             html += `
                 <div class="property-group">
                     <label>URL do Webhook</label>
-                    <input type="url" value="${selectedNode.data.url || ''}" onchange="updateNodeProperty('url', this.value)" placeholder="https://...">
+                    <input type="url" value="${escapeHtml(webhookUrl)}" onchange="updateNodeProperty('url', this.value)" placeholder="https://...">
                 </div>
             `;
             break;
     }
-    
+
+    html += `
+        <div class="property-group">
+            <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
+                Confirmar alterações
+            </button>
+            <div class="hint">${hasPendingNodeDraftChanges() ? 'Há alterações pendentes neste bloco.' : 'Sem alterações pendentes.'}</div>
+        </div>
+    `;
+
     container.innerHTML = html;
 }
 
@@ -1987,22 +2071,43 @@ function renderProperties() {
 function updateNodeProperty(key: keyof NodeData, value: any) {
     if (isFlowReadOnlyMode()) return;
     if (!selectedNode) return;
-    
-    selectedNode.data[key] = value;
 
-    if (isIntentTrigger(selectedNode) && key === 'keyword') {
-        selectedNode.data.intentRoutes = parsePhraseList(String(value || '')).map((phrase, index) => ({
-            id: normalizeRouteId(`intent-${index + 1}`),
-            label: phrase,
-            phrases: phrase
-        }));
-    }
+    const draft = ensurePendingNodeDraft();
+    if (!draft) return;
+    (draft as any)[key] = value;
 
-    rerenderNode(selectedNode.id);
-    if (key === 'onceRepeatMode') {
+    if (key === 'onceRepeatMode' || key === 'isOnceMessage') {
         renderProperties();
     }
+}
+
+function confirmNodePropertyChanges() {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode) return;
+    if (!pendingNodeDraft || pendingNodeDraftId !== selectedNode.id) return;
+
+    const changedEntries = Object.entries(pendingNodeDraft);
+    if (changedEntries.length === 0) {
+        notify('info', 'Sem alterações', 'Nenhuma alteração pendente neste bloco.');
+        return;
+    }
+
+    for (const [key, value] of changedEntries) {
+        (selectedNode.data as any)[key] = value;
+        if (key === 'keyword' && isIntentTrigger(selectedNode)) {
+            selectedNode.data.intentRoutes = parsePhraseList(String(value || '')).map((phrase, index) => ({
+                id: normalizeRouteId(`intent-${index + 1}`),
+                label: phrase,
+                phrases: phrase
+            }));
+        }
+    }
+
+    resetPendingNodeDraft();
+    rerenderNode(selectedNode.id);
+    renderProperties();
     markFlowDirty();
+    notify('success', 'Bloco atualizado', 'Alterações confirmadas com sucesso.');
 }
 
 function updateEventNodeSelection(value: string) {
@@ -2011,22 +2116,18 @@ function updateEventNodeSelection(value: string) {
 
     const eventId = Number.parseInt(String(value || '').trim(), 10);
     if (!Number.isFinite(eventId) || eventId <= 0) {
-        selectedNode.data.eventId = null;
-        selectedNode.data.eventKey = '';
-        selectedNode.data.eventName = '';
-        rerenderNode(selectedNode.id);
+        updateNodeProperty('eventId', null);
+        updateNodeProperty('eventKey', '');
+        updateNodeProperty('eventName', '');
         renderProperties();
-        markFlowDirty();
         return;
     }
 
     const selected = customEventsCache.find((item) => Number(item.id) === eventId);
-    selectedNode.data.eventId = eventId;
-    selectedNode.data.eventKey = String(selected?.event_key || '').trim();
-    selectedNode.data.eventName = String(selected?.name || '').trim();
-    rerenderNode(selectedNode.id);
+    updateNodeProperty('eventId', eventId);
+    updateNodeProperty('eventKey', String(selected?.event_key || '').trim());
+    updateNodeProperty('eventName', String(selected?.name || '').trim());
     renderProperties();
-    markFlowDirty();
 }
 
 function rerenderNode(nodeId: string) {
@@ -2173,75 +2274,124 @@ function cleanupInvalidEdgesForNode(nodeId: string) {
 function addIntentRoute() {
     if (isFlowReadOnlyMode()) return;
     if (!selectedNode || !isIntentTrigger(selectedNode)) return;
-    syncIntentRoutesFromNode(selectedNode);
+    const existingDraft = getNodePropValue('intentRoutes', null as any);
+    const baseRoutes = Array.isArray(existingDraft) && existingDraft.length > 0
+        ? existingDraft
+        : getIntentRoutes(selectedNode);
+    const routes = baseRoutes.map((route: any, index: number) => ({
+        id: String(route?.id || normalizeRouteId(`intent-${index + 1}`)),
+        label: String(route?.label || ''),
+        phrases: String(route?.phrases || '')
+    }));
 
-    const nextIndex = (selectedNode.data.intentRoutes?.length || 0) + 1;
+    const nextIndex = routes.length + 1;
     const nextRoute = {
         id: normalizeRouteId(`intent-${Date.now()}-${nextIndex}`),
         label: `Intenção ${nextIndex}`,
         phrases: ''
     };
 
-    selectedNode.data.intentRoutes = [...(selectedNode.data.intentRoutes || []), nextRoute];
-    syncIntentRoutesFromNode(selectedNode);
-    rerenderNode(selectedNode.id);
+    const nextRoutes = [...routes, nextRoute];
+    const allPhrases = nextRoutes.flatMap((route) => parsePhraseList(route.phrases || ''));
+    const uniquePhrases = Array.from(new Set(allPhrases));
+    updateNodeProperty('intentRoutes', nextRoutes);
+    updateNodeProperty('keyword', uniquePhrases.join(', '));
     renderProperties();
-    markFlowDirty();
 }
 
 function updateIntentRoute(index: number, key: 'label' | 'phrases', value: string) {
     if (isFlowReadOnlyMode()) return;
     if (!selectedNode || !isIntentTrigger(selectedNode)) return;
-    syncIntentRoutesFromNode(selectedNode);
+    const existingDraft = getNodePropValue('intentRoutes', null as any);
+    const baseRoutes = Array.isArray(existingDraft) && existingDraft.length > 0
+        ? existingDraft
+        : getIntentRoutes(selectedNode);
+    const routes = baseRoutes.map((route: any, routeIndex: number) => ({
+        id: String(route?.id || normalizeRouteId(`intent-${routeIndex + 1}`)),
+        label: String(route?.label || ''),
+        phrases: String(route?.phrases || '')
+    }));
 
-    if (!selectedNode.data.intentRoutes?.[index]) return;
-    selectedNode.data.intentRoutes[index][key] = String(value || '');
-    syncIntentRoutesFromNode(selectedNode);
-    rerenderNode(selectedNode.id);
+    if (!routes[index]) return;
+    routes[index][key] = String(value || '');
+    const allPhrases = routes.flatMap((route) => parsePhraseList(route.phrases || ''));
+    const uniquePhrases = Array.from(new Set(allPhrases));
+    updateNodeProperty('intentRoutes', routes);
+    updateNodeProperty('keyword', uniquePhrases.join(', '));
     renderProperties();
-    markFlowDirty();
 }
 
 function removeIntentRoute(index: number) {
     if (isFlowReadOnlyMode()) return;
     if (!selectedNode || !isIntentTrigger(selectedNode)) return;
-    syncIntentRoutesFromNode(selectedNode);
+    const existingDraft = getNodePropValue('intentRoutes', null as any);
+    const baseRoutes = Array.isArray(existingDraft) && existingDraft.length > 0
+        ? existingDraft
+        : getIntentRoutes(selectedNode);
+    const routes = baseRoutes.map((route: any, routeIndex: number) => ({
+        id: String(route?.id || normalizeRouteId(`intent-${routeIndex + 1}`)),
+        label: String(route?.label || ''),
+        phrases: String(route?.phrases || '')
+    }));
+    if (!routes[index]) return;
 
-    if (!selectedNode.data.intentRoutes) return;
-    selectedNode.data.intentRoutes.splice(index, 1);
-    syncIntentRoutesFromNode(selectedNode);
-    rerenderNode(selectedNode.id);
+    routes.splice(index, 1);
+    const allPhrases = routes.flatMap((route) => parsePhraseList(route.phrases || ''));
+    const uniquePhrases = Array.from(new Set(allPhrases));
+    updateNodeProperty('intentRoutes', routes);
+    updateNodeProperty('keyword', uniquePhrases.join(', '));
     renderProperties();
-    markFlowDirty();
 }
 
 // Condicoes
 function addCondition() {
     if (isFlowReadOnlyMode()) return;
     if (!selectedNode || selectedNode.type !== 'condition') return;
-    
-    if (!selectedNode.data.conditions) {
-        selectedNode.data.conditions = [];
-    }
-    
-    selectedNode.data.conditions.push({ value: '', next: '' });
+
+    const currentConditions = Array.isArray(getNodePropValue('conditions', selectedNode.data.conditions || []))
+        ? (getNodePropValue('conditions', selectedNode.data.conditions || []) as Array<{ value: string; next?: string }>)
+        : [];
+    const nextConditions = [
+        ...currentConditions.map((item) => ({
+            value: String(item?.value || ''),
+            next: String(item?.next || '')
+        })),
+        { value: '', next: '' }
+    ];
+    updateNodeProperty('conditions', nextConditions);
     renderProperties();
-    markFlowDirty();
 }
 
 function updateCondition(index: number, key: 'value' | 'next', value: string) {
     if (isFlowReadOnlyMode()) return;
-    if (!selectedNode) return;
-    selectedNode.data.conditions[index][key] = value;
-    markFlowDirty();
+    if (!selectedNode || selectedNode.type !== 'condition') return;
+    const currentConditions = Array.isArray(getNodePropValue('conditions', selectedNode.data.conditions || []))
+        ? (getNodePropValue('conditions', selectedNode.data.conditions || []) as Array<{ value: string; next?: string }>)
+        : [];
+    if (!currentConditions[index]) return;
+    const nextConditions = currentConditions.map((item, itemIndex) => ({
+        value: String(item?.value || ''),
+        next: String(item?.next || '')
+    }));
+    nextConditions[index][key] = value;
+    updateNodeProperty('conditions', nextConditions);
 }
 
 function removeCondition(index: number) {
     if (isFlowReadOnlyMode()) return;
-    if (!selectedNode) return;
-    selectedNode.data.conditions.splice(index, 1);
+    if (!selectedNode || selectedNode.type !== 'condition') return;
+    const currentConditions = Array.isArray(getNodePropValue('conditions', selectedNode.data.conditions || []))
+        ? (getNodePropValue('conditions', selectedNode.data.conditions || []) as Array<{ value: string; next?: string }>)
+        : [];
+    if (!currentConditions[index]) return;
+    const nextConditions = currentConditions
+        .map((item) => ({
+            value: String(item?.value || ''),
+            next: String(item?.next || '')
+        }))
+        .filter((_, itemIndex) => itemIndex !== index);
+    updateNodeProperty('conditions', nextConditions);
     renderProperties();
-    markFlowDirty();
 }
 
 // Inserir variavel
@@ -2574,19 +2724,28 @@ function normalizeLoadedFlowData() {
         if (!String(node.data?.label || '').trim()) {
             node.data.label = getNodeTypeLabel(node);
         }
+        if (node.type === 'message_once') {
+            node.type = 'message';
+            node.data.isOnceMessage = true;
+            if (!String(node.data?.label || '').trim() || String(node.data?.label || '').trim().toLowerCase() === 'mensagem única') {
+                node.data.label = 'Mensagem';
+            }
+        }
+
         if (node.type === 'message' || node.type === 'message_once') {
             const rawDelay = Number(node.data?.delaySeconds);
             node.data.delaySeconds = Number.isFinite(rawDelay) ? Math.max(0, rawDelay) : 0;
-            if (node.type === 'message_once') {
-                const modeRaw = String((node.data as any)?.onceRepeatMode || '').trim().toLowerCase();
-                node.data.onceRepeatMode = ['always', 'hours', 'days'].includes(modeRaw)
-                    ? modeRaw
-                    : 'always';
-                const valueRaw = Number((node.data as any)?.onceRepeatValue);
-                node.data.onceRepeatValue = Number.isFinite(valueRaw) && valueRaw > 0
-                    ? Math.max(1, Math.trunc(valueRaw))
-                    : 1;
-            }
+            const isOnceMessage = node.type === 'message_once'
+                || Boolean((node.data as any)?.isOnceMessage);
+            node.data.isOnceMessage = isOnceMessage;
+            const modeRaw = String((node.data as any)?.onceRepeatMode || '').trim().toLowerCase();
+            node.data.onceRepeatMode = ['always', 'hours', 'days'].includes(modeRaw)
+                ? modeRaw
+                : 'always';
+            const valueRaw = Number((node.data as any)?.onceRepeatValue);
+            node.data.onceRepeatValue = Number.isFinite(valueRaw) && valueRaw > 0
+                ? Math.max(1, Math.trunc(valueRaw))
+                : 1;
         }
 
         if (node.type === 'event') {
@@ -2628,6 +2787,10 @@ function normalizeLoadedFlowData() {
 
 // Salvar fluxo
 async function saveFlow() {
+    if (hasPendingNodeDraftChanges()) {
+        confirmNodePropertyChanges();
+    }
+
     let name = String(currentFlowName || '').trim();
     if (!name) {
         const typedName = await showFlowPromptDialog('Digite um nome para o fluxo:', {
@@ -3264,6 +3427,7 @@ const windowAny = window as Window & {
     resetZoom?: () => void;
     insertVariable?: (variable: string) => void;
     updateNodeProperty?: (key: keyof NodeData, value: any) => void;
+    confirmNodePropertyChanges?: () => void;
     updateEventNodeSelection?: (value: string) => void;
     reloadCustomEventsCatalog?: () => void;
     reloadFlowSessionOptions?: () => void;
@@ -3305,6 +3469,7 @@ windowAny.zoomOut = zoomOut;
 windowAny.resetZoom = resetZoom;
 windowAny.insertVariable = insertVariable;
 windowAny.updateNodeProperty = updateNodeProperty;
+windowAny.confirmNodePropertyChanges = confirmNodePropertyChanges;
 windowAny.updateEventNodeSelection = updateEventNodeSelection;
 windowAny.reloadCustomEventsCatalog = reloadCustomEventsCatalog;
 windowAny.reloadFlowSessionOptions = reloadFlowSessionOptions;
