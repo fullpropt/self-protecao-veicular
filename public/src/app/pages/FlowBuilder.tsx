@@ -664,6 +664,8 @@ export default function FlowBuilder() {
             overflow: hidden;
             box-shadow: 0 4px 25px rgba(0,0,0,0.08);
             min-width: 0;
+            grid-column: 1;
+            grid-row: 2;
         }
         
         /* Painel de Nos */
@@ -1976,7 +1978,8 @@ export default function FlowBuilder() {
         }
 
         .flow-selector-screen {
-            grid-row: 1 / -1;
+            grid-column: 1;
+            grid-row: 2;
             min-height: 0;
             display: flex;
             align-items: center;
@@ -1984,7 +1987,9 @@ export default function FlowBuilder() {
             padding: 8px 0;
         }
 
-        .flow-selector-screen[hidden] {
+        .flow-builder-react #flowSelectorScreen[hidden],
+        .flow-builder-react #flowBuilderFlowInfoRow[hidden],
+        .flow-builder-react #flowBuilderContainer[hidden] {
             display: none !important;
         }
 
@@ -2849,29 +2854,12 @@ export default function FlowBuilder() {
           </aside>
           
           <main className="main-content">
-              <section className="flow-selector-screen" id="flowSelectorScreen">
-                  <div className="flow-selector-card">
-                      <div className="flow-selector-header">
-                          <h2 id="flowsScreenTitle">Selecione um Fluxo para começar</h2>
-                      </div>
-                      <div className="flow-selector-body">
-                          <div id="flowsList"></div>
-                      </div>
-                      <div className="flow-selector-footer">
-                          <button className="toolbar-btn primary" onClick={() => globals.createNewFlow?.()}>
-                              <span className="icon icon-add icon-sm"></span>
-                              <span className="toolbar-btn-label">Criar Novo Fluxo</span>
-                          </button>
-                      </div>
-                  </div>
-              </section>
-
-              <div className="header" id="flowBuilderHeader" hidden>
+              <div className="header" id="flowBuilderHeader">
                   <div className="header-title">
                       <h1><span className="icon icon-flows icon-sm"></span> Construtor de Fluxos</h1>
                       <p>Crie automações visuais para suas conversas</p>
                   </div>
-                  <div className="header-flow-row">
+                  <div className="header-flow-row" id="flowBuilderFlowInfoRow" hidden>
                       <div className="flow-name-highlight">
                           <div className="flow-name-highlight-content">
                               <div className="flow-name-highlight-label">Fluxo atual</div>
@@ -2903,6 +2891,23 @@ export default function FlowBuilder() {
                       </div>
                   </div>
               </div>
+
+              <section className="flow-selector-screen" id="flowSelectorScreen">
+                  <div className="flow-selector-card">
+                      <div className="flow-selector-header">
+                          <h2 id="flowsScreenTitle">Selecione um Fluxo para começar</h2>
+                      </div>
+                      <div className="flow-selector-body">
+                          <div id="flowsList"></div>
+                      </div>
+                      <div className="flow-selector-footer">
+                          <button className="toolbar-btn primary" onClick={() => globals.createNewFlow?.()}>
+                              <span className="icon icon-add icon-sm"></span>
+                              <span className="toolbar-btn-label">Criar Novo Fluxo</span>
+                          </button>
+                      </div>
+                  </div>
+              </section>
               
               <div className="flow-container" id="flowBuilderContainer" hidden>
                   <div className="flow-canvas" id="flowCanvas">
