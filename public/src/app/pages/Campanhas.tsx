@@ -638,8 +638,8 @@ export default function Campanhas() {
                                   <label className="form-label">Distribuição</label>
                                   <select className="form-select" id="campaignDistributionStrategy">
                                       <option value="single">Conta única</option>
-                                      <option value="round_robin">Round-robin</option>
-                                      <option value="weighted_round_robin">Round-robin por peso</option>
+                                      <option value="round_robin">Rotativo</option>
+                                      <option value="weighted_round_robin">Rotativo por peso</option>
                                       <option value="random">Aleatório</option>
                                   </select>
                               </div>

@@ -1033,8 +1033,8 @@ function escapeAttributeSelector(value: string) {
 
 function getDistributionStrategyLabel(strategy?: string) {
     const normalized = String(strategy || 'single').toLowerCase();
-    if (normalized === 'round_robin') return 'Round-robin';
-    if (normalized === 'weighted_round_robin') return 'Round-robin por peso';
+    if (normalized === 'round_robin') return 'Rotativo';
+    if (normalized === 'weighted_round_robin') return 'Rotativo por peso';
     if (normalized === 'random') return 'Aleatório';
     return 'Conta única';
 }
