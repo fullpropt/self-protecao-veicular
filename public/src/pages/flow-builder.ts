@@ -2329,9 +2329,12 @@ function renderProperties() {
                                 const sectionKey = `route:${index}`;
                                 const sectionExpanded = isIntentPropertySectionExpanded(sectionKey, false);
                                 return `
-                                    <div class="intent-config-card ${sectionExpanded ? 'is-expanded' : ''}">
+                                    <div class="intent-config-card intent-config-card-intent ${sectionExpanded ? 'is-expanded' : ''}">
                                         <div class="intent-config-header" role="button" tabindex="0" onclick="toggleIntentPropertySection('${sectionKey}', event)" onkeydown="if(event.key==='Enter'||event.key===' '){toggleIntentPropertySection('${sectionKey}', event);}">
-                                            <span class="intent-config-title">${escapeHtml(routeTitle)}</span>
+                                            <div class="intent-config-title-wrap">
+                                                <span class="intent-config-kind intent-config-kind-intent">Intenção</span>
+                                                <span class="intent-config-title">${escapeHtml(routeTitle)}</span>
+                                            </div>
                                             <div class="intent-config-header-actions">
                                                 <span class="intent-config-chevron">${sectionExpanded ? '▾' : '▸'}</span>
                                                 <button class="remove-btn" type="button" title="Remover intenção" onclick="event.stopPropagation(); removeIntentRoute(${index})">×</button>
@@ -2360,9 +2363,13 @@ function renderProperties() {
                                     </div>
                                 `;
                             }).join('')}
-                            <div class="intent-config-card ${defaultSectionExpanded ? 'is-expanded' : ''}">
+                            <button class="add-condition-btn intent-add-route-btn" onclick="addIntentRoute()">+ Adicionar intenção</button>
+                            <div class="intent-config-card intent-config-card-default ${defaultSectionExpanded ? 'is-expanded' : ''}">
                                 <div class="intent-config-header" role="button" tabindex="0" onclick="toggleIntentPropertySection('default', event)" onkeydown="if(event.key==='Enter'||event.key===' '){toggleIntentPropertySection('default', event);}">
-                                    <span class="intent-config-title">Outros</span>
+                                    <div class="intent-config-title-wrap">
+                                        <span class="intent-config-kind intent-config-kind-default">Outros</span>
+                                        <span class="intent-config-title">Outros</span>
+                                    </div>
                                     <div class="intent-config-header-actions">
                                         <span class="intent-config-chevron">${defaultSectionExpanded ? '▾' : '▸'}</span>
                                     </div>
@@ -2381,9 +2388,12 @@ function renderProperties() {
                                 ` : ''}
                             </div>
                             ${isIntentTriggerNode ? `
-                                <div class="intent-config-card ${welcomeSectionExpanded ? 'is-expanded' : ''}">
+                                <div class="intent-config-card intent-config-card-welcome ${welcomeSectionExpanded ? 'is-expanded' : ''}">
                                     <div class="intent-config-header" role="button" tabindex="0" onclick="toggleIntentPropertySection('welcome', event)" onkeydown="if(event.key==='Enter'||event.key===' '){toggleIntentPropertySection('welcome', event);}">
-                                        <span class="intent-config-title">Boas vindas</span>
+                                        <div class="intent-config-title-wrap">
+                                            <span class="intent-config-kind intent-config-kind-welcome">Boas-vindas</span>
+                                            <span class="intent-config-title">Boas vindas</span>
+                                        </div>
                                         <div class="intent-config-header-actions">
                                             <span class="intent-config-state">${triggerWelcomeEnabled ? 'Ativada' : 'Desativada'}</span>
                                             <span class="intent-config-chevron">${welcomeSectionExpanded ? '▾' : '▸'}</span>
@@ -2427,7 +2437,6 @@ function renderProperties() {
                                 </div>
                             ` : ''}
                         </div>
-                        <button class="add-condition-btn" onclick="addIntentRoute()">+ Adicionar Intenção</button>
                     </div>
                 `;
             }

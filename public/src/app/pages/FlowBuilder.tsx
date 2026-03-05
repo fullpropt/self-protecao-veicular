@@ -1618,12 +1618,34 @@ export default function FlowBuilder() {
             outline-offset: -2px;
         }
 
+        .intent-config-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .intent-config-kind {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
         .intent-config-title {
             font-size: 13px;
             font-weight: 700;
             color: var(--dark);
             line-height: 1.2;
             min-width: 0;
+            flex: 1 1 auto;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -1654,6 +1676,63 @@ export default function FlowBuilder() {
             border-top: 1px solid var(--border);
             padding: 10px 12px 12px;
             background: white;
+        }
+
+        .intent-config-card-intent {
+            border-color: rgba(59, 130, 246, 0.35);
+            background: rgba(239, 246, 255, 0.7);
+        }
+
+        .intent-config-card-intent .intent-config-header {
+            background: rgba(191, 219, 254, 0.26);
+        }
+
+        .intent-config-card-intent .intent-config-header:hover {
+            background: rgba(147, 197, 253, 0.34);
+        }
+
+        .intent-config-kind-intent {
+            color: #1d4ed8;
+            border-color: rgba(59, 130, 246, 0.3);
+            background: rgba(219, 234, 254, 0.9);
+        }
+
+        .intent-config-card-default {
+            border-color: rgba(245, 158, 11, 0.36);
+            background: rgba(255, 247, 237, 0.85);
+        }
+
+        .intent-config-card-default .intent-config-header {
+            background: rgba(254, 215, 170, 0.3);
+        }
+
+        .intent-config-card-default .intent-config-header:hover {
+            background: rgba(253, 186, 116, 0.34);
+        }
+
+        .intent-config-kind-default {
+            color: #b45309;
+            border-color: rgba(245, 158, 11, 0.35);
+            background: rgba(255, 237, 213, 0.95);
+        }
+
+        .intent-config-card-welcome {
+            border-color: rgba(20, 184, 166, 0.35);
+            background: rgba(240, 253, 250, 0.9);
+        }
+
+        .intent-config-card-welcome .intent-config-header {
+            background: rgba(153, 246, 228, 0.28);
+        }
+
+        .intent-config-card-welcome .intent-config-header:hover {
+            background: rgba(94, 234, 212, 0.34);
+        }
+
+        .intent-config-kind-welcome {
+            color: #0f766e;
+            border-color: rgba(20, 184, 166, 0.35);
+            background: rgba(204, 251, 241, 0.95);
         }
 
         .intent-route-field {
@@ -1756,20 +1835,35 @@ export default function FlowBuilder() {
             color: var(--primary);
         }
 
+        .intent-add-route-btn {
+            margin: 2px 0 6px;
+        }
+
         .btn-confirm-flow-block {
             width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #0f766e;
-            background: #14b8a6;
-            border-radius: 8px;
+            padding: 11px 14px;
+            border: 1px solid var(--primary);
+            background: var(--primary);
+            border-radius: 10px;
             color: #ffffff;
-            font-weight: 700;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
             cursor: pointer;
-            transition: filter 0.2s;
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 10px rgba(var(--primary-rgb), 0.25);
         }
 
         .btn-confirm-flow-block:hover {
-            filter: brightness(0.95);
+            background: var(--primary-light);
+            border-color: var(--primary-light);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(var(--primary-rgb), 0.3);
+        }
+
+        .btn-confirm-flow-block:active {
+            transform: translateY(0);
+            box-shadow: 0 3px 8px rgba(var(--primary-rgb), 0.2);
         }
         
         /* Flow List Modal */
