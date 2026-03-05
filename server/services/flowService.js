@@ -882,6 +882,23 @@ class FlowService extends EventEmitter {
         return normalized || 'default';
     }
 
+    normalizeFlowSessionScope(value = '') {
+        const normalized = String(value ?? '').trim();
+        return normalized || '';
+    }
+
+    flowMatchesConversationSession(flow, conversationOrSessionId = null) {
+        const flowSessionId = this.normalizeFlowSessionScope(flow?.session_id);
+        if (!flowSessionId) return true;
+
+        const conversationSessionId = typeof conversationOrSessionId === 'string'
+            ? this.normalizeFlowSessionScope(conversationOrSessionId)
+            : this.normalizeFlowSessionScope(conversationOrSessionId?.session_id);
+
+        if (!conversationSessionId) return false;
+        return conversationSessionId === flowSessionId;
+    }
+
     readNodeEntryHandleMap(execution) {
         const variables = this.ensureExecutionVariables(execution);
         const mapValue = variables[NODE_ENTRY_HANDLE_MAP_KEY];
@@ -1128,18 +1145,21 @@ class FlowService extends EventEmitter {
         const text = message.text?.trim() || '';
         let flow = null;
         let suppressKeywordFallback = false;
+        const conversationSessionId = this.normalizeFlowSessionScope(conversation?.session_id);
         const ownerScopeUserId = await resolveOwnerScopeUserIdFromAssignee(
             conversation?.assigned_to,
             lead?.assigned_to
         );
         const flowScopeOptions = ownerScopeUserId
-            ? { owner_user_id: ownerScopeUserId }
-            : {};
+            ? { owner_user_id: ownerScopeUserId, session_id: conversationSessionId || undefined }
+            : { session_id: conversationSessionId || undefined };
 
         if (text) {
             const strictIntentRouting = isStrictFlowIntentRoutingEnabled() && isFlowIntentClassifierConfigured();
-            const keywordMatches = await Flow.findKeywordMatches(text, flowScopeOptions);
-            const semanticCandidates = await Flow.findActiveKeywordFlows(flowScopeOptions);
+            const keywordMatches = (await Flow.findKeywordMatches(text, flowScopeOptions))
+                .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
+            const semanticCandidates = (await Flow.findActiveKeywordFlows(flowScopeOptions))
+                .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
             if (semanticCandidates.length > 0) {
                 const intentDecision = await classifyKeywordFlowIntent(text, semanticCandidates);
                 if (intentDecision?.status === 'selected' && intentDecision.flowId) {
@@ -1169,6 +1189,9 @@ class FlowService extends EventEmitter {
         // Se não encontrou por keyword, verificar se é novo contato
         if (!flow && conversation?.created) {
             flow = await Flow.findByTrigger('new_contact', null, flowScopeOptions);
+            if (flow && !this.flowMatchesConversationSession(flow, conversationSessionId)) {
+                flow = null;
+            }
         }
         
         if (flow) {

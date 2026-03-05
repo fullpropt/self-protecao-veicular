@@ -15,6 +15,7 @@ type FlowBuilderGlobals = {
   handleFlowAiAssistantInputKeydown?: (event: KeyboardEvent) => void;
   toggleFlowActive?: () => void;
   updateFlowStatusFromSelect?: () => void;
+  reloadFlowSessionOptions?: () => void;
   zoomIn?: () => void;
   zoomOut?: () => void;
   resetZoom?: () => void;
@@ -138,6 +139,67 @@ export default function FlowBuilder() {
             gap: 10px;
             flex-wrap: wrap;
             flex-shrink: 0;
+        }
+
+        .flow-builder-react .flow-name-highlight-scope {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 220px;
+        }
+
+        .flow-builder-react .flow-scope-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #9fb0c8;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        .flow-builder-react .flow-scope-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .flow-builder-react .flow-scope-select {
+            min-width: 220px;
+            max-width: 280px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.46);
+            background: rgba(15, 23, 42, 0.46);
+            color: #e7edf7;
+            padding: 7px 10px;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+
+        .flow-builder-react .flow-scope-select:focus {
+            outline: none;
+            border-color: rgba(var(--primary-rgb), 0.75);
+            box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+        }
+
+        .flow-builder-react .flow-scope-refresh {
+            width: 30px;
+            min-width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            background: rgba(15, 23, 42, 0.38);
+            color: #cbd5e1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .flow-builder-react .flow-scope-refresh:hover {
+            border-color: rgba(var(--primary-rgb), 0.58);
+            color: #e7edf7;
+            background: rgba(var(--primary-rgb), 0.24);
         }
 
         .flow-builder-react .flow-name-highlight-content {
@@ -1920,6 +1982,18 @@ export default function FlowBuilder() {
                 justify-content: space-between;
                 gap: 8px;
             }
+            .flow-builder-react .flow-name-highlight-scope {
+                min-width: 0;
+                width: 100%;
+            }
+            .flow-builder-react .flow-scope-controls {
+                width: 100%;
+            }
+            .flow-builder-react .flow-scope-select {
+                min-width: 0;
+                max-width: none;
+                width: 100%;
+            }
             .flow-list-item .name-row {
                 width: 100%;
             }
@@ -2019,6 +2093,22 @@ export default function FlowBuilder() {
                           </div>
                           <div className="flow-name-highlight-meta">
                               <span className="flow-name-highlight-status draft" id="currentFlowStatusDisplay">Não salvo</span>
+                              <div className="flow-name-highlight-scope">
+                                  <label className="flow-scope-label" htmlFor="flowSessionScope">Conta do fluxo</label>
+                                  <div className="flow-scope-controls">
+                                      <select id="flowSessionScope" className="flow-scope-select" defaultValue="">
+                                          <option value="">Todas as contas WhatsApp</option>
+                                      </select>
+                                      <button
+                                          type="button"
+                                          className="flow-scope-refresh"
+                                          title="Atualizar contas WhatsApp"
+                                          onClick={() => globals.reloadFlowSessionOptions?.()}
+                                      >
+                                          <span className="icon icon-refresh icon-sm"></span>
+                                      </button>
+                                  </div>
+                              </div>
                               <button className="flow-name-highlight-link" type="button" onClick={() => globals.openFlowsModal?.()}>
                                   <span className="icon icon-list icon-sm"></span> Meus Fluxos
                               </button>

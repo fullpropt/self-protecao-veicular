@@ -184,6 +184,11 @@ function normalizeCustomEventKey(value) {
         .slice(0, 80);
 }
 
+function normalizeFlowSessionScope(value) {
+    const normalized = String(value ?? '').trim();
+    return normalized || null;
+}
+
 function buildCustomEventKey(name) {
     const fromName = normalizeCustomEventKey(name);
     if (fromName) return fromName;
@@ -1939,10 +1944,11 @@ const Automation = {
 const Flow = {
     async create(data) {
         const uuid = generateUUID();
+        const sessionScope = normalizeFlowSessionScope(data.session_id ?? data.sessionId);
         
         const result = await run(`
-            INSERT INTO flows (uuid, name, description, trigger_type, trigger_value, nodes, edges, is_active, priority, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO flows (uuid, name, description, trigger_type, trigger_value, nodes, edges, is_active, priority, created_by, session_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             data.name,
@@ -1953,7 +1959,8 @@ const Flow = {
             JSON.stringify(data.edges || []),
             data.is_active !== undefined ? data.is_active : 1,
             data.priority || 0,
-            data.created_by
+            data.created_by,
+            sessionScope
         ]);
         
         return { id: result.lastInsertRowid, uuid };
@@ -2004,6 +2011,12 @@ const Flow = {
             params.push(triggerValue);
         }
 
+        const scopedSessionId = normalizeFlowSessionScope(options.session_id || options.sessionId);
+        if (scopedSessionId) {
+            sql += " AND (flows.session_id IS NULL OR TRIM(flows.session_id) = '' OR flows.session_id = ?)";
+            params.push(scopedSessionId);
+        }
+
         const ownerUserId = parsePositiveInteger(options.owner_user_id);
         const createdBy = parsePositiveInteger(options.created_by);
 
@@ -2040,6 +2053,10 @@ const Flow = {
         const createdBy = parsePositiveInteger(options.created_by);
         const params = [];
         let ownerFilter = '';
+        const scopedSessionId = normalizeFlowSessionScope(options.session_id || options.sessionId);
+        if (scopedSessionId) {
+            params.push(scopedSessionId);
+        }
         if (ownerUserId) {
             ownerFilter = `
                 AND (
@@ -2061,6 +2078,7 @@ const Flow = {
         const rows = await query(`
             SELECT * FROM flows
             WHERE trigger_type = 'keyword' AND is_active = 1
+            ${scopedSessionId ? "AND (flows.session_id IS NULL OR TRIM(flows.session_id) = '' OR flows.session_id = ?)" : ''}
             ${ownerFilter}
             ORDER BY priority DESC, id ASC
         `, params);
@@ -2080,6 +2098,10 @@ const Flow = {
         const createdBy = parsePositiveInteger(options.created_by);
         const params = [];
         let ownerFilter = '';
+        const scopedSessionId = normalizeFlowSessionScope(options.session_id || options.sessionId);
+        if (scopedSessionId) {
+            params.push(scopedSessionId);
+        }
         if (ownerUserId) {
             ownerFilter = `
                 AND (
@@ -2101,6 +2123,7 @@ const Flow = {
         const flows = await query(`
             SELECT * FROM flows 
             WHERE trigger_type = 'keyword' AND is_active = 1
+            ${scopedSessionId ? "AND (flows.session_id IS NULL OR TRIM(flows.session_id) = '' OR flows.session_id = ?)" : ''}
             ${ownerFilter}
             ORDER BY priority DESC, id ASC
         `, params);
@@ -2150,6 +2173,12 @@ const Flow = {
             params.push(options.is_active);
         }
 
+        const scopedSessionId = normalizeFlowSessionScope(options.session_id || options.sessionId);
+        if (scopedSessionId) {
+            sql += " AND (flows.session_id IS NULL OR TRIM(flows.session_id) = '' OR flows.session_id = ?)";
+            params.push(scopedSessionId);
+        }
+
         const ownerUserId = parsePositiveInteger(options.owner_user_id);
         const createdBy = parsePositiveInteger(options.created_by);
 
@@ -2185,12 +2214,16 @@ const Flow = {
         const fields = [];
         const values = [];
         
-        const allowedFields = ['name', 'description', 'trigger_type', 'trigger_value', 'nodes', 'edges', 'is_active', 'priority'];
+        const allowedFields = ['name', 'description', 'trigger_type', 'trigger_value', 'nodes', 'edges', 'is_active', 'priority', 'session_id'];
         
         for (const [key, value] of Object.entries(data)) {
             if (allowedFields.includes(key)) {
                 fields.push(`${key} = ?`);
-                values.push(typeof value === 'object' ? JSON.stringify(value) : value);
+                if (key === 'session_id') {
+                    values.push(normalizeFlowSessionScope(value));
+                } else {
+                    values.push(typeof value === 'object' ? JSON.stringify(value) : value);
+                }
             }
         }
         

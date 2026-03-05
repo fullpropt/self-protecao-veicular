@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS flows (
     description TEXT,
     trigger_type TEXT NOT NULL CHECK(trigger_type IN ('keyword', 'new_contact', 'webhook', 'schedule', 'manual')),
     trigger_value TEXT,
+    session_id TEXT,
     nodes TEXT NOT NULL,
     edges TEXT,
     is_active INTEGER DEFAULT 1,
@@ -413,6 +414,7 @@ CREATE TABLE IF NOT EXISTS lead_tags (
 ALTER TABLE messages ADD COLUMN campaign_id INTEGER;
 ALTER TABLE message_queue ADD COLUMN campaign_id INTEGER;
 ALTER TABLE message_queue ADD COLUMN session_id TEXT;
+ALTER TABLE flows ADD COLUMN session_id TEXT;
 ALTER TABLE message_queue ADD COLUMN is_first_contact INTEGER DEFAULT 1;
 ALTER TABLE message_queue ADD COLUMN assignment_meta TEXT;
 ALTER TABLE campaigns ADD COLUMN delay_min INTEGER;

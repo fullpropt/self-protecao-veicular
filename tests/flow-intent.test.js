@@ -197,6 +197,16 @@ describe('FlowService intent routing compatibility', () => {
         endSpy.mockRestore();
     });
 
+    test('flow session scope matches only the configured WhatsApp account', () => {
+        const service = new FlowService();
+
+        expect(service.flowMatchesConversationSession({ session_id: null }, 'conta_a')).toBe(true);
+        expect(service.flowMatchesConversationSession({ session_id: '' }, 'conta_a')).toBe(true);
+        expect(service.flowMatchesConversationSession({ session_id: 'conta_a' }, 'conta_a')).toBe(true);
+        expect(service.flowMatchesConversationSession({ session_id: 'conta_a' }, 'conta_b')).toBe(false);
+        expect(service.flowMatchesConversationSession({ session_id: 'conta_a' }, '')).toBe(false);
+    });
+
     test('intent node waits one extra message before default route and reuses context', async () => {
         const service = new FlowService();
         const node = {

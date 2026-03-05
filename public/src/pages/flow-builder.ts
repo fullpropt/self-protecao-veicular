@@ -71,6 +71,7 @@ type FlowSummary = {
     trigger_type?: string;
     nodes?: FlowNode[];
     is_active?: boolean;
+    session_id?: string | null;
 };
 
 type ContactField = {
@@ -89,12 +90,22 @@ type CustomEventOption = {
     is_active?: number;
 };
 
+type FlowWhatsappSessionOption = {
+    session_id: string;
+    name?: string;
+    phone?: string;
+    status?: string;
+    connected?: boolean;
+    campaign_enabled?: boolean;
+};
+
 let nodes: FlowNode[] = [];
 let edges: Edge[] = [];
 let selectedNode: FlowNode | null = null;
 let currentFlowId: number | null = null;
 let currentFlowName = '';
 let currentFlowIsActive = true;
+let currentFlowSessionId = '';
 let flowHasUnsavedChanges = false;
 let flowsCache: FlowSummary[] = [];
 let renamingFlowId: number | null = null;
@@ -115,6 +126,7 @@ let lastPointer = { x: 0, y: 0 };
 let hasGlobalCanvasListeners = false;
 let contactFieldsCache: ContactField[] = [];
 let customEventsCache: CustomEventOption[] = [];
+let flowWhatsappSessionsCache: FlowWhatsappSessionOption[] = [];
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type ToastFn = (type: ToastType, title: string, message: string, duration?: number) => void;
@@ -146,6 +158,7 @@ type FlowAiAssistantMessage = {
 
 const DEFAULT_HANDLE = 'default';
 const EXTRA_INPUT_PORT_MIN = 2;
+const FLOW_ALL_SESSIONS_VALUE = '';
 const LAST_OPEN_FLOW_ID_STORAGE_KEY = 'flow_builder:last_open_flow_id';
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true, required: true, placeholder: 'Nome completo' },
@@ -890,6 +903,10 @@ function reloadCustomEventsCatalog() {
     loadCustomEventsCatalog();
 }
 
+function reloadFlowSessionOptions() {
+    loadFlowWhatsappSessions();
+}
+
 function getNodeTypeLabel(node: FlowNode) {
     if (node.type === 'trigger') {
         if (isIntentTrigger(node)) return 'Intenção';
@@ -977,11 +994,104 @@ function setCurrentFlowActive(value: unknown) {
     renderFlowStatusControls();
 }
 
+function normalizeFlowSessionId(value: unknown) {
+    return String(value || '').trim();
+}
+
+function normalizeFlowWhatsappSessionOption(raw: any): FlowWhatsappSessionOption | null {
+    const sessionId = normalizeFlowSessionId(raw?.session_id || raw?.sessionId);
+    if (!sessionId) return null;
+    return {
+        session_id: sessionId,
+        name: String(raw?.name || '').trim(),
+        phone: String(raw?.phone || '').trim(),
+        status: String(raw?.status || '').trim(),
+        connected: Boolean(raw?.connected),
+        campaign_enabled: raw?.campaign_enabled
+    };
+}
+
+function getFlowWhatsappSessionDisplayName(session?: FlowWhatsappSessionOption | null) {
+    const label = String(session?.name || session?.phone || '').trim();
+    if (label) return label;
+    return String(session?.session_id || '').trim();
+}
+
+function renderFlowSessionScopeControls() {
+    const select = document.getElementById('flowSessionScope') as HTMLSelectElement | null;
+    if (!select) return;
+
+    const options = [...flowWhatsappSessionsCache]
+        .filter((item) => normalizeFlowSessionId(item.session_id))
+        .sort((a, b) => getFlowWhatsappSessionDisplayName(a).localeCompare(getFlowWhatsappSessionDisplayName(b), 'pt-BR'));
+    const knownIds = new Set(options.map((item) => normalizeFlowSessionId(item.session_id)));
+    const selectedSessionId = normalizeFlowSessionId(currentFlowSessionId);
+
+    const entries = [
+        `<option value="${FLOW_ALL_SESSIONS_VALUE}">Todas as contas WhatsApp</option>`,
+        ...options.map((item) => {
+            const sessionId = normalizeFlowSessionId(item.session_id);
+            const status = String(item.connected ? 'Conectada' : (item.status || 'Desconectada')).trim();
+            const name = getFlowWhatsappSessionDisplayName(item);
+            const label = name === sessionId
+                ? `${sessionId} - ${status}`
+                : `${name} - ${sessionId} - ${status}`;
+            return `<option value="${escapeHtml(sessionId)}">${escapeHtml(label)}</option>`;
+        })
+    ];
+
+    if (selectedSessionId && !knownIds.has(selectedSessionId)) {
+        entries.push(`<option value="${escapeHtml(selectedSessionId)}">Conta indisponível (${escapeHtml(selectedSessionId)})</option>`);
+    }
+
+    select.innerHTML = entries.join('');
+    select.value = selectedSessionId || FLOW_ALL_SESSIONS_VALUE;
+}
+
+function setCurrentFlowSessionScope(sessionId: unknown) {
+    currentFlowSessionId = normalizeFlowSessionId(sessionId);
+    renderFlowSessionScopeControls();
+}
+
+function updateFlowSessionScopeFromSelect() {
+    const select = document.getElementById('flowSessionScope') as HTMLSelectElement | null;
+    if (!select) return;
+    const nextSessionId = normalizeFlowSessionId(select.value);
+    if (nextSessionId === currentFlowSessionId) return;
+    setCurrentFlowSessionScope(nextSessionId);
+    markFlowDirty();
+}
+
+async function loadFlowWhatsappSessions(options: { silent?: boolean } = {}) {
+    try {
+        const response = await fetch('/api/whatsapp/sessions?includeDisabled=true', {
+            headers: buildAuthHeaders(false)
+        });
+        const result = await response.json();
+        if (response.ok && result?.success) {
+            flowWhatsappSessionsCache = (Array.isArray(result.sessions) ? result.sessions : [])
+                .map((item) => normalizeFlowWhatsappSessionOption(item))
+                .filter((item): item is FlowWhatsappSessionOption => Boolean(item));
+            renderFlowSessionScopeControls();
+            return;
+        }
+    } catch (_) {
+        // no-op
+    }
+
+    flowWhatsappSessionsCache = [];
+    renderFlowSessionScopeControls();
+    if (!options.silent) {
+        notify('warning', 'Fluxos', 'Não foi possível carregar as contas WhatsApp.');
+    }
+}
+
 function renderFlowStatusControls() {
     const statusSelect = document.getElementById('flowStatus') as HTMLSelectElement | null;
     if (statusSelect) {
         statusSelect.value = currentFlowIsActive ? '1' : '0';
     }
+    renderFlowSessionScopeControls();
     renderCurrentFlowStatusIndicator();
 }
 
@@ -1092,11 +1202,20 @@ function initFlowBuilder() {
     if (currentFlowId === null) {
         setCurrentFlowActive(true);
     }
+    const flowSessionScopeSelect = document.getElementById('flowSessionScope') as HTMLSelectElement | null;
+    if (flowSessionScopeSelect && flowSessionScopeSelect.dataset.bound !== '1') {
+        flowSessionScopeSelect.dataset.bound = '1';
+        flowSessionScopeSelect.addEventListener('change', () => {
+            updateFlowSessionScopeFromSelect();
+        });
+    }
+
     renderCurrentFlowName();
     setFlowDirtyState(false);
     bindFlowAiAssistant();
     renderFlowVariableTags();
     loadFlowVariableFields();
+    loadFlowWhatsappSessions({ silent: true });
     loadCustomEventsCatalog({ silent: true });
     setupDragAndDrop();
     setupCanvasEvents();
@@ -2259,6 +2378,7 @@ function resetEditorState() {
     currentFlowId = null;
     currentFlowName = '';
     currentFlowIsActive = true;
+    currentFlowSessionId = '';
     zoom = 1;
     pan = { x: 0, y: 0 };
 
@@ -2392,6 +2512,7 @@ async function saveFlow() {
         description: '',
         trigger_type: triggerPayload.triggerType,
         trigger_value: triggerPayload.triggerValue,
+        session_id: currentFlowSessionId || null,
         nodes,
         edges,
         is_active: currentFlowIsActive ? 1 : 0
@@ -2412,6 +2533,7 @@ async function saveFlow() {
         if (result.success) {
             currentFlowId = result.flow.id;
             currentFlowName = String(result.flow?.name || name).trim();
+            setCurrentFlowSessionScope(result.flow?.session_id || currentFlowSessionId);
             persistLastOpenFlowId(currentFlowId);
             setCurrentFlowActive(result.flow?.is_active);
             renderCurrentFlowName();
@@ -2477,6 +2599,13 @@ function renderFlowsList(flows: FlowSummary[]) {
         return triggerType || 'manual';
     };
 
+    const getFlowSessionScopeLabel = (sessionId?: string | null) => {
+        const normalizedSessionId = normalizeFlowSessionId(sessionId);
+        if (!normalizedSessionId) return 'todas as contas';
+        const session = flowWhatsappSessionsCache.find((item) => normalizeFlowSessionId(item.session_id) === normalizedSessionId);
+        return getFlowWhatsappSessionDisplayName(session || { session_id: normalizedSessionId });
+    };
+
     container.innerHTML = flows.map(flow => {
         const isActive = toBoolean(flow.is_active, true);
         const isCurrent = Number(flow.id) === Number(currentFlowId);
@@ -2516,7 +2645,7 @@ function renderFlowsList(flows: FlowSummary[]) {
                         </div>
                     `
                 }
-                <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
+                <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | Conta: ${escapeHtml(getFlowSessionScopeLabel(flow.session_id))} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
             </div>
             <div class="flow-list-actions">
                 <button class="flow-list-btn flow-list-toggle ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Desativar fluxo' : 'Ativar fluxo'}" onclick="toggleFlowActivation(${flow.id}, event)">
@@ -2700,6 +2829,7 @@ async function duplicateFlow(id: number, event?: Event) {
         normalizeLoadedFlowData();
         currentFlowId = null;
         currentFlowName = `${flow.name || 'Fluxo'} (copia)`;
+        setCurrentFlowSessionScope(flow?.session_id || '');
         setCurrentFlowActive(flow?.is_active);
         renderCurrentFlowName();
         setFlowDirtyState(true);
@@ -2769,6 +2899,7 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
             // Carregar dados
             currentFlowId = result.flow.id;
             currentFlowName = String(result.flow?.name || '').trim();
+            setCurrentFlowSessionScope(result.flow?.session_id || '');
             persistLastOpenFlowId(currentFlowId);
             nodes = result.flow.nodes || [];
             edges = result.flow.edges || [];
@@ -2929,6 +3060,7 @@ function openFlowsModal() {
     renderFlowStatusControls();
     renamingFlowId = null;
     renamingFlowDraft = '';
+    void loadFlowWhatsappSessions({ silent: true });
     loadFlows();
     document.getElementById('flowsModal')?.classList.add('active');
 }
@@ -2959,6 +3091,8 @@ const windowAny = window as Window & {
     updateNodeProperty?: (key: keyof NodeData, value: any) => void;
     updateEventNodeSelection?: (value: string) => void;
     reloadCustomEventsCatalog?: () => void;
+    reloadFlowSessionOptions?: () => void;
+    updateFlowSessionScopeFromSelect?: () => void;
     addIntentRoute?: () => void;
     updateIntentRoute?: (index: number, key: 'label' | 'phrases', value: string) => void;
     removeIntentRoute?: (index: number) => void;
@@ -2998,6 +3132,8 @@ windowAny.insertVariable = insertVariable;
 windowAny.updateNodeProperty = updateNodeProperty;
 windowAny.updateEventNodeSelection = updateEventNodeSelection;
 windowAny.reloadCustomEventsCatalog = reloadCustomEventsCatalog;
+windowAny.reloadFlowSessionOptions = reloadFlowSessionOptions;
+windowAny.updateFlowSessionScopeFromSelect = updateFlowSessionScopeFromSelect;
 windowAny.addIntentRoute = addIntentRoute;
 windowAny.updateIntentRoute = updateIntentRoute;
 windowAny.removeIntentRoute = removeIntentRoute;

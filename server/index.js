@@ -14629,11 +14629,47 @@ app.post('/api/ai/flows/generate', authenticate, async (req, res) => {
 
 
 
+async function resolveFlowSessionScopePayload(req, ownerScopeUserId = null) {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const hasSessionField = Object.prototype.hasOwnProperty.call(body, 'session_id')
+        || Object.prototype.hasOwnProperty.call(body, 'sessionId');
+
+    if (!hasSessionField) {
+        return { provided: false, sessionId: null };
+    }
+
+    const rawSessionId = body.session_id ?? body.sessionId;
+    const normalizedSessionId = sanitizeSessionId(rawSessionId);
+    if (!normalizedSessionId) {
+        return { provided: true, sessionId: null };
+    }
+
+    const canAccessSession = await canAccessSessionRecordInOwnerScope(req, normalizedSessionId, ownerScopeUserId);
+    if (!canAccessSession) {
+        return {
+            provided: true,
+            sessionId: null,
+            error: 'Conta WhatsApp nao encontrada ou sem permissao'
+        };
+    }
+
+    return { provided: true, sessionId: normalizedSessionId };
+}
+
 app.get('/api/flows', authenticate, async (req, res) => {
 
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const requestedSessionId = sanitizeSessionId(req.query?.session_id || req.query?.sessionId);
+    if (requestedSessionId) {
+        const canAccessSession = await canAccessSessionRecordInOwnerScope(req, requestedSessionId, ownerScopeUserId);
+        if (!canAccessSession) {
+            return res.status(403).json({ error: 'Sem permissao para acessar esta conta WhatsApp' });
+        }
+    }
+
     const flows = await Flow.list({
         ...req.query,
+        session_id: requestedSessionId || undefined,
         owner_user_id: ownerScopeUserId || undefined
     });
 
@@ -14668,13 +14704,22 @@ app.get('/api/flows/:id', authenticate, async (req, res) => {
 
 app.post('/api/flows', authenticate, async (req, res) => {
 
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const flowSessionScope = await resolveFlowSessionScopePayload(req, ownerScopeUserId);
+    if (flowSessionScope.error) {
+        return res.status(403).json({ error: flowSessionScope.error });
+    }
     const payload = {
         ...req.body,
-        created_by: req.user?.id
+        created_by: req.user?.id,
+        session_id: flowSessionScope.provided ? flowSessionScope.sessionId : null
     };
+    delete payload.sessionId;
     const result = await Flow.create(payload);
 
-    const flow = await Flow.findById(result.id);
+    const flow = await Flow.findById(result.id, {
+        owner_user_id: ownerScopeUserId || undefined
+    });
 
     res.json({ success: true, flow });
 
@@ -14695,7 +14740,19 @@ app.put('/api/flows/:id', authenticate, async (req, res) => {
         return res.status(403).json({ error: 'Sem permissao para editar este fluxo' });
     }
 
-    await Flow.update(req.params.id, req.body);
+    const flowSessionScope = await resolveFlowSessionScopePayload(req, ownerScopeUserId);
+    if (flowSessionScope.error) {
+        return res.status(403).json({ error: flowSessionScope.error });
+    }
+    const payload = {
+        ...req.body
+    };
+    if (flowSessionScope.provided) {
+        payload.session_id = flowSessionScope.sessionId;
+    }
+    delete payload.sessionId;
+
+    await Flow.update(req.params.id, payload);
 
     const flow = await Flow.findById(req.params.id, {
         owner_user_id: ownerScopeUserId || undefined
