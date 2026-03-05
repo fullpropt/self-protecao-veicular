@@ -63,6 +63,7 @@ export default function Inbox() {
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-lg);
             overflow: hidden;
+            min-width: 0;
         }
         .inbox-react .conversations-list,
         .inbox-react .chat-messages,
@@ -147,22 +148,12 @@ export default function Inbox() {
         .inbox-react .chat-input textarea::-webkit-scrollbar-corner {
             background: rgba(8, 14, 24, 0.96);
         }
-        @media (max-width: 1024px) {
-            .inbox-container { grid-template-columns: 350px 1fr; }
-            .inbox-right-panel { display: none; }
-        }
-        @media (max-width: 768px) {
-            .inbox-container { grid-template-columns: 1fr; }
-            .chat-panel { display: none; }
-            .chat-panel.active { display: flex; }
-            .conversations-panel.hidden { display: none; }
-            .inbox-right-panel { display: none; }
-        }
         .conversations-panel {
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             min-height: 0;
+            min-width: 0;
         }
         .conversations-header {
             padding: 20px;
@@ -289,6 +280,7 @@ export default function Inbox() {
             display: flex;
             gap: 10px;
             margin-bottom: 15px;
+            flex-wrap: wrap;
         }
         .conversations-tabs button {
             padding: 8px 16px;
@@ -299,6 +291,7 @@ export default function Inbox() {
             cursor: pointer;
             font-size: 13px;
             transition: all 0.2s;
+            flex-shrink: 0;
         }
         .conversations-tabs button.active {
             background: var(--primary);
@@ -417,6 +410,7 @@ export default function Inbox() {
             background: linear-gradient(180deg, rgba(24, 40, 64, 0.94), rgba(20, 35, 57, 0.96));
             min-height: 0;
             position: relative;
+            min-width: 0;
         }
         .chat-header {
             background: var(--surface);
@@ -426,7 +420,7 @@ export default function Inbox() {
             gap: 15px;
             border-bottom: 1px solid var(--border-color);
         }
-        .chat-header-info { flex: 1; }
+        .chat-header-info { flex: 1; min-width: 0; }
         .chat-header-name { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-header-status { font-size: 12px; color: var(--gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-messages {
@@ -960,6 +954,7 @@ export default function Inbox() {
             gap: 15px;
             align-items: flex-end;
             position: relative;
+            min-width: 0;
         }
         .chat-input .chat-input-btn {
             width: 44px;
@@ -1106,6 +1101,7 @@ export default function Inbox() {
         }
         .chat-input textarea {
             flex: 1;
+            min-width: 0;
             border: 1px solid var(--border-color);
             border-radius: 20px;
             background: var(--surface-muted);
@@ -1137,6 +1133,9 @@ export default function Inbox() {
             color: var(--gray-700);
             cursor: pointer;
             transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        }
+        .quick-reply-trigger-label {
+            line-height: 1;
         }
         .quick-reply-trigger:hover {
             background: rgba(var(--primary-rgb), 0.08);
@@ -1265,6 +1264,7 @@ export default function Inbox() {
         .inbox-main-content {
             padding: var(--inbox-main-pad-y) 20px;
             box-sizing: border-box;
+            min-width: 0;
         }
         .chat-header-actions { display: flex; gap: 8px; align-items: center; }
         .chat-back-btn { display: none; }
@@ -1366,7 +1366,7 @@ export default function Inbox() {
 
         @media (max-width: 1024px) {
             .inbox-container {
-                grid-template-columns: 340px 1fr !important;
+                grid-template-columns: clamp(280px, 38vw, 340px) minmax(0, 1fr) !important;
             }
             .inbox-right-panel {
                 display: flex !important;
@@ -1427,8 +1427,11 @@ export default function Inbox() {
                 font-size: 13px;
             }
             .chat-input {
-                padding: 10px 12px;
-                gap: 10px;
+                padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+                gap: 8px;
+            }
+            .chat-input textarea {
+                padding: 10px 14px;
             }
             .chat-scroll-bottom-btn {
                 right: 12px;
@@ -1518,6 +1521,8 @@ export default function Inbox() {
             .inbox-session-highlight {
                 padding: 8px 10px;
                 gap: 8px;
+                flex-direction: column;
+                align-items: flex-start;
             }
             .inbox-session-highlight-name {
                 font-size: 13px;
@@ -1527,7 +1532,10 @@ export default function Inbox() {
                 padding: 3px 8px;
             }
             .inbox-session-highlight-actions {
-                align-items: flex-end;
+                width: 100%;
+                align-items: flex-start;
+                flex-direction: row;
+                flex-wrap: wrap;
             }
             .inbox-session-resync-btn {
                 font-size: 10px;
@@ -1535,12 +1543,28 @@ export default function Inbox() {
             }
             .conversations-tabs {
                 margin-bottom: 10px;
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                -webkit-overflow-scrolling: touch;
             }
             .conversations-list .conversation-item {
                 padding: 12px;
             }
             .contact-card-actions {
                 grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 480px) {
+            .quick-reply-trigger {
+                width: 42px;
+                padding: 0;
+                justify-content: center;
+            }
+            .quick-reply-trigger-label {
+                display: none;
+            }
+            .conversation-session-chip {
+                max-width: 84px;
             }
         }
       `}</style>

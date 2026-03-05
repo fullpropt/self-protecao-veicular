@@ -2174,7 +2174,8 @@ function renderChat() {
             </div>
             <textarea id="messageInput" placeholder="Digite uma mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
             <button class="quick-reply-trigger" onclick="toggleQuickReplyPicker()" title="Selecionar resposta rapida" type="button">
-                <span class="icon icon-bolt icon-sm"></span> R&aacute;pidas
+                <span class="icon icon-bolt icon-sm"></span>
+                <span class="quick-reply-trigger-label">R&aacute;pidas</span>
             </button>
             <div class="quick-reply-picker" id="quickReplyPicker">
                 ${quickReplyItems}
