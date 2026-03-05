@@ -1694,7 +1694,7 @@ export default function FlowBuilder() {
         }
 
         .flow-list-item.is-readonly {
-            cursor: default;
+            cursor: pointer;
         }
 
         .flow-list-item.is-current {
@@ -2056,14 +2056,15 @@ export default function FlowBuilder() {
             }
             .flow-container {
                 grid-template-columns: 1fr;
-                grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-                height: 100%;
+                grid-template-rows: auto;
+                height: auto;
                 min-height: 0;
+                align-content: start;
             }
             .flow-builder-react .flow-container {
-                display: none;
+                display: grid;
             }
-            .flow-builder-react #flowsModal.modal-overlay {
+            .flow-builder-react #flowsModal.modal-overlay.active {
                 display: flex;
                 position: fixed;
                 top: 0;
@@ -2071,7 +2072,7 @@ export default function FlowBuilder() {
                 width: 100%;
                 height: 100%;
                 min-height: 0;
-                padding: calc(118px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom));
+                padding: calc(84px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));
                 background: transparent;
                 backdrop-filter: none;
                 z-index: 3;
@@ -2080,47 +2081,51 @@ export default function FlowBuilder() {
             }
             .flow-builder-react #flowsModal .modal {
                 width: 100%;
-                max-height: none;
+                max-height: min(32vh, 240px);
                 height: auto;
                 max-width: 760px;
-                border-radius: 16px;
-                box-shadow: 0 6px 24px rgba(2, 6, 23, 0.3);
+                border-radius: 12px;
+                box-shadow: 0 3px 14px rgba(2, 6, 23, 0.25);
                 display: flex;
                 flex-direction: column;
                 min-height: 0;
-                max-height: calc(100vh - 136px - env(safe-area-inset-bottom));
-                max-height: calc(100dvh - 136px - env(safe-area-inset-bottom));
+                max-height: min(32vh, 240px);
             }
             .flow-builder-react #flowsModal .modal-close {
                 display: none;
             }
             .flow-builder-react #flowsModal .modal-header {
-                padding: 14px;
+                padding: 10px 12px;
             }
             .flow-builder-react #flowsModal .modal-header h2 {
-                font-size: 16px;
+                font-size: 14px;
             }
             .flow-builder-react #flowsModal .modal-body {
-                max-height: none;
-                flex: 1;
+                max-height: min(22vh, 170px);
+                flex: 0 1 auto;
                 min-height: 0;
-                padding: 12px;
+                padding: 8px;
+                overflow-y: auto;
             }
             .flow-builder-react #flowsModal .modal-footer {
                 display: none;
             }
+            .flow-builder-react #flowsModal .flow-list-empty {
+                border-radius: 10px;
+                padding: 12px 8px;
+                font-size: 13px;
+            }
+            .flow-builder-react.flow-mobile-modal-open .flow-container {
+                margin-top: min(34vh, 250px);
+            }
             .flow-canvas {
                 order: 1;
-                min-height: 0;
+                min-height: clamp(220px, 46vh, 360px);
+                height: clamp(220px, 46vh, 360px);
+                max-height: clamp(220px, 46vh, 360px);
             }
             .nodes-panel {
-                order: 2;
-                border-right: none;
-                border-top: 1px solid var(--border);
-                border-bottom: none;
-                padding: 12px;
-                max-height: none;
-                min-height: 0;
+                display: none;
             }
             .node-item {
                 padding: 10px 12px;
@@ -2170,12 +2175,7 @@ export default function FlowBuilder() {
                 min-width: 0;
             }
             .flow-builder-react .flow-canvas-toolbar {
-                top: 8px;
-                left: 8px;
-                right: 8px;
-                gap: 6px;
-                max-width: none;
-                justify-content: stretch;
+                display: none;
             }
             .flow-builder-react .flow-canvas-toolbar .toolbar-btn {
                 flex: 1 1 0;
@@ -2188,8 +2188,7 @@ export default function FlowBuilder() {
                 min-width: 0;
             }
             .flow-builder-react .flow-ai-assistant-dock {
-                width: calc(100% - 16px);
-                bottom: calc(10px + env(safe-area-inset-bottom));
+                display: none;
             }
             .flow-builder-react .flow-ai-assistant-launch {
                 width: min(100%, 240px);
@@ -2236,6 +2235,14 @@ export default function FlowBuilder() {
             .modal-body {
                 max-height: calc(100vh - 170px);
                 max-height: calc(100dvh - 170px);
+            }
+            .flow-builder-react .flow-node .delete-btn,
+            .flow-builder-react .flow-node .duplicate-btn,
+            .flow-builder-react .flow-node .collapse-btn {
+                display: none;
+            }
+            .flow-builder-react .flow-node .port {
+                pointer-events: none;
             }
         }
 

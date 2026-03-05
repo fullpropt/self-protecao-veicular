@@ -745,6 +745,12 @@ function isTabletOrMobileView() {
     return window.matchMedia('(max-width: 1024px)').matches;
 }
 
+function syncInboxBodyScrollLock() {
+    const chatPanel = document.getElementById('chatPanel') as HTMLElement | null;
+    const chatOpenOnMobile = isMobileInboxView() && Boolean(chatPanel?.classList.contains('active'));
+    document.body.classList.toggle('inbox-mobile-chat-lock', chatOpenOnMobile);
+}
+
 function setMobileConversationMode(chatOpen: boolean) {
     const conversationsPanel = document.getElementById('conversationsPanel') as HTMLElement | null;
     const chatPanel = document.getElementById('chatPanel') as HTMLElement | null;
@@ -753,6 +759,7 @@ function setMobileConversationMode(chatOpen: boolean) {
     if (!isMobileInboxView()) {
         conversationsPanel.classList.remove('hidden');
         chatPanel.classList.remove('active');
+        syncInboxBodyScrollLock();
         return;
     }
 
@@ -763,6 +770,7 @@ function setMobileConversationMode(chatOpen: boolean) {
         conversationsPanel.classList.remove('hidden');
         chatPanel.classList.remove('active');
     }
+    syncInboxBodyScrollLock();
 }
 
 function isCurrentChatVisible() {
@@ -1190,8 +1198,20 @@ function startInboxAutoRefresh() {
 function bindInboxLifecycle() {
     if (inboxLifecycleBound) return;
     inboxLifecycleBound = true;
-    window.addEventListener('app:logout', stopInboxAutoRefresh);
+    window.addEventListener('app:logout', () => {
+        stopInboxAutoRefresh();
+        document.body.classList.remove('inbox-mobile-chat-lock');
+    });
     window.addEventListener('beforeunload', stopInboxAutoRefresh);
+    window.addEventListener('hashchange', () => {
+        const hash = String(window.location.hash || '').toLowerCase();
+        if (!hash.startsWith('#/inbox')) {
+            document.body.classList.remove('inbox-mobile-chat-lock');
+            return;
+        }
+        syncInboxBodyScrollLock();
+    });
+    window.addEventListener('resize', syncInboxBodyScrollLock);
 }
 
 function renderConversations() {
@@ -2133,8 +2153,8 @@ function renderChat() {
 
     panel.innerHTML = `
         <div class="chat-header">
-            <button class="btn btn-sm btn-outline btn-icon chat-back-btn" onclick="backToList()" id="backBtn" title="Voltar para lista">
-                <span class="icon icon-arrow-left icon-sm"></span>
+            <button class="btn btn-sm btn-outline chat-back-btn" onclick="backToList()" id="backBtn" title="Voltar para conversas" aria-label="Voltar para conversas">
+                <span class="chat-back-btn-arrow" aria-hidden="true">←</span>
             </button>
             ${renderAvatarMarkup({
                 name: currentConversation.name,

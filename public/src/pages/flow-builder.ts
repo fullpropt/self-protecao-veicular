@@ -952,6 +952,16 @@ function isFlowMobileListMode() {
     return window.matchMedia('(max-width: 768px)').matches;
 }
 
+function isFlowReadOnlyMode() {
+    return isFlowMobileListMode();
+}
+
+function setFlowMobileModalOpenState(isOpen: boolean) {
+    const root = document.querySelector('.flow-builder-react') as HTMLElement | null;
+    if (!root) return;
+    root.classList.toggle('flow-mobile-modal-open', Boolean(isOpen) && isFlowMobileListMode());
+}
+
 function readLastOpenFlowId() {
     try {
         const raw = localStorage.getItem(LAST_OPEN_FLOW_ID_STORAGE_KEY);
@@ -1285,6 +1295,10 @@ function setupDragAndDrop() {
         nodeItem.dataset.flowDragBound = '1';
 
         nodeItem.addEventListener('dragstart', (e) => {
+            if (isFlowReadOnlyMode()) {
+                e.preventDefault();
+                return;
+            }
             e.dataTransfer?.setData('nodeType', item.dataset.type || '');
             e.dataTransfer?.setData('nodeSubtype', item.dataset.subtype || '');
         });
@@ -1298,6 +1312,7 @@ function setupDragAndDrop() {
     const handleDrop = (e: DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        if (isFlowReadOnlyMode()) return;
         const type = e.dataTransfer?.getData('nodeType') || '';
         const subtype = e.dataTransfer?.getData('nodeSubtype') || '';
         if (!type) return;
@@ -1357,6 +1372,7 @@ function setupCanvasEvents() {
 
 // Adicionar no
 function addNode(type: NodeType, subtype: string, x: number, y: number) {
+    if (isFlowReadOnlyMode()) return;
     if (type === 'condition') {
         return;
     }
@@ -1492,6 +1508,7 @@ function renderNode(node: FlowNode) {
     
     // Eventos de arrastar
     nodeEl.addEventListener('mousedown', (e) => {
+        if (isFlowReadOnlyMode()) return;
         if (e.button !== 0) return;
 
         const target = e.target as HTMLElement | null;
@@ -1671,6 +1688,7 @@ function deselectNode() {
 
 // Deletar no
 function deleteNode(id: string) {
+    if (isFlowReadOnlyMode()) return;
     if (connectionStart?.nodeId === id) {
         cancelConnection();
     }
@@ -1696,6 +1714,7 @@ function deleteNode(id: string) {
 }
 
 function duplicateNode(id: string, event?: Event) {
+    if (isFlowReadOnlyMode()) return;
     event?.preventDefault();
     event?.stopPropagation();
 
@@ -1913,6 +1932,7 @@ function renderProperties() {
 
 // Atualizar propriedade do no
 function updateNodeProperty(key: keyof NodeData, value: any) {
+    if (isFlowReadOnlyMode()) return;
     if (!selectedNode) return;
     
     selectedNode.data[key] = value;
@@ -1930,6 +1950,7 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
 }
 
 function updateEventNodeSelection(value: string) {
+    if (isFlowReadOnlyMode()) return;
     if (!selectedNode || selectedNode.type !== 'event') return;
 
     const eventId = Number.parseInt(String(value || '').trim(), 10);
@@ -2049,6 +2070,7 @@ function adjustNodesForResize(anchorId: string, deltaHeight: number) {
 }
 
 function toggleNodeCollapsed(id: string, event?: Event) {
+    if (isFlowReadOnlyMode()) return;
     event?.preventDefault();
     event?.stopPropagation();
 
@@ -2093,6 +2115,7 @@ function cleanupInvalidEdgesForNode(nodeId: string) {
 }
 
 function addIntentRoute() {
+    if (isFlowReadOnlyMode()) return;
     if (!selectedNode || !isIntentTrigger(selectedNode)) return;
     syncIntentRoutesFromNode(selectedNode);
 
@@ -2111,6 +2134,7 @@ function addIntentRoute() {
 }
 
 function updateIntentRoute(index: number, key: 'label' | 'phrases', value: string) {
+    if (isFlowReadOnlyMode()) return;
     if (!selectedNode || !isIntentTrigger(selectedNode)) return;
     syncIntentRoutesFromNode(selectedNode);
 
@@ -2123,6 +2147,7 @@ function updateIntentRoute(index: number, key: 'label' | 'phrases', value: strin
 }
 
 function removeIntentRoute(index: number) {
+    if (isFlowReadOnlyMode()) return;
     if (!selectedNode || !isIntentTrigger(selectedNode)) return;
     syncIntentRoutesFromNode(selectedNode);
 
@@ -2136,6 +2161,7 @@ function removeIntentRoute(index: number) {
 
 // Condicoes
 function addCondition() {
+    if (isFlowReadOnlyMode()) return;
     if (!selectedNode || selectedNode.type !== 'condition') return;
     
     if (!selectedNode.data.conditions) {
@@ -2148,12 +2174,14 @@ function addCondition() {
 }
 
 function updateCondition(index: number, key: 'value' | 'next', value: string) {
+    if (isFlowReadOnlyMode()) return;
     if (!selectedNode) return;
     selectedNode.data.conditions[index][key] = value;
     markFlowDirty();
 }
 
 function removeCondition(index: number) {
+    if (isFlowReadOnlyMode()) return;
     if (!selectedNode) return;
     selectedNode.data.conditions.splice(index, 1);
     renderProperties();
@@ -2182,6 +2210,7 @@ function startConnection(
     label = '',
     sourcePortOverride?: HTMLElement | null
 ) {
+    if (isFlowReadOnlyMode()) return;
     if (portType !== 'output') return;
 
     const sourceNode = document.getElementById(nodeId);
@@ -2216,6 +2245,7 @@ function startConnection(
 }
 
 function endConnection(nodeId: string, portType: string, targetHandle = DEFAULT_HANDLE) {
+    if (isFlowReadOnlyMode()) return;
     if (!isConnecting || !connectionStart) return;
 
     if (portType !== 'input' || connectionStart.nodeId === nodeId) {
@@ -2681,7 +2711,7 @@ function renderFlowsList(flows: FlowSummary[]) {
             isRenaming ? 'is-renaming' : '',
             mobileListMode ? 'is-readonly' : ''
         ].filter(Boolean).join(' ');
-        const itemClick = mobileListMode ? '' : ` onclick="loadFlow(${flow.id})"`;
+        const itemClick = ` onclick="loadFlow(${flow.id})"`;
 
         return `
         <div class="${itemClasses}"${itemClick}>
@@ -3136,15 +3166,14 @@ function openFlowsModal() {
     void loadFlowWhatsappSessions({ silent: true });
     loadFlows();
     document.getElementById('flowsModal')?.classList.add('active');
+    setFlowMobileModalOpenState(true);
 }
 
 function closeFlowsModal() {
-    if (isFlowMobileListMode()) {
-        return;
-    }
     renamingFlowId = null;
     renamingFlowDraft = '';
     document.getElementById('flowsModal')?.classList.remove('active');
+    setFlowMobileModalOpenState(false);
 }
 
 const windowAny = window as Window & {

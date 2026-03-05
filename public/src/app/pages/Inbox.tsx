@@ -170,6 +170,12 @@ export default function Inbox() {
         .inbox-session-filter {
             margin-bottom: 0;
         }
+        .inbox-session-unified {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: stretch;
+        }
         .inbox-session-filter .form-label {
             display: block;
             font-size: 12px;
@@ -207,6 +213,16 @@ export default function Inbox() {
                 0 10px 22px rgba(2, 8, 20, 0.2),
                 0 0 0 1px rgba(var(--primary-rgb), 0.06),
                 0 0 18px rgba(var(--primary-rgb), 0.12);
+        }
+        .inbox-session-highlight-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .inbox-session-filter-embedded .form-select {
+            border-color: rgba(var(--primary-rgb), 0.26);
+            background: rgba(15, 23, 42, 0.52);
         }
         .inbox-session-highlight-label {
             font-size: 11px;
@@ -503,6 +519,8 @@ export default function Inbox() {
         .chat-messages {
             flex: 1;
             overflow-y: auto;
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
             padding: 20px;
             min-height: 0;
             position: relative;
@@ -1344,7 +1362,23 @@ export default function Inbox() {
             min-width: 0;
         }
         .chat-header-actions { display: flex; gap: 8px; align-items: center; }
-        .chat-back-btn { display: none; }
+        .chat-back-btn {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+        .chat-back-btn-arrow {
+            font-size: 22px;
+            line-height: 1;
+            font-weight: 700;
+            transform: translateX(-1px);
+            display: inline-block;
+        }
         .contact-info-backdrop {
             position: fixed;
             inset: 0;
@@ -1463,6 +1497,18 @@ export default function Inbox() {
         }
 
         @media (max-width: 768px) {
+            body.inbox-mobile-chat-lock {
+                overflow: hidden;
+                height: 100vh;
+                height: 100dvh;
+                overscroll-behavior: none;
+            }
+            body.inbox-mobile-chat-lock .inbox-react .main-content,
+            body.inbox-mobile-chat-lock .inbox-react .inbox-main-content,
+            body.inbox-mobile-chat-lock .inbox-react .inbox-container,
+            body.inbox-mobile-chat-lock .inbox-react .chat-panel.active {
+                overflow: hidden !important;
+            }
             .inbox-react { --inbox-main-pad-y: 8px; }
             .inbox-main-content {
                 padding: calc(env(safe-area-inset-top, 0px) + 72px) 10px 10px !important;
@@ -1513,6 +1559,12 @@ export default function Inbox() {
             }
             .chat-back-btn {
                 display: inline-flex;
+                width: 38px;
+                height: 38px;
+                border-radius: 11px;
+            }
+            .chat-back-btn-arrow {
+                font-size: 24px;
             }
             .chat-header-actions {
                 gap: 6px;
@@ -1631,34 +1683,66 @@ export default function Inbox() {
                 border-radius: 12px;
                 padding: 0 12px;
             }
+            .inbox-session-unified {
+                gap: 8px;
+            }
+            .inbox-session-filter-embedded .form-label {
+                margin-bottom: 6px;
+                font-size: 10px;
+                letter-spacing: 0.05em;
+                text-align: center;
+            }
+            .inbox-session-filter-embedded .form-select {
+                min-height: 38px;
+                padding: 0 10px;
+                font-size: 12px;
+                text-align: center;
+                text-align-last: center;
+            }
             .inbox-session-highlight {
-                padding: 12px;
-                gap: 10px;
+                padding: 10px;
+                gap: 8px;
                 flex-direction: column;
-                align-items: flex-start;
+                align-items: center;
                 border-radius: 14px;
             }
+            .inbox-session-highlight-main {
+                width: 100%;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+            .inbox-session-highlight-main > div {
+                width: 100%;
+                text-align: center;
+            }
+            .inbox-session-highlight-label,
+            .inbox-session-highlight-meta {
+                display: none;
+            }
             .inbox-session-highlight-name {
-                font-size: 14px;
+                font-size: 13px;
+                line-height: 1.25;
             }
             .inbox-session-highlight-status {
-                font-size: 11px;
-                padding: 0 10px;
-                min-height: 32px;
+                font-size: 10px;
+                padding: 0 8px;
+                min-height: 28px;
                 display: inline-flex;
                 align-items: center;
             }
             .inbox-session-highlight-actions {
                 width: 100%;
-                align-items: flex-start;
                 flex-direction: row;
                 flex-wrap: wrap;
-                gap: 8px;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
             }
             .inbox-session-resync-btn {
-                min-height: 34px;
-                font-size: 11px;
-                padding: 0 12px;
+                min-height: 30px;
+                font-size: 10px;
+                padding: 0 10px;
             }
             .conversations-tabs {
                 margin-bottom: 0;
@@ -1708,6 +1792,9 @@ export default function Inbox() {
             }
             .conversation-session-chip {
                 max-width: 84px;
+            }
+            .inbox-session-unified {
+                gap: 7px;
             }
         }
       `}</style>
@@ -1804,33 +1891,35 @@ export default function Inbox() {
           <div className="conversations-panel" id="conversationsPanel">
             <div className="conversations-header">
               <h2><span className="icon icon-inbox icon-sm"></span> Inbox</h2>
-              <div className="inbox-session-filter">
-                <label className="form-label" htmlFor="inboxSessionFilter">Conta WhatsApp</label>
-                <select
-                  id="inboxSessionFilter"
-                  className="form-select"
-                  defaultValue=""
-                  onChange={(event) => globals.changeInboxSessionFilter?.((event.target as HTMLSelectElement).value)}
-                >
-                  <option value="">Todas as contas</option>
-                </select>
-              </div>
-              <div className="inbox-session-highlight" id="inboxSessionIndicator">
-                <div>
-                  <div className="inbox-session-highlight-label">Conta exibida</div>
-                  <div className="inbox-session-highlight-name">Todas as contas</div>
-                  <div className="inbox-session-highlight-meta">Mostrando conversas de todas as contas</div>
-                </div>
-                <div className="inbox-session-highlight-actions">
-                  <span className="inbox-session-highlight-status all">Filtro geral</span>
-                  <button
-                    id="inboxResyncHistoryBtn"
-                    className="inbox-session-resync-btn"
-                    type="button"
-                    onClick={() => globals.resyncInboxHistory?.()}
+              <div className="inbox-session-highlight inbox-session-unified" id="inboxSessionIndicator">
+                <div className="inbox-session-filter inbox-session-filter-embedded">
+                  <label className="form-label" htmlFor="inboxSessionFilter">Conta WhatsApp</label>
+                  <select
+                    id="inboxSessionFilter"
+                    className="form-select"
+                    defaultValue=""
+                    onChange={(event) => globals.changeInboxSessionFilter?.((event.target as HTMLSelectElement).value)}
                   >
-                    Ressincronizar
-                  </button>
+                    <option value="">Todas as contas</option>
+                  </select>
+                </div>
+                <div className="inbox-session-highlight-main">
+                  <div>
+                    <div className="inbox-session-highlight-label">Conta exibida</div>
+                    <div className="inbox-session-highlight-name">Todas as contas</div>
+                    <div className="inbox-session-highlight-meta">Mostrando conversas de todas as contas</div>
+                  </div>
+                  <div className="inbox-session-highlight-actions">
+                    <span className="inbox-session-highlight-status all">Filtro geral</span>
+                    <button
+                      id="inboxResyncHistoryBtn"
+                      className="inbox-session-resync-btn"
+                      type="button"
+                      onClick={() => globals.resyncInboxHistory?.()}
+                    >
+                      Ressincronizar
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="conversations-tabs">

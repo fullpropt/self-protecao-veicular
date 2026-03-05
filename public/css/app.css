@@ -1876,6 +1876,14 @@ body.sidebar-open .mobile-menu-toggle {
         border-bottom: none;
     }
 
+    .contatos-react .table-wrapper tr[data-id] td:not(.contact-cell-select):not(.contact-cell-main) {
+        display: none;
+    }
+
+    .contatos-react .table-wrapper tr.is-mobile-expanded td:not(.contact-cell-select):not(.contact-cell-main) {
+        display: flex;
+    }
+
     .contatos-react .table-wrapper tr[data-id] td::before {
         content: attr(data-label);
         min-width: 108px;
