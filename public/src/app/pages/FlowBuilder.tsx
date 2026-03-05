@@ -741,7 +741,7 @@ export default function FlowBuilder() {
             justify-content: center;
             align-items: center;
             gap: 6px;
-            padding: 12px;
+            padding: 16px 12px 12px;
         }
 
         .flow-node-header.trigger { background: rgba(16, 185, 129, 0.1); }
@@ -787,6 +787,7 @@ export default function FlowBuilder() {
             align-items: center;
             text-align: center;
             gap: 4px;
+            margin-top: 10px;
         }
 
         .flow-node-header .node-kind {
@@ -854,11 +855,24 @@ export default function FlowBuilder() {
 
         .flow-node.event-circle .flow-node-header .duplicate-btn {
             position: absolute;
-            top: -8px;
-            left: 8px;
-            min-width: 38px;
-            font-size: 9px;
-            padding: 2px 4px;
+            top: 10px;
+            left: 10px;
+            width: 22px;
+            min-width: 22px;
+            height: 22px;
+            padding: 0;
+            border-radius: 999px;
+            font-size: 0;
+            border-color: rgba(16, 185, 129, 0.38);
+            background: rgba(236, 253, 245, 0.98);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+        }
+
+        .flow-node.event-circle .flow-node-header .duplicate-btn::before {
+            content: '⧉';
+            font-size: 12px;
+            line-height: 1;
+            color: #047857;
         }
 
         .flow-node.event-circle .flow-node-header .collapse-btn {
@@ -867,10 +881,22 @@ export default function FlowBuilder() {
 
         .flow-node.event-circle .flow-node-header .delete-btn {
             position: absolute;
-            top: -8px;
-            right: 8px;
-            min-width: 20px;
-            padding: 2px 4px;
+            top: 10px;
+            right: 10px;
+            width: 22px;
+            min-width: 22px;
+            height: 22px;
+            padding: 0;
+            border-radius: 999px;
+            font-size: 0;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+        }
+
+        .flow-node.event-circle .flow-node-header .delete-btn::before {
+            content: '×';
+            font-size: 14px;
+            line-height: 1;
+            color: #b91c1c;
         }
 
         .flow-node-header .duplicate-btn:hover {
