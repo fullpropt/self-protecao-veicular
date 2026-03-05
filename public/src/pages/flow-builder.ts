@@ -1088,6 +1088,24 @@ function setFlowMobileModalOpenState(isOpen: boolean) {
     root.classList.toggle('flow-mobile-modal-open', Boolean(isOpen) && isFlowMobileListMode());
 }
 
+function setFlowBuilderScreen(screen: 'selector' | 'builder') {
+    const selectorScreen = document.getElementById('flowSelectorScreen') as HTMLElement | null;
+    const builderHeader = document.getElementById('flowBuilderHeader') as HTMLElement | null;
+    const builderContainer = document.getElementById('flowBuilderContainer') as HTMLElement | null;
+    const showSelector = screen === 'selector';
+
+    selectorScreen?.toggleAttribute('hidden', !showSelector);
+    builderHeader?.toggleAttribute('hidden', showSelector);
+    builderContainer?.toggleAttribute('hidden', showSelector);
+
+    setFlowMobileModalOpenState(showSelector);
+    if (!showSelector) {
+        requestAnimationFrame(() => {
+            renderConnections();
+        });
+    }
+}
+
 function readLastOpenFlowId() {
     try {
         const raw = localStorage.getItem(LAST_OPEN_FLOW_ID_STORAGE_KEY);
@@ -4470,26 +4488,20 @@ function openFlowsModal() {
     renamingFlowDraft = '';
     void loadFlowWhatsappSessions({ silent: true });
     loadFlows();
-    const modalTitle = document.getElementById('flowsModalTitle') as HTMLElement | null;
-    if (modalTitle) {
-        modalTitle.textContent = currentFlowId
+    const screenTitle = document.getElementById('flowsScreenTitle') as HTMLElement | null;
+    if (screenTitle) {
+        screenTitle.textContent = currentFlowId
             ? 'Selecione um Fluxo'
             : 'Selecione um Fluxo para começar';
     }
-    const closeBtn = document.getElementById('flowsModalCloseBtn') as HTMLButtonElement | null;
-    if (closeBtn) {
-        closeBtn.toggleAttribute('hidden', !currentFlowId);
-    }
-    document.getElementById('flowsModal')?.classList.add('active');
-    setFlowMobileModalOpenState(true);
+    setFlowBuilderScreen('selector');
 }
 
 function closeFlowsModal(options: { force?: boolean } = {}) {
     if (!currentFlowId && options.force !== true) return;
     renamingFlowId = null;
     renamingFlowDraft = '';
-    document.getElementById('flowsModal')?.classList.remove('active');
-    setFlowMobileModalOpenState(false);
+    setFlowBuilderScreen('builder');
 }
 
 const windowAny = window as Window & {
