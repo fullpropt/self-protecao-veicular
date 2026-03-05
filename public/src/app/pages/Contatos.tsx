@@ -167,10 +167,10 @@ export default function Contatos() {
             <button className="btn btn-outline" onClick={() => globals.loadContacts?.({ forceRefresh: true })}>
               <span className="icon icon-refresh icon-sm"></span> Atualizar
             </button>
-            <button className="btn btn-outline" onClick={() => globals.openModal?.('importModal')}>
+            <button className="btn btn-outline btn-import-contacts" onClick={() => globals.openModal?.('importModal')}>
               <span className="icon icon-import icon-sm"></span> Importar
             </button>
-            <button className="btn btn-success" onClick={() => globals.exportContacts?.()}>
+            <button className="btn btn-success btn-export-contacts" onClick={() => globals.exportContacts?.()}>
               <span className="icon icon-export icon-sm"></span> Exportar
             </button>
             <button className="btn btn-primary" onClick={() => globals.openModal?.('addContactModal')}>

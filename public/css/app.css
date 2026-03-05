@@ -1795,10 +1795,15 @@ body.sidebar-open .mobile-menu-toggle {
 }
 
 @media (max-width: 768px) {
+    .contatos-react .page-actions .btn-import-contacts,
+    .contatos-react .page-actions .btn-export-contacts {
+        display: none !important;
+    }
+
     .contatos-react .contacts-table-filters {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
+        gap: 8px;
         width: 100%;
         max-width: 100%;
         align-items: stretch;
@@ -1820,14 +1825,15 @@ body.sidebar-open .mobile-menu-toggle {
     }
 
     .contatos-react .contacts-table-filters .form-select {
-        height: 36px;
-        padding-left: 8px;
-        padding-right: 18px;
-        font-size: 11px;
-        line-height: 1.1;
-        letter-spacing: -0.01em;
-        background-position: right 6px center;
-        background-size: 9px;
+        height: 42px;
+        padding-left: 12px;
+        padding-right: 32px;
+        font-size: 13px;
+        line-height: 1.2;
+        letter-spacing: 0;
+        border-radius: 12px;
+        background-position: right 10px center;
+        background-size: 10px;
     }
 
     .contatos-react .table-wrapper {

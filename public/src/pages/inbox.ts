@@ -2199,7 +2199,7 @@ function renderChat() {
             <div class="chat-emoji-picker" id="emojiPicker" aria-label="Selecionador de emojis">
                 ${emojiPickerItems}
             </div>
-            <textarea id="messageInput" placeholder="Digite uma mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
+            <textarea id="messageInput" placeholder="Mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
             <button class="quick-reply-trigger" onclick="toggleQuickReplyPicker()" title="Selecionar resposta rapida" type="button">
                 <span class="icon icon-bolt icon-sm"></span>
                 <span class="quick-reply-trigger-label">R&aacute;pidas</span>

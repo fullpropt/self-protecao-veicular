@@ -73,10 +73,31 @@ function DashboardStyles() {
           .dashboard-botconversa { gap: 14px; margin-bottom: 16px; }
           .stats-period-card, .stats-general-card, .events-personalized-card { padding: 12px; border-radius: 12px; }
           .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin-bottom: 12px; font-size: 15px; }
-          .stats-period-controls { gap: 8px; }
-          .stats-period-controls .form-input, .stats-period-controls .form-select { width: 100%; min-width: 0; }
-          .chart-type-toggle { width: 100%; justify-content: flex-start; }
-          .chart-type-toggle .chart-btn { flex: 1 1 0; }
+          .stats-period-controls {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            align-items: stretch;
+          }
+          .stats-period-controls .form-input,
+          .stats-period-controls .form-select {
+            width: 100%;
+            min-width: 0;
+            height: 42px;
+            padding: 0 10px;
+            font-size: 12px;
+          }
+          .stats-period-controls .chart-type-toggle {
+            grid-column: 1 / -1;
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .stats-period-controls .chart-type-toggle .chart-btn {
+            width: 100%;
+            min-height: 40px;
+          }
           .stats-period-chart canvas { max-height: 150px !important; }
           .stats-general-item { gap: 12px; }
           .stats-general-label { font-size: 12px; }
@@ -116,7 +137,7 @@ function StatsPeriod() {
         <div className="stats-period-controls">
           <input type="date" className="form-input" id="statsStartDate" />
           <input type="date" className="form-input" id="statsEndDate" />
-          <select className="form-select" id="statsMetric" style={{ width: 'auto' }}>
+          <select className="form-select" id="statsMetric">
             <option value="novos_contatos">Novos Contatos</option>
             <option value="mensagens">Mensagens</option>
             <option value="interacoes">Interações</option>

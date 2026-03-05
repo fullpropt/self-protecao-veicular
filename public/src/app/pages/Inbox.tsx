@@ -1203,8 +1203,10 @@ export default function Inbox() {
             color: var(--dark);
             padding: 12px 20px;
             font-size: 14px;
+            line-height: 1.25;
             resize: none;
             max-height: 120px;
+            overflow-wrap: anywhere;
             font-family: inherit, 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
         }
         .chat-input textarea::placeholder { color: var(--gray-500); }
@@ -1590,10 +1592,14 @@ export default function Inbox() {
             }
             .chat-input {
                 padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-                gap: 8px;
+                gap: 6px;
             }
             .chat-input textarea {
-                padding: 10px 14px;
+                min-height: 42px;
+                max-height: 42px;
+                padding: 10px 12px;
+                font-size: 13px;
+                line-height: 1.2;
             }
             .chat-scroll-bottom-btn {
                 right: 12px;
@@ -1602,8 +1608,9 @@ export default function Inbox() {
                 height: 36px;
             }
             .quick-reply-trigger {
-                height: 42px;
-                padding: 0 10px;
+                height: 38px;
+                min-width: 38px;
+                padding: 0 8px;
                 font-size: 12px;
                 gap: 5px;
             }
@@ -1633,8 +1640,8 @@ export default function Inbox() {
                 gap: 5px;
             }
             .chat-input .chat-input-btn {
-                width: 42px;
-                height: 42px;
+                width: 38px;
+                height: 38px;
             }
             .chat-messages .message.media-audio {
                 min-width: 0;
@@ -1729,8 +1736,7 @@ export default function Inbox() {
                 display: none;
             }
             .inbox-session-highlight-name {
-                font-size: 13px;
-                line-height: 1.25;
+                display: none;
             }
             .inbox-session-highlight-status {
                 font-size: 10px;
