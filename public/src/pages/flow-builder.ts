@@ -1843,7 +1843,6 @@ function renderProperties() {
                 html += `
                     <div class="property-group">
                         <label>Intenções</label>
-                        <div class="intent-routes-intro">Defina um título curto para a saída e as frases que devem acionar essa intenção.</div>
                         <div class="intent-routes-editor">
                             ${routes.map((route, index) => `
                                 <div class="intent-route-card">
@@ -1858,13 +1857,11 @@ function renderProperties() {
                                     <div class="intent-route-field">
                                         <label>Frases que ativam esta intenção</label>
                                         <input class="intent-route-phrases-input" type="text" value="${escapeHtml(route.phrases)}" title="${escapeHtml(route.phrases)}" placeholder="Ex.: onde posso comprar, como comprar óculos" onchange="updateIntentRoute(${index}, 'phrases', this.value)">
-                                        <div class="intent-route-field-hint">Separe variações por vírgula.</div>
                                     </div>
                                 </div>
                             `).join('')}
                         </div>
                         <button class="add-condition-btn" onclick="addIntentRoute()">+ Adicionar Intenção</button>
-                        <div class="hint">Conecte cada saída do bloco para o caminho correspondente. A saída "Outra resposta" cobre casos sem match.</div>
                     </div>
                 `;
             }
@@ -1889,12 +1886,10 @@ function renderProperties() {
                 <div class="property-group">
                     <label>${isOnceMessageNode ? 'Conteúdo da Mensagem' : 'Conteúdo da Mensagem'}</label>
                     <textarea id="messageContent" onchange="updateNodeProperty('content', this.value)">${escapeHtml(messageContent)}</textarea>
-                    <div class="hint">${isOnceMessageNode ? 'Controle por lead: você define por quanto tempo a mensagem não pode ser reenviada.' : 'Use as variáveis de Campos Dinâmicos para personalizar'}</div>
                 </div>
                 <div class="property-group">
                     <label>Delay antes de enviar (segundos)</label>
                     <input type="number" min="0" step="1" value="${messageDelaySeconds}" onchange="updateNodeProperty('delaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
-                    <div class="hint">Use 0 para envio imediato</div>
                 </div>
             `;
             if (!isLegacyOnceType) {
@@ -1908,7 +1903,6 @@ function renderProperties() {
                                 <span class="flow-toggle-slider"></span>
                             </label>
                         </div>
-                        <div class="hint">As opções abaixo aparecem somente quando estiver ativada.</div>
                     </div>
                 `;
             }
@@ -1921,7 +1915,6 @@ function renderProperties() {
                             <option value="hours" ${onceRepeatMode === 'hours' ? 'selected' : ''}>Em horas</option>
                             <option value="days" ${onceRepeatMode === 'days' ? 'selected' : ''}>Em dias</option>
                         </select>
-                        <div class="hint">Aplica individualmente por lead.</div>
                     </div>
                 `;
                 if (onceRepeatMode !== 'always') {
@@ -1929,7 +1922,6 @@ function renderProperties() {
                         <div class="property-group">
                             <label>${onceRepeatMode === 'hours' ? 'Quantidade de horas' : 'Quantidade de dias'}</label>
                             <input type="number" min="1" step="1" value="${onceRepeatValue}" onchange="updateNodeProperty('onceRepeatValue', Math.max(1, parseInt(this.value || '1', 10) || 1))">
-                            <div class="hint">Ex.: 1 = só permite novo envio após ${onceRepeatMode === 'hours' ? '1 hora' : '1 dia'}.</div>
                         </div>
                     `;
                 }
@@ -1944,7 +1936,6 @@ function renderProperties() {
                 <div class="property-group">
                     <label>Timeout (segundos)</label>
                     <input type="number" value="${waitTimeout}" onchange="updateNodeProperty('timeout', Math.max(1, parseInt(this.value || '300', 10) || 300))">
-                    <div class="hint">Tempo máximo de espera pela resposta</div>
                 </div>
             `;
             break;
@@ -2032,19 +2023,9 @@ function renderProperties() {
                             </option>
                         `).join('')}
                     </select>
-                    <div class="hint">Crie eventos em Painel de Controle &gt; Eventos personalizados.</div>
-                    ${selectedEvent?.event_key ? `<div class="hint">Chave: <code>${escapeHtml(selectedEvent.event_key)}</code></div>` : ''}
                     <button class="add-condition-btn" style="margin-top: 8px;" onclick="reloadCustomEventsCatalog()">Atualizar lista</button>
                 </div>
             `;
-
-            if (availableEvents.length === 0) {
-                html += `
-                    <div class="property-group">
-                        <div class="hint">Nenhum evento ativo cadastrado no momento.</div>
-                    </div>
-                `;
-            }
             break;
             
         case 'webhook':
@@ -2063,7 +2044,6 @@ function renderProperties() {
             <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
                 Confirmar alterações
             </button>
-            <div class="hint">${hasPendingNodeDraftChanges() ? 'Há alterações pendentes neste bloco.' : 'Sem alterações pendentes.'}</div>
         </div>
     `;
 
