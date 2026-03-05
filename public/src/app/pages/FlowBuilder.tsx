@@ -1039,7 +1039,25 @@ export default function FlowBuilder() {
         .node-input-port {
             display: flex;
             align-items: center;
+            gap: 6px;
             min-height: 14px;
+        }
+
+        .node-input-label-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: flex-start;
+        }
+
+        .node-input-label {
+            font-size: 10px;
+            color: var(--gray);
+            max-width: 124px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            line-height: 1.15;
         }
 
         .flow-node.event-circle .flow-node-ports {
@@ -1075,6 +1093,10 @@ export default function FlowBuilder() {
             display: none;
         }
 
+        .flow-node.event-circle .node-input-label-list {
+            display: none;
+        }
+
         .flow-node.is-collapsed .flow-node-body {
             display: none;
         }
@@ -1086,6 +1108,10 @@ export default function FlowBuilder() {
         }
 
         .flow-node.is-collapsed .node-output-label {
+            display: none;
+        }
+
+        .flow-node.is-collapsed .node-input-label-list {
             display: none;
         }
 

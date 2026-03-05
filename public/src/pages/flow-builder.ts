@@ -51,6 +51,7 @@ type NodeData = {
     eventKey?: string;
     eventName?: string;
     outputActions?: Record<string, OutputActionItem[]>;
+    outputEntryLabels?: Record<string, string>;
 };
 
 type FlowNode = {
@@ -67,6 +68,7 @@ type Edge = {
     sourceHandle?: string;
     targetHandle?: string;
     label?: string;
+    inputLabel?: string;
 };
 
 type AiGeneratedFlowDraft = {
@@ -730,6 +732,29 @@ function isPathPassThroughNode(node?: FlowNode | null) {
     return node.type !== 'trigger' && node.type !== 'intent' && node.type !== 'end';
 }
 
+function getEdgeInputLabel(edge?: Edge | null) {
+    if (!edge) return '';
+
+    const explicit = String((edge as any)?.inputLabel || '').trim();
+    if (explicit) return explicit;
+
+    const sourceNode = nodes.find((node) => node.id === edge.source) || null;
+    if (sourceNode) {
+        const map = getOutputEntryLabelsMapForNode(sourceNode);
+        const mapLabel = String(map[edgeHandle(edge.sourceHandle)] || '').trim();
+        if (mapLabel) return mapLabel;
+    }
+
+    return String(edge.label || '').trim();
+}
+
+function getIncomingEdgeLabels(node: FlowNode, targetHandle: string) {
+    return edges
+        .filter((edge) => edge.target === node.id && edgeHandle(edge.targetHandle) === edgeHandle(targetHandle))
+        .map((edge) => getEdgeInputLabel(edge))
+        .filter(Boolean);
+}
+
 function getInputHandles(node: FlowNode) {
     if (node.type === 'trigger') return [];
     if (node.type === 'intent' || node.type === 'end') {
@@ -737,7 +762,8 @@ function getInputHandles(node: FlowNode) {
             handle: DEFAULT_HANDLE,
             label: '',
             isConnected: true,
-            isExtra: false
+            isExtra: false,
+            incomingLabels: getIncomingEdgeLabels(node, DEFAULT_HANDLE)
         }];
     }
 
@@ -756,7 +782,8 @@ function getInputHandles(node: FlowNode) {
             handle: pathHandleFromIndex(index),
             label: `${index}`,
             isConnected,
-            isExtra: isLast && !isConnected && index > 1
+            isExtra: isLast && !isConnected && index > 1,
+            incomingLabels: getIncomingEdgeLabels(node, pathHandleFromIndex(index))
         };
     });
 }
@@ -1511,7 +1538,8 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             triggerWelcomeDelaySeconds: 0,
             triggerWelcomeRepeatMode: 'always',
             triggerWelcomeRepeatValue: 1,
-            outputActions: {}
+            outputActions: {},
+            outputEntryLabels: {}
         },
         intent: {
             label: 'Intenção',
@@ -1522,7 +1550,8 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             intentDefaultResponse: '',
             intentDefaultFollowupResponse: '',
             intentDefaultFollowupResponses: [],
-            outputActions: {}
+            outputActions: {},
+            outputEntryLabels: {}
         },
         message: {
             label: 'Mensagem',
@@ -1532,7 +1561,8 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             isOnceMessage: false,
             onceRepeatMode: 'always',
             onceRepeatValue: 1,
-            outputActions: {}
+            outputActions: {},
+            outputEntryLabels: {}
         },
         message_once: {
             label: 'Mensagem',
@@ -1542,12 +1572,13 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             isOnceMessage: true,
             onceRepeatMode: 'always',
             onceRepeatValue: 1,
-            outputActions: {}
+            outputActions: {},
+            outputEntryLabels: {}
         },
-        wait: { label: 'Aguardar Resposta', collapsed: false, timeout: 300, outputActions: {} },
-        condition: { label: 'Condição', collapsed: false, conditions: [], outputActions: {} },
-        delay: { label: 'Delay', collapsed: false, seconds: 5, outputActions: {} },
-        transfer: { label: 'Transferir', collapsed: false, message: 'Transferindo para um atendente...', outputActions: {} },
+        wait: { label: 'Aguardar Resposta', collapsed: false, timeout: 300, outputActions: {}, outputEntryLabels: {} },
+        condition: { label: 'Condição', collapsed: false, conditions: [], outputActions: {}, outputEntryLabels: {} },
+        delay: { label: 'Delay', collapsed: false, seconds: 5, outputActions: {}, outputEntryLabels: {} },
+        transfer: { label: 'Transferir', collapsed: false, message: 'Transferindo para um atendente...', outputActions: {}, outputEntryLabels: {} },
         tag: { label: 'Adicionar Tag', collapsed: false, tag: '' },
         status: { label: 'Alterar Status', collapsed: false, status: 2 },
         webhook: { label: 'Webhook', collapsed: false, url: '' },
@@ -1599,6 +1630,17 @@ function getNodeInputPortsMarkup(node: FlowNode) {
         <div class="node-input-ports">
             ${handles.map((item) => `
                 <div class="node-input-port${item.isExtra ? ' is-extra' : ''}">
+                    ${
+                        Array.isArray((item as any).incomingLabels) && (item as any).incomingLabels.length > 0
+                            ? `
+                                <div class="node-input-label-list">
+                                    ${(item as any).incomingLabels.map((text: string) => `
+                                        <span class="node-input-label" title="${escapeHtml(text)}">${escapeHtml(truncateLabel(text, 20))}</span>
+                                    `).join('')}
+                                </div>
+                            `
+                            : ''
+                    }
                     <div
                         class="port input${item.isExtra ? ' is-extra-input' : ''}"
                         data-port="input"
@@ -1901,6 +1943,24 @@ function sanitizeOutputActionsMap(value: unknown) {
     return normalizedMap;
 }
 
+function sanitizeOutputEntryLabelsMap(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {} as Record<string, string>;
+    }
+
+    const rawMap = value as Record<string, unknown>;
+    const normalizedMap: Record<string, string> = {};
+
+    Object.entries(rawMap).forEach(([rawHandle, rawLabel]) => {
+        const handle = edgeHandle(rawHandle);
+        const label = String(rawLabel || '').trim();
+        if (!label) return;
+        normalizedMap[handle] = label;
+    });
+
+    return normalizedMap;
+}
+
 function setPropertiesPanelTitle(title: string) {
     const titleElement = document.getElementById('propertiesPanelTitle') as HTMLElement | null;
     if (titleElement) {
@@ -1963,6 +2023,21 @@ function getOutputActionsForNodeHandle(node: FlowNode | null, handle: string) {
     return map[edgeHandle(handle)] || [];
 }
 
+function getOutputEntryLabelsMapForNode(node: FlowNode | null) {
+    if (!node) return {} as Record<string, string>;
+    return sanitizeOutputEntryLabelsMap(node?.data?.outputEntryLabels || {});
+}
+
+function getSelectedOutputEntryLabel() {
+    if (!selectedNode) return '';
+    const handle = getSelectedOutputActionHandle();
+    const mapRaw = getNodePropValue('outputEntryLabels', selectedNode.data.outputEntryLabels || {});
+    const map = sanitizeOutputEntryLabelsMap(mapRaw);
+    const currentValue = String(map[handle] || '').trim();
+    if (currentValue) return currentValue;
+    return String(selectedOutputActionContext?.label || '').trim();
+}
+
 function getSelectedOutputActionHandle() {
     if (!selectedOutputActionContext) return DEFAULT_HANDLE;
     return edgeHandle(selectedOutputActionContext.handle);
@@ -1994,6 +2069,25 @@ function updateSelectedOutputActions(actions: OutputActionItem[]) {
     }
 
     updateNodeProperty('outputActions', map);
+}
+
+function updateSelectedOutputEntryLabel(value: string) {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode) return;
+    if (!selectedOutputActionContext || selectedOutputActionContext.nodeId !== selectedNode.id) return;
+
+    const currentMapRaw = getNodePropValue('outputEntryLabels', selectedNode.data.outputEntryLabels || {});
+    const map = sanitizeOutputEntryLabelsMap(currentMapRaw);
+    const handle = getSelectedOutputActionHandle();
+    const normalizedValue = String(value || '').trim();
+
+    if (normalizedValue) {
+        map[handle] = normalizedValue;
+    } else {
+        delete map[handle];
+    }
+
+    updateNodeProperty('outputEntryLabels', map);
 }
 
 function clearSelectedOutputActionContext() {
@@ -2192,10 +2286,15 @@ function renderProperties() {
         const selectedHandle = getSelectedOutputActionHandle();
         const outputLabel = String(selectedOutputActionContext.label || '').trim();
         const outputActions = getSelectedOutputActions();
+        const outputEntryLabel = getSelectedOutputEntryLabel();
 
         html += `
             <div class="property-type-summary">
                 <h4 class="property-type-summary-value">Saída ${escapeHtml(outputLabel || selectedHandle)}</h4>
+            </div>
+            <div class="property-group">
+                <label>Título no bloco seguinte</label>
+                <input type="text" value="${escapeHtml(outputEntryLabel)}" placeholder="Ex.: Cliente quer metal" onchange="updateSelectedOutputEntryLabel(this.value)">
             </div>
             <div class="property-group">
                 <div class="output-action-toolbar">
@@ -2794,6 +2893,7 @@ function confirmNodePropertyChanges() {
 
     const changedEntries = Object.entries(pendingNodeDraft);
     const hasIntentRoutesDraft = Object.prototype.hasOwnProperty.call(pendingNodeDraft, 'intentRoutes');
+    const targetNodeIdsToRerender = new Set<string>();
     if (changedEntries.length === 0) {
         notify('info', 'Sem alterações', 'Nenhuma alteração pendente neste bloco.');
         return;
@@ -2802,6 +2902,16 @@ function confirmNodePropertyChanges() {
     for (const [key, value] of changedEntries) {
         if (key === 'outputActions') {
             selectedNode.data.outputActions = sanitizeOutputActionsMap(value);
+            continue;
+        }
+
+        if (key === 'outputEntryLabels') {
+            selectedNode.data.outputEntryLabels = sanitizeOutputEntryLabelsMap(value);
+            edges.forEach((edge) => {
+                if (edge.source === selectedNode?.id) {
+                    targetNodeIdsToRerender.add(String(edge.target || '').trim());
+                }
+            });
             continue;
         }
 
@@ -2820,6 +2930,10 @@ function confirmNodePropertyChanges() {
 
     resetPendingNodeDraft();
     rerenderNode(selectedNode.id);
+    targetNodeIdsToRerender.forEach((targetNodeId) => {
+        if (!targetNodeId || targetNodeId === selectedNode?.id) return;
+        rerenderNode(targetNodeId);
+    });
     renderProperties();
     markFlowDirty();
     notify('success', 'Bloco atualizado', 'Alterações confirmadas com sucesso.');
@@ -3298,14 +3412,21 @@ function endConnection(nodeId: string, portType: string, targetHandle = DEFAULT_
     }
 
     const normalizedTargetHandle = edgeHandle(targetHandle);
+    const sourceNode = nodes.find((node) => node.id === connectionStart.nodeId) || null;
+    const sourceEntryLabelMap = getOutputEntryLabelsMapForNode(sourceNode);
+    const sourceEntryLabel = String(
+        sourceEntryLabelMap[edgeHandle(connectionStart.handle)]
+        || connectionStart.label
+        || ''
+    ).trim();
     const newEdge: Edge = {
         source: connectionStart.nodeId,
         target: nodeId,
         sourceHandle: edgeHandle(connectionStart.handle),
         targetHandle: normalizedTargetHandle,
-        label: connectionStart.label || undefined
+        label: connectionStart.label || undefined,
+        inputLabel: sourceEntryLabel || undefined
     };
-    const sourceNode = nodes.find((node) => node.id === newEdge.source);
     const targetNode = nodes.find((node) => node.id === newEdge.target);
     const sourceIsIntentTrigger = isIntentTrigger(sourceNode);
     const allowMultipleIncomingOnHandle = targetNode?.type === 'intent' || targetNode?.type === 'end';
@@ -3569,6 +3690,8 @@ function normalizeLoadedFlowData() {
         if (!String(node.data?.label || '').trim()) {
             node.data.label = getNodeTypeLabel(node);
         }
+
+        node.data.outputEntryLabels = sanitizeOutputEntryLabelsMap((node.data as any)?.outputEntryLabels);
         if (node.type === 'message_once') {
             node.type = 'message';
             node.data.isOnceMessage = true;
@@ -3659,7 +3782,8 @@ function normalizeLoadedFlowData() {
             sourceHandle: edgeHandle(edge.sourceHandle),
             targetHandle: targetNode?.type === 'intent' || targetNode?.type === 'end'
                 ? DEFAULT_HANDLE
-                : edgeHandle(edge.targetHandle)
+                : edgeHandle(edge.targetHandle),
+            inputLabel: String((edge as any)?.inputLabel || '').trim() || undefined
         };
     });
 }
@@ -4311,6 +4435,7 @@ const windowAny = window as Window & {
     openOutputActionEditor?: (nodeId: string, encodedHandle: string, encodedLabel?: string, event?: Event) => void;
     toggleOutputActionTypeMenu?: (event?: Event) => void;
     addOutputActionByType?: (type: string) => void;
+    updateSelectedOutputEntryLabel?: (value: string) => void;
     updateOutputActionField?: (index: number, field: 'tag' | 'status' | 'url', value: any) => void;
     updateOutputActionEventSelection?: (index: number, value: string) => void;
     removeOutputAction?: (index: number) => void;
@@ -4366,6 +4491,7 @@ windowAny.updateEventNodeSelection = updateEventNodeSelection;
 windowAny.openOutputActionEditor = openOutputActionEditor;
 windowAny.toggleOutputActionTypeMenu = toggleOutputActionTypeMenu;
 windowAny.addOutputActionByType = addOutputActionByType;
+windowAny.updateSelectedOutputEntryLabel = updateSelectedOutputEntryLabel;
 windowAny.updateOutputActionField = updateOutputActionField;
 windowAny.updateOutputActionEventSelection = updateOutputActionEventSelection;
 windowAny.removeOutputAction = removeOutputAction;
