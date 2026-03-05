@@ -654,7 +654,7 @@ export default function FlowBuilder() {
         
         .flow-container {
             display: grid;
-            grid-template-columns: 280px minmax(0, 1fr) 320px;
+            grid-template-columns: 280px minmax(0, 1fr) 380px;
             height: 100%;
             min-height: 0;
             gap: 0;
@@ -1236,7 +1236,7 @@ export default function FlowBuilder() {
         .properties-panel {
             background: white;
             border-left: 1px solid var(--border);
-            padding: 20px;
+            padding: 18px;
             overflow-y: auto;
             min-width: 0;
         }
@@ -1298,12 +1298,6 @@ export default function FlowBuilder() {
             resize: vertical;
         }
         
-        .property-group .hint {
-            font-size: 12px;
-            color: var(--gray);
-            margin-top: 5px;
-        }
-
         .output-action-toolbar {
             position: relative;
         }
@@ -1594,38 +1588,72 @@ export default function FlowBuilder() {
         .intent-routes-editor {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-top: 12px;
+            gap: 8px;
+            margin-top: 10px;
         }
 
-        .intent-routes-intro {
-            font-size: 12px;
-            color: var(--gray);
-            margin-bottom: 4px;
-        }
-
-        .intent-route-card {
+        .intent-config-card {
             border: 1px solid var(--border);
             border-radius: 10px;
             background: #f8fafc;
-            padding: 10px;
+            overflow: hidden;
         }
 
-        .intent-route-card-header {
+        .intent-config-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 8px;
+            gap: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
+            user-select: none;
         }
 
-        .intent-route-badge {
-            font-size: 11px;
+        .intent-config-header:hover {
+            background: rgba(148, 163, 184, 0.12);
+        }
+
+        .intent-config-header:focus-visible {
+            outline: 2px solid rgba(var(--primary-rgb), 0.45);
+            outline-offset: -2px;
+        }
+
+        .intent-config-title {
+            font-size: 13px;
             font-weight: 700;
-            color: #475569;
-            background: rgba(148, 163, 184, 0.2);
-            border-radius: 999px;
-            padding: 4px 8px;
-            letter-spacing: 0.02em;
+            color: var(--dark);
+            line-height: 1.2;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .intent-config-header-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .intent-config-state {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--gray);
+        }
+
+        .intent-config-chevron {
+            font-size: 13px;
+            line-height: 1;
+            color: var(--gray);
+        }
+
+        .intent-config-body {
+            border-top: 1px solid var(--border);
+            padding: 10px 12px 12px;
+            background: white;
         }
 
         .intent-route-field {
@@ -1659,12 +1687,18 @@ export default function FlowBuilder() {
             resize: vertical;
         }
 
-        .intent-route-field-hint {
-            margin-top: 2px;
-            font-size: 11px;
-            color: var(--gray);
+        .intent-config-body .property-group {
+            margin-bottom: 10px;
         }
-        
+
+        .intent-config-body .property-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .intent-welcome-toggle-row {
+            margin-bottom: 8px;
+        }
+
         .condition-row {
             display: flex;
             gap: 8px;
@@ -1686,7 +1720,7 @@ export default function FlowBuilder() {
             cursor: pointer;
         }
 
-        .intent-route-card .remove-btn {
+        .intent-config-card .remove-btn {
             width: 28px;
             height: 28px;
             border: 1px solid rgba(148, 163, 184, 0.35);
@@ -1700,7 +1734,7 @@ export default function FlowBuilder() {
             transition: all 0.2s;
         }
 
-        .intent-route-card .remove-btn:hover {
+        .intent-config-card .remove-btn:hover {
             border-color: rgba(239, 68, 68, 0.4);
             background: rgba(239, 68, 68, 0.08);
             color: var(--danger);

@@ -141,6 +141,7 @@ let currentFlowSessionId = '';
 let flowHasUnsavedChanges = false;
 let pendingNodeDraft: Partial<NodeData> | null = null;
 let pendingNodeDraftId: string | null = null;
+let intentPropertySectionExpandedState: Record<string, boolean> = {};
 let flowsCache: FlowSummary[] = [];
 let renamingFlowId: number | null = null;
 let renamingFlowDraft = '';
@@ -1877,6 +1878,50 @@ function setPropertiesPanelTitle(title: string) {
     }
 }
 
+function getIntentPropertySectionStateKey(sectionKey: string) {
+    if (!selectedNode || !isIntentTrigger(selectedNode)) return '';
+    const normalizedSectionKey = String(sectionKey || '').trim();
+    if (!normalizedSectionKey) return '';
+    return `${selectedNode.id}:${normalizedSectionKey}`;
+}
+
+function isIntentPropertySectionExpanded(sectionKey: string, defaultValue = false) {
+    const scopedKey = getIntentPropertySectionStateKey(sectionKey);
+    if (!scopedKey) return Boolean(defaultValue);
+    if (!Object.prototype.hasOwnProperty.call(intentPropertySectionExpandedState, scopedKey)) {
+        intentPropertySectionExpandedState[scopedKey] = Boolean(defaultValue);
+    }
+    return Boolean(intentPropertySectionExpandedState[scopedKey]);
+}
+
+function setIntentPropertySectionExpanded(sectionKey: string, expanded: boolean) {
+    const scopedKey = getIntentPropertySectionStateKey(sectionKey);
+    if (!scopedKey) return;
+    intentPropertySectionExpandedState[scopedKey] = Boolean(expanded);
+}
+
+function clearIntentRouteSectionExpandedStateForSelectedNode() {
+    if (!selectedNode) return;
+    const prefix = `${selectedNode.id}:route:`;
+    Object.keys(intentPropertySectionExpandedState).forEach((key) => {
+        if (key.startsWith(prefix)) {
+            delete intentPropertySectionExpandedState[key];
+        }
+    });
+}
+
+function toggleIntentPropertySection(sectionKey: string, event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (!selectedNode || !isIntentTrigger(selectedNode)) return;
+
+    const scopedKey = getIntentPropertySectionStateKey(sectionKey);
+    if (!scopedKey) return;
+
+    intentPropertySectionExpandedState[scopedKey] = !Boolean(intentPropertySectionExpandedState[scopedKey]);
+    renderProperties();
+}
+
 function getOutputActionsMapForNode(node: FlowNode) {
     const rawMap = node?.data?.outputActions || {};
     return sanitizeOutputActionsMap(rawMap);
@@ -2121,7 +2166,6 @@ function renderProperties() {
         html += `
             <div class="property-type-summary">
                 <h4 class="property-type-summary-value">Saída ${escapeHtml(outputLabel || selectedHandle)}</h4>
-                <p class="hint" style="margin-top: 6px;">${escapeHtml(selectedTypeLabel)} • ${escapeHtml(String(nodeLabelValue || '').trim() || selectedTypeLabel)}</p>
             </div>
             <div class="property-group">
                 <div class="output-action-toolbar">
@@ -2248,108 +2292,144 @@ function renderProperties() {
                     : 0;
                 const intentDefaultResponse = String(getNodePropValue('intentDefaultResponse', selectedNode.data.intentDefaultResponse || ''));
                 const intentDefaultFollowupResponse = String(getNodePropValue('intentDefaultFollowupResponse', selectedNode.data.intentDefaultFollowupResponse || ''));
+                const isIntentTriggerNode = selectedNode.type === 'trigger';
+                const triggerWelcomeEnabled = isIntentTriggerNode
+                    ? Boolean(getNodePropValue('triggerWelcomeEnabled', selectedNode.data.triggerWelcomeEnabled))
+                    : false;
+                const triggerWelcomeContent = isIntentTriggerNode
+                    ? String(getNodePropValue('triggerWelcomeContent', selectedNode.data.triggerWelcomeContent || ''))
+                    : '';
+                const triggerWelcomeDelaySeconds = isIntentTriggerNode && Number.isFinite(Number(getNodePropValue('triggerWelcomeDelaySeconds', selectedNode.data.triggerWelcomeDelaySeconds)))
+                    ? Math.max(0, Number(getNodePropValue('triggerWelcomeDelaySeconds', selectedNode.data.triggerWelcomeDelaySeconds)))
+                    : 0;
+                const triggerWelcomeRepeatModeRaw = isIntentTriggerNode
+                    ? String(getNodePropValue('triggerWelcomeRepeatMode', selectedNode.data.triggerWelcomeRepeatMode || 'always')).trim().toLowerCase()
+                    : 'always';
+                const triggerWelcomeRepeatMode = ['always', 'hours', 'days'].includes(triggerWelcomeRepeatModeRaw)
+                    ? triggerWelcomeRepeatModeRaw
+                    : 'always';
+                const triggerWelcomeRepeatValue = isIntentTriggerNode && Number.isFinite(Number(getNodePropValue('triggerWelcomeRepeatValue', selectedNode.data.triggerWelcomeRepeatValue)))
+                    ? Math.max(1, Math.trunc(Number(getNodePropValue('triggerWelcomeRepeatValue', selectedNode.data.triggerWelcomeRepeatValue))))
+                    : 1;
+                const defaultSectionExpanded = isIntentPropertySectionExpanded('default', false);
+                const welcomeSectionExpanded = isIntentTriggerNode
+                    ? isIntentPropertySectionExpanded('welcome', false)
+                    : false;
+
                 html += `
+                    <div class="property-group">
+                        <label>Delay único das respostas (segundos)</label>
+                        <input type="number" min="0" step="1" value="${intentResponseDelaySeconds}" onchange="updateNodeProperty('intentResponseDelaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
+                    </div>
                     <div class="property-group">
                         <label>Intenções</label>
                         <div class="intent-routes-editor">
-                            ${routes.map((route, index) => `
-                                <div class="intent-route-card">
-                                    <div class="intent-route-card-header">
-                                        <span class="intent-route-badge">Intenção ${index + 1}</span>
-                                        <button class="remove-btn" title="Remover intenção" onclick="removeIntentRoute(${index})">×</button>
+                            ${routes.map((route, index) => {
+                                const routeTitle = String(route.label || '').trim() || `Intenção ${index + 1}`;
+                                const sectionKey = `route:${index}`;
+                                const sectionExpanded = isIntentPropertySectionExpanded(sectionKey, false);
+                                return `
+                                    <div class="intent-config-card ${sectionExpanded ? 'is-expanded' : ''}">
+                                        <div class="intent-config-header" role="button" tabindex="0" onclick="toggleIntentPropertySection('${sectionKey}', event)" onkeydown="if(event.key==='Enter'||event.key===' '){toggleIntentPropertySection('${sectionKey}', event);}">
+                                            <span class="intent-config-title">${escapeHtml(routeTitle)}</span>
+                                            <div class="intent-config-header-actions">
+                                                <span class="intent-config-chevron">${sectionExpanded ? '▾' : '▸'}</span>
+                                                <button class="remove-btn" type="button" title="Remover intenção" onclick="event.stopPropagation(); removeIntentRoute(${index})">×</button>
+                                            </div>
+                                        </div>
+                                        ${sectionExpanded ? `
+                                            <div class="intent-config-body">
+                                                <div class="intent-route-field">
+                                                    <label>Título da saída</label>
+                                                    <input class="intent-route-name-input" type="text" value="${escapeHtml(String(route.label || ''))}" title="${escapeHtml(String(route.label || ''))}" placeholder="Ex.: Loja Física" onchange="updateIntentRoute(${index}, 'label', this.value)">
+                                                </div>
+                                                <div class="intent-route-field">
+                                                    <label>Frases que ativam</label>
+                                                    <input class="intent-route-phrases-input" type="text" value="${escapeHtml(String(route.phrases || ''))}" title="${escapeHtml(String(route.phrases || ''))}" placeholder="Ex.: endereço da loja, loja física" onchange="updateIntentRoute(${index}, 'phrases', this.value)">
+                                                </div>
+                                                <div class="intent-route-field">
+                                                    <label>Resposta principal</label>
+                                                    <textarea class="intent-route-response-input" onchange="updateIntentRoute(${index}, 'response', this.value)">${escapeHtml(String(route.response || ''))}</textarea>
+                                                </div>
+                                                <div class="intent-route-field">
+                                                    <label>Mensagem após a primeira</label>
+                                                    <textarea class="intent-route-response-input" onchange="updateIntentRoute(${index}, 'followupResponse', this.value)">${escapeHtml(String(route.followupResponse || ''))}</textarea>
+                                                </div>
+                                            </div>
+                                        ` : ''}
                                     </div>
-                                    <div class="intent-route-field">
-                                        <label>Título da saída</label>
-                                        <input class="intent-route-name-input" type="text" value="${escapeHtml(route.label)}" title="${escapeHtml(route.label)}" placeholder="Ex.: Comprar óculos" onchange="updateIntentRoute(${index}, 'label', this.value)">
-                                    </div>
-                                    <div class="intent-route-field">
-                                        <label>Frases que ativam esta intenção</label>
-                                        <input class="intent-route-phrases-input" type="text" value="${escapeHtml(route.phrases)}" title="${escapeHtml(route.phrases)}" placeholder="Ex.: onde posso comprar, como comprar óculos" onchange="updateIntentRoute(${index}, 'phrases', this.value)">
-                                    </div>
-                                    <div class="intent-route-field">
-                                        <label>Mensagem de resposta</label>
-                                        <textarea class="intent-route-response-input" placeholder="Mensagem enviada quando esta intenção for identificada" onchange="updateIntentRoute(${index}, 'response', this.value)">${escapeHtml(String(route.response || ''))}</textarea>
-                                    </div>
-                                    <div class="intent-route-field">
-                                        <label>Mensagem após a primeira (opcional)</label>
-                                        <textarea class="intent-route-response-input" placeholder="Mensagem complementar opcional, enviada após a resposta principal" onchange="updateIntentRoute(${index}, 'followupResponse', this.value)">${escapeHtml(String(route.followupResponse || ''))}</textarea>
+                                `;
+                            }).join('')}
+                            <div class="intent-config-card ${defaultSectionExpanded ? 'is-expanded' : ''}">
+                                <div class="intent-config-header" role="button" tabindex="0" onclick="toggleIntentPropertySection('default', event)" onkeydown="if(event.key==='Enter'||event.key===' '){toggleIntentPropertySection('default', event);}">
+                                    <span class="intent-config-title">Outros</span>
+                                    <div class="intent-config-header-actions">
+                                        <span class="intent-config-chevron">${defaultSectionExpanded ? '▾' : '▸'}</span>
                                     </div>
                                 </div>
-                            `).join('')}
+                                ${defaultSectionExpanded ? `
+                                    <div class="intent-config-body">
+                                        <div class="intent-route-field">
+                                            <label>Resposta principal</label>
+                                            <textarea class="intent-route-response-input" onchange="updateNodeProperty('intentDefaultResponse', this.value)">${escapeHtml(intentDefaultResponse)}</textarea>
+                                        </div>
+                                        <div class="intent-route-field">
+                                            <label>Mensagem após a primeira</label>
+                                            <textarea class="intent-route-response-input" onchange="updateNodeProperty('intentDefaultFollowupResponse', this.value)">${escapeHtml(intentDefaultFollowupResponse)}</textarea>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            ${isIntentTriggerNode ? `
+                                <div class="intent-config-card ${welcomeSectionExpanded ? 'is-expanded' : ''}">
+                                    <div class="intent-config-header" role="button" tabindex="0" onclick="toggleIntentPropertySection('welcome', event)" onkeydown="if(event.key==='Enter'||event.key===' '){toggleIntentPropertySection('welcome', event);}">
+                                        <span class="intent-config-title">Boas vindas</span>
+                                        <div class="intent-config-header-actions">
+                                            <span class="intent-config-state">${triggerWelcomeEnabled ? 'Ativada' : 'Desativada'}</span>
+                                            <span class="intent-config-chevron">${welcomeSectionExpanded ? '▾' : '▸'}</span>
+                                        </div>
+                                    </div>
+                                    ${welcomeSectionExpanded ? `
+                                        <div class="intent-config-body">
+                                            <div class="flow-toggle-row intent-welcome-toggle-row">
+                                                <span class="flow-toggle-label">${triggerWelcomeEnabled ? 'Ativada' : 'Desativada'}</span>
+                                                <label class="flow-toggle-switch" title="Ativar boas vindas">
+                                                    <input type="checkbox" ${triggerWelcomeEnabled ? 'checked' : ''} onchange="updateNodeProperty('triggerWelcomeEnabled', this.checked)">
+                                                    <span class="flow-toggle-slider"></span>
+                                                </label>
+                                            </div>
+                                            ${triggerWelcomeEnabled ? `
+                                                <div class="property-group">
+                                                    <label>Mensagem</label>
+                                                    <textarea onchange="updateNodeProperty('triggerWelcomeContent', this.value)">${escapeHtml(triggerWelcomeContent)}</textarea>
+                                                </div>
+                                                <div class="property-group">
+                                                    <label>Delay (segundos)</label>
+                                                    <input type="number" min="0" step="1" value="${triggerWelcomeDelaySeconds}" onchange="updateNodeProperty('triggerWelcomeDelaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
+                                                </div>
+                                                <div class="property-group">
+                                                    <label>Reenvio</label>
+                                                    <select onchange="updateNodeProperty('triggerWelcomeRepeatMode', this.value)">
+                                                        <option value="always" ${triggerWelcomeRepeatMode === 'always' ? 'selected' : ''}>Sempre (não reenviar)</option>
+                                                        <option value="hours" ${triggerWelcomeRepeatMode === 'hours' ? 'selected' : ''}>Em horas</option>
+                                                        <option value="days" ${triggerWelcomeRepeatMode === 'days' ? 'selected' : ''}>Em dias</option>
+                                                    </select>
+                                                </div>
+                                                ${triggerWelcomeRepeatMode !== 'always' ? `
+                                                    <div class="property-group">
+                                                        <label>${triggerWelcomeRepeatMode === 'hours' ? 'Quantidade de horas' : 'Quantidade de dias'}</label>
+                                                        <input type="number" min="1" step="1" value="${triggerWelcomeRepeatValue}" onchange="updateNodeProperty('triggerWelcomeRepeatValue', Math.max(1, parseInt(this.value || '1', 10) || 1))">
+                                                    </div>
+                                                ` : ''}
+                                            ` : ''}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
                         </div>
                         <button class="add-condition-btn" onclick="addIntentRoute()">+ Adicionar Intenção</button>
                     </div>
-                    <div class="property-group">
-                        <label>Delay da resposta (segundos)</label>
-                        <input type="number" min="0" step="1" value="${intentResponseDelaySeconds}" onchange="updateNodeProperty('intentResponseDelaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
-                        <div class="hint">Esse delay será aplicado em todas as mensagens de resposta das intenções deste bloco.</div>
-                    </div>
-                    <div class="property-group">
-                        <label>Resposta quando não se enquadra em nenhuma intenção</label>
-                        <textarea placeholder="Mensagem opcional para 'Outra resposta'" onchange="updateNodeProperty('intentDefaultResponse', this.value)">${escapeHtml(intentDefaultResponse)}</textarea>
-                        <textarea style="margin-top: 8px;" placeholder="Mensagem após a primeira (opcional)" onchange="updateNodeProperty('intentDefaultFollowupResponse', this.value)">${escapeHtml(intentDefaultFollowupResponse)}</textarea>
-                        <div class="hint">Se os campos ficarem vazios, o fluxo apenas segue pela saída padrão sem enviar mensagem.</div>
-                    </div>
                 `;
-
-                const isIntentTriggerNode = selectedNode.type === 'trigger';
-                if (isIntentTriggerNode) {
-                    const triggerWelcomeEnabled = Boolean(getNodePropValue('triggerWelcomeEnabled', selectedNode.data.triggerWelcomeEnabled));
-                    const triggerWelcomeContent = String(getNodePropValue('triggerWelcomeContent', selectedNode.data.triggerWelcomeContent || ''));
-                    const triggerWelcomeDelaySeconds = Number.isFinite(Number(getNodePropValue('triggerWelcomeDelaySeconds', selectedNode.data.triggerWelcomeDelaySeconds)))
-                        ? Math.max(0, Number(getNodePropValue('triggerWelcomeDelaySeconds', selectedNode.data.triggerWelcomeDelaySeconds)))
-                        : 0;
-                    const triggerWelcomeRepeatModeRaw = String(getNodePropValue('triggerWelcomeRepeatMode', selectedNode.data.triggerWelcomeRepeatMode || 'always')).trim().toLowerCase();
-                    const triggerWelcomeRepeatMode = ['always', 'hours', 'days'].includes(triggerWelcomeRepeatModeRaw)
-                        ? triggerWelcomeRepeatModeRaw
-                        : 'always';
-                    const triggerWelcomeRepeatValue = Number.isFinite(Number(getNodePropValue('triggerWelcomeRepeatValue', selectedNode.data.triggerWelcomeRepeatValue)))
-                        ? Math.max(1, Math.trunc(Number(getNodePropValue('triggerWelcomeRepeatValue', selectedNode.data.triggerWelcomeRepeatValue))))
-                        : 1;
-
-                    html += `
-                        <div class="property-group">
-                            <label>Boas vindas</label>
-                            <div class="flow-toggle-row">
-                                <span class="flow-toggle-label">${triggerWelcomeEnabled ? 'Ativada' : 'Desativada'}</span>
-                                <label class="flow-toggle-switch" title="Ativar boas vindas">
-                                    <input type="checkbox" ${triggerWelcomeEnabled ? 'checked' : ''} onchange="updateNodeProperty('triggerWelcomeEnabled', this.checked)">
-                                    <span class="flow-toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="hint">Responde primeiro com uma mensagem única e depois faz a identificação de intenção.</div>
-                        </div>
-                    `;
-
-                    if (triggerWelcomeEnabled) {
-                        html += `
-                            <div class="property-group">
-                                <label>Mensagem de Boas vindas</label>
-                                <textarea onchange="updateNodeProperty('triggerWelcomeContent', this.value)">${escapeHtml(triggerWelcomeContent)}</textarea>
-                            </div>
-                            <div class="property-group">
-                                <label>Delay da Boas vindas (segundos)</label>
-                                <input type="number" min="0" step="1" value="${triggerWelcomeDelaySeconds}" onchange="updateNodeProperty('triggerWelcomeDelaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
-                            </div>
-                            <div class="property-group">
-                                <label>Tempo sem reenviar Boas vindas</label>
-                                <select onchange="updateNodeProperty('triggerWelcomeRepeatMode', this.value)">
-                                    <option value="always" ${triggerWelcomeRepeatMode === 'always' ? 'selected' : ''}>Sempre (não reenviar)</option>
-                                    <option value="hours" ${triggerWelcomeRepeatMode === 'hours' ? 'selected' : ''}>Em horas</option>
-                                    <option value="days" ${triggerWelcomeRepeatMode === 'days' ? 'selected' : ''}>Em dias</option>
-                                </select>
-                            </div>
-                        `;
-                        if (triggerWelcomeRepeatMode !== 'always') {
-                            html += `
-                                <div class="property-group">
-                                    <label>${triggerWelcomeRepeatMode === 'hours' ? 'Quantidade de horas' : 'Quantidade de dias'}</label>
-                                    <input type="number" min="1" step="1" value="${triggerWelcomeRepeatValue}" onchange="updateNodeProperty('triggerWelcomeRepeatValue', Math.max(1, parseInt(this.value || '1', 10) || 1))">
-                                </div>
-                            `;
-                        }
-                    }
-                }
             }
             break;
             
@@ -2871,6 +2951,7 @@ function addIntentRoute() {
     const uniquePhrases = Array.from(new Set(allPhrases));
     updateNodeProperty('intentRoutes', nextRoutes);
     updateNodeProperty('keyword', uniquePhrases.join(', '));
+    setIntentPropertySectionExpanded(`route:${nextRoutes.length - 1}`, true);
     renderProperties();
 }
 
@@ -2919,6 +3000,11 @@ function removeIntentRoute(index: number) {
     const uniquePhrases = Array.from(new Set(allPhrases));
     updateNodeProperty('intentRoutes', routes);
     updateNodeProperty('keyword', uniquePhrases.join(', '));
+    clearIntentRouteSectionExpandedStateForSelectedNode();
+    if (routes.length > 0) {
+        const fallbackIndex = Math.max(0, Math.min(index, routes.length - 1));
+        setIntentPropertySectionExpanded(`route:${fallbackIndex}`, true);
+    }
     renderProperties();
 }
 
@@ -4056,6 +4142,7 @@ const windowAny = window as Window & {
     addIntentRoute?: () => void;
     updateIntentRoute?: (index: number, key: 'label' | 'phrases' | 'response' | 'followupResponse', value: string) => void;
     removeIntentRoute?: (index: number) => void;
+    toggleIntentPropertySection?: (sectionKey: string, event?: Event) => void;
     toggleNodeCollapsed?: (id: string, event?: Event) => void;
     duplicateNode?: (id: string, event?: Event) => void;
     addCondition?: () => void;
@@ -4104,6 +4191,7 @@ windowAny.updateFlowSessionScopeFromSelect = updateFlowSessionScopeFromSelect;
 windowAny.addIntentRoute = addIntentRoute;
 windowAny.updateIntentRoute = updateIntentRoute;
 windowAny.removeIntentRoute = removeIntentRoute;
+windowAny.toggleIntentPropertySection = toggleIntentPropertySection;
 windowAny.toggleNodeCollapsed = toggleNodeCollapsed;
 windowAny.duplicateNode = duplicateNode;
 windowAny.addCondition = addCondition;
