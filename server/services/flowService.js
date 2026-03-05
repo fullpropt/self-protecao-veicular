@@ -2070,7 +2070,8 @@ class FlowService extends EventEmitter {
         const normalizedHandle = this.normalizeFlowHandle(selectedHandle);
         if (normalizedHandle === 'default') {
             const defaultMessage = String(node?.data?.intentDefaultResponse || '').trim();
-            return defaultMessage ? [defaultMessage] : [];
+            const defaultFollowupMessage = String(node?.data?.intentDefaultFollowupResponse || '').trim();
+            return [defaultMessage, defaultFollowupMessage].filter(Boolean);
         }
 
         const matchedRoute = this.resolveTriggerIntentRouteByHandle(node, normalizedHandle);

@@ -250,6 +250,48 @@ describe('FlowService intent routing compatibility', () => {
         executeSpy.mockRestore();
     });
 
+    test('goToNextNode on intent envia segunda resposta default opcional', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const intentNode = {
+            id: 'intent-mid',
+            type: 'intent',
+            data: {
+                intentRoutes: [
+                    { id: 'route-buy', label: 'Comprar', phrases: 'comprar', response: 'Vamos falar de compra.' }
+                ],
+                intentDefaultResponse: 'Nao entendi, pode me explicar melhor?',
+                intentDefaultFollowupResponse: 'Se preferir, posso te mostrar as opcoes principais.'
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 36,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-mid', target: 'fallback-node', sourceHandle: 'default', targetHandle: 'default' }
+                ]
+            },
+            conversation: { id: 53, session_id: 'session-1' },
+            lead: { id: 24, phone: '5511977777777', jid: '5511977777777@s.whatsapp.net' },
+            variables: {}
+        };
+
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
+
+        await service.goToNextNode(execution, intentNode, null);
+
+        expect(sendMock).toHaveBeenCalledTimes(2);
+        expect(sendMock.mock.calls[0][0].content).toBe('Nao entendi, pode me explicar melhor?');
+        expect(sendMock.mock.calls[1][0].content).toBe('Se preferir, posso te mostrar as opcoes principais.');
+        expect(executeSpy).toHaveBeenCalledWith(execution, 'fallback-node', 'default');
+
+        executeSpy.mockRestore();
+    });
+
     test('boas vindas do gatilho de intencao respeita comportamento de mensagem unica', async () => {
         const service = new FlowService();
         const sendMock = jest.fn().mockResolvedValue();

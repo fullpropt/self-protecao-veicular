@@ -27,6 +27,7 @@ type NodeData = {
     intentRoutes?: IntentRoute[];
     intentResponseDelaySeconds?: number;
     intentDefaultResponse?: string;
+    intentDefaultFollowupResponse?: string;
     triggerWelcomeEnabled?: boolean;
     triggerWelcomeContent?: string;
     triggerWelcomeDelaySeconds?: number;
@@ -702,7 +703,7 @@ function isPathPassThroughNode(node?: FlowNode | null) {
 
 function getInputHandles(node: FlowNode) {
     if (node.type === 'trigger') return [];
-    if (node.type === 'intent') {
+    if (node.type === 'intent' || node.type === 'end') {
         return [{
             handle: DEFAULT_HANDLE,
             label: '',
@@ -1474,6 +1475,7 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             intentRoutes: [],
             intentResponseDelaySeconds: 0,
             intentDefaultResponse: '',
+            intentDefaultFollowupResponse: '',
             triggerWelcomeEnabled: false,
             triggerWelcomeContent: '',
             triggerWelcomeDelaySeconds: 0,
@@ -1488,6 +1490,7 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             intentRoutes: [],
             intentResponseDelaySeconds: 0,
             intentDefaultResponse: '',
+            intentDefaultFollowupResponse: '',
             outputActions: {}
         },
         message: {
@@ -2244,6 +2247,7 @@ function renderProperties() {
                     ? Math.max(0, Number(getNodePropValue('intentResponseDelaySeconds', selectedNode.data.intentResponseDelaySeconds)))
                     : 0;
                 const intentDefaultResponse = String(getNodePropValue('intentDefaultResponse', selectedNode.data.intentDefaultResponse || ''));
+                const intentDefaultFollowupResponse = String(getNodePropValue('intentDefaultFollowupResponse', selectedNode.data.intentDefaultFollowupResponse || ''));
                 html += `
                     <div class="property-group">
                         <label>Intenções</label>
@@ -2283,7 +2287,8 @@ function renderProperties() {
                     <div class="property-group">
                         <label>Resposta quando não se enquadra em nenhuma intenção</label>
                         <textarea placeholder="Mensagem opcional para 'Outra resposta'" onchange="updateNodeProperty('intentDefaultResponse', this.value)">${escapeHtml(intentDefaultResponse)}</textarea>
-                        <div class="hint">Se ficar vazio, o fluxo apenas segue pela saída padrão sem enviar mensagem.</div>
+                        <textarea style="margin-top: 8px;" placeholder="Mensagem após a primeira (opcional)" onchange="updateNodeProperty('intentDefaultFollowupResponse', this.value)">${escapeHtml(intentDefaultFollowupResponse)}</textarea>
+                        <div class="hint">Se os campos ficarem vazios, o fluxo apenas segue pela saída padrão sem enviar mensagem.</div>
                     </div>
                 `;
 
@@ -3044,7 +3049,7 @@ function endConnection(nodeId: string, portType: string, targetHandle = DEFAULT_
     const sourceNode = nodes.find((node) => node.id === newEdge.source);
     const targetNode = nodes.find((node) => node.id === newEdge.target);
     const sourceIsIntentTrigger = isIntentTrigger(sourceNode);
-    const allowMultipleIncomingOnHandle = targetNode?.type === 'intent';
+    const allowMultipleIncomingOnHandle = targetNode?.type === 'intent' || targetNode?.type === 'end';
 
     edges = edges.filter((edge) => {
         if (
@@ -3359,6 +3364,7 @@ function normalizeLoadedFlowData() {
                 ? Math.max(0, Math.trunc(rawIntentDelay))
                 : 0;
             node.data.intentDefaultResponse = String(node.data?.intentDefaultResponse || '').trim();
+            node.data.intentDefaultFollowupResponse = String(node.data?.intentDefaultFollowupResponse || '').trim();
 
             if (node.type === 'trigger') {
                 node.data.triggerWelcomeEnabled = Boolean(node.data?.triggerWelcomeEnabled);
@@ -3387,7 +3393,7 @@ function normalizeLoadedFlowData() {
         return {
             ...edge,
             sourceHandle: edgeHandle(edge.sourceHandle),
-            targetHandle: targetNode?.type === 'intent'
+            targetHandle: targetNode?.type === 'intent' || targetNode?.type === 'end'
                 ? DEFAULT_HANDLE
                 : edgeHandle(edge.targetHandle)
         };
