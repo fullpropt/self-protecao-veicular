@@ -115,17 +115,17 @@ describe('FlowService intent routing compatibility', () => {
         goToNextSpy.mockRestore();
     });
 
-    test('continueFlow on intent node envia resposta configurada com delay unico', async () => {
+        test('goToNextNode on intent envia resposta configurada com delay unico', async () => {
         const service = new FlowService();
         const sendMock = jest.fn().mockResolvedValue();
         service.init(sendMock);
 
-        const node = {
+        const intentNode = {
             id: 'intent-mid',
             type: 'intent',
             data: {
                 intentRoutes: [
-                    { id: 'route-hours', label: 'Horários', phrases: 'horario, funcionamento', response: 'Nosso horário é de 8h às 18h, {{nome}}.' }
+                    { id: 'route-hours', label: 'Horarios', phrases: 'horario, funcionamento', response: 'Nosso horario e de 8h as 18h, {{nome}}.' }
                 ],
                 intentResponseDelaySeconds: 2
             }
@@ -133,29 +133,115 @@ describe('FlowService intent routing compatibility', () => {
 
         const execution = {
             id: 111,
-            flow: { id: 33, nodes: [node], edges: [] },
+            flow: {
+                id: 33,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-mid', target: 'next-node', sourceHandle: 'route-hours', targetHandle: 'default' }
+                ]
+            },
             conversation: { id: 51, session_id: 'session-1' },
             lead: { id: 22, phone: '5511999999999', jid: '5511999999999@s.whatsapp.net' },
             currentNode: 'intent-mid',
             variables: { nome: 'Carlos' }
         };
 
-        const pickSpy = jest.spyOn(service, 'pickTriggerIntentHandle').mockResolvedValue('route-hours');
         const delaySpy = jest.spyOn(service, 'delay').mockResolvedValue();
-        const goToNextSpy = jest.spyOn(service, 'goToNextNode').mockResolvedValue();
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
 
-        await service.continueFlow(execution, { text: 'qual horario?' });
+        await service.goToNextNode(execution, intentNode, 'route-hours');
 
         expect(delaySpy).toHaveBeenCalledWith(2000);
         expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
-            content: 'Nosso horário é de 8h às 18h, Carlos.'
+            content: 'Nosso horario e de 8h as 18h, Carlos.'
         }));
-        expect(goToNextSpy).toHaveBeenCalledWith(execution, node, 'route-hours');
-        expect(sendMock.mock.invocationCallOrder[0]).toBeLessThan(goToNextSpy.mock.invocationCallOrder[0]);
+        expect(executeSpy).toHaveBeenCalledWith(execution, 'next-node', 'default');
+        expect(sendMock.mock.invocationCallOrder[0]).toBeLessThan(executeSpy.mock.invocationCallOrder[0]);
 
-        pickSpy.mockRestore();
         delaySpy.mockRestore();
-        goToNextSpy.mockRestore();
+        executeSpy.mockRestore();
+    });
+
+    test('goToNextNode on intent usa resposta default quando nao houver match', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const intentNode = {
+            id: 'intent-mid',
+            type: 'intent',
+            data: {
+                intentRoutes: [
+                    { id: 'route-buy', label: 'Comprar', phrases: 'comprar', response: 'Vamos falar de compra.' }
+                ],
+                intentDefaultResponse: 'Nao entendi, pode me explicar melhor?'
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 34,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-mid', target: 'fallback-node', sourceHandle: 'default', targetHandle: 'default' }
+                ]
+            },
+            conversation: { id: 52, session_id: 'session-1' },
+            lead: { id: 23, phone: '5511988888888', jid: '5511988888888@s.whatsapp.net' },
+            variables: {}
+        };
+
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
+
+        await service.goToNextNode(execution, intentNode, null);
+
+        expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+            content: 'Nao entendi, pode me explicar melhor?'
+        }));
+        expect(executeSpy).toHaveBeenCalledWith(execution, 'fallback-node', 'default');
+
+        executeSpy.mockRestore();
+    });
+
+    test('boas vindas do gatilho de intencao respeita comportamento de mensagem unica', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const triggerNode = {
+            id: 'trigger-intent',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                triggerWelcomeEnabled: true,
+                triggerWelcomeContent: 'Ola, {{nome}}! Seja bem-vindo.',
+                triggerWelcomeDelaySeconds: 1,
+                triggerWelcomeRepeatMode: 'always',
+                triggerWelcomeRepeatValue: 1
+            }
+        };
+
+        const execution = {
+            flow: { id: 35 },
+            conversation: { id: 53, session_id: 'session-1' },
+            lead: { id: 24, phone: '5511977777777', jid: '5511977777777@s.whatsapp.net', custom_fields: '{}' },
+            variables: { nome: 'Ana' }
+        };
+
+        const leadUpdateSpy = jest.spyOn(Lead, 'update').mockResolvedValue({ success: true });
+        const delaySpy = jest.spyOn(service, 'delay').mockResolvedValue();
+
+        await service.maybeSendTriggerWelcomeMessage(execution, triggerNode);
+        await service.maybeSendTriggerWelcomeMessage(execution, triggerNode);
+
+        expect(delaySpy).toHaveBeenCalledWith(1000);
+        expect(sendMock).toHaveBeenCalledTimes(1);
+        expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+            content: 'Ola, Ana! Seja bem-vindo.'
+        }));
+
+        leadUpdateSpy.mockRestore();
+        delaySpy.mockRestore();
     });
 
     test('goToNextNode falls back to edge label when sourceHandle is stale', async () => {

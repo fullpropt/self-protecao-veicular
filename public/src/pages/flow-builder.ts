@@ -25,6 +25,12 @@ type NodeData = {
     keyword?: string;
     intentRoutes?: IntentRoute[];
     intentResponseDelaySeconds?: number;
+    intentDefaultResponse?: string;
+    triggerWelcomeEnabled?: boolean;
+    triggerWelcomeContent?: string;
+    triggerWelcomeDelaySeconds?: number;
+    triggerWelcomeRepeatMode?: string;
+    triggerWelcomeRepeatValue?: number;
     content?: string;
     delaySeconds?: number;
     isOnceMessage?: boolean;
@@ -1456,6 +1462,12 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             keyword: '',
             intentRoutes: [],
             intentResponseDelaySeconds: 0,
+            intentDefaultResponse: '',
+            triggerWelcomeEnabled: false,
+            triggerWelcomeContent: '',
+            triggerWelcomeDelaySeconds: 0,
+            triggerWelcomeRepeatMode: 'always',
+            triggerWelcomeRepeatValue: 1,
             outputActions: {}
         },
         intent: {
@@ -1464,6 +1476,7 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             keyword: '',
             intentRoutes: [],
             intentResponseDelaySeconds: 0,
+            intentDefaultResponse: '',
             outputActions: {}
         },
         message: {
@@ -2220,6 +2233,7 @@ function renderProperties() {
                 const intentResponseDelaySeconds = Number.isFinite(Number(getNodePropValue('intentResponseDelaySeconds', selectedNode.data.intentResponseDelaySeconds)))
                     ? Math.max(0, Number(getNodePropValue('intentResponseDelaySeconds', selectedNode.data.intentResponseDelaySeconds)))
                     : 0;
+                const intentDefaultResponse = String(getNodePropValue('intentDefaultResponse', selectedNode.data.intentDefaultResponse || ''));
                 html += `
                     <div class="property-group">
                         <label>Intenções</label>
@@ -2252,7 +2266,71 @@ function renderProperties() {
                         <input type="number" min="0" step="1" value="${intentResponseDelaySeconds}" onchange="updateNodeProperty('intentResponseDelaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
                         <div class="hint">Esse delay será aplicado em todas as mensagens de resposta das intenções deste bloco.</div>
                     </div>
+                    <div class="property-group">
+                        <label>Resposta quando não se enquadra em nenhuma intenção</label>
+                        <textarea placeholder="Mensagem opcional para 'Outra resposta'" onchange="updateNodeProperty('intentDefaultResponse', this.value)">${escapeHtml(intentDefaultResponse)}</textarea>
+                        <div class="hint">Se ficar vazio, o fluxo apenas segue pela saída padrão sem enviar mensagem.</div>
+                    </div>
                 `;
+
+                const isIntentTriggerNode = selectedNode.type === 'trigger';
+                if (isIntentTriggerNode) {
+                    const triggerWelcomeEnabled = Boolean(getNodePropValue('triggerWelcomeEnabled', selectedNode.data.triggerWelcomeEnabled));
+                    const triggerWelcomeContent = String(getNodePropValue('triggerWelcomeContent', selectedNode.data.triggerWelcomeContent || ''));
+                    const triggerWelcomeDelaySeconds = Number.isFinite(Number(getNodePropValue('triggerWelcomeDelaySeconds', selectedNode.data.triggerWelcomeDelaySeconds)))
+                        ? Math.max(0, Number(getNodePropValue('triggerWelcomeDelaySeconds', selectedNode.data.triggerWelcomeDelaySeconds)))
+                        : 0;
+                    const triggerWelcomeRepeatModeRaw = String(getNodePropValue('triggerWelcomeRepeatMode', selectedNode.data.triggerWelcomeRepeatMode || 'always')).trim().toLowerCase();
+                    const triggerWelcomeRepeatMode = ['always', 'hours', 'days'].includes(triggerWelcomeRepeatModeRaw)
+                        ? triggerWelcomeRepeatModeRaw
+                        : 'always';
+                    const triggerWelcomeRepeatValue = Number.isFinite(Number(getNodePropValue('triggerWelcomeRepeatValue', selectedNode.data.triggerWelcomeRepeatValue)))
+                        ? Math.max(1, Math.trunc(Number(getNodePropValue('triggerWelcomeRepeatValue', selectedNode.data.triggerWelcomeRepeatValue))))
+                        : 1;
+
+                    html += `
+                        <div class="property-group">
+                            <label>Boas vindas</label>
+                            <div class="flow-toggle-row">
+                                <span class="flow-toggle-label">${triggerWelcomeEnabled ? 'Ativada' : 'Desativada'}</span>
+                                <label class="flow-toggle-switch" title="Ativar boas vindas">
+                                    <input type="checkbox" ${triggerWelcomeEnabled ? 'checked' : ''} onchange="updateNodeProperty('triggerWelcomeEnabled', this.checked)">
+                                    <span class="flow-toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="hint">Responde primeiro com uma mensagem única e depois faz a identificação de intenção.</div>
+                        </div>
+                    `;
+
+                    if (triggerWelcomeEnabled) {
+                        html += `
+                            <div class="property-group">
+                                <label>Mensagem de Boas vindas</label>
+                                <textarea onchange="updateNodeProperty('triggerWelcomeContent', this.value)">${escapeHtml(triggerWelcomeContent)}</textarea>
+                            </div>
+                            <div class="property-group">
+                                <label>Delay da Boas vindas (segundos)</label>
+                                <input type="number" min="0" step="1" value="${triggerWelcomeDelaySeconds}" onchange="updateNodeProperty('triggerWelcomeDelaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
+                            </div>
+                            <div class="property-group">
+                                <label>Tempo sem reenviar Boas vindas</label>
+                                <select onchange="updateNodeProperty('triggerWelcomeRepeatMode', this.value)">
+                                    <option value="always" ${triggerWelcomeRepeatMode === 'always' ? 'selected' : ''}>Sempre (não reenviar)</option>
+                                    <option value="hours" ${triggerWelcomeRepeatMode === 'hours' ? 'selected' : ''}>Em horas</option>
+                                    <option value="days" ${triggerWelcomeRepeatMode === 'days' ? 'selected' : ''}>Em dias</option>
+                                </select>
+                            </div>
+                        `;
+                        if (triggerWelcomeRepeatMode !== 'always') {
+                            html += `
+                                <div class="property-group">
+                                    <label>${triggerWelcomeRepeatMode === 'hours' ? 'Quantidade de horas' : 'Quantidade de dias'}</label>
+                                    <input type="number" min="1" step="1" value="${triggerWelcomeRepeatValue}" onchange="updateNodeProperty('triggerWelcomeRepeatValue', Math.max(1, parseInt(this.value || '1', 10) || 1))">
+                                </div>
+                            `;
+                        }
+                    }
+                }
             }
             break;
             
@@ -2535,7 +2613,13 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
     if (!draft) return;
     (draft as any)[key] = value;
 
-    if (key === 'onceRepeatMode' || key === 'isOnceMessage' || key === 'outputActions') {
+    if (
+        key === 'onceRepeatMode'
+        || key === 'isOnceMessage'
+        || key === 'outputActions'
+        || key === 'triggerWelcomeEnabled'
+        || key === 'triggerWelcomeRepeatMode'
+    ) {
         renderProperties();
     }
 }
@@ -3251,6 +3335,24 @@ function normalizeLoadedFlowData() {
             node.data.intentResponseDelaySeconds = Number.isFinite(rawIntentDelay)
                 ? Math.max(0, Math.trunc(rawIntentDelay))
                 : 0;
+            node.data.intentDefaultResponse = String(node.data?.intentDefaultResponse || '').trim();
+
+            if (node.type === 'trigger') {
+                node.data.triggerWelcomeEnabled = Boolean(node.data?.triggerWelcomeEnabled);
+                node.data.triggerWelcomeContent = String(node.data?.triggerWelcomeContent || '').trim();
+                const rawWelcomeDelay = Number(node.data?.triggerWelcomeDelaySeconds);
+                node.data.triggerWelcomeDelaySeconds = Number.isFinite(rawWelcomeDelay)
+                    ? Math.max(0, Math.trunc(rawWelcomeDelay))
+                    : 0;
+                const rawWelcomeMode = String(node.data?.triggerWelcomeRepeatMode || '').trim().toLowerCase();
+                node.data.triggerWelcomeRepeatMode = ['always', 'hours', 'days'].includes(rawWelcomeMode)
+                    ? rawWelcomeMode
+                    : 'always';
+                const rawWelcomeValue = Number(node.data?.triggerWelcomeRepeatValue);
+                node.data.triggerWelcomeRepeatValue = Number.isFinite(rawWelcomeValue) && rawWelcomeValue > 0
+                    ? Math.max(1, Math.trunc(rawWelcomeValue))
+                    : 1;
+            }
             syncIntentRoutesFromNode(node);
         }
         return node;

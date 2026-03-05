@@ -1600,6 +1600,7 @@ class FlowService extends EventEmitter {
             || (currentNode.type === 'trigger' && (currentSubtype === 'keyword' || currentSubtype === 'intent'));
 
         if (isIntentNode) {
+            await this.maybeSendTriggerWelcomeMessage(execution, currentNode);
             this.ensureExecutionVariables(execution).last_response = messageText;
             const intentInputText = this.resolveIntentInputText(execution, currentNode, messageText);
             let selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, intentInputText);
@@ -1666,7 +1667,6 @@ class FlowService extends EventEmitter {
                 this.clearIntentHistory(execution, currentNode.id);
             }
 
-            await this.sendIntentRouteResponse(execution, currentNode, selectedHandle);
             await this.goToNextNode(execution, currentNode, selectedHandle);
             return execution;
         }
@@ -2064,9 +2064,18 @@ class FlowService extends EventEmitter {
         }) || null;
     }
 
+    resolveIntentResponseText(node = null, selectedHandle = null) {
+        const normalizedHandle = this.normalizeFlowHandle(selectedHandle);
+        if (normalizedHandle === 'default') {
+            return String(node?.data?.intentDefaultResponse || '').trim();
+        }
+
+        const matchedRoute = this.resolveTriggerIntentRouteByHandle(node, normalizedHandle);
+        return String(matchedRoute?.response || '').trim();
+    }
+
     async sendIntentRouteResponse(execution, node = null, selectedHandle = null) {
-        const matchedRoute = this.resolveTriggerIntentRouteByHandle(node, selectedHandle);
-        const rawResponse = String(matchedRoute?.response || '').trim();
+        const rawResponse = this.resolveIntentResponseText(node, selectedHandle);
         if (!rawResponse) return;
 
         const content = sanitizeOutgoingFlowText(
@@ -2089,7 +2098,70 @@ class FlowService extends EventEmitter {
         });
     }
 
+    resolveTriggerWelcomeConfig(node = null) {
+        return {
+            enabled: Boolean(node?.data?.triggerWelcomeEnabled),
+            content: String(node?.data?.triggerWelcomeContent || '').trim(),
+            delaySeconds: Number.isFinite(Number(node?.data?.triggerWelcomeDelaySeconds))
+                ? Math.max(0, Math.trunc(Number(node?.data?.triggerWelcomeDelaySeconds)))
+                : 0,
+            repeatMode: String(node?.data?.triggerWelcomeRepeatMode || 'always').trim().toLowerCase(),
+            repeatValue: Number.isFinite(Number(node?.data?.triggerWelcomeRepeatValue))
+                ? Math.max(1, Math.trunc(Number(node?.data?.triggerWelcomeRepeatValue)))
+                : 1
+        };
+    }
+
+    buildTriggerWelcomeOnceNode(execution, node = null) {
+        const flowId = Number(execution?.flow?.id || 0);
+        const flowScope = Number.isInteger(flowId) && flowId > 0 ? `flow:${flowId}` : 'flow:unknown';
+        const nodeScope = String(node?.id || 'trigger').trim() || 'trigger';
+        return {
+            id: `${nodeScope}:welcome`,
+            data: {
+                onceRepeatMode: String(node?.data?.triggerWelcomeRepeatMode || 'always').trim().toLowerCase(),
+                onceRepeatValue: Number(node?.data?.triggerWelcomeRepeatValue),
+                onceKey: `${flowScope}:node:${nodeScope}:welcome`
+            }
+        };
+    }
+
+    async maybeSendTriggerWelcomeMessage(execution, node = null) {
+        if (!this.isIntentTriggerNode(node)) return;
+        if (!this.sendFunction) return;
+
+        const config = this.resolveTriggerWelcomeConfig(node);
+        if (!config.enabled || !config.content) return;
+
+        const onceNode = this.buildTriggerWelcomeOnceNode(execution, node);
+        if (this.hasLeadSeenOnceMessageNode(execution, onceNode)) {
+            return;
+        }
+
+        const content = sanitizeOutgoingFlowText(
+            this.replaceVariables(config.content, this.ensureExecutionVariables(execution))
+        );
+        if (!content) return;
+
+        const delayMs = config.delaySeconds * 1000;
+        if (delayMs > 0) {
+            await this.delay(delayMs);
+        }
+
+        await this.sendFunction({
+            to: execution.lead?.phone,
+            jid: execution.lead?.jid,
+            sessionId: execution.conversation?.session_id || null,
+            conversationId: execution.conversation?.id || null,
+            content
+        });
+
+        await this.markLeadOnceMessageNodeSeen(execution, onceNode);
+    }
+
     async executeTriggerNode(execution, node) {
+        await this.maybeSendTriggerWelcomeMessage(execution, node);
+
         const selectedHandle = await this.pickTriggerIntentHandle(execution, node);
 
         if (selectedHandle) {
@@ -2103,8 +2175,6 @@ class FlowService extends EventEmitter {
             SET variables = ?
             WHERE id = ?
         `, [JSON.stringify(execution.variables), execution.id]);
-
-        await this.sendIntentRouteResponse(execution, node, selectedHandle);
 
         await this.goToNextNode(execution, node, selectedHandle);
     }
@@ -2393,6 +2463,9 @@ class FlowService extends EventEmitter {
                 this.clearIntentDefaultMessageOnceReentry(execution);
             }
 
+            if (isIntentNode) {
+                await this.sendIntentRouteResponse(execution, currentNode, selectedSourceHandle);
+            }
             await this.executeOutputActions(execution, currentNode, selectedSourceHandle);
             this.setNodeEntryHandle(execution, edge.target, nextTargetHandle);
             await this.executeNode(execution, edge.target, nextTargetHandle);
