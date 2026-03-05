@@ -1383,7 +1383,19 @@ class FlowService extends EventEmitter {
         if (isIntentNode) {
             this.ensureExecutionVariables(execution).last_response = messageText;
             const intentInputText = this.resolveIntentInputText(execution, currentNode, messageText);
-            const selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, intentInputText);
+            let selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, intentInputText);
+            const normalizedIntentContext = normalizeIntentText(intentInputText);
+            const normalizedLatestMessage = normalizeIntentText(messageText);
+            if (
+                !selectedHandle
+                && normalizedLatestMessage
+                && normalizedIntentContext
+                && normalizedLatestMessage !== normalizedIntentContext
+            ) {
+                // O contexto historico ajuda em muitos casos, mas pode diluir respostas curtas
+                // como "Gostei". Sem match no contexto, tentamos a ultima mensagem isolada.
+                selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, messageText);
+            }
 
             if (selectedHandle) {
                 this.clearIntentNoMatchCounter(execution, currentNode.id);

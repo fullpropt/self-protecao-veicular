@@ -258,6 +258,50 @@ describe('FlowService intent routing compatibility', () => {
         goToNextSpy.mockRestore();
     });
 
+    test('intent node falls back to latest reply when merged context misses', async () => {
+        const service = new FlowService();
+        const node = {
+            id: 'intent-short',
+            type: 'intent',
+            data: {
+                intentRoutes: [
+                    { id: 'route-interested', label: 'Interessado', phrases: 'Gostei desse' }
+                ]
+            }
+        };
+
+        const execution = {
+            id: 521,
+            flow: {
+                id: 10,
+                nodes: [node],
+                edges: [
+                    { source: 'intent-short', target: 'interested-answer', sourceHandle: 'route-interested' },
+                    { source: 'intent-short', target: 'fallback-answer', sourceHandle: 'default' }
+                ]
+            },
+            conversation: { id: 18 },
+            lead: { id: 32 },
+            currentNode: 'intent-short',
+            variables: {}
+        };
+
+        const persistSpy = jest.spyOn(service, 'persistExecutionVariables').mockResolvedValue();
+        const goToNextSpy = jest.spyOn(service, 'goToNextNode').mockResolvedValue();
+
+        await service.continueFlow(execution, { text: 'Gostei do mais arredondado' });
+
+        expect(goToNextSpy).not.toHaveBeenCalled();
+        expect(execution.variables.intent_no_match_count_by_node['intent-short']).toBe(1);
+
+        await service.continueFlow(execution, { text: 'Gostei' });
+
+        expect(goToNextSpy).toHaveBeenCalledWith(execution, node, 'route-interested');
+
+        persistSpy.mockRestore();
+        goToNextSpy.mockRestore();
+    });
+
     test('queues inbound messages that arrive before a wait/intent node and replays them', async () => {
         const service = new FlowService();
         const messageNode = {
