@@ -73,6 +73,41 @@ function DashboardStyles() {
           .dashboard-botconversa { gap: 14px; margin-bottom: 16px; }
           .stats-period-card, .stats-general-card, .events-personalized-card { padding: 12px; border-radius: 12px; }
           .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin-bottom: 12px; font-size: 15px; }
+          .dashboard-react .stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 14px;
+          }
+          .dashboard-react .stats-grid .stat-card {
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
+            gap: 8px;
+            min-width: 0;
+            padding: 12px;
+            border-radius: 12px;
+          }
+          .dashboard-react .stats-grid .stat-icon {
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
+          }
+          .dashboard-react .stats-grid .stat-icon .icon {
+            width: 16px;
+            height: 16px;
+          }
+          .dashboard-react .stats-grid .stat-content {
+            width: 100%;
+            min-width: 0;
+            text-align: left;
+          }
+          .dashboard-react .stats-grid .stat-value { font-size: 20px; }
+          .dashboard-react .stats-grid .stat-label { font-size: 11px; line-height: 1.2; }
+          .dashboard-react .stats-grid .stat-change {
+            margin-top: 6px;
+            font-size: 10px;
+            padding: 2px 6px;
+          }
           .stats-period-controls {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));

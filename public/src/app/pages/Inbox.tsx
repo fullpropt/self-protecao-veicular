@@ -1500,6 +1500,11 @@ export default function Inbox() {
         }
 
         @media (max-width: 768px) {
+            html.inbox-mobile-chat-lock {
+                overflow: hidden;
+                height: var(--inbox-mobile-vh, 100svh);
+                overscroll-behavior: none;
+            }
             body.inbox-mobile-chat-lock {
                 overflow: hidden;
                 height: var(--inbox-mobile-vh, 100svh);
@@ -1513,7 +1518,7 @@ export default function Inbox() {
             }
             .inbox-react { --inbox-main-pad-y: 8px; }
             .inbox-main-content {
-                padding: calc(env(safe-area-inset-top, 0px) + 72px) 10px 10px !important;
+                padding: calc(env(safe-area-inset-top, 0px) + 8px) 10px 10px !important;
                 min-height: var(--inbox-mobile-vh, 100svh);
                 height: var(--inbox-mobile-vh, 100svh);
                 display: flex;
@@ -1524,27 +1529,30 @@ export default function Inbox() {
                 padding-top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
             }
             .inbox-react .mobile-menu-toggle {
-                top: calc(env(safe-area-inset-top, 0px) + 8px);
-                left: 10px;
-                right: 10px;
-                height: 58px;
-                padding: 0 16px;
-                border-radius: 14px;
+                position: static;
+                top: auto;
+                left: auto;
+                right: auto;
+                width: 36px;
+                min-width: 36px;
+                height: 36px;
+                padding: 0;
+                border-radius: 10px;
                 justify-content: center;
                 align-items: center;
-                gap: 10px;
-                font-size: 23px;
+                gap: 0;
+                font-size: 20px;
                 font-weight: 700;
                 color: #f7fffb;
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 box-shadow:
-                    0 10px 22px rgba(2, 8, 20, 0.34),
+                    0 6px 14px rgba(2, 8, 20, 0.28),
                     inset 0 1px 0 rgba(255, 255, 255, 0.14),
                     0 1px 0 rgba(5, 10, 18, 0.5);
+                flex-shrink: 0;
             }
             .inbox-react .mobile-menu-toggle::after {
-                font-size: 12px;
-                letter-spacing: 0.08em;
+                content: none;
             }
             body.inbox-mobile-chat-lock .inbox-react .mobile-menu-toggle {
                 opacity: 0;
@@ -1701,6 +1709,9 @@ export default function Inbox() {
                 gap: 14px;
             }
             .conversations-header h2 {
+                display: flex;
+                align-items: center;
+                gap: 8px;
                 font-size: 18px;
                 margin-bottom: 0;
             }
@@ -1829,16 +1840,6 @@ export default function Inbox() {
         }
       `}</style>
 
-      <button
-        className="mobile-menu-toggle"
-        type="button"
-        onClick={() => {
-          document.querySelector('.sidebar')?.classList.toggle('open');
-          document.querySelector('.sidebar-overlay')?.classList.toggle('active');
-        }}
-      >
-        {'\u2630'}
-      </button>
       <div
         className="sidebar-overlay"
         onClick={() => {
@@ -1920,7 +1921,21 @@ export default function Inbox() {
         <div className="inbox-container">
           <div className="conversations-panel" id="conversationsPanel">
             <div className="conversations-header">
-              <h2><span className="icon icon-inbox icon-sm"></span> Inbox</h2>
+              <h2>
+                <button
+                  className="mobile-menu-toggle inbox-title-menu-toggle"
+                  type="button"
+                  onClick={() => {
+                    document.querySelector('.sidebar')?.classList.toggle('open');
+                    document.querySelector('.sidebar-overlay')?.classList.toggle('active');
+                  }}
+                  aria-label="Abrir menu lateral"
+                  title="Menu"
+                >
+                  {'\u2630'}
+                </button>
+                <span className="icon icon-inbox icon-sm"></span> Inbox
+              </h2>
               <div className="inbox-session-highlight inbox-session-unified" id="inboxSessionIndicator">
                 <div className="inbox-session-filter inbox-session-filter-embedded">
                   <label className="form-label" htmlFor="inboxSessionFilter">Conta WhatsApp</label>

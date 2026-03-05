@@ -774,6 +774,15 @@ function syncInboxBodyScrollLock() {
     const chatPanel = document.getElementById('chatPanel') as HTMLElement | null;
     const chatOpenOnMobile = isMobileInboxView() && Boolean(chatPanel?.classList.contains('active'));
     document.body.classList.toggle('inbox-mobile-chat-lock', chatOpenOnMobile);
+    document.documentElement.classList.toggle('inbox-mobile-chat-lock', chatOpenOnMobile);
+
+    if (chatOpenOnMobile) {
+        if ((window.scrollY || 0) > 0) {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        }
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    }
 }
 
 function setMobileConversationMode(chatOpen: boolean) {
@@ -791,6 +800,14 @@ function setMobileConversationMode(chatOpen: boolean) {
     if (chatOpen) {
         conversationsPanel.classList.add('hidden');
         chatPanel.classList.add('active');
+        window.requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            scheduleInboxMobileViewportStateSync();
+        });
+        window.setTimeout(() => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            scheduleInboxMobileViewportStateSync();
+        }, 120);
     } else {
         conversationsPanel.classList.remove('hidden');
         chatPanel.classList.remove('active');
@@ -1230,12 +1247,14 @@ function bindInboxLifecycle() {
     window.addEventListener('app:logout', () => {
         stopInboxAutoRefresh();
         document.body.classList.remove('inbox-mobile-chat-lock');
+        document.documentElement.classList.remove('inbox-mobile-chat-lock');
     });
     window.addEventListener('beforeunload', stopInboxAutoRefresh);
     window.addEventListener('hashchange', () => {
         const hash = String(window.location.hash || '').toLowerCase();
         if (!hash.startsWith('#/inbox')) {
             document.body.classList.remove('inbox-mobile-chat-lock');
+            document.documentElement.classList.remove('inbox-mobile-chat-lock');
             return;
         }
         scheduleInboxMobileViewportStateSync();
