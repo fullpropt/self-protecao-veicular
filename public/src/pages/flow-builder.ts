@@ -2546,6 +2546,7 @@ function confirmNodePropertyChanges() {
     if (!pendingNodeDraft || pendingNodeDraftId !== selectedNode.id) return;
 
     const changedEntries = Object.entries(pendingNodeDraft);
+    const hasIntentRoutesDraft = Object.prototype.hasOwnProperty.call(pendingNodeDraft, 'intentRoutes');
     if (changedEntries.length === 0) {
         notify('info', 'Sem alterações', 'Nenhuma alteração pendente neste bloco.');
         return;
@@ -2558,7 +2559,7 @@ function confirmNodePropertyChanges() {
         }
 
         (selectedNode.data as any)[key] = value;
-        if (key === 'keyword' && isIntentTrigger(selectedNode)) {
+        if (key === 'keyword' && isIntentTrigger(selectedNode) && !hasIntentRoutesDraft) {
             selectedNode.data.intentRoutes = parsePhraseList(String(value || '')).map((phrase, index) => ({
                 id: normalizeRouteId(`intent-${index + 1}`),
                 label: phrase,
