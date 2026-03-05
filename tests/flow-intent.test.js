@@ -6,7 +6,7 @@ jest.mock('../server/services/intentClassifierService', () => ({
 const intentClassifier = require('../server/services/intentClassifierService');
 const flowService = require('../server/services/flowService');
 const { FlowService } = require('../server/services/flowService');
-const { Lead } = require('../server/database/models');
+const { Lead, Flow } = require('../server/database/models');
 
 describe('FlowService intent routing', () => {
     const execution = { triggerMessageText: '', variables: {} };
@@ -295,6 +295,66 @@ describe('FlowService intent routing compatibility', () => {
         expect(service.flowMatchesConversationSession({ session_id: 'conta_a' }, 'conta_a')).toBe(true);
         expect(service.flowMatchesConversationSession({ session_id: 'conta_a' }, 'conta_b')).toBe(false);
         expect(service.flowMatchesConversationSession({ session_id: 'conta_a' }, '')).toBe(false);
+    });
+
+    test('processIncomingMessage starts keyword flow via default->message_once fallback on unmatched greeting', async () => {
+        const service = new FlowService();
+        const triggerNode = {
+            id: 'trigger-intent',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                intentRoutes: [
+                    { id: 'route-buy', label: 'Comprar', phrases: 'onde compro' }
+                ]
+            }
+        };
+        const onceNode = {
+            id: 'welcome-once',
+            type: 'message_once',
+            data: {
+                label: 'Mensagem Única',
+                content: 'Olá {{nome}}, tudo bem?'
+            }
+        };
+        const flow = {
+            id: 77,
+            name: 'FAQ',
+            trigger_type: 'keyword',
+            session_id: 'momnt',
+            priority: 10,
+            nodes: [triggerNode, onceNode],
+            edges: [
+                { source: 'trigger-intent', target: 'welcome-once', sourceHandle: 'default', targetHandle: 'default' }
+            ]
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([flow]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 123 });
+        intentClassifier.classifyKeywordFlowIntent.mockResolvedValue({ status: 'no_match' });
+
+        const result = await service.processIncomingMessage(
+            { text: 'oi' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
+        );
+
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            flow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'oi' })
+        );
+        expect(result).toEqual({ id: 123 });
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
     });
 
     test('intent node waits one extra message before default route and reuses context', async () => {

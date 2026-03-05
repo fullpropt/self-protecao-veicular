@@ -901,6 +901,64 @@ class FlowService extends EventEmitter {
         return conversationSessionId === flowSessionId;
     }
 
+    resolveFlowTriggerStartNode(flow = null) {
+        const nodes = Array.isArray(flow?.nodes) ? flow.nodes : [];
+        if (nodes.length === 0) return null;
+
+        const startNodeId = this.resolveStartNodeId(flow);
+        const startNode = nodes.find((item) => String(item?.id || '').trim() === String(startNodeId || '').trim());
+        if (String(startNode?.type || '').trim().toLowerCase() === 'trigger') {
+            return startNode;
+        }
+
+        return nodes.find((item) => String(item?.type || '').trim().toLowerCase() === 'trigger') || null;
+    }
+
+    hasDefaultEdgeToMessageOnce(flow = null, sourceNodeId = '') {
+        const normalizedSourceId = String(sourceNodeId || '').trim();
+        if (!normalizedSourceId) return false;
+
+        const nodes = Array.isArray(flow?.nodes) ? flow.nodes : [];
+        const nodeMap = new Map(nodes.map((item) => [String(item?.id || '').trim(), item]));
+        const edges = Array.isArray(flow?.edges) ? flow.edges : [];
+
+        return edges.some((edge) => {
+            if (String(edge?.source || '').trim() !== normalizedSourceId) return false;
+            if (this.normalizeFlowHandle(edge?.sourceHandle) !== 'default') return false;
+
+            const targetNode = nodeMap.get(String(edge?.target || '').trim());
+            const targetType = String(targetNode?.type || '').trim().toLowerCase();
+            return targetType === 'message_once';
+        });
+    }
+
+    isKeywordFlowWithIntentDefaultOnceFallback(flow = null) {
+        const triggerType = String(flow?.trigger_type || '').trim().toLowerCase();
+        if (triggerType !== 'keyword') return false;
+
+        const triggerNode = this.resolveFlowTriggerStartNode(flow);
+        const nodeSubtype = String(triggerNode?.subtype || '').trim().toLowerCase();
+        if (!triggerNode || (nodeSubtype !== 'keyword' && nodeSubtype !== 'intent')) {
+            return false;
+        }
+
+        return this.hasDefaultEdgeToMessageOnce(flow, triggerNode.id);
+    }
+
+    pickKeywordFlowByDefaultRouteFallback(candidateFlows = []) {
+        const eligible = (Array.isArray(candidateFlows) ? candidateFlows : [])
+            .filter((item) => this.isKeywordFlowWithIntentDefaultOnceFallback(item));
+
+        if (eligible.length === 0) return null;
+        if (eligible.length === 1) return eligible[0];
+
+        const highestPriority = Math.max(...eligible.map((item) => Number(item?.priority || 0)));
+        const topPriorityFlows = eligible.filter((item) => Number(item?.priority || 0) === highestPriority);
+        if (topPriorityFlows.length === 1) return topPriorityFlows[0];
+
+        return null;
+    }
+
     readNodeEntryHandleMap(execution) {
         const variables = this.ensureExecutionVariables(execution);
         const mapValue = variables[NODE_ENTRY_HANDLE_MAP_KEY];
@@ -1355,6 +1413,19 @@ class FlowService extends EventEmitter {
                     if (flow) {
                         console.info(`[flow-intent] Fallback local selecionou fluxo ${flow.id} (${flow.name || 'sem-nome'})`);
                     }
+                }
+            }
+
+            if (!flow && semanticCandidates.length > 0) {
+                // Permite iniciar pelo "Outra resposta" quando o gatilho de intencao
+                // direciona o default para um bloco de Mensagem Unica.
+                const defaultFallbackFlow = this.pickKeywordFlowByDefaultRouteFallback(semanticCandidates);
+                if (defaultFallbackFlow) {
+                    flow = defaultFallbackFlow;
+                    console.info(
+                        `[flow-intent] Fallback por rota padrao selecionou fluxo ${flow.id} `
+                        + `(${flow.name || 'sem-nome'}) para mensagem sem match explicito.`
+                    );
                 }
             }
         }
