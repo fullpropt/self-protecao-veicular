@@ -7276,8 +7276,7 @@ async function runCiphertextRecovery(sessionId, rawMessage = {}, attempt = 1) {
 
 
 
-let cachedBusinessHoursSettings = null;
-let cachedBusinessHoursSettingsAt = 0;
+const businessHoursSettingsCacheByOwner = new Map();
 const outsideHoursAutoReplyTracker = new Map();
 
 function normalizeBusinessHoursTime(value, fallback) {
@@ -7370,33 +7369,58 @@ function markOutsideHoursAutoReplySent(conversationId) {
     }
 }
 
-function invalidateBusinessHoursSettingsCache() {
-    cachedBusinessHoursSettings = null;
-    cachedBusinessHoursSettingsAt = 0;
+function buildBusinessHoursCacheKey(ownerUserId = null) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    return normalizedOwnerUserId ? `owner:${normalizedOwnerUserId}` : 'global';
 }
 
-async function getBusinessHoursSettings(forceRefresh = false) {
-    const now = Date.now();
-    if (!forceRefresh && cachedBusinessHoursSettings && (now - cachedBusinessHoursSettingsAt) < BUSINESS_HOURS_CACHE_TTL_MS) {
-        return cachedBusinessHoursSettings;
+function invalidateBusinessHoursSettingsCache(ownerUserId = null) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    if (normalizedOwnerUserId) {
+        businessHoursSettingsCacheByOwner.delete(buildBusinessHoursCacheKey(normalizedOwnerUserId));
+        return;
     }
 
-    const [enabledValue, startValue, endValue, autoReplyMessageValue] = await Promise.all([
-        Settings.get('business_hours_enabled'),
-        Settings.get('business_hours_start'),
-        Settings.get('business_hours_end'),
-        Settings.get('business_hours_auto_reply_message')
+    businessHoursSettingsCacheByOwner.clear();
+}
+
+async function getBusinessHoursSettings(ownerUserId = null, forceRefresh = false) {
+    // Compatibilidade: chamadas antigas getBusinessHoursSettings(true)
+    if (typeof ownerUserId === 'boolean' && forceRefresh === false) {
+        forceRefresh = ownerUserId;
+        ownerUserId = null;
+    }
+
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    const cacheKey = buildBusinessHoursCacheKey(normalizedOwnerUserId);
+    const now = Date.now();
+    const cached = businessHoursSettingsCacheByOwner.get(cacheKey);
+    if (!forceRefresh && cached && (now - Number(cached.cachedAt || 0)) < BUSINESS_HOURS_CACHE_TTL_MS) {
+        return cached.value;
+    }
+
+    const [scopedEnabledValue, scopedStartValue, scopedEndValue, scopedAutoReplyMessageValue, legacyEnabledValue, legacyStartValue, legacyEndValue, legacyAutoReplyMessageValue] = await Promise.all([
+        Settings.get(buildScopedSettingsKey('business_hours_enabled', normalizedOwnerUserId || null)),
+        Settings.get(buildScopedSettingsKey('business_hours_start', normalizedOwnerUserId || null)),
+        Settings.get(buildScopedSettingsKey('business_hours_end', normalizedOwnerUserId || null)),
+        Settings.get(buildScopedSettingsKey('business_hours_auto_reply_message', normalizedOwnerUserId || null)),
+        normalizedOwnerUserId ? Settings.get('business_hours_enabled') : Promise.resolve(null),
+        normalizedOwnerUserId ? Settings.get('business_hours_start') : Promise.resolve(null),
+        normalizedOwnerUserId ? Settings.get('business_hours_end') : Promise.resolve(null),
+        normalizedOwnerUserId ? Settings.get('business_hours_auto_reply_message') : Promise.resolve(null)
     ]);
 
     const normalized = normalizeBusinessHoursSettings({
-        enabled: enabledValue,
-        start: startValue,
-        end: endValue,
-        autoReplyMessage: autoReplyMessageValue
+        enabled: scopedEnabledValue ?? legacyEnabledValue,
+        start: scopedStartValue ?? legacyStartValue,
+        end: scopedEndValue ?? legacyEndValue,
+        autoReplyMessage: scopedAutoReplyMessageValue ?? legacyAutoReplyMessageValue
     });
 
-    cachedBusinessHoursSettings = normalized;
-    cachedBusinessHoursSettingsAt = now;
+    businessHoursSettingsCacheByOwner.set(cacheKey, {
+        value: normalized,
+        cachedAt: now
+    });
 
     return normalized;
 }
@@ -7836,7 +7860,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         if (!skipInboundAutomation) {
             console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
 
-            const businessHoursSettings = await getBusinessHoursSettings();
+            const businessHoursSettings = await getBusinessHoursSettings(sessionOwnerUserId || null);
             const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
 
             if (isOutsideBusinessHours && !isSelfChat) {
@@ -16408,10 +16432,10 @@ app.put('/api/settings', authenticate, async (req, res) => {
     }
 
     const touchedBusinessHours = changedKeys.some((key) => String(key || '').startsWith('business_hours_'));
-    if (touchedBusinessHours && !ownerScopeUserId) {
-        invalidateBusinessHoursSettingsCache();
+    if (touchedBusinessHours) {
+        invalidateBusinessHoursSettingsCache(ownerScopeUserId || null);
         if (typeof queueService.invalidateBusinessHoursCache === 'function') {
-            queueService.invalidateBusinessHoursCache();
+            queueService.invalidateBusinessHoursCache(ownerScopeUserId || null);
         }
     }
 
