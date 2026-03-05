@@ -1348,25 +1348,7 @@ function toggleFlowActive() {
 }
 
 async function restoreLastFlowOrOpenModal() {
-    if (isFlowMobileListMode()) {
-        openFlowsModal();
-        return;
-    }
-
-    const fallbackFlowId = currentFlowId || readLastOpenFlowId();
-    if (!fallbackFlowId) {
-        openFlowsModal();
-        return;
-    }
-
-    const restored = await loadFlow(fallbackFlowId, {
-        silent: true,
-        keepModalClosed: true
-    });
-
-    if (!restored) {
-        openFlowsModal();
-    }
+    openFlowsModal();
 }
 
 // Inicializacao
@@ -1732,12 +1714,12 @@ function renderNode(node: FlowNode) {
     if (!container) return;
     
     const nodeEl = document.createElement('div');
-    const isCollapsed = Boolean(node.data?.collapsed);
     const isEventCircle = node.type === 'event';
     const eventDisplayName = node.type === 'event'
         ? String(node.data.eventName || node.data.eventKey || '').trim()
         : '';
-    nodeEl.className = `flow-node${isCollapsed ? ' is-collapsed' : ''}${isEventCircle ? ' event-circle' : ''}`;
+    node.data.collapsed = false;
+    nodeEl.className = `flow-node${isEventCircle ? ' event-circle' : ''}`;
     nodeEl.id = node.id;
     nodeEl.style.left = node.position.x + 'px';
     nodeEl.style.top = node.position.y + 'px';
@@ -1766,11 +1748,14 @@ function renderNode(node: FlowNode) {
                 <span class="title">${escapeHtml(String(node.data.label || '').trim() || getNodeTypeLabel(node))}</span>
                 ${eventDisplayName ? `<span class="node-subtitle" title="${escapeHtml(eventDisplayName)}">${escapeHtml(truncateLabel(eventDisplayName, 22))}</span>` : ''}
             </div>
-            <button class="duplicate-btn" title="Duplicar bloco" onclick="duplicateNode('${node.id}', event)">Copiar</button>
-            <button class="collapse-btn" title="${isCollapsed ? 'Expandir bloco' : 'Recolher bloco'}" onclick="toggleNodeCollapsed('${node.id}', event)">
-                ${isCollapsed ? '▸' : '▾'}
-            </button>
-            <button class="delete-btn" onclick="deleteNode('${node.id}')">&times;</button>
+            <div class="node-header-actions">
+                <button class="node-header-btn duplicate-btn" title="Duplicar bloco" aria-label="Duplicar bloco" onclick="duplicateNode('${node.id}', event)">
+                    <span class="icon icon-templates icon-sm"></span>
+                </button>
+                <button class="node-header-btn delete-btn" title="Excluir bloco" aria-label="Excluir bloco" onclick="deleteNode('${node.id}')">
+                    <span class="icon icon-delete icon-sm"></span>
+                </button>
+            </div>
         </div>
         <div class="flow-node-body">
             ${escapeHtml(getNodePreview(node))}
@@ -1787,23 +1772,23 @@ function renderNode(node: FlowNode) {
         if (e.button !== 0) return;
 
         const target = e.target as HTMLElement | null;
-        if (target?.classList.contains('port')) {
+        const portTarget = target?.closest('.port') as HTMLElement | null;
+        if (portTarget) {
             e.preventDefault();
             e.stopPropagation();
             startConnection(
                 node.id,
-                target.dataset.port || '',
-                target.dataset.handle || DEFAULT_HANDLE,
-                target.dataset.label || '',
-                target
+                portTarget.dataset.port || '',
+                portTarget.dataset.handle || DEFAULT_HANDLE,
+                portTarget.dataset.label || '',
+                portTarget
             );
             return;
         }
         if (
-            target?.classList.contains('delete-btn')
-            || target?.classList.contains('collapse-btn')
-            || target?.classList.contains('duplicate-btn')
-            || target?.classList.contains('output-action-trigger')
+            target?.closest('.delete-btn')
+            || target?.closest('.duplicate-btn')
+            || target?.closest('.output-action-trigger')
         ) return;
         
         isDragging = true;
@@ -3766,9 +3751,7 @@ function buildTriggerPayload(trigger?: FlowNode) {
 
 function normalizeLoadedFlowData() {
     nodes = nodes.map((node) => {
-        if (typeof node.data?.collapsed !== 'boolean') {
-            node.data.collapsed = false;
-        }
+        node.data.collapsed = false;
         node.data.outputActions = sanitizeOutputActionsMap(
             node.data?.outputActions || (node.data as any)?.output_actions || {}
         );
@@ -4245,7 +4228,7 @@ async function duplicateFlow(id: number, event?: Event) {
         }
 
         resetEditorState();
-        closeFlowsModal();
+        closeFlowsModal({ force: true });
 
         const flow = result.flow || {};
         nodes = flow.nodes || [];
@@ -4310,7 +4293,7 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
         if (result.success) {
             resetEditorState();
             if (!options.keepModalClosed) {
-                closeFlowsModal();
+                closeFlowsModal({ force: true });
             }
 
             // Limpar canvas
@@ -4373,7 +4356,7 @@ async function createNewFlow() {
     }
 
     resetEditorState();
-    closeFlowsModal();
+    closeFlowsModal({ force: true });
     persistLastOpenFlowId(null);
     currentFlowName = nextName;
     renderCurrentFlowName();
@@ -4389,7 +4372,7 @@ function applyAiDraftToEditor(draft: AiGeneratedFlowDraft) {
     }
 
     resetEditorState();
-    closeFlowsModal();
+    closeFlowsModal({ force: true });
 
     const canvasContainer = document.getElementById('canvasContainer') as HTMLElement | null;
     const connectionsSvg = document.getElementById('connectionsSvg') as HTMLElement | null;
@@ -4487,11 +4470,22 @@ function openFlowsModal() {
     renamingFlowDraft = '';
     void loadFlowWhatsappSessions({ silent: true });
     loadFlows();
+    const modalTitle = document.getElementById('flowsModalTitle') as HTMLElement | null;
+    if (modalTitle) {
+        modalTitle.textContent = currentFlowId
+            ? 'Selecione um Fluxo'
+            : 'Selecione um Fluxo para começar';
+    }
+    const closeBtn = document.getElementById('flowsModalCloseBtn') as HTMLButtonElement | null;
+    if (closeBtn) {
+        closeBtn.toggleAttribute('hidden', !currentFlowId);
+    }
     document.getElementById('flowsModal')?.classList.add('active');
     setFlowMobileModalOpenState(true);
 }
 
-function closeFlowsModal() {
+function closeFlowsModal(options: { force?: boolean } = {}) {
+    if (!currentFlowId && options.force !== true) return;
     renamingFlowId = null;
     renamingFlowDraft = '';
     document.getElementById('flowsModal')?.classList.remove('active');

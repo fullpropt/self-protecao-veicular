@@ -906,106 +906,74 @@ export default function FlowBuilder() {
             text-align: center;
         }
 
-        .flow-node-header .duplicate-btn,
-        .flow-node-header .collapse-btn,
-        .flow-node-header .delete-btn {
-            background: rgba(255, 255, 255, 0.96);
-            border: 1px solid rgba(51, 65, 85, 0.34);
-            color: #334155;
+        .flow-node-header .node-header-actions {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .flow-node-header .node-header-btn {
+            width: 24px;
+            min-width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            background: rgba(255, 255, 255, 0.8);
+            color: #475569;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
-            padding: 4px 6px;
-            border-radius: 5px;
-            transition: all 0.2s;
-            font-weight: 700;
-            line-height: 1;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
-        }
-
-        .flow-node-header .collapse-btn {
-            min-width: 24px;
-            font-size: 13px;
-        }
-
-        .flow-node-header .duplicate-btn {
-            min-width: 52px;
-            font-size: 10px;
-            font-weight: 700;
-        }
-        
-        .flow-node-header .delete-btn {
-            opacity: 0.72;
-            min-width: 24px;
-            border-color: rgba(239, 68, 68, 0.38);
-            background: rgba(254, 242, 242, 0.96);
-            color: #b91c1c;
-        }
-
-        .flow-node.event-circle .flow-node-header .duplicate-btn {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            width: 22px;
-            min-width: 22px;
-            height: 22px;
+            transition: all 0.2s ease;
             padding: 0;
-            border-radius: 999px;
-            font-size: 0;
-            border-color: rgba(16, 185, 129, 0.38);
-            background: rgba(236, 253, 245, 0.98);
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
         }
 
-        .flow-node.event-circle .flow-node-header .duplicate-btn::before {
-            content: '⧉';
+        .flow-node-header .node-header-btn .icon {
+            width: 12px;
+            height: 12px;
             font-size: 12px;
-            line-height: 1;
-            color: #047857;
-        }
-
-        .flow-node.event-circle .flow-node-header .collapse-btn {
-            display: none;
-        }
-
-        .flow-node.event-circle .flow-node-header .delete-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 22px;
-            min-width: 22px;
-            height: 22px;
-            padding: 0;
-            border-radius: 999px;
-            font-size: 0;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
-        }
-
-        .flow-node.event-circle .flow-node-header .delete-btn::before {
-            content: '×';
-            font-size: 14px;
-            line-height: 1;
-            color: #b91c1c;
+            color: currentColor;
+            opacity: 0.92;
         }
 
         .flow-node-header .duplicate-btn:hover {
-            background: rgba(16, 185, 129, 0.14);
-            border-color: rgba(16, 185, 129, 0.4);
-            color: var(--success);
+            border-color: rgba(var(--primary-rgb), 0.52);
+            background: rgba(var(--primary-rgb), 0.14);
+            color: var(--primary);
         }
-
-        .flow-node:hover .delete-btn {
-            opacity: 1;
-        }
-
-        .flow-node-header .collapse-btn:hover {
-            background: rgba(59, 130, 246, 0.1);
-            border-color: rgba(59, 130, 246, 0.38);
-            color: var(--info);
+        
+        .flow-node-header .delete-btn {
+            border-color: rgba(239, 68, 68, 0.34);
+            background: rgba(254, 242, 242, 0.85);
+            color: #b91c1c;
         }
         
         .flow-node-header .delete-btn:hover {
             background: rgba(239, 68, 68, 0.1);
-            border-color: rgba(239, 68, 68, 0.36);
+            border-color: rgba(239, 68, 68, 0.44);
             color: var(--danger);
+        }
+
+        .flow-node.event-circle .flow-node-header .node-header-actions {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            gap: 7px;
+        }
+
+        .flow-node.event-circle .flow-node-header .node-header-btn {
+            width: 22px;
+            min-width: 22px;
+            height: 22px;
+        }
+
+        .flow-node.event-circle .flow-node-header .node-header-btn .icon {
+            width: 11px;
+            height: 11px;
+            font-size: 11px;
         }
         
         .flow-node-body {
@@ -2717,8 +2685,7 @@ export default function FlowBuilder() {
                 max-height: calc(100dvh - 170px);
             }
             .flow-builder-react .flow-node .delete-btn,
-            .flow-builder-react .flow-node .duplicate-btn,
-            .flow-builder-react .flow-node .collapse-btn {
+            .flow-builder-react .flow-node .duplicate-btn {
                 display: none;
             }
             .flow-builder-react .flow-node .port {
@@ -2945,8 +2912,8 @@ export default function FlowBuilder() {
           <div className="modal-overlay" id="flowsModal">
               <div className="modal">
                   <div className="modal-header">
-                      <h2>Selecione um Fluxo</h2>
-                      <button className="modal-close" onClick={() => globals.closeFlowsModal?.()}>&times;</button>
+                      <h2 id="flowsModalTitle">Selecione um Fluxo</h2>
+                      <button className="modal-close" id="flowsModalCloseBtn" onClick={() => globals.closeFlowsModal?.()}>&times;</button>
                   </div>
                   <div className="modal-body">
                       <div id="flowsList"></div>
