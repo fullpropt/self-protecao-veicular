@@ -63,6 +63,7 @@ export default function Inbox() {
             border-radius: var(--border-radius-lg);
             box-shadow: var(--shadow-lg);
             overflow: hidden;
+            min-width: 0;
         }
         .inbox-react .conversations-list,
         .inbox-react .chat-messages,
@@ -147,34 +148,33 @@ export default function Inbox() {
         .inbox-react .chat-input textarea::-webkit-scrollbar-corner {
             background: rgba(8, 14, 24, 0.96);
         }
-        @media (max-width: 1024px) {
-            .inbox-container { grid-template-columns: 350px 1fr; }
-            .inbox-right-panel { display: none; }
-        }
-        @media (max-width: 768px) {
-            .inbox-container { grid-template-columns: 1fr; }
-            .chat-panel { display: none; }
-            .chat-panel.active { display: flex; }
-            .conversations-panel.hidden { display: none; }
-            .inbox-right-panel { display: none; }
-        }
         .conversations-panel {
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             min-height: 0;
+            min-width: 0;
         }
         .conversations-header {
             padding: 20px;
             border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
         .conversations-header h2 {
-            margin: 0 0 15px;
+            margin: 0;
             font-size: 20px;
             color: var(--dark);
         }
         .inbox-session-filter {
-            margin-bottom: 12px;
+            margin-bottom: 0;
+        }
+        .inbox-session-unified {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: stretch;
         }
         .inbox-session-filter .form-label {
             display: block;
@@ -193,40 +193,55 @@ export default function Inbox() {
             padding: 9px 10px;
         }
         .inbox-session-highlight {
-            margin-bottom: 12px;
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: 1px solid rgba(var(--primary-rgb), 0.28);
-            border-left: 3px solid rgba(var(--primary-rgb), 0.85);
+            margin-bottom: 0;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(var(--primary-rgb), 0.32);
+            border-left: 2px solid rgba(var(--primary-rgb), 0.78);
             background: linear-gradient(
                 90deg,
-                rgba(var(--primary-rgb), 0.08) 0%,
-                rgba(15, 23, 42, 0.22) 38%,
-                rgba(15, 23, 42, 0.2) 100%
+                rgba(var(--primary-rgb), 0.12) 0%,
+                rgba(15, 23, 42, 0.3) 44%,
+                rgba(15, 23, 42, 0.24) 100%
             );
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
+            box-shadow:
+                inset 0 1px 0 rgba(var(--primary-rgb), 0.2),
+                0 10px 22px rgba(2, 8, 20, 0.2),
+                0 0 0 1px rgba(var(--primary-rgb), 0.06),
+                0 0 18px rgba(var(--primary-rgb), 0.12);
+        }
+        .inbox-session-highlight-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .inbox-session-filter-embedded .form-select {
+            border-color: rgba(var(--primary-rgb), 0.26);
+            background: rgba(15, 23, 42, 0.52);
         }
         .inbox-session-highlight-label {
-            font-size: 10px;
+            font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.06em;
             color: rgba(var(--primary-rgb), 0.9);
             font-weight: 700;
-            margin-bottom: 2px;
+            margin-bottom: 4px;
         }
         .inbox-session-highlight-name {
-            font-size: 14px;
+            font-size: 15px;
             color: var(--dark);
             font-weight: 700;
             line-height: 1.2;
         }
         .inbox-session-highlight-meta {
-            font-size: 11px;
-            color: var(--gray-600);
-            margin-top: 3px;
+            font-size: 12px;
+            color: rgba(192, 203, 219, 0.88);
+            margin-top: 5px;
             line-height: 1.3;
         }
         .inbox-session-highlight-status {
@@ -257,7 +272,7 @@ export default function Inbox() {
         .inbox-session-highlight-actions {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
             align-items: flex-end;
             flex-shrink: 0;
         }
@@ -266,7 +281,8 @@ export default function Inbox() {
             border: 1px solid rgba(var(--primary-rgb), 0.45);
             background: rgba(var(--primary-rgb), 0.14);
             color: var(--primary);
-            padding: 4px 12px;
+            padding: 0 14px;
+            min-height: 36px;
             font-size: 11px;
             font-weight: 700;
             line-height: 1.2;
@@ -277,6 +293,7 @@ export default function Inbox() {
         .inbox-session-resync-btn:hover:not(:disabled) {
             background: rgba(var(--primary-rgb), 0.2);
             border-color: rgba(var(--primary-rgb), 0.62);
+            transform: translateY(-1px);
         }
         .inbox-session-resync-btn:disabled {
             opacity: 0.55;
@@ -288,26 +305,95 @@ export default function Inbox() {
         .conversations-tabs {
             display: flex;
             gap: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 0;
+            flex-wrap: wrap;
         }
         .conversations-tabs button {
-            padding: 8px 16px;
-            border: 1px solid var(--border-color);
-            background: var(--gray-100);
+            min-height: 38px;
+            padding: 0 16px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(28, 42, 63, 0.75);
             color: var(--gray-800);
-            border-radius: 20px;
+            border-radius: 999px;
             cursor: pointer;
             font-size: 13px;
-            transition: all 0.2s;
+            font-weight: 600;
+            transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            flex-shrink: 0;
+        }
+        .conversations-tabs button:hover {
+            border-color: rgba(var(--primary-rgb), 0.4);
+            background: rgba(var(--primary-rgb), 0.12);
+            color: var(--dark);
+            transform: translateY(-1px);
         }
         .conversations-tabs button.active {
-            background: var(--primary);
+            border-color: rgba(var(--primary-rgb), 0.75);
+            background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.95) 0%, rgba(16, 148, 98, 0.95) 100%);
             color: white;
+            box-shadow: 0 8px 18px rgba(var(--primary-rgb), 0.26);
+        }
+        .conversations-header .search-box {
+            width: 100%;
+            max-width: 100%;
+        }
+        .conversations-header .search-box input {
+            height: 42px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            background: rgba(22, 35, 54, 0.82);
+            color: var(--dark);
+            padding: 0 14px 0 40px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .conversations-header .search-box .search-icon {
+            left: 13px;
+            width: 14px;
+            height: 14px;
+            opacity: 0.76;
+        }
+        .conversations-header .search-box input::placeholder {
+            color: rgba(176, 190, 210, 0.86);
+        }
+        .conversations-header .search-box input:focus {
+            border-color: rgba(var(--primary-rgb), 0.52);
+            box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.16);
+            background: rgba(19, 33, 51, 0.92);
         }
         .conversations-list {
             flex: 1;
             overflow-y: auto;
             background: var(--surface);
+        }
+        .conversations-list .empty-state {
+            min-height: 320px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            text-align: center;
+            padding: 48px 20px !important;
+        }
+        .conversations-list .empty-state-icon {
+            width: 56px;
+            height: 56px;
+            margin: 0;
+            opacity: 0.76;
+        }
+        .conversations-list .empty-state p {
+            margin: 0;
+            color: var(--dark);
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+        .conversations-list .empty-state .empty-state-subtext {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(173, 187, 206, 0.8);
+            max-width: 280px;
+            line-height: 1.45;
         }
         .conversation-item {
             display: flex;
@@ -417,6 +503,7 @@ export default function Inbox() {
             background: linear-gradient(180deg, rgba(24, 40, 64, 0.94), rgba(20, 35, 57, 0.96));
             min-height: 0;
             position: relative;
+            min-width: 0;
         }
         .chat-header {
             background: var(--surface);
@@ -426,12 +513,14 @@ export default function Inbox() {
             gap: 15px;
             border-bottom: 1px solid var(--border-color);
         }
-        .chat-header-info { flex: 1; }
+        .chat-header-info { flex: 1; min-width: 0; }
         .chat-header-name { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-header-status { font-size: 12px; color: var(--gray-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-messages {
             flex: 1;
             overflow-y: auto;
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
             padding: 20px;
             min-height: 0;
             position: relative;
@@ -960,6 +1049,7 @@ export default function Inbox() {
             gap: 15px;
             align-items: flex-end;
             position: relative;
+            min-width: 0;
         }
         .chat-input .chat-input-btn {
             width: 44px;
@@ -1106,14 +1196,17 @@ export default function Inbox() {
         }
         .chat-input textarea {
             flex: 1;
+            min-width: 0;
             border: 1px solid var(--border-color);
             border-radius: 20px;
             background: var(--surface-muted);
             color: var(--dark);
             padding: 12px 20px;
             font-size: 14px;
+            line-height: 1.25;
             resize: none;
             max-height: 120px;
+            overflow-wrap: anywhere;
             font-family: inherit, 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
         }
         .chat-input textarea::placeholder { color: var(--gray-500); }
@@ -1137,6 +1230,9 @@ export default function Inbox() {
             color: var(--gray-700);
             cursor: pointer;
             transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        }
+        .quick-reply-trigger-label {
+            line-height: 1;
         }
         .quick-reply-trigger:hover {
             background: rgba(var(--primary-rgb), 0.08);
@@ -1265,9 +1361,26 @@ export default function Inbox() {
         .inbox-main-content {
             padding: var(--inbox-main-pad-y) 20px;
             box-sizing: border-box;
+            min-width: 0;
         }
         .chat-header-actions { display: flex; gap: 8px; align-items: center; }
-        .chat-back-btn { display: none; }
+        .chat-back-btn {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+        .chat-back-btn-arrow {
+            font-size: 22px;
+            line-height: 1;
+            font-weight: 700;
+            transform: translateX(-1px);
+            display: inline-block;
+        }
         .contact-info-backdrop {
             position: fixed;
             inset: 0;
@@ -1366,7 +1479,7 @@ export default function Inbox() {
 
         @media (max-width: 1024px) {
             .inbox-container {
-                grid-template-columns: 340px 1fr !important;
+                grid-template-columns: clamp(280px, 38vw, 340px) minmax(0, 1fr) !important;
             }
             .inbox-right-panel {
                 display: flex !important;
@@ -1386,11 +1499,59 @@ export default function Inbox() {
         }
 
         @media (max-width: 768px) {
+            body.inbox-mobile-chat-lock {
+                overflow: hidden;
+                height: 100vh;
+                height: 100dvh;
+                overscroll-behavior: none;
+            }
+            body.inbox-mobile-chat-lock .inbox-react .main-content,
+            body.inbox-mobile-chat-lock .inbox-react .inbox-main-content,
+            body.inbox-mobile-chat-lock .inbox-react .inbox-container,
+            body.inbox-mobile-chat-lock .inbox-react .chat-panel.active {
+                overflow: hidden !important;
+            }
             .inbox-react { --inbox-main-pad-y: 8px; }
-            .inbox-main-content { padding: 8px !important; }
+            .inbox-main-content {
+                padding: calc(env(safe-area-inset-top, 0px) + 72px) 10px 10px !important;
+                min-height: 100svh;
+            }
+            body.inbox-mobile-chat-lock .inbox-react .inbox-main-content {
+                padding-top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+            }
+            .inbox-react .mobile-menu-toggle {
+                top: calc(env(safe-area-inset-top, 0px) + 8px);
+                left: 10px;
+                right: 10px;
+                height: 58px;
+                padding: 0 16px;
+                border-radius: 14px;
+                justify-content: center;
+                align-items: center;
+                gap: 10px;
+                font-size: 23px;
+                font-weight: 700;
+                color: #f7fffb;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                box-shadow:
+                    0 10px 22px rgba(2, 8, 20, 0.34),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+                    0 1px 0 rgba(5, 10, 18, 0.5);
+            }
+            .inbox-react .mobile-menu-toggle::after {
+                font-size: 12px;
+                letter-spacing: 0.08em;
+            }
+            body.inbox-mobile-chat-lock .inbox-react .mobile-menu-toggle {
+                opacity: 0;
+                pointer-events: none;
+                transform: translateY(calc(-100% - 20px));
+            }
             .inbox-container {
                 grid-template-columns: 1fr !important;
                 border-radius: 12px;
+                height: calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px) !important;
+                max-height: calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px) !important;
             }
             .conversations-panel {
                 display: flex !important;
@@ -1404,6 +1565,7 @@ export default function Inbox() {
             }
             .chat-panel.active {
                 display: flex !important;
+                min-height: 0;
             }
             .chat-header {
                 padding: 10px 12px;
@@ -1411,6 +1573,12 @@ export default function Inbox() {
             }
             .chat-back-btn {
                 display: inline-flex;
+                width: 38px;
+                height: 38px;
+                border-radius: 11px;
+            }
+            .chat-back-btn-arrow {
+                font-size: 24px;
             }
             .chat-header-actions {
                 gap: 6px;
@@ -1427,8 +1595,17 @@ export default function Inbox() {
                 font-size: 13px;
             }
             .chat-input {
-                padding: 10px 12px;
-                gap: 10px;
+                padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+                gap: 6px;
+                align-items: center;
+            }
+            .chat-input textarea {
+                min-height: 44px;
+                max-height: 88px;
+                padding: 11px 12px;
+                font-size: 13px;
+                line-height: 1.3;
+                overflow-y: auto;
             }
             .chat-scroll-bottom-btn {
                 right: 12px;
@@ -1437,8 +1614,9 @@ export default function Inbox() {
                 height: 36px;
             }
             .quick-reply-trigger {
-                height: 42px;
-                padding: 0 10px;
+                height: 38px;
+                min-width: 38px;
+                padding: 0 8px;
                 font-size: 12px;
                 gap: 5px;
             }
@@ -1468,8 +1646,8 @@ export default function Inbox() {
                 gap: 5px;
             }
             .chat-input .chat-input-btn {
-                width: 42px;
-                height: 42px;
+                width: 38px;
+                height: 38px;
             }
             .chat-messages .message.media-audio {
                 min-width: 0;
@@ -1509,38 +1687,134 @@ export default function Inbox() {
                 height: 32px;
             }
             .conversations-header {
-                padding: 14px 12px;
+                padding: 16px 14px;
+                gap: 14px;
             }
             .conversations-header h2 {
                 font-size: 18px;
-                margin-bottom: 10px;
+                margin-bottom: 0;
             }
-            .inbox-session-highlight {
-                padding: 8px 10px;
+            .inbox-session-filter .form-label {
+                margin-bottom: 8px;
+                font-size: 11px;
+                letter-spacing: 0.06em;
+            }
+            .inbox-session-filter .form-select {
+                min-height: 42px;
+                border-radius: 12px;
+                padding: 0 12px;
+            }
+            .inbox-session-unified {
                 gap: 8px;
             }
+            .inbox-session-filter-embedded .form-label {
+                margin-bottom: 6px;
+                font-size: 10px;
+                letter-spacing: 0.05em;
+                text-align: center;
+            }
+            .inbox-session-filter-embedded .form-select {
+                min-height: 38px;
+                padding: 0 10px;
+                font-size: 12px;
+                text-align: center;
+                text-align-last: center;
+            }
+            .inbox-session-highlight {
+                padding: 10px;
+                gap: 8px;
+                flex-direction: column;
+                align-items: center;
+                border-radius: 14px;
+            }
+            .inbox-session-highlight-main {
+                width: 100%;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+            .inbox-session-highlight-main > div {
+                width: 100%;
+                text-align: center;
+            }
+            .inbox-session-highlight-label,
+            .inbox-session-highlight-meta {
+                display: none;
+            }
             .inbox-session-highlight-name {
-                font-size: 13px;
+                display: none;
             }
             .inbox-session-highlight-status {
                 font-size: 10px;
-                padding: 3px 8px;
+                padding: 0 8px;
+                min-height: 28px;
+                display: inline-flex;
+                align-items: center;
             }
             .inbox-session-highlight-actions {
-                align-items: flex-end;
+                width: 100%;
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
             }
             .inbox-session-resync-btn {
+                min-height: 30px;
                 font-size: 10px;
-                padding: 3px 9px;
+                padding: 0 10px;
             }
             .conversations-tabs {
-                margin-bottom: 10px;
+                margin-bottom: 0;
+                gap: 8px;
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                -webkit-overflow-scrolling: touch;
+            }
+            .conversations-tabs button {
+                min-height: 40px;
+                padding: 0 16px;
+            }
+            .conversations-header .search-box input {
+                height: 42px;
             }
             .conversations-list .conversation-item {
                 padding: 12px;
             }
+            .conversations-list .empty-state {
+                min-height: 52vh;
+                gap: 14px;
+                padding: 56px 18px !important;
+            }
+            .conversations-list .empty-state-icon {
+                width: 60px;
+                height: 60px;
+                opacity: 0.84;
+            }
+            .conversations-list .empty-state p {
+                font-size: 20px;
+            }
+            .conversations-list .empty-state .empty-state-subtext {
+                font-size: 13px;
+            }
             .contact-card-actions {
                 grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 480px) {
+            .quick-reply-trigger {
+                width: 42px;
+                padding: 0;
+                justify-content: center;
+            }
+            .quick-reply-trigger-label {
+                display: none;
+            }
+            .conversation-session-chip {
+                max-width: 84px;
+            }
+            .inbox-session-unified {
+                gap: 7px;
             }
         }
       `}</style>
@@ -1637,33 +1911,35 @@ export default function Inbox() {
           <div className="conversations-panel" id="conversationsPanel">
             <div className="conversations-header">
               <h2><span className="icon icon-inbox icon-sm"></span> Inbox</h2>
-              <div className="inbox-session-filter">
-                <label className="form-label" htmlFor="inboxSessionFilter">Conta WhatsApp</label>
-                <select
-                  id="inboxSessionFilter"
-                  className="form-select"
-                  defaultValue=""
-                  onChange={(event) => globals.changeInboxSessionFilter?.((event.target as HTMLSelectElement).value)}
-                >
-                  <option value="">Todas as contas</option>
-                </select>
-              </div>
-              <div className="inbox-session-highlight" id="inboxSessionIndicator">
-                <div>
-                  <div className="inbox-session-highlight-label">Conta exibida</div>
-                  <div className="inbox-session-highlight-name">Todas as contas</div>
-                  <div className="inbox-session-highlight-meta">Mostrando conversas de todas as contas</div>
-                </div>
-                <div className="inbox-session-highlight-actions">
-                  <span className="inbox-session-highlight-status all">Filtro geral</span>
-                  <button
-                    id="inboxResyncHistoryBtn"
-                    className="inbox-session-resync-btn"
-                    type="button"
-                    onClick={() => globals.resyncInboxHistory?.()}
+              <div className="inbox-session-highlight inbox-session-unified" id="inboxSessionIndicator">
+                <div className="inbox-session-filter inbox-session-filter-embedded">
+                  <label className="form-label" htmlFor="inboxSessionFilter">Conta WhatsApp</label>
+                  <select
+                    id="inboxSessionFilter"
+                    className="form-select"
+                    defaultValue=""
+                    onChange={(event) => globals.changeInboxSessionFilter?.((event.target as HTMLSelectElement).value)}
                   >
-                    Ressincronizar
-                  </button>
+                    <option value="">Todas as contas</option>
+                  </select>
+                </div>
+                <div className="inbox-session-highlight-main">
+                  <div>
+                    <div className="inbox-session-highlight-label">Conta exibida</div>
+                    <div className="inbox-session-highlight-name">Todas as contas</div>
+                    <div className="inbox-session-highlight-meta">Mostrando conversas de todas as contas</div>
+                  </div>
+                  <div className="inbox-session-highlight-actions">
+                    <span className="inbox-session-highlight-status all">Filtro geral</span>
+                    <button
+                      id="inboxResyncHistoryBtn"
+                      className="inbox-session-resync-btn"
+                      type="button"
+                      onClick={() => globals.resyncInboxHistory?.()}
+                    >
+                      Ressincronizar
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="conversations-tabs">

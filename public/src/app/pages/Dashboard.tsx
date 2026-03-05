@@ -64,14 +64,58 @@ function DashboardStyles() {
         .custom-event-status { font-size: 11px; border-radius: 999px; padding: 3px 8px; border: 1px solid rgba(var(--primary-rgb), 0.25); color: var(--gray-500); background: rgba(15, 23, 42, 0.24); white-space: nowrap; }
         .custom-event-status.active { border-color: rgba(var(--primary-rgb), 0.45); color: #d8f4e6; background: rgba(var(--primary-rgb), 0.13); }
         .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.4); color: #cbd5e1; }
+        @media (max-width: 768px) {
+          .events-create-btn,
+          .events-empty-create-btn,
+          .dashboard-fab-add-lead { display: none !important; }
+        }
         @media (max-width: 640px) {
           .dashboard-botconversa { gap: 14px; margin-bottom: 16px; }
           .stats-period-card, .stats-general-card, .events-personalized-card { padding: 12px; border-radius: 12px; }
           .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin-bottom: 12px; font-size: 15px; }
-          .stats-period-controls { gap: 8px; }
-          .stats-period-controls .form-input, .stats-period-controls .form-select { width: 100%; min-width: 0; }
-          .chart-type-toggle { width: 100%; justify-content: flex-start; }
-          .chart-type-toggle .chart-btn { flex: 1 1 0; }
+          .stats-period-controls {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            align-items: stretch;
+          }
+          .stats-period-controls .form-input,
+          .stats-period-controls .form-select {
+            width: 100%;
+            min-width: 0;
+            height: 42px;
+            padding: 0 12px;
+            font-size: 12px;
+            line-height: 1.2;
+            border-radius: 12px;
+            box-sizing: border-box;
+            font-variant-numeric: tabular-nums;
+          }
+          .stats-period-controls input[type="date"] {
+            padding-right: 34px;
+          }
+          .stats-period-controls input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0.9;
+            cursor: pointer;
+            margin-left: 6px;
+          }
+          .stats-period-controls .form-select {
+            padding-right: 30px;
+            text-overflow: ellipsis;
+            background-position: right 10px center;
+            background-size: 10px;
+          }
+          .stats-period-controls .chart-type-toggle {
+            grid-column: 1 / -1;
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .stats-period-controls .chart-type-toggle .chart-btn {
+            width: 100%;
+            min-height: 40px;
+          }
           .stats-period-chart canvas { max-height: 150px !important; }
           .stats-general-item { gap: 12px; }
           .stats-general-label { font-size: 12px; }
@@ -111,7 +155,7 @@ function StatsPeriod() {
         <div className="stats-period-controls">
           <input type="date" className="form-input" id="statsStartDate" />
           <input type="date" className="form-input" id="statsEndDate" />
-          <select className="form-select" id="statsMetric" style={{ width: 'auto' }}>
+          <select className="form-select" id="statsMetric">
             <option value="novos_contatos">Novos Contatos</option>
             <option value="mensagens">Mensagens</option>
             <option value="interacoes">Interações</option>
@@ -170,7 +214,7 @@ function EventsCard() {
             <option value="year">Ano</option>
             <option value="last_30_days">Últimos 30 dias</option>
           </select>
-          <button className="btn btn-primary btn-sm" type="button" onClick={() => globals.openCustomEventModal?.()}>
+          <button className="btn btn-primary btn-sm events-create-btn" type="button" onClick={() => globals.openCustomEventModal?.()}>
             Criar
           </button>
         </div>
@@ -546,7 +590,7 @@ function FloatingAddLeadButton() {
   return (
     <button
       type="button"
-      className="btn btn-whatsapp btn-icon"
+      className="btn btn-whatsapp btn-icon dashboard-fab-add-lead"
       style={{
         position: 'fixed',
         bottom: '30px',

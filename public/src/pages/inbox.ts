@@ -745,6 +745,12 @@ function isTabletOrMobileView() {
     return window.matchMedia('(max-width: 1024px)').matches;
 }
 
+function syncInboxBodyScrollLock() {
+    const chatPanel = document.getElementById('chatPanel') as HTMLElement | null;
+    const chatOpenOnMobile = isMobileInboxView() && Boolean(chatPanel?.classList.contains('active'));
+    document.body.classList.toggle('inbox-mobile-chat-lock', chatOpenOnMobile);
+}
+
 function setMobileConversationMode(chatOpen: boolean) {
     const conversationsPanel = document.getElementById('conversationsPanel') as HTMLElement | null;
     const chatPanel = document.getElementById('chatPanel') as HTMLElement | null;
@@ -753,6 +759,7 @@ function setMobileConversationMode(chatOpen: boolean) {
     if (!isMobileInboxView()) {
         conversationsPanel.classList.remove('hidden');
         chatPanel.classList.remove('active');
+        syncInboxBodyScrollLock();
         return;
     }
 
@@ -763,6 +770,7 @@ function setMobileConversationMode(chatOpen: boolean) {
         conversationsPanel.classList.remove('hidden');
         chatPanel.classList.remove('active');
     }
+    syncInboxBodyScrollLock();
 }
 
 function isCurrentChatVisible() {
@@ -1190,8 +1198,20 @@ function startInboxAutoRefresh() {
 function bindInboxLifecycle() {
     if (inboxLifecycleBound) return;
     inboxLifecycleBound = true;
-    window.addEventListener('app:logout', stopInboxAutoRefresh);
+    window.addEventListener('app:logout', () => {
+        stopInboxAutoRefresh();
+        document.body.classList.remove('inbox-mobile-chat-lock');
+    });
     window.addEventListener('beforeunload', stopInboxAutoRefresh);
+    window.addEventListener('hashchange', () => {
+        const hash = String(window.location.hash || '').toLowerCase();
+        if (!hash.startsWith('#/inbox')) {
+            document.body.classList.remove('inbox-mobile-chat-lock');
+            return;
+        }
+        syncInboxBodyScrollLock();
+    });
+    window.addEventListener('resize', syncInboxBodyScrollLock);
 }
 
 function renderConversations() {
@@ -1203,6 +1223,7 @@ function renderConversations() {
             <div class="empty-state" style="padding: 40px;">
                 <div class="empty-state-icon icon icon-empty icon-lg"></div>
                 <p>Nenhuma conversa</p>
+                <p class="empty-state-subtext">Quando houver mensagens, elas aparecerao aqui.</p>
             </div>
         `;
         return;
@@ -1249,7 +1270,13 @@ function renderFilteredConversations(filtered: Conversation[]) {
     const list = document.getElementById('conversationsList') as HTMLElement | null;
     if (!list) return;
     if (filtered.length === 0) {
-        list.innerHTML = `<div class="empty-state" style="padding: 40px;"><p>Nenhuma conversa encontrada</p></div>`;
+        list.innerHTML = `
+            <div class="empty-state" style="padding: 40px;">
+                <div class="empty-state-icon icon icon-empty icon-lg"></div>
+                <p>Nenhuma conversa encontrada</p>
+                <p class="empty-state-subtext">Tente ajustar a busca ou trocar o filtro.</p>
+            </div>
+        `;
         return;
     }
     // Usar mesma lógica de renderConversations
@@ -2126,8 +2153,8 @@ function renderChat() {
 
     panel.innerHTML = `
         <div class="chat-header">
-            <button class="btn btn-sm btn-outline btn-icon chat-back-btn" onclick="backToList()" id="backBtn" title="Voltar para lista">
-                <span class="icon icon-arrow-left icon-sm"></span>
+            <button class="btn btn-sm btn-outline chat-back-btn" onclick="backToList()" id="backBtn" title="Voltar para conversas" aria-label="Voltar para conversas">
+                <span class="chat-back-btn-arrow" aria-hidden="true">←</span>
             </button>
             ${renderAvatarMarkup({
                 name: currentConversation.name,
@@ -2172,9 +2199,10 @@ function renderChat() {
             <div class="chat-emoji-picker" id="emojiPicker" aria-label="Selecionador de emojis">
                 ${emojiPickerItems}
             </div>
-            <textarea id="messageInput" placeholder="Digite uma mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
+            <textarea id="messageInput" placeholder="Mensagem..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
             <button class="quick-reply-trigger" onclick="toggleQuickReplyPicker()" title="Selecionar resposta rapida" type="button">
-                <span class="icon icon-bolt icon-sm"></span> R&aacute;pidas
+                <span class="icon icon-bolt icon-sm"></span>
+                <span class="quick-reply-trigger-label">R&aacute;pidas</span>
             </button>
             <div class="quick-reply-picker" id="quickReplyPicker">
                 ${quickReplyItems}
