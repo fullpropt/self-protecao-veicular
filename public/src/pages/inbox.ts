@@ -2708,6 +2708,11 @@ function bindMessageComposerViewportSync() {
 
     const syncComposerViewport = () => {
         scheduleInboxMobileViewportStateSync();
+        if (isMobileInboxView()) {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        }
         window.setTimeout(() => {
             scheduleInboxMobileViewportStateSync();
             scrollToBottom();

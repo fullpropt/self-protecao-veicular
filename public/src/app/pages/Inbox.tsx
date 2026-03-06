@@ -1600,10 +1600,14 @@ export default function Inbox() {
                 display: flex !important;
                 min-height: 0;
                 height: 100%;
+                position: relative;
+                overflow: hidden;
             }
             .chat-header {
                 padding: 10px 12px;
                 gap: 10px;
+                position: relative;
+                z-index: 12;
             }
             .chat-back-btn {
                 display: inline-flex;
@@ -1623,6 +1627,7 @@ export default function Inbox() {
             }
             .chat-messages {
                 padding: 10px 12px;
+                padding-bottom: calc(96px + env(safe-area-inset-bottom));
                 flex: 1 1 auto;
                 min-height: 0;
             }
@@ -1635,7 +1640,9 @@ export default function Inbox() {
                 gap: 6px;
                 align-items: center;
                 flex-shrink: 0;
-                position: sticky;
+                position: absolute;
+                left: 0;
+                right: 0;
                 bottom: 0;
                 z-index: 15;
                 background: linear-gradient(180deg, rgba(20, 34, 55, 0.96), rgba(17, 29, 47, 0.98));
