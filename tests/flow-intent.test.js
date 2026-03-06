@@ -703,6 +703,54 @@ describe('FlowService intent routing compatibility', () => {
         expect(service.flowMatchesConversationSession({ session_id: 'conta_a' }, '')).toBe(false);
     });
 
+    test('processIncomingMessage serializes concurrent messages for the same conversation', async () => {
+        const service = new FlowService();
+        const execution = {
+            id: 701,
+            flow: { id: 88, nodes: [], edges: [] },
+            conversation: { id: 331 },
+            currentNode: 'intent-mid',
+            variables: {}
+        };
+        const lead = { id: 26, phone: '5527996459659' };
+        const conversation = { id: 331, session_id: 'momnt', is_bot_active: 1, created: false };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(execution);
+        const order = [];
+        let inFlight = 0;
+        let maxInFlight = 0;
+        const continueSpy = jest.spyOn(service, 'continueFlow').mockImplementation(async (_execution, message) => {
+            inFlight += 1;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            order.push(`start:${message.text}`);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            order.push(`end:${message.text}`);
+            inFlight -= 1;
+            return execution;
+        });
+
+        await Promise.all([
+            service.processIncomingMessage({ text: 'Ei' }, lead, conversation),
+            service.processIncomingMessage({ text: 'Oi' }, lead, conversation),
+            service.processIncomingMessage({ text: 'Boa tarde' }, lead, conversation)
+        ]);
+
+        expect(resolveExecutionSpy).toHaveBeenCalledTimes(3);
+        expect(continueSpy).toHaveBeenCalledTimes(3);
+        expect(maxInFlight).toBe(1);
+        expect(order).toEqual([
+            'start:Ei',
+            'end:Ei',
+            'start:Oi',
+            'end:Oi',
+            'start:Boa tarde',
+            'end:Boa tarde'
+        ]);
+
+        resolveExecutionSpy.mockRestore();
+        continueSpy.mockRestore();
+    });
+
     test('processIncomingMessage starts keyword flow via default->message_once fallback on unmatched greeting', async () => {
         const service = new FlowService();
         const triggerNode = {

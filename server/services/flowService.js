@@ -774,6 +774,7 @@ class FlowService extends EventEmitter {
         super();
         this.sendFunction = null;
         this.activeExecutions = new Map();
+        this.conversationProcessingChains = new Map();
     }
     
     /**
@@ -812,6 +813,31 @@ class FlowService extends EventEmitter {
         const key = this.getExecutionConversationKey(conversationId);
         if (!key) return;
         this.activeExecutions.delete(key);
+    }
+
+    runConversationSerialized(conversationId, task) {
+        if (typeof task !== 'function') {
+            return Promise.resolve(null);
+        }
+
+        const key = this.getExecutionConversationKey(conversationId);
+        if (!key) {
+            return Promise.resolve().then(() => task());
+        }
+
+        const previousChain = this.conversationProcessingChains.get(key) || Promise.resolve();
+        const currentChain = previousChain
+            .catch(() => null)
+            .then(() => task());
+
+        const trackedChain = currentChain.finally(() => {
+            if (this.conversationProcessingChains.get(key) === trackedChain) {
+                this.conversationProcessingChains.delete(key);
+            }
+        });
+
+        this.conversationProcessingChains.set(key, trackedChain);
+        return trackedChain;
     }
 
     async restoreExecutionFromStorage(conversation, lead = null) {
@@ -1502,6 +1528,13 @@ class FlowService extends EventEmitter {
      * Processar mensagem recebida e verificar triggers
      */
     async processIncomingMessage(message, lead, conversation) {
+        return this.runConversationSerialized(
+            conversation?.id,
+            () => this.processIncomingMessageInternal(message, lead, conversation)
+        );
+    }
+
+    async processIncomingMessageInternal(message, lead, conversation) {
         // Verificar se bot está ativo para esta conversa
         if (conversation && !conversation.is_bot_active) {
             return null;
