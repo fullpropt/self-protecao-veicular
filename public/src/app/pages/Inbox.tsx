@@ -8,6 +8,10 @@ type InboxGlobals = {
   searchConversations?: () => void;
   changeInboxSessionFilter?: (sessionId: string) => void;
   resyncInboxHistory?: () => void | Promise<void>;
+  openStartConversationModal?: () => void | Promise<void>;
+  closeStartConversationModal?: () => void;
+  filterStartConversationContacts?: () => void;
+  confirmStartConversationModal?: () => void | Promise<void>;
   registerCurrentUser?: () => void;
   toggleContactInfo?: (forceOpen?: boolean) => void;
   logout?: () => void;
@@ -304,6 +308,128 @@ export default function Inbox() {
         }
         .inbox-session-resync-btn.is-loading {
             cursor: progress;
+        }
+        .inbox-session-start-btn {
+            border-radius: 999px;
+            border: 1px solid rgba(var(--primary-rgb), 0.58);
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.94), rgba(16, 148, 98, 0.94));
+            color: #ffffff;
+            padding: 0 14px;
+            min-height: 36px;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.2;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+            box-shadow: 0 10px 24px rgba(var(--primary-rgb), 0.28);
+        }
+        .inbox-session-start-btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.04);
+            box-shadow: 0 12px 26px rgba(var(--primary-rgb), 0.34);
+        }
+        .inbox-start-conversation-modal[hidden] {
+            display: none !important;
+        }
+        .inbox-start-conversation-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1450;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(2, 6, 23, 0.66);
+            backdrop-filter: blur(5px);
+        }
+        .inbox-start-conversation-dialog {
+            width: min(100%, 560px);
+            border-radius: 16px;
+            border: 1px solid rgba(var(--primary-rgb), 0.24);
+            background:
+                radial-gradient(circle at top right, rgba(var(--primary-rgb), 0.08), transparent 55%),
+                rgba(9, 16, 28, 0.96);
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+            color: var(--gray-900);
+            overflow: hidden;
+        }
+        .inbox-start-conversation-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+        }
+        .inbox-start-conversation-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        .inbox-start-conversation-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.34);
+            color: var(--gray-800);
+            cursor: pointer;
+            font-size: 19px;
+            line-height: 1;
+            display: grid;
+            place-items: center;
+        }
+        .inbox-start-conversation-close:hover {
+            border-color: rgba(var(--primary-rgb), 0.42);
+            color: var(--primary);
+        }
+        .inbox-start-conversation-body {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding: 16px 18px 10px;
+        }
+        .inbox-start-conversation-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .inbox-start-conversation-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--gray-700);
+            font-weight: 700;
+        }
+        .inbox-start-conversation-field .form-input,
+        .inbox-start-conversation-field .form-select {
+            min-height: 42px;
+            border-radius: 12px;
+        }
+        .inbox-start-conversation-lead-select {
+            min-height: 180px;
+            max-height: 280px;
+        }
+        .inbox-start-conversation-hint {
+            margin: 0;
+            font-size: 12px;
+            color: var(--gray-700);
+        }
+        .inbox-start-conversation-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 14px 18px 18px;
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
         }
         .conversations-tabs {
             display: flex;
@@ -1833,6 +1959,27 @@ export default function Inbox() {
                 font-size: 10px;
                 padding: 0 10px;
             }
+            .inbox-session-start-btn {
+                min-height: 30px;
+                font-size: 10px;
+                padding: 0 10px;
+            }
+            .inbox-start-conversation-modal {
+                padding: 12px;
+            }
+            .inbox-start-conversation-dialog {
+                border-radius: 14px;
+            }
+            .inbox-start-conversation-header,
+            .inbox-start-conversation-body,
+            .inbox-start-conversation-footer {
+                padding-left: 14px;
+                padding-right: 14px;
+            }
+            .inbox-start-conversation-lead-select {
+                min-height: 160px;
+                max-height: 220px;
+            }
             .conversations-tabs {
                 margin-bottom: 0;
                 gap: 8px;
@@ -2005,6 +2152,15 @@ export default function Inbox() {
                   <div className="inbox-session-highlight-actions">
                     <span className="inbox-session-highlight-status all">Filtro geral</span>
                     <button
+                      id="inboxStartConversationBtn"
+                      className="inbox-session-start-btn"
+                      type="button"
+                      onClick={() => globals.openStartConversationModal?.()}
+                    >
+                      <span className="icon icon-add icon-sm"></span>
+                      Iniciar conversa
+                    </button>
+                    <button
                       id="inboxResyncHistoryBtn"
                       className="inbox-session-resync-btn"
                       type="button"
@@ -2057,6 +2213,70 @@ export default function Inbox() {
           </div>
         </div>
         <div className="contact-info-backdrop" id="contactInfoBackdrop" onClick={() => globals.toggleContactInfo?.(false)}></div>
+        <div className="inbox-start-conversation-modal" id="inboxStartConversationModal" hidden aria-hidden="true">
+          <div
+            className="inbox-start-conversation-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="inboxStartConversationTitle"
+          >
+            <div className="inbox-start-conversation-header">
+              <h3 className="inbox-start-conversation-title" id="inboxStartConversationTitle">
+                <span className="icon icon-add icon-sm"></span>
+                Iniciar conversa
+              </h3>
+              <button
+                className="inbox-start-conversation-close"
+                type="button"
+                aria-label="Fechar"
+                onClick={() => globals.closeStartConversationModal?.()}
+              >
+                ×
+              </button>
+            </div>
+            <div className="inbox-start-conversation-body">
+              <div className="inbox-start-conversation-field">
+                <label className="inbox-start-conversation-label" htmlFor="inboxStartConversationSessionSelect">
+                  Conta WhatsApp
+                </label>
+                <select id="inboxStartConversationSessionSelect" className="form-select" defaultValue="">
+                  <option value="">Selecione uma conta</option>
+                </select>
+              </div>
+              <div className="inbox-start-conversation-field">
+                <label className="inbox-start-conversation-label" htmlFor="inboxStartConversationLeadSearch">
+                  Buscar contato
+                </label>
+                <input
+                  id="inboxStartConversationLeadSearch"
+                  className="form-input"
+                  type="text"
+                  placeholder="Nome ou telefone..."
+                  onInput={() => globals.filterStartConversationContacts?.()}
+                />
+              </div>
+              <div className="inbox-start-conversation-field">
+                <label className="inbox-start-conversation-label" htmlFor="inboxStartConversationLeadSelect">
+                  Contato
+                </label>
+                <select id="inboxStartConversationLeadSelect" className="form-select inbox-start-conversation-lead-select" size={8}>
+                  <option value="">Carregando contatos...</option>
+                </select>
+              </div>
+              <p className="inbox-start-conversation-hint" id="inboxStartConversationLeadHint">
+                Selecione um contato para iniciar o chat.
+              </p>
+            </div>
+            <div className="inbox-start-conversation-footer">
+              <button className="btn-secondary" type="button" onClick={() => globals.closeStartConversationModal?.()}>
+                Cancelar
+              </button>
+              <button className="btn-primary" type="button" onClick={() => globals.confirmStartConversationModal?.()}>
+                Iniciar
+              </button>
+            </div>
+          </div>
+        </div>
         <div className="chat-media-preview-modal" id="chatMediaPreviewModal" hidden aria-hidden="true">
           <div className="chat-media-preview-dialog" id="chatMediaPreviewDialog" role="dialog" aria-modal="true" aria-label="Visualizacao de midia">
             <button className="chat-media-preview-close" id="chatMediaPreviewCloseBtn" type="button" aria-label="Fechar visualizacao">×</button>

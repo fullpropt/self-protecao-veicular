@@ -134,7 +134,12 @@ let inboxSearchLeadsCache: InboxLeadItem[] = [];
 let inboxSearchLeadsCacheKey = '';
 let inboxSearchLeadsCacheAt = 0;
 let inboxSearchLeadsFetchInFlight: Promise<InboxLeadItem[]> | null = null;
+let inboxStartConversationLeadsCache: InboxLeadItem[] = [];
+let inboxStartConversationLeadsCacheAt = 0;
+let inboxStartConversationLeadsFetchInFlight: Promise<InboxLeadItem[]> | null = null;
 let inboxSearchRequestToken = 0;
+let inboxStartConversationLeads: InboxLeadItem[] = [];
+let inboxStartConversationModalBound = false;
 
 const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 const INBOX_OPEN_LEAD_QUERY_KEYS = ['leadId', 'lead_id', 'id'] as const;
@@ -142,6 +147,7 @@ const INBOX_SEARCH_CONTACTS_CACHE_TTL_MS = 30 * 1000;
 const INBOX_SEARCH_CONTACTS_BATCH_SIZE = 200;
 const INBOX_SEARCH_CONTACTS_MAX_PAGES = 20;
 const INBOX_NEW_CONVERSATION_PREVIEW = 'Clique para iniciar uma nova conversa';
+const INBOX_START_CONVERSATION_MAX_RESULTS = 300;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', is_default: true, source: 'name' },
@@ -709,6 +715,68 @@ async function fetchInboxSearchLeads(force = false) {
     return inboxSearchLeadsFetchInFlight;
 }
 
+async function fetchInboxStartConversationLeads(force = false) {
+    const cacheValid =
+        !force &&
+        Array.isArray(inboxStartConversationLeadsCache) &&
+        (Date.now() - inboxStartConversationLeadsCacheAt) < INBOX_SEARCH_CONTACTS_CACHE_TTL_MS;
+
+    if (cacheValid) {
+        return inboxStartConversationLeadsCache;
+    }
+
+    if (inboxStartConversationLeadsFetchInFlight) {
+        return inboxStartConversationLeadsFetchInFlight;
+    }
+
+    inboxStartConversationLeadsFetchInFlight = (async () => {
+        const leads: InboxLeadItem[] = [];
+        let offset = 0;
+        let page = 0;
+        let totalExpected: number | null = null;
+
+        while (page < INBOX_SEARCH_CONTACTS_MAX_PAGES) {
+            const params = new URLSearchParams();
+            params.set('limit', String(INBOX_SEARCH_CONTACTS_BATCH_SIZE));
+            params.set('offset', String(offset));
+
+            const response: InboxLeadsResponse = await api.get(`/api/leads?${params.toString()}`);
+            const batch = Array.isArray(response?.leads) ? response.leads : [];
+            const reportedTotal = Number(response?.total || 0);
+
+            if (Number.isFinite(reportedTotal) && reportedTotal > 0) {
+                totalExpected = reportedTotal;
+            }
+
+            leads.push(...batch.map((item) => ({
+                id: normalizeInboxLeadId(item.id),
+                name: String(item.name || '').trim(),
+                phone: String(item.phone || '').trim(),
+                avatar_url: String(item.avatar_url || '').trim(),
+                avatarUrl: String(item.avatarUrl || '').trim(),
+                status: item.status,
+                updated_at: String(item.updated_at || '').trim(),
+                created_at: String(item.created_at || '').trim(),
+                last_message_at: String(item.last_message_at || '').trim()
+            })).filter((item) => item.id > 0));
+
+            page += 1;
+            offset += batch.length;
+
+            if (batch.length < INBOX_SEARCH_CONTACTS_BATCH_SIZE) break;
+            if (totalExpected !== null && leads.length >= totalExpected) break;
+        }
+
+        inboxStartConversationLeadsCache = leads;
+        inboxStartConversationLeadsCacheAt = Date.now();
+        return leads;
+    })().finally(() => {
+        inboxStartConversationLeadsFetchInFlight = null;
+    });
+
+    return inboxStartConversationLeadsFetchInFlight;
+}
+
 async function buildInboxConversationSearchPool() {
     const leads = await fetchInboxSearchLeads();
     const leadIdsWithConversation = new Set(
@@ -751,6 +819,275 @@ function resolveConversationSessionId(conversation: Conversation | null | undefi
     if (anyListedSessionId) return anyListedSessionId;
 
     return buildOwnerFallbackSessionId(getOwnerUserIdFromSessionToken(), 'default_whatsapp_session');
+}
+
+function isStartConversationModalOpen() {
+    const modal = document.getElementById('inboxStartConversationModal') as HTMLElement | null;
+    if (!modal) return false;
+    return !modal.hasAttribute('hidden');
+}
+
+function closeStartConversationModal() {
+    const modal = document.getElementById('inboxStartConversationModal') as HTMLElement | null;
+    if (!modal) return;
+
+    modal.setAttribute('hidden', '');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.classList.remove('active');
+}
+
+function resolvePreferredStartConversationSessionId() {
+    const preferredFilter = sanitizeSessionId(inboxSessionFilter);
+    if (preferredFilter) {
+        const filteredSession = findInboxSessionById(preferredFilter);
+        if (filteredSession && isInboxSessionConnected(filteredSession)) {
+            return preferredFilter;
+        }
+    }
+
+    const connectedSession = inboxAvailableSessions.find((session) => {
+        const sessionId = sanitizeSessionId(session?.session_id);
+        return Boolean(sessionId) && isInboxSessionConnected(session);
+    });
+    const connectedSessionId = sanitizeSessionId(connectedSession?.session_id);
+    if (connectedSessionId) {
+        return connectedSessionId;
+    }
+
+    return sanitizeSessionId(inboxAvailableSessions[0]?.session_id);
+}
+
+function renderStartConversationSessionOptions(preferredSessionId = '') {
+    const sessionSelect = document.getElementById('inboxStartConversationSessionSelect') as HTMLSelectElement | null;
+    if (!sessionSelect) return;
+
+    const options = inboxAvailableSessions
+        .map((session) => {
+            const sessionId = sanitizeSessionId(session?.session_id);
+            if (!sessionId) return null;
+
+            const displayName = getSessionDisplayName(session);
+            const statusLabel = getSessionStatusLabel(session);
+            const connected = isInboxSessionConnected(session);
+            const label = displayName === sessionId
+                ? `${displayName} - ${statusLabel}`
+                : `${displayName} - ${sessionId} - ${statusLabel}`;
+
+            return {
+                sessionId,
+                connected,
+                html: `<option value="${escapeHtml(sessionId)}"${connected ? '' : ' disabled'}>${escapeHtml(label)}</option>`
+            };
+        })
+        .filter((item): item is { sessionId: string; connected: boolean; html: string } => Boolean(item));
+
+    if (options.length === 0) {
+        sessionSelect.innerHTML = '<option value="">Nenhuma conta WhatsApp disponivel</option>';
+        sessionSelect.value = '';
+        return;
+    }
+
+    sessionSelect.innerHTML = options.map((item) => item.html).join('');
+
+    const normalizedPreferred = sanitizeSessionId(preferredSessionId);
+    let nextSessionId = normalizedPreferred;
+    if (!nextSessionId || !options.some((item) => item.sessionId === nextSessionId && item.connected)) {
+        nextSessionId = resolvePreferredStartConversationSessionId();
+    }
+    if (!nextSessionId || !options.some((item) => item.sessionId === nextSessionId && item.connected)) {
+        nextSessionId = options.find((item) => item.connected)?.sessionId || options[0]?.sessionId || '';
+    }
+    sessionSelect.value = nextSessionId;
+}
+
+function renderStartConversationLeadHint() {
+    const hint = document.getElementById('inboxStartConversationLeadHint') as HTMLElement | null;
+    const leadSelect = document.getElementById('inboxStartConversationLeadSelect') as HTMLSelectElement | null;
+    if (!hint || !leadSelect) return;
+
+    const selectedLeadId = normalizeInboxLeadId(leadSelect.value);
+    const selectedLead = inboxStartConversationLeads.find((lead) => normalizeInboxLeadId(lead.id) === selectedLeadId) || null;
+    if (!selectedLead) {
+        hint.textContent = 'Selecione um contato para iniciar o chat.';
+        return;
+    }
+
+    const leadPhone = String(selectedLead.phone || '').trim();
+    hint.textContent = leadPhone
+        ? `${selectedLead.name || 'Contato'} • ${formatPhone(leadPhone)}`
+        : `${selectedLead.name || 'Contato'} • sem telefone`;
+}
+
+function renderStartConversationLeadOptions() {
+    const leadSelect = document.getElementById('inboxStartConversationLeadSelect') as HTMLSelectElement | null;
+    const searchInput = document.getElementById('inboxStartConversationLeadSearch') as HTMLInputElement | null;
+    if (!leadSelect) return;
+
+    const search = normalizeName(String(searchInput?.value || '').trim());
+    const previousSelection = normalizeInboxLeadId(leadSelect.value);
+
+    const filteredLeads = inboxStartConversationLeads
+        .filter((lead) => Boolean(String(lead?.phone || '').trim()))
+        .filter((lead) => {
+            if (!search) return true;
+            const leadName = normalizeName(String(lead?.name || ''));
+            const leadPhone = String(lead?.phone || '').replace(/\D+/g, '');
+            return leadName.includes(search) || leadPhone.includes(search.replace(/\D+/g, ''));
+        })
+        .slice(0, INBOX_START_CONVERSATION_MAX_RESULTS);
+
+    if (filteredLeads.length === 0) {
+        leadSelect.innerHTML = '<option value="">Nenhum contato encontrado</option>';
+        leadSelect.value = '';
+        renderStartConversationLeadHint();
+        return;
+    }
+
+    leadSelect.innerHTML = filteredLeads
+        .map((lead) => {
+            const leadId = normalizeInboxLeadId(lead.id);
+            const leadName = String(lead.name || lead.phone || `Contato ${leadId}`).trim() || `Contato ${leadId}`;
+            const leadPhone = String(lead.phone || '').trim();
+            const label = leadPhone
+                ? `${leadName} - ${formatPhone(leadPhone)}`
+                : `${leadName} - sem telefone`;
+            return `<option value="${leadId}">${escapeHtml(label)}</option>`;
+        })
+        .join('');
+
+    const hasPreviousSelection = previousSelection > 0
+        && filteredLeads.some((lead) => normalizeInboxLeadId(lead.id) === previousSelection);
+    leadSelect.value = hasPreviousSelection ? String(previousSelection) : String(normalizeInboxLeadId(filteredLeads[0]?.id));
+    renderStartConversationLeadHint();
+}
+
+function filterStartConversationContacts() {
+    renderStartConversationLeadOptions();
+}
+
+async function openStartConversationModal() {
+    const modal = document.getElementById('inboxStartConversationModal') as HTMLElement | null;
+    const searchInput = document.getElementById('inboxStartConversationLeadSearch') as HTMLInputElement | null;
+    if (!modal) return;
+
+    if (inboxAvailableSessions.length === 0) {
+        await loadInboxSessionFilters();
+    }
+
+    renderStartConversationSessionOptions(resolvePreferredStartConversationSessionId());
+
+    inboxStartConversationLeads = await fetchInboxStartConversationLeads();
+    if (!inboxStartConversationLeads.length) {
+        showToast('warning', 'Aviso', 'Nenhum contato encontrado para iniciar conversa');
+        return;
+    }
+
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    renderStartConversationLeadOptions();
+
+    modal.removeAttribute('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    modal.classList.add('active');
+
+    window.setTimeout(() => {
+        searchInput?.focus();
+    }, 0);
+}
+
+async function confirmStartConversationModal() {
+    const leadSelect = document.getElementById('inboxStartConversationLeadSelect') as HTMLSelectElement | null;
+    const sessionSelect = document.getElementById('inboxStartConversationSessionSelect') as HTMLSelectElement | null;
+    if (!leadSelect || !sessionSelect) return;
+
+    const selectedLeadId = normalizeInboxLeadId(leadSelect.value);
+    const selectedSessionId = sanitizeSessionId(sessionSelect.value);
+    if (!selectedLeadId) {
+        showToast('warning', 'Aviso', 'Selecione um contato para iniciar conversa');
+        return;
+    }
+    if (!selectedSessionId) {
+        showToast('warning', 'Aviso', 'Selecione uma conta WhatsApp');
+        return;
+    }
+
+    const selectedLead = inboxStartConversationLeads.find(
+        (lead) => normalizeInboxLeadId(lead.id) === selectedLeadId
+    ) || null;
+    const selectedPhone = String(selectedLead?.phone || '').trim();
+    if (!selectedLead || !selectedPhone) {
+        showToast('warning', 'Aviso', 'Contato sem telefone valido para iniciar conversa');
+        return;
+    }
+
+    const sessionConnected = await ensureSessionConnected(selectedSessionId);
+    if (!sessionConnected) {
+        showToast('warning', 'Aviso', 'Conta WhatsApp selecionada nao esta conectada');
+        return;
+    }
+
+    let targetConversation = conversations.find((conversation) => {
+        const leadId = normalizeInboxLeadId(conversation.leadId);
+        const sessionId = sanitizeSessionId(conversation.sessionId);
+        return leadId === selectedLeadId && sessionId === selectedSessionId;
+    }) || null;
+
+    if (!targetConversation) {
+        const virtualConversation = buildVirtualConversationFromLead(selectedLead);
+        if (!virtualConversation) {
+            showToast('error', 'Erro', 'Nao foi possivel preparar a conversa para este contato');
+            return;
+        }
+
+        targetConversation = {
+            ...virtualConversation,
+            sessionId: selectedSessionId,
+            sessionLabel: resolveConversationSessionLabel(selectedSessionId),
+            hasConversation: false
+        };
+
+        inboxSearchVirtualConversations = [
+            targetConversation,
+            ...inboxSearchVirtualConversations.filter((conversation) => Number(conversation.id) !== Number(targetConversation?.id))
+        ];
+    }
+
+    closeStartConversationModal();
+    await selectConversation(Number(targetConversation.id));
+}
+
+function bindStartConversationModal() {
+    if (inboxStartConversationModalBound) return;
+    inboxStartConversationModalBound = true;
+
+    const modal = document.getElementById('inboxStartConversationModal') as HTMLElement | null;
+    const searchInput = document.getElementById('inboxStartConversationLeadSearch') as HTMLInputElement | null;
+    const leadSelect = document.getElementById('inboxStartConversationLeadSelect') as HTMLSelectElement | null;
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            filterStartConversationContacts();
+        });
+    }
+    if (leadSelect) {
+        leadSelect.addEventListener('change', () => {
+            renderStartConversationLeadHint();
+        });
+    }
+
+    if (modal) {
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeStartConversationModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && isStartConversationModalOpen()) {
+            closeStartConversationModal();
+        }
+    });
 }
 
 function parseLeadCustomFields(value: unknown) {
@@ -981,6 +1318,7 @@ function initInbox() {
     pendingInboxOpenLeadId = resolveInboxOpenLeadIdFromRouteParams();
     bindInboxLifecycle();
     syncInboxMobileViewportState();
+    bindStartConversationModal();
     bindQuickReplyDismiss();
     bindEmojiPickerDismiss();
     bindChatMediaPreviewModal();
@@ -3061,6 +3399,12 @@ async function registerCurrentUser() {
         hideLoading();
         showToast('success', 'Sucesso', 'Contato cadastrado com sucesso');
 
+        inboxSearchLeadsCache = [];
+        inboxSearchLeadsCacheKey = '';
+        inboxSearchLeadsCacheAt = 0;
+        inboxStartConversationLeadsCache = [];
+        inboxStartConversationLeadsCacheAt = 0;
+
         await loadConversations();
         const refreshedConversation =
             conversations.find((conversation) => conversation.id === currentConversation?.id) ||
@@ -3103,6 +3447,10 @@ const windowAny = window as Window & {
     searchConversations?: () => void;
     changeInboxSessionFilter?: (sessionId: string) => void;
     resyncInboxHistory?: () => Promise<void>;
+    openStartConversationModal?: () => Promise<void>;
+    closeStartConversationModal?: () => void;
+    filterStartConversationContacts?: () => void;
+    confirmStartConversationModal?: () => Promise<void>;
     selectConversation?: (id: number) => Promise<void>;
     toggleQuickReplyPicker?: () => void;
     closeQuickReplyPicker?: () => void;
@@ -3127,6 +3475,10 @@ windowAny.filterConversations = filterConversations;
 windowAny.searchConversations = searchConversations;
 windowAny.changeInboxSessionFilter = changeInboxSessionFilter;
 windowAny.resyncInboxHistory = resyncInboxHistory;
+windowAny.openStartConversationModal = openStartConversationModal;
+windowAny.closeStartConversationModal = closeStartConversationModal;
+windowAny.filterStartConversationContacts = filterStartConversationContacts;
+windowAny.confirmStartConversationModal = confirmStartConversationModal;
 windowAny.registerCurrentUser = registerCurrentUser;
 windowAny.logout = logout;
 windowAny.selectConversation = selectConversation;
