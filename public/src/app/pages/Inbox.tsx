@@ -237,6 +237,7 @@ export default function Inbox() {
             border: 1px solid transparent;
             background: transparent;
             color: var(--dark);
+            color-scheme: dark;
             font-size: 15px;
             font-weight: 700;
             line-height: 1.2;
@@ -255,6 +256,15 @@ export default function Inbox() {
             outline: none;
             border-color: rgba(var(--primary-rgb), 0.62);
             background: rgba(var(--primary-rgb), 0.1);
+        }
+        .inbox-session-highlight-select option,
+        .inbox-session-highlight-select optgroup {
+            background: #102129;
+            color: #ecf7f5;
+        }
+        .inbox-session-highlight-select option:checked {
+            background: #1f5fc4;
+            color: #ffffff;
         }
         .inbox-session-highlight-select-icon {
             position: absolute;
