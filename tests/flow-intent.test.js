@@ -763,6 +763,89 @@ describe('FlowService intent routing compatibility', () => {
         startFlowSpy.mockRestore();
     });
 
+    test('processIncomingMessage starts session-scoped keyword intent flow via catch-all fallback on unmatched greeting', async () => {
+        process.env.FLOW_INTENT_CLASSIFIER_STRICT = '1';
+        process.env.GEMINI_API_KEY = 'mock-key';
+
+        const service = new FlowService();
+
+        const sessionTriggerNode = {
+            id: 'trigger-session',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                intentRoutes: [
+                    { id: 'route-sport', label: 'Esportivos', phrases: 'gostei dos esportivos' }
+                ],
+                intentDefaultResponse: 'Desculpa, nao consegui entender',
+                triggerWelcomeEnabled: true,
+                triggerWelcomeContent: 'Ola, {{nome}}! Tudo bem?'
+            }
+        };
+        const globalTriggerNode = {
+            id: 'trigger-global',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                intentRoutes: [
+                    { id: 'route-global', label: 'Global', phrases: 'onde compro roupa' }
+                ],
+                intentDefaultResponse: 'Nao entendi'
+            }
+        };
+        const endNode = { id: 'end', type: 'end', data: {} };
+
+        const scopedFlow = {
+            id: 101,
+            name: 'FAQ MOMNT',
+            trigger_type: 'keyword',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [sessionTriggerNode, endNode],
+            edges: [
+                { source: 'trigger-session', target: 'end', sourceHandle: 'default', targetHandle: 'default' }
+            ]
+        };
+        const globalFlow = {
+            id: 102,
+            name: 'FAQ Global',
+            trigger_type: 'keyword',
+            session_id: null,
+            priority: 100,
+            nodes: [globalTriggerNode, endNode],
+            edges: [
+                { source: 'trigger-global', target: 'end', sourceHandle: 'default', targetHandle: 'default' }
+            ]
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([globalFlow, scopedFlow]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 456 });
+        intentClassifier.classifyKeywordFlowIntent.mockResolvedValue({ status: 'no_match' });
+
+        const result = await service.processIncomingMessage(
+            { text: 'oi' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
+        );
+
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            scopedFlow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'oi' })
+        );
+        expect(result).toEqual({ id: 456 });
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
+    });
+
     test('continueFlow routes second unmatched reply through message_once output after reentry', async () => {
         const service = new FlowService();
         const triggerNode = {

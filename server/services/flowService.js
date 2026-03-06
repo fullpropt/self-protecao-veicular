@@ -946,6 +946,17 @@ class FlowService extends EventEmitter {
         });
     }
 
+    hasDefaultOutgoingEdge(flow = null, sourceNodeId = '') {
+        const normalizedSourceId = String(sourceNodeId || '').trim();
+        if (!normalizedSourceId) return false;
+
+        const edges = Array.isArray(flow?.edges) ? flow.edges : [];
+        return edges.some((edge) => {
+            if (String(edge?.source || '').trim() !== normalizedSourceId) return false;
+            return this.normalizeFlowHandle(edge?.sourceHandle) === 'default';
+        });
+    }
+
     isKeywordFlowWithIntentDefaultOnceFallback(flow = null) {
         const triggerType = String(flow?.trigger_type || '').trim().toLowerCase();
         if (triggerType !== 'keyword') return false;
@@ -968,6 +979,54 @@ class FlowService extends EventEmitter {
 
         const highestPriority = Math.max(...eligible.map((item) => Number(item?.priority || 0)));
         const topPriorityFlows = eligible.filter((item) => Number(item?.priority || 0) === highestPriority);
+        if (topPriorityFlows.length === 1) return topPriorityFlows[0];
+
+        return null;
+    }
+
+    isKeywordFlowWithIntentTriggerCatchAllFallback(flow = null) {
+        const triggerType = String(flow?.trigger_type || '').trim().toLowerCase();
+        if (triggerType !== 'keyword') return false;
+
+        const triggerNode = this.resolveFlowTriggerStartNode(flow);
+        if (!this.isIntentTriggerNode(triggerNode)) {
+            return false;
+        }
+
+        if (!this.hasDefaultOutgoingEdge(flow, triggerNode.id)) {
+            return false;
+        }
+
+        const defaultResponse = String(triggerNode?.data?.intentDefaultResponse || '').trim();
+        const defaultFollowups = parseIntentResponseList(
+            triggerNode?.data?.intentDefaultFollowupResponses,
+            triggerNode?.data?.intentDefaultFollowupResponse
+        );
+        const hasDefaultResponse = Boolean(defaultResponse) || defaultFollowups.length > 0;
+
+        const welcomeConfig = this.resolveTriggerWelcomeConfig(triggerNode);
+        const hasWelcomeMessage = Boolean(welcomeConfig?.enabled && String(welcomeConfig?.content || '').trim());
+
+        return hasDefaultResponse || hasWelcomeMessage;
+    }
+
+    pickKeywordFlowByIntentTriggerCatchAllFallback(candidateFlows = [], conversationSessionId = '') {
+        const eligible = (Array.isArray(candidateFlows) ? candidateFlows : [])
+            .filter((item) => this.isKeywordFlowWithIntentTriggerCatchAllFallback(item));
+
+        if (eligible.length === 0) return null;
+
+        const normalizedConversationSessionId = this.normalizeFlowSessionScope(conversationSessionId);
+        const sessionScoped = eligible.filter((item) => {
+            const flowSessionId = this.normalizeFlowSessionScope(item?.session_id);
+            return Boolean(flowSessionId) && flowSessionId === normalizedConversationSessionId;
+        });
+
+        const pool = sessionScoped.length > 0 ? sessionScoped : eligible;
+        if (pool.length === 1) return pool[0];
+
+        const highestPriority = Math.max(...pool.map((item) => Number(item?.priority || 0)));
+        const topPriorityFlows = pool.filter((item) => Number(item?.priority || 0) === highestPriority);
         if (topPriorityFlows.length === 1) return topPriorityFlows[0];
 
         return null;
@@ -1506,6 +1565,22 @@ class FlowService extends EventEmitter {
                     flow = defaultFallbackFlow;
                     console.info(
                         `[flow-intent] Fallback por rota padrao selecionou fluxo ${flow.id} `
+                        + `(${flow.name || 'sem-nome'}) para mensagem sem match explicito.`
+                    );
+                }
+            }
+
+            if (!flow && semanticCandidates.length > 0) {
+                // Se houver apenas um fluxo de intencao elegivel para fallback no escopo da sessao,
+                // inicia pelo gatilho para permitir boas-vindas + rota default ("nao entendi").
+                const catchAllFallbackFlow = this.pickKeywordFlowByIntentTriggerCatchAllFallback(
+                    semanticCandidates,
+                    conversationSessionId
+                );
+                if (catchAllFallbackFlow) {
+                    flow = catchAllFallbackFlow;
+                    console.info(
+                        `[flow-intent] Fallback catch-all selecionou fluxo ${flow.id} `
                         + `(${flow.name || 'sem-nome'}) para mensagem sem match explicito.`
                     );
                 }
