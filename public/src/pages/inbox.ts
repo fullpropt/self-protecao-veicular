@@ -123,6 +123,7 @@ let mediaUploadInProgress = false;
 let inboxLifecycleBound = false;
 let inboxViewportSyncRaf: number | null = null;
 let inboxMobileLayoutViewportHeight = 0;
+let inboxComposerFocusActive = false;
 const stickerMediaRehydrateAttempts = new Set<string>();
 let activeChatScrollContainer: HTMLElement | null = null;
 let chatMediaPreviewBindingsBound = false;
@@ -979,6 +980,7 @@ function initInbox() {
     initSocket();
     renderContactInfoPanel();
     setMobileConversationMode(false);
+    setInboxComposerFocusState(false);
     startInboxAutoRefresh();
 }
 
@@ -993,10 +995,17 @@ function isTabletOrMobileView() {
 }
 
 function isMessageComposerFocused() {
+    if (inboxComposerFocusActive) return true;
     const activeElement = document.activeElement as HTMLElement | null;
     if (!activeElement) return false;
     if (activeElement.id === 'messageInput') return true;
     return Boolean(activeElement.closest?.('.chat-input'));
+}
+
+function setInboxComposerFocusState(focused: boolean) {
+    inboxComposerFocusActive = Boolean(focused);
+    document.body.classList.toggle('inbox-mobile-composing', inboxComposerFocusActive);
+    document.documentElement.classList.toggle('inbox-mobile-composing', inboxComposerFocusActive);
 }
 
 function syncInboxMobileViewportHeight() {
@@ -1546,6 +1555,9 @@ function startInboxAutoRefresh() {
             stopInboxAutoRefresh();
             return;
         }
+        if (isMessageComposerFocused()) {
+            return;
+        }
         void loadConversations();
     }, 10000);
 }
@@ -1559,6 +1571,7 @@ function bindInboxLifecycle() {
 
     window.addEventListener('app:logout', () => {
         stopInboxAutoRefresh();
+        setInboxComposerFocusState(false);
         document.body.classList.remove('inbox-route-lock');
         document.documentElement.classList.remove('inbox-route-lock');
         document.body.classList.remove('inbox-mobile-chat-lock');
@@ -1568,6 +1581,7 @@ function bindInboxLifecycle() {
     window.addEventListener('hashchange', () => {
         const hash = String(window.location.hash || '').toLowerCase();
         if (!hash.startsWith('#/inbox')) {
+            setInboxComposerFocusState(false);
             document.body.classList.remove('inbox-route-lock');
             document.documentElement.classList.remove('inbox-route-lock');
             document.body.classList.remove('inbox-mobile-chat-lock');
@@ -2719,10 +2733,18 @@ function bindMessageComposerViewportSync() {
         }, 80);
     };
 
-    input.addEventListener('focus', syncComposerViewport);
+    input.addEventListener('focus', () => {
+        setInboxComposerFocusState(true);
+        syncComposerViewport();
+    });
     input.addEventListener('click', syncComposerViewport);
-    input.addEventListener('input', syncComposerViewport);
+    input.addEventListener('input', () => {
+        window.requestAnimationFrame(() => {
+            scrollToBottom();
+        });
+    });
     input.addEventListener('blur', () => {
+        setInboxComposerFocusState(false);
         window.setTimeout(() => {
             scheduleInboxMobileViewportStateSync();
         }, 80);

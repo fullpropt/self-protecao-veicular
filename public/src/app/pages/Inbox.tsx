@@ -1507,6 +1507,11 @@ export default function Inbox() {
         }
 
         @media (max-width: 768px) {
+            html.inbox-mobile-composing,
+            body.inbox-mobile-composing {
+                overflow: hidden !important;
+                overscroll-behavior: none;
+            }
             html.inbox-mobile-chat-lock {
                 overflow: hidden;
                 height: calc(var(--inbox-mobile-vh, 100svh) - var(--inbox-mobile-keyboard-inset, 0px));
