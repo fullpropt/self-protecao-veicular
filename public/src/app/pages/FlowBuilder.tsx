@@ -2094,18 +2094,10 @@ export default function FlowBuilder() {
         .flow-selector-footer {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 16px;
+            justify-content: center;
             padding: 16px 20px;
             border-top: 1px solid rgba(148, 163, 184, 0.2);
             background: rgba(2, 6, 23, 0.28);
-        }
-
-        .flow-selector-footer-text {
-            margin: 0;
-            font-size: 13px;
-            line-height: 1.5;
-            color: #9fb0c8;
         }
         
         /* Flow List Modal */
@@ -2879,9 +2871,6 @@ export default function FlowBuilder() {
             .flow-builder-react .flow-name-highlight-link-label {
                 display: none;
             }
-            .flow-selector-footer-text {
-                font-size: 12px;
-            }
             .nodes-panel {
                 max-height: none;
             }
@@ -2960,10 +2949,6 @@ export default function FlowBuilder() {
                           <span className="icon icon-refresh icon-sm"></span>
                           <span className="toolbar-btn-label">Atualizar</span>
                       </button>
-                      <button className="toolbar-btn primary" type="button" onClick={() => globals.createNewFlow?.()}>
-                          <span className="icon icon-add icon-sm"></span>
-                          <span className="toolbar-btn-label">Novo Fluxo</span>
-                      </button>
                   </div>
                   <div className="header-flow-row" id="flowBuilderFlowInfoRow" hidden>
                       <div className="flow-name-highlight">
@@ -3007,7 +2992,6 @@ export default function FlowBuilder() {
                           <div id="flowsList"></div>
                       </div>
                       <div className="flow-selector-footer card-footer">
-                          <p className="flow-selector-footer-text">Escolha um fluxo existente para editar ou crie um novo fluxo do zero.</p>
                           <button className="toolbar-btn primary" onClick={() => globals.createNewFlow?.()}>
                               <span className="icon icon-add icon-sm"></span>
                               <span className="toolbar-btn-label">Criar Novo Fluxo</span>
