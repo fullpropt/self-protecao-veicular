@@ -649,7 +649,7 @@ export default function Campanhas() {
                       <p>Gerencie suas campanhas de marketing</p>
                   </div>
                   <div className="page-actions">
-                      <button className="btn btn-outline" onClick={() => globals.loadCampaigns?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
+                      <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.loadCampaigns?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
                       <button className="btn btn-primary" onClick={() => (globals.openCampaignModal ? globals.openCampaignModal() : globals.openModal?.('newCampaignModal'))}><span className="icon icon-add icon-sm"></span> Nova Campanha</button>
                   </div>
               </div>

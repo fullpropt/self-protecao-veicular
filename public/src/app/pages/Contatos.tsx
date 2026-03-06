@@ -198,7 +198,7 @@ export default function Contatos() {
             <p>Gerencie todos os seus leads e contatos</p>
           </div>
           <div className="page-actions">
-            <button className="btn btn-outline" onClick={() => globals.loadContacts?.({ forceRefresh: true })}>
+            <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.loadContacts?.({ forceRefresh: true })}>
               <span className="icon icon-refresh icon-sm"></span> Atualizar
             </button>
             <button className="btn btn-outline btn-import-contacts" onClick={() => globals.openModal?.('importModal')}>

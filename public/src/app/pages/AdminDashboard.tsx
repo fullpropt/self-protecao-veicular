@@ -1243,7 +1243,8 @@ export default function AdminDashboard() {
                   <p>Mensagens recebidas pelo webhook de entrada de e-mail.</p>
                   <div className="admin-muted">Endpoint de entrada: <code>/webhooks/support-inbox/incoming</code></div>
                   <div className="admin-actions">
-                    <button type="button" className="btn btn-outline" onClick={() => loadSupportInbox()} disabled={loadingSupportInbox}>
+                    <button type="button" className="btn btn-outline btn-refresh-outline" onClick={() => loadSupportInbox()} disabled={loadingSupportInbox}>
+                      <span className="icon icon-refresh icon-sm"></span>
                       {loadingSupportInbox ? 'Atualizando...' : 'Atualizar caixa'}
                     </button>
                     <span className="admin-muted">Não lidas: {supportInboxUnreadCount}</span>

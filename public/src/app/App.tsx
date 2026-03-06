@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
+import './shared.css';
 import Automacao from './pages/Automacao';
 import AdminDashboard from './pages/AdminDashboard';
 import Campanhas from './pages/Campanhas';

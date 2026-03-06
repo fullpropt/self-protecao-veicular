@@ -373,7 +373,7 @@ export default function Automacao() {
                       <p>Configure regras automáticas para seus leads</p>
                   </div>
                   <div className="page-actions">
-                      <button className="btn btn-outline" onClick={() => globals.loadAutomations?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
+                      <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.loadAutomations?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
                       <button className="btn btn-primary" onClick={() => (globals.openAutomationModal ? globals.openAutomationModal() : globals.openModal?.('newAutomationModal'))}><span className="icon icon-add icon-sm"></span> Nova Automação</button>
                   </div>
               </div>

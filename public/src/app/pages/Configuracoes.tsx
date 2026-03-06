@@ -380,7 +380,7 @@ export default function Configuracoes() {
                                   Gerencie nome de exibição, participação em campanhas, peso e limite diário de cada conta.
                               </p>
                               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                                  <button className="btn btn-outline" onClick={() => globals.refreshWhatsAppAccounts?.()}>Atualizar lista</button>
+                                  <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.refreshWhatsAppAccounts?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar lista</button>
                                   <Link to="/whatsapp" className="btn btn-primary">Ir para WhatsApp</Link>
                               </div>
                               <div className="connection-accounts-list" id="connectionAccountsList">

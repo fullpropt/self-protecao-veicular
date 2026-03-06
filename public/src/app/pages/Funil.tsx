@@ -326,7 +326,7 @@ export default function Funil() {
                       <p>Visualize e gerencie seu pipeline de vendas</p>
                   </div>
                   <div className="page-actions">
-                      <button className="btn btn-outline" onClick={() => globals.loadFunnel?.({ forceRefresh: true })}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
+                      <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.loadFunnel?.({ forceRefresh: true })}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
                       <button className="btn btn-primary" onClick={() => globals.openModal?.('configModal')}><span className="icon icon-settings icon-sm"></span> Configurar Etapas</button>
                   </div>
               </div>
