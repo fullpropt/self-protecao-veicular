@@ -2319,11 +2319,39 @@ class FlowService extends EventEmitter {
         }
 
         const selectedHandle = await this.pickTriggerIntentHandle(execution, node);
+        let shouldWaitForMoreInput = false;
+        let noMatchCount = 0;
+        let minAttemptsBeforeDefault = 1;
 
         if (selectedHandle) {
             execution.variables.trigger_intent_handle = selectedHandle;
+            this.clearIntentNoMatchCounter(execution, node?.id);
+            this.clearIntentHistory(execution, node?.id);
+            this.clearIntentDefaultMessageOnceReentry(execution);
         } else {
             delete execution.variables.trigger_intent_handle;
+
+            if (this.isIntentTriggerNode(node)) {
+                const outgoingEdges = (execution.flow?.edges || []).filter((edge) => edge.source === node.id);
+                const hasDefaultRoute = outgoingEdges.some((edge) => {
+                    const handle = String(edge?.sourceHandle || '').trim().toLowerCase();
+                    return !handle || handle === 'default';
+                });
+                const hasSpecificRoutes = outgoingEdges.some((edge) => {
+                    const handle = String(edge?.sourceHandle || '').trim().toLowerCase();
+                    return Boolean(handle) && handle !== 'default';
+                });
+
+                noMatchCount = this.incrementIntentNoMatchCounter(execution, node.id);
+                minAttemptsBeforeDefault = this.resolveIntentDefaultMinAttempts(node);
+                shouldWaitForMoreInput = hasSpecificRoutes
+                    && (!hasDefaultRoute || noMatchCount < minAttemptsBeforeDefault);
+
+                if (!shouldWaitForMoreInput) {
+                    this.clearIntentNoMatchCounter(execution, node.id);
+                    this.clearIntentHistory(execution, node.id);
+                }
+            }
         }
 
         await run(`
@@ -2331,6 +2359,16 @@ class FlowService extends EventEmitter {
             SET variables = ?
             WHERE id = ?
         `, [JSON.stringify(execution.variables), execution.id]);
+
+        if (shouldWaitForMoreInput) {
+            console.info(
+                `[flow-intent] Nenhuma rota correspondeu no no ${node?.id || 'desconhecido'} `
+                + `(fluxo ${execution?.flow?.id || 'n/a'}, conversa ${execution?.conversation?.id || 'n/a'}). `
+                + `Tentativa ${noMatchCount}/${minAttemptsBeforeDefault}; `
+                + 'execucao mantida aguardando nova resposta.'
+            );
+            return;
+        }
 
         await this.goToNextNode(execution, node, selectedHandle);
     }
