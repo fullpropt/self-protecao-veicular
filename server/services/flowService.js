@@ -1202,6 +1202,12 @@ class FlowService extends EventEmitter {
             return Math.max(1, Math.min(6, Math.trunc(nodeSpecific)));
         }
 
+        if (this.isIntentTriggerNode(node)) {
+            return Math.trunc(
+                readIntentNumberEnv('FLOW_INTENT_TRIGGER_DEFAULT_AFTER_ATTEMPTS', 2, 1, 6)
+            );
+        }
+
         const nodeType = String(node?.type || '').trim().toLowerCase();
         if (nodeType !== 'intent') {
             return 1;

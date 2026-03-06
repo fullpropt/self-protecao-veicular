@@ -995,6 +995,55 @@ describe('FlowService intent routing compatibility', () => {
         goToNextSpy.mockRestore();
     });
 
+    test('trigger intent node waits one extra message before default route', async () => {
+        const service = new FlowService();
+        const node = {
+            id: 'trigger-intent',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                intentRoutes: [
+                    { id: 'route-buy', label: 'Comprar', phrases: 'comprar oculos' }
+                ]
+            }
+        };
+
+        const execution = {
+            id: 522,
+            flow: {
+                id: 11,
+                nodes: [node],
+                edges: [
+                    { source: 'trigger-intent', target: 'buy-answer', sourceHandle: 'route-buy' },
+                    { source: 'trigger-intent', target: 'fallback-answer', sourceHandle: 'default' }
+                ]
+            },
+            conversation: { id: 19 },
+            lead: { id: 33 },
+            currentNode: 'trigger-intent',
+            variables: {}
+        };
+
+        const pickSpy = jest.spyOn(service, 'pickTriggerIntentHandle').mockResolvedValue(null);
+        const persistSpy = jest.spyOn(service, 'persistExecutionVariables').mockResolvedValue();
+        const goToNextSpy = jest.spyOn(service, 'goToNextNode').mockResolvedValue();
+
+        await service.continueFlow(execution, { text: 'boa tarde' });
+
+        expect(goToNextSpy).not.toHaveBeenCalled();
+        expect(persistSpy).toHaveBeenCalledTimes(1);
+        expect(execution.variables.intent_no_match_count_by_node['trigger-intent']).toBe(1);
+
+        await service.continueFlow(execution, { text: 'so olhando' });
+
+        expect(goToNextSpy).toHaveBeenCalledWith(execution, node, null);
+        expect(execution.variables.intent_no_match_count_by_node).toBeUndefined();
+
+        pickSpy.mockRestore();
+        persistSpy.mockRestore();
+        goToNextSpy.mockRestore();
+    });
+
     test('intent node falls back to latest reply when merged context misses', async () => {
         const service = new FlowService();
         const node = {
