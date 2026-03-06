@@ -1054,6 +1054,7 @@ function syncInboxMobileViewportState() {
     syncInboxMobileViewportHeight();
     syncInboxRouteScrollLock();
     syncInboxBodyScrollLock();
+    syncContactInfoPanelLayout();
 }
 
 function scheduleInboxMobileViewportStateSync() {
@@ -1149,15 +1150,21 @@ function setConversationUnreadLocal(conversationId: number, unread: number) {
     updateUnreadBadge();
 }
 
-function setContactInfoPanelState(forceOpen?: boolean) {
+function syncContactInfoPanelLayout() {
     const panel = document.getElementById('inboxRightPanel') as HTMLElement | null;
     const backdrop = document.getElementById('contactInfoBackdrop') as HTMLElement | null;
-    if (!panel || !backdrop) return;
+    const inboxContainer = document.querySelector('.inbox-container') as HTMLElement | null;
+    const overlayMode = isTabletOrMobileView();
 
+    panel?.classList.toggle('active', overlayMode && isContactInfoOpen);
+    backdrop?.classList.toggle('active', overlayMode && isContactInfoOpen);
+    inboxContainer?.classList.toggle('contact-info-collapsed', !overlayMode && !isContactInfoOpen);
+}
+
+function setContactInfoPanelState(forceOpen?: boolean) {
     const nextState = typeof forceOpen === 'boolean' ? forceOpen : !isContactInfoOpen;
     isContactInfoOpen = nextState;
-    panel.classList.toggle('active', isContactInfoOpen);
-    backdrop.classList.toggle('active', isContactInfoOpen);
+    syncContactInfoPanelLayout();
 }
 
 function closeContactInfoPanel() {
@@ -2659,7 +2666,7 @@ function renderChat() {
             </div>
             <div class="chat-header-actions">
                 <button class="btn btn-sm btn-outline btn-icon" onclick="openWhatsApp()" title="Abrir no WhatsApp"><span class="icon icon-whatsapp icon-sm"></span></button>
-                <button class="btn btn-sm btn-outline btn-icon" onclick="toggleContactInfo(true)" title="Dados do contato"><span class="icon icon-user icon-sm"></span></button>
+                <button class="btn btn-sm btn-outline btn-icon" onclick="toggleContactInfo()" title="Dados do contato"><span class="icon icon-user icon-sm"></span></button>
             </div>
         </div>
 
@@ -3023,7 +3030,6 @@ function toggleContactInfo(forceOpen?: boolean) {
     }
 
     renderContactInfoPanel();
-    if (!isTabletOrMobileView()) return;
     setContactInfoPanelState(forceOpen);
 }
 

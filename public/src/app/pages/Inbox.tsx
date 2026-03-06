@@ -66,6 +66,7 @@ export default function Inbox() {
             box-shadow: var(--shadow-lg);
             overflow: hidden;
             min-width: 0;
+            transition: grid-template-columns var(--transition);
         }
         .inbox-react .conversations-list,
         .inbox-react .chat-messages,
@@ -1484,6 +1485,15 @@ export default function Inbox() {
             gap: 8px;
         }
         .contact-card-actions .btn { width: 100%; }
+
+        @media (min-width: 1025px) {
+            .inbox-container.contact-info-collapsed {
+                grid-template-columns: 350px minmax(0, 1fr);
+            }
+            .inbox-container.contact-info-collapsed .inbox-right-panel {
+                display: none;
+            }
+        }
 
         @media (max-width: 1024px) {
             .inbox-container {
