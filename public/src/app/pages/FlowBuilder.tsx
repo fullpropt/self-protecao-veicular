@@ -2183,6 +2183,16 @@ export default function FlowBuilder() {
             display: flex;
         }
 
+        .flow-dialog-select-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .flow-dialog-select-wrap.active {
+            display: flex;
+        }
+
         .flow-dialog-input {
             width: 100%;
             border-radius: 10px;
@@ -2202,6 +2212,15 @@ export default function FlowBuilder() {
         .flow-dialog-input:focus {
             border-color: rgba(var(--primary-rgb), 0.65);
             box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.16);
+        }
+
+        .flow-dialog-select {
+            padding-right: 34px;
+            appearance: none;
+            background-image: linear-gradient(45deg, transparent 50%, #9fb0c8 50%), linear-gradient(135deg, #9fb0c8 50%, transparent 50%);
+            background-position: calc(100% - 18px) calc(50% - 2px), calc(100% - 12px) calc(50% - 2px);
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
         }
 
         .flow-dialog-footer {
@@ -2460,6 +2479,18 @@ export default function FlowBuilder() {
             color: #dbeafe;
         }
 
+        .flow-list-edit {
+            color: #bfdbfe;
+            border-color: rgba(59, 130, 246, 0.46);
+            background: rgba(30, 58, 138, 0.22);
+        }
+
+        .flow-list-edit:hover {
+            border-color: rgba(96, 165, 250, 0.75);
+            background: rgba(37, 99, 235, 0.3);
+            color: #dbeafe;
+        }
+
         .flow-list-toggle {
             color: #dbe6f7;
         }
@@ -2625,8 +2656,14 @@ export default function FlowBuilder() {
             .flow-list-actions {
                 grid-column: 1 / -1;
                 width: 100%;
-                justify-content: flex-end;
+                justify-content: flex-start;
                 justify-self: stretch;
+                flex-wrap: wrap;
+            }
+            .flow-list-actions .flow-list-btn {
+                flex: 1 1 calc(33.333% - 6px);
+                min-width: 88px;
+                text-align: center;
             }
             .flow-list-item.is-renaming .flow-list-actions {
                 grid-column: 1 / -1;
@@ -3074,6 +3111,9 @@ export default function FlowBuilder() {
                       <p className="flow-dialog-message" id="flowDialogMessage"></p>
                       <div className="flow-dialog-input-wrap" id="flowDialogInputWrap">
                           <input className="flow-dialog-input" id="flowDialogInput" type="text" />
+                      </div>
+                      <div className="flow-dialog-select-wrap" id="flowDialogSelectWrap">
+                          <select className="flow-dialog-input flow-dialog-select" id="flowDialogSelect"></select>
                       </div>
                   </div>
                   <div className="modal-footer flow-dialog-footer">

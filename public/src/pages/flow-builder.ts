@@ -169,7 +169,11 @@ let flowWhatsappSessionsCache: FlowWhatsappSessionOption[] = [];
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type ToastFn = (type: ToastType, title: string, message: string, duration?: number) => void;
-type FlowDialogMode = 'alert' | 'confirm' | 'prompt';
+type FlowDialogMode = 'alert' | 'confirm' | 'prompt' | 'select';
+type FlowDialogSelectOption = {
+    value: string;
+    label: string;
+};
 type FlowDialogOptions = {
     mode: FlowDialogMode;
     title?: string;
@@ -178,6 +182,7 @@ type FlowDialogOptions = {
     cancelLabel?: string;
     defaultValue?: string;
     placeholder?: string;
+    selectOptions?: FlowDialogSelectOption[];
 };
 type FlowDialogElements = {
     overlay: HTMLElement;
@@ -185,6 +190,8 @@ type FlowDialogElements = {
     message: HTMLElement;
     inputWrap: HTMLElement;
     input: HTMLInputElement;
+    selectWrap: HTMLElement;
+    select: HTMLSelectElement;
     cancelBtn: HTMLButtonElement;
     confirmBtn: HTMLButtonElement;
     closeBtn: HTMLButtonElement;
@@ -225,11 +232,13 @@ function getFlowDialogElements(): FlowDialogElements | null {
     const message = document.getElementById('flowDialogMessage') as HTMLElement | null;
     const inputWrap = document.getElementById('flowDialogInputWrap') as HTMLElement | null;
     const input = document.getElementById('flowDialogInput') as HTMLInputElement | null;
+    const selectWrap = document.getElementById('flowDialogSelectWrap') as HTMLElement | null;
+    const select = document.getElementById('flowDialogSelect') as HTMLSelectElement | null;
     const cancelBtn = document.getElementById('flowDialogCancelBtn') as HTMLButtonElement | null;
     const confirmBtn = document.getElementById('flowDialogConfirmBtn') as HTMLButtonElement | null;
     const closeBtn = document.getElementById('flowDialogCloseBtn') as HTMLButtonElement | null;
 
-    if (!overlay || !title || !message || !inputWrap || !input || !cancelBtn || !confirmBtn || !closeBtn) {
+    if (!overlay || !title || !message || !inputWrap || !input || !selectWrap || !select || !cancelBtn || !confirmBtn || !closeBtn) {
         return null;
     }
 
@@ -239,6 +248,8 @@ function getFlowDialogElements(): FlowDialogElements | null {
         message,
         inputWrap,
         input,
+        selectWrap,
+        select,
         cancelBtn,
         confirmBtn,
         closeBtn
@@ -253,6 +264,24 @@ function fallbackNativeDialog(options: FlowDialogOptions): Promise<any> {
 
     if (options.mode === 'confirm') {
         return Promise.resolve(window.confirm(options.message));
+    }
+
+    if (options.mode === 'select') {
+        const optionsText = (Array.isArray(options.selectOptions) ? options.selectOptions : [])
+            .map((item, index) => `${index + 1}. ${item.label}`)
+            .join('\n');
+        const fallbackPrompt = optionsText
+            ? `${options.message}\n\n${optionsText}\n\nDigite o número da opção:`
+            : options.message;
+        const raw = window.prompt(fallbackPrompt, options.defaultValue || '');
+        if (raw === null) return Promise.resolve(null);
+        const trimmed = String(raw).trim();
+        if (!trimmed) return Promise.resolve(null);
+        const numericIndex = Number.parseInt(trimmed, 10);
+        if (Number.isFinite(numericIndex) && Array.isArray(options.selectOptions) && numericIndex > 0 && numericIndex <= options.selectOptions.length) {
+            return Promise.resolve(String(options.selectOptions[numericIndex - 1]?.value || ''));
+        }
+        return Promise.resolve(trimmed);
     }
 
     const value = window.prompt(options.message, options.defaultValue || '');
@@ -276,6 +305,8 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
             message,
             inputWrap,
             input,
+            selectWrap,
+            select,
             cancelBtn,
             confirmBtn,
             closeBtn
@@ -283,6 +314,7 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
 
         let settled = false;
         const isPrompt = options.mode === 'prompt';
+        const isSelect = options.mode === 'select';
         const isAlert = options.mode === 'alert';
 
         const finish = (result: any) => {
@@ -294,7 +326,7 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
 
         const cancelResult = () => {
             if (isAlert) return undefined;
-            if (isPrompt) return null;
+            if (isPrompt || isSelect) return null;
             return false;
         };
 
@@ -306,6 +338,7 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
             confirmBtn.onclick = null;
             closeBtn.onclick = null;
             input.onkeydown = null;
+            select.onkeydown = null;
             document.removeEventListener('keydown', onKeydown, true);
         };
 
@@ -318,27 +351,44 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
                 return;
             }
 
-            if (event.key === 'Enter' && (isPrompt || options.mode === 'confirm')) {
+            if (event.key === 'Enter' && (isPrompt || isSelect || options.mode === 'confirm')) {
                 const target = event.target as HTMLElement | null;
-                if (!isPrompt || target === input) {
+                if ((isPrompt && target === input) || (isSelect && target === select) || (!isPrompt && !isSelect)) {
                     event.preventDefault();
-                    finish(isPrompt ? input.value : true);
+                    finish(isPrompt ? input.value : isSelect ? select.value : true);
                 }
             }
         };
 
         activeFlowDialogDismiss = () => finish(cancelResult());
 
-        title.textContent = String(options.title || (isPrompt ? 'Digite um valor' : isAlert ? 'Aviso' : 'Confirmacao'));
+        title.textContent = String(
+            options.title || (isPrompt ? 'Digite um valor' : isSelect ? 'Selecione uma opção' : isAlert ? 'Aviso' : 'Confirmacao')
+        );
         message.textContent = String(options.message || '');
 
         inputWrap.classList.toggle('active', isPrompt);
+        selectWrap.classList.toggle('active', isSelect);
         input.value = isPrompt ? String(options.defaultValue || '') : '';
         input.placeholder = isPrompt ? String(options.placeholder || '') : '';
+        if (isSelect) {
+            const entries = (Array.isArray(options.selectOptions) ? options.selectOptions : [])
+                .map((item) => `<option value="${escapeHtml(String(item.value || ''))}">${escapeHtml(String(item.label || item.value || ''))}</option>`);
+            select.innerHTML = entries.join('');
+            const nextValue = String(options.defaultValue || '');
+            if (nextValue) {
+                select.value = nextValue;
+            }
+            if (!select.value && select.options.length > 0) {
+                select.selectedIndex = 0;
+            }
+        } else {
+            select.innerHTML = '';
+        }
 
         cancelBtn.style.display = isAlert ? 'none' : '';
         cancelBtn.textContent = String(options.cancelLabel || 'Cancelar');
-        confirmBtn.textContent = String(options.confirmLabel || (isPrompt ? 'Aplicar' : 'OK'));
+        confirmBtn.textContent = String(options.confirmLabel || (isPrompt || isSelect ? 'Aplicar' : 'OK'));
 
         overlay.onclick = (event) => {
             if (event.target === overlay) {
@@ -347,11 +397,17 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
         };
         cancelBtn.onclick = () => finish(cancelResult());
         closeBtn.onclick = () => finish(cancelResult());
-        confirmBtn.onclick = () => finish(isPrompt ? input.value : (isAlert ? undefined : true));
+        confirmBtn.onclick = () => finish(isPrompt ? input.value : isSelect ? select.value : (isAlert ? undefined : true));
         input.onkeydown = (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 finish(input.value);
+            }
+        };
+        select.onkeydown = (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                finish(select.value);
             }
         };
 
@@ -362,6 +418,10 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
             if (isPrompt) {
                 input.focus();
                 input.select();
+                return;
+            }
+            if (isSelect) {
+                select.focus();
                 return;
             }
             if (!isAlert) {
@@ -399,6 +459,27 @@ function showFlowPromptDialog(message: string, options: { title?: string; defaul
         message,
         defaultValue: options.defaultValue,
         placeholder: options.placeholder,
+        confirmLabel: options.confirmLabel || 'OK',
+        cancelLabel: options.cancelLabel || 'Cancelar'
+    }) as Promise<string | null>;
+}
+
+function showFlowSelectDialog(
+    message: string,
+    options: {
+        title?: string;
+        defaultValue?: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+        selectOptions: FlowDialogSelectOption[];
+    }
+) {
+    return openStyledFlowDialog({
+        mode: 'select',
+        title: options.title,
+        message,
+        defaultValue: options.defaultValue,
+        selectOptions: options.selectOptions,
         confirmLabel: options.confirmLabel || 'OK',
         cancelLabel: options.cancelLabel || 'Cancelar'
     }) as Promise<string | null>;
@@ -4076,7 +4157,14 @@ function renderFlowsList(flows: FlowSummary[]) {
                 <button class="flow-list-btn flow-list-toggle ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Desativar fluxo' : 'Ativar fluxo'}" onclick="toggleFlowActivation(${flow.id}, event)">
                     ${isActive ? 'Desativar' : 'Ativar'}
                 </button>
-                ${mobileListMode ? '' : `
+                ${mobileListMode ? `
+                    <button class="flow-list-btn flow-list-edit" title="Editar fluxo" onclick="editFlowFromList(${flow.id}, decodeURIComponent('${encodedName}'), event)">
+                        Editar
+                    </button>
+                    <button class="flow-list-btn flow-list-delete" title="Excluir fluxo" onclick="discardFlow(${flow.id}, event)">
+                        Excluir
+                    </button>
+                ` : `
                     <button class="flow-list-btn flow-list-icon-btn flow-list-duplicate" title="Duplicar fluxo" onclick="duplicateFlow(${flow.id}, event)">
                         <span class="icon icon-templates icon-sm"></span>
                     </button>
@@ -4182,6 +4270,97 @@ async function saveFlowRenameInline(id: number, event?: Event) {
         await loadFlows();
     } catch (error) {
         await showFlowAlertDialog('Erro ao renomear fluxo: ' + (error instanceof Error ? error.message : 'Falha inesperada'), 'Renomear fluxo');
+    }
+}
+
+async function editFlowFromList(id: number, currentName = '', event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    const flowId = Number(id);
+    if (!Number.isFinite(flowId)) return;
+
+    const currentFlow = flowsCache.find((flow) => Number(flow.id) === flowId);
+    const currentSessionId = normalizeFlowSessionId(currentFlow?.session_id);
+    const fallbackName = String(currentName || currentFlow?.name || '').trim() || 'Novo fluxo';
+    const typedName = await showFlowPromptDialog('Edite o nome do fluxo:', {
+        title: 'Editar fluxo',
+        defaultValue: fallbackName,
+        placeholder: 'Ex.: Captação de leads',
+        confirmLabel: 'Salvar'
+    });
+
+    if (typedName === null) return;
+
+    const nextName = String(typedName || '').trim();
+    if (!nextName) {
+        await showFlowAlertDialog('O nome do fluxo não pode ficar vazio.', 'Editar fluxo');
+        return;
+    }
+
+    if (flowWhatsappSessionsCache.length === 0) {
+        await loadFlowWhatsappSessions({ silent: true });
+    }
+
+    const availableSessions = [...flowWhatsappSessionsCache]
+        .filter((item) => normalizeFlowSessionId(item.session_id))
+        .sort((a, b) => getFlowWhatsappSessionDisplayName(a).localeCompare(getFlowWhatsappSessionDisplayName(b), 'pt-BR'));
+    const options: FlowDialogSelectOption[] = [
+        { value: FLOW_ALL_SESSIONS_VALUE, label: 'Todas as contas WhatsApp' },
+        ...availableSessions.map((item) => {
+            const sessionId = normalizeFlowSessionId(item.session_id);
+            const status = String(item.connected ? 'Conectada' : (item.status || 'Desconectada')).trim();
+            const displayName = getFlowWhatsappSessionDisplayName(item);
+            const label = displayName === sessionId
+                ? `${sessionId} - ${status}`
+                : `${displayName} - ${sessionId} - ${status}`;
+            return { value: sessionId, label };
+        })
+    ];
+    const hasCurrentSession = options.some((option) => normalizeFlowSessionId(option.value) === currentSessionId);
+    if (currentSessionId && !hasCurrentSession) {
+        options.push({
+            value: currentSessionId,
+            label: `Conta indisponível (${currentSessionId})`
+        });
+    }
+
+    const selectedSession = await showFlowSelectDialog('Escolha a conta WhatsApp para execução do fluxo:', {
+        title: 'Conta do fluxo',
+        defaultValue: currentSessionId || FLOW_ALL_SESSIONS_VALUE,
+        selectOptions: options,
+        confirmLabel: 'Salvar'
+    });
+    if (selectedSession === null) return;
+
+    const nextSessionId = normalizeFlowSessionId(selectedSession);
+    if (nextName === fallbackName && nextSessionId === currentSessionId) return;
+
+    try {
+        const response = await fetch(buildFlowApiUrl(`/api/flows/${flowId}`), {
+            method: 'PUT',
+            headers: buildAuthHeaders(true),
+            body: JSON.stringify({
+                name: nextName,
+                session_id: nextSessionId || null
+            })
+        });
+        const result = await readFlowJsonResponse<any>(response, {});
+
+        if (!result.success) {
+            await showFlowAlertDialog('Erro ao editar fluxo: ' + (result.error || 'Falha inesperada'), 'Editar fluxo');
+            return;
+        }
+
+        if (Number(currentFlowId) === Number(flowId)) {
+            currentFlowName = nextName;
+            setCurrentFlowSessionScope(nextSessionId);
+            renderCurrentFlowName();
+        }
+
+        await loadFlows();
+    } catch (error) {
+        await showFlowAlertDialog('Erro ao editar fluxo: ' + (error instanceof Error ? error.message : 'Falha inesperada'), 'Editar fluxo');
     }
 }
 
@@ -4559,6 +4738,7 @@ const windowAny = window as Window & {
     cancelRenameFlow?: (event?: Event) => void;
     handleRenameFlowKeydown?: (id: number, event?: KeyboardEvent) => void;
     saveFlowRenameInline?: (id: number, event?: Event) => Promise<void>;
+    editFlowFromList?: (id: number, currentName?: string, event?: Event) => Promise<void>;
     toggleFlowActivation?: (id: number, event?: Event) => Promise<void>;
     duplicateFlow?: (id: number, event?: Event) => Promise<void>;
     discardFlow?: (id: number, event?: Event) => Promise<void>;
@@ -4616,6 +4796,7 @@ windowAny.updateRenameFlowDraft = updateRenameFlowDraft;
 windowAny.cancelRenameFlow = cancelRenameFlow;
 windowAny.handleRenameFlowKeydown = handleRenameFlowKeydown;
 windowAny.saveFlowRenameInline = saveFlowRenameInline;
+windowAny.editFlowFromList = editFlowFromList;
 windowAny.toggleFlowActivation = toggleFlowActivation;
 windowAny.duplicateFlow = duplicateFlow;
 windowAny.discardFlow = discardFlow;
