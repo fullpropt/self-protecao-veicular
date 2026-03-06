@@ -204,13 +204,19 @@ export default function Inbox() {
         }
         .inbox-session-highlight-main {
             display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            width: 100%;
+        }
+        .inbox-session-highlight-top {
+            display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
         }
         .inbox-session-highlight-content {
             min-width: 0;
-            flex: 1;
         }
         .inbox-session-highlight-label {
             font-size: 11px;
@@ -218,7 +224,7 @@ export default function Inbox() {
             letter-spacing: 0.06em;
             color: rgba(var(--primary-rgb), 0.9);
             font-weight: 700;
-            margin-bottom: 4px;
+            margin: 0;
         }
         .inbox-session-highlight-select-shell {
             position: relative;
@@ -294,11 +300,16 @@ export default function Inbox() {
             color: var(--primary);
         }
         .inbox-session-highlight-actions {
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 8px;
-            align-items: flex-end;
-            flex-shrink: 0;
+            width: 100%;
+        }
+        .inbox-session-start-btn,
+        .inbox-session-resync-btn {
+            width: 100%;
+            min-width: 0;
+            justify-content: center;
         }
         .inbox-session-resync-btn {
             border-radius: 999px;
@@ -1919,21 +1930,20 @@ export default function Inbox() {
             .inbox-session-highlight-main {
                 width: 100%;
                 flex-direction: column;
-                align-items: center;
+                align-items: stretch;
                 gap: 8px;
             }
             .inbox-session-highlight-main > div {
                 width: 100%;
-                text-align: center;
+            }
+            .inbox-session-highlight-top {
+                justify-content: space-between;
+                align-items: center;
             }
             .inbox-session-highlight-content {
                 display: flex;
                 flex-direction: column;
-                align-items: center;
-            }
-            .inbox-session-highlight-label,
-            .inbox-session-highlight-meta {
-                display: none;
+                align-items: flex-start;
             }
             .inbox-session-highlight-select-shell {
                 max-width: 100%;
@@ -1942,7 +1952,6 @@ export default function Inbox() {
                 font-size: 13px;
                 padding: 4px 20px 4px 8px;
                 margin-left: 0;
-                text-align: center;
             }
             .inbox-session-highlight-status {
                 font-size: 10px;
@@ -1953,10 +1962,8 @@ export default function Inbox() {
             }
             .inbox-session-highlight-actions {
                 width: 100%;
-                flex-direction: row;
-                flex-wrap: wrap;
-                align-items: center;
-                justify-content: center;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
                 gap: 6px;
             }
             .inbox-session-resync-btn {
@@ -2138,8 +2145,11 @@ export default function Inbox() {
               </h2>
               <div className="inbox-session-highlight inbox-session-unified" id="inboxSessionIndicator">
                 <div className="inbox-session-highlight-main">
-                  <div className="inbox-session-highlight-content">
+                  <div className="inbox-session-highlight-top">
                     <div className="inbox-session-highlight-label">Conta exibida</div>
+                    <span className="inbox-session-highlight-status all">Filtro geral</span>
+                  </div>
+                  <div className="inbox-session-highlight-content">
                     <div className="inbox-session-highlight-select-shell">
                       <select
                         id="inboxSessionFilter"
@@ -2154,7 +2164,6 @@ export default function Inbox() {
                     <div className="inbox-session-highlight-meta">Mostrando conversas de todas as contas</div>
                   </div>
                   <div className="inbox-session-highlight-actions">
-                    <span className="inbox-session-highlight-status all">Filtro geral</span>
                     <button
                       id="inboxStartConversationBtn"
                       className="inbox-session-start-btn"
