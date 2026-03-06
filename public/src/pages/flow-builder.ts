@@ -169,7 +169,7 @@ let flowWhatsappSessionsCache: FlowWhatsappSessionOption[] = [];
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type ToastFn = (type: ToastType, title: string, message: string, duration?: number) => void;
-type FlowDialogMode = 'alert' | 'confirm' | 'prompt' | 'select';
+type FlowDialogMode = 'alert' | 'confirm' | 'prompt' | 'select' | 'prompt_select';
 type FlowDialogSelectOption = {
     value: string;
     label: string;
@@ -181,6 +181,7 @@ type FlowDialogOptions = {
     confirmLabel?: string;
     cancelLabel?: string;
     defaultValue?: string;
+    defaultSelectValue?: string;
     placeholder?: string;
     selectOptions?: FlowDialogSelectOption[];
 };
@@ -284,6 +285,32 @@ function fallbackNativeDialog(options: FlowDialogOptions): Promise<any> {
         return Promise.resolve(trimmed);
     }
 
+    if (options.mode === 'prompt_select') {
+        const inputValue = window.prompt(options.message, options.defaultValue || '');
+        if (inputValue === null) return Promise.resolve(null);
+
+        const optionsText = (Array.isArray(options.selectOptions) ? options.selectOptions : [])
+            .map((item, index) => `${index + 1}. ${item.label}`)
+            .join('\n');
+        const fallbackPrompt = optionsText
+            ? `Selecione a conta:\n\n${optionsText}\n\nDigite o número da opção:`
+            : 'Selecione a conta:';
+        const rawSelect = window.prompt(fallbackPrompt, options.defaultSelectValue || options.defaultValue || '');
+        if (rawSelect === null) return Promise.resolve(null);
+        const trimmed = String(rawSelect).trim();
+        if (!trimmed) return Promise.resolve(null);
+        const numericIndex = Number.parseInt(trimmed, 10);
+        let selectValue = trimmed;
+        if (Number.isFinite(numericIndex) && Array.isArray(options.selectOptions) && numericIndex > 0 && numericIndex <= options.selectOptions.length) {
+            selectValue = String(options.selectOptions[numericIndex - 1]?.value || '');
+        }
+
+        return Promise.resolve({
+            inputValue: String(inputValue),
+            selectValue
+        });
+    }
+
     const value = window.prompt(options.message, options.defaultValue || '');
     return Promise.resolve(value === null ? null : String(value));
 }
@@ -313,8 +340,9 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
         } = elements;
 
         let settled = false;
-        const isPrompt = options.mode === 'prompt';
-        const isSelect = options.mode === 'select';
+        const isPrompt = options.mode === 'prompt' || options.mode === 'prompt_select';
+        const isSelect = options.mode === 'select' || options.mode === 'prompt_select';
+        const isPromptSelect = options.mode === 'prompt_select';
         const isAlert = options.mode === 'alert';
 
         const finish = (result: any) => {
@@ -355,7 +383,15 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
                 const target = event.target as HTMLElement | null;
                 if ((isPrompt && target === input) || (isSelect && target === select) || (!isPrompt && !isSelect)) {
                     event.preventDefault();
-                    finish(isPrompt ? input.value : isSelect ? select.value : true);
+                    finish(
+                        isPromptSelect
+                            ? { inputValue: input.value, selectValue: select.value }
+                            : isPrompt
+                                ? input.value
+                                : isSelect
+                                    ? select.value
+                                    : true
+                    );
                 }
             }
         };
@@ -363,7 +399,7 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
         activeFlowDialogDismiss = () => finish(cancelResult());
 
         title.textContent = String(
-            options.title || (isPrompt ? 'Digite um valor' : isSelect ? 'Selecione uma opção' : isAlert ? 'Aviso' : 'Confirmacao')
+            options.title || (isPromptSelect ? 'Preencha os dados' : isPrompt ? 'Digite um valor' : isSelect ? 'Selecione uma opção' : isAlert ? 'Aviso' : 'Confirmacao')
         );
         message.textContent = String(options.message || '');
 
@@ -375,7 +411,7 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
             const entries = (Array.isArray(options.selectOptions) ? options.selectOptions : [])
                 .map((item) => `<option value="${escapeHtml(String(item.value || ''))}">${escapeHtml(String(item.label || item.value || ''))}</option>`);
             select.innerHTML = entries.join('');
-            const nextValue = String(options.defaultValue || '');
+            const nextValue = String(isPromptSelect ? (options.defaultSelectValue || '') : (options.defaultValue || ''));
             if (nextValue) {
                 select.value = nextValue;
             }
@@ -397,17 +433,33 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
         };
         cancelBtn.onclick = () => finish(cancelResult());
         closeBtn.onclick = () => finish(cancelResult());
-        confirmBtn.onclick = () => finish(isPrompt ? input.value : isSelect ? select.value : (isAlert ? undefined : true));
+        confirmBtn.onclick = () => finish(
+            isPromptSelect
+                ? { inputValue: input.value, selectValue: select.value }
+                : isPrompt
+                    ? input.value
+                    : isSelect
+                        ? select.value
+                        : (isAlert ? undefined : true)
+        );
         input.onkeydown = (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
-                finish(input.value);
+                finish(
+                    isPromptSelect
+                        ? { inputValue: input.value, selectValue: select.value }
+                        : input.value
+                );
             }
         };
         select.onkeydown = (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
-                finish(select.value);
+                finish(
+                    isPromptSelect
+                        ? { inputValue: input.value, selectValue: select.value }
+                        : select.value
+                );
             }
         };
 
@@ -462,6 +514,31 @@ function showFlowPromptDialog(message: string, options: { title?: string; defaul
         confirmLabel: options.confirmLabel || 'OK',
         cancelLabel: options.cancelLabel || 'Cancelar'
     }) as Promise<string | null>;
+}
+
+function showFlowPromptSelectDialog(
+    message: string,
+    options: {
+        title?: string;
+        defaultValue?: string;
+        defaultSelectValue?: string;
+        placeholder?: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+        selectOptions: FlowDialogSelectOption[];
+    }
+) {
+    return openStyledFlowDialog({
+        mode: 'prompt_select',
+        title: options.title,
+        message,
+        defaultValue: options.defaultValue,
+        defaultSelectValue: options.defaultSelectValue,
+        placeholder: options.placeholder,
+        selectOptions: options.selectOptions,
+        confirmLabel: options.confirmLabel || 'OK',
+        cancelLabel: options.cancelLabel || 'Cancelar'
+    }) as Promise<{ inputValue: string; selectValue: string } | null>;
 }
 
 function showFlowSelectDialog(
@@ -4283,20 +4360,6 @@ async function editFlowFromList(id: number, currentName = '', event?: Event) {
     const currentFlow = flowsCache.find((flow) => Number(flow.id) === flowId);
     const currentSessionId = normalizeFlowSessionId(currentFlow?.session_id);
     const fallbackName = String(currentName || currentFlow?.name || '').trim() || 'Novo fluxo';
-    const typedName = await showFlowPromptDialog('Edite o nome do fluxo:', {
-        title: 'Editar fluxo',
-        defaultValue: fallbackName,
-        placeholder: 'Ex.: Captação de leads',
-        confirmLabel: 'Salvar'
-    });
-
-    if (typedName === null) return;
-
-    const nextName = String(typedName || '').trim();
-    if (!nextName) {
-        await showFlowAlertDialog('O nome do fluxo não pode ficar vazio.', 'Editar fluxo');
-        return;
-    }
 
     if (flowWhatsappSessionsCache.length === 0) {
         await loadFlowWhatsappSessions({ silent: true });
@@ -4325,15 +4388,23 @@ async function editFlowFromList(id: number, currentName = '', event?: Event) {
         });
     }
 
-    const selectedSession = await showFlowSelectDialog('Escolha a conta WhatsApp para execução do fluxo:', {
-        title: 'Conta do fluxo',
-        defaultValue: currentSessionId || FLOW_ALL_SESSIONS_VALUE,
+    const editPayload = await showFlowPromptSelectDialog('Edite o nome do fluxo e escolha a conta WhatsApp:', {
+        title: 'Editar fluxo',
+        defaultValue: fallbackName,
+        defaultSelectValue: currentSessionId || FLOW_ALL_SESSIONS_VALUE,
+        placeholder: 'Ex.: Captação de leads',
         selectOptions: options,
         confirmLabel: 'Salvar'
     });
-    if (selectedSession === null) return;
+    if (editPayload === null) return;
 
-    const nextSessionId = normalizeFlowSessionId(selectedSession);
+    const nextName = String(editPayload?.inputValue || '').trim();
+    if (!nextName) {
+        await showFlowAlertDialog('O nome do fluxo não pode ficar vazio.', 'Editar fluxo');
+        return;
+    }
+
+    const nextSessionId = normalizeFlowSessionId(editPayload?.selectValue);
     if (nextName === fallbackName && nextSessionId === currentSessionId) return;
 
     try {
