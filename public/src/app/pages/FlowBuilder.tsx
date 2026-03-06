@@ -254,13 +254,7 @@ export default function FlowBuilder() {
             line-height: 1.1;
         }
 
-        .flow-builder-react .flow-scope-controls {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .flow-builder-react .flow-scope-select {
+        .flow-builder-react .flow-scope-value {
             min-width: 220px;
             max-width: 280px;
             border-radius: 8px;
@@ -270,33 +264,10 @@ export default function FlowBuilder() {
             padding: 7px 10px;
             font-size: 12px;
             line-height: 1.2;
-        }
-
-        .flow-builder-react .flow-scope-select:focus {
-            outline: none;
-            border-color: rgba(var(--primary-rgb), 0.75);
-            box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
-        }
-
-        .flow-builder-react .flow-scope-refresh {
-            width: 30px;
-            min-width: 30px;
-            height: 30px;
-            border-radius: 8px;
-            border: 1px solid rgba(148, 163, 184, 0.4);
-            background: rgba(15, 23, 42, 0.38);
-            color: #cbd5e1;
+            min-height: 32px;
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .flow-builder-react .flow-scope-refresh:hover {
-            border-color: rgba(var(--primary-rgb), 0.58);
-            color: #e7edf7;
-            background: rgba(var(--primary-rgb), 0.24);
+            box-sizing: border-box;
         }
 
         .flow-builder-react .flow-name-highlight-content {
@@ -2518,6 +2489,28 @@ export default function FlowBuilder() {
             flex-shrink: 0;
             min-width: 0;
             max-width: 100%;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .flow-list-scope-select {
+            min-width: 220px;
+            max-width: 280px;
+            height: 30px;
+            border-radius: 8px;
+            border: 1px solid rgba(100, 116, 139, 0.35);
+            background: rgba(15, 23, 42, 0.62);
+            color: #dbe6f7;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .flow-list-scope-select:focus {
+            outline: none;
+            border-color: rgba(var(--primary-rgb), 0.62);
+            box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.18);
         }
 
         .flow-list-btn {
@@ -2883,10 +2876,7 @@ export default function FlowBuilder() {
                 min-width: 0;
                 width: 100%;
             }
-            .flow-builder-react .flow-scope-controls {
-                width: 100%;
-            }
-            .flow-builder-react .flow-scope-select {
+            .flow-builder-react .flow-scope-value {
                 min-width: 0;
                 max-width: none;
                 width: 100%;
@@ -2896,6 +2886,12 @@ export default function FlowBuilder() {
             }
             .flow-inline-name-input {
                 min-width: 0;
+            }
+            .flow-list-scope-select {
+                min-width: 0;
+                max-width: none;
+                width: 100%;
+                flex: 1 1 100%;
             }
             .flow-builder-react .flow-canvas-toolbar {
                 display: none;
@@ -3075,20 +3071,8 @@ export default function FlowBuilder() {
                           <div className="flow-name-highlight-meta">
                               <span className="flow-name-highlight-status draft" id="currentFlowStatusDisplay">Não salvo</span>
                               <div className="flow-name-highlight-scope">
-                                  <label className="flow-scope-label" htmlFor="flowSessionScope">Conta do fluxo</label>
-                                  <div className="flow-scope-controls">
-                                      <select id="flowSessionScope" className="flow-scope-select" defaultValue="">
-                                          <option value="">Todas as contas WhatsApp</option>
-                                      </select>
-                                      <button
-                                          type="button"
-                                          className="flow-scope-refresh"
-                                          title="Atualizar contas WhatsApp"
-                                          onClick={() => globals.reloadFlowSessionOptions?.()}
-                                      >
-                                          <span className="icon icon-refresh icon-sm"></span>
-                                      </button>
-                                  </div>
+                                  <div className="flow-scope-label">Conta do fluxo</div>
+                                  <div className="flow-scope-value" id="currentFlowSessionScopeDisplay">Todas as contas WhatsApp</div>
                               </div>
                           </div>
                       </div>

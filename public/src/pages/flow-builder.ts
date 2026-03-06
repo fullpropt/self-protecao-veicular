@@ -1378,35 +1378,67 @@ function getFlowWhatsappSessionDisplayName(session?: FlowWhatsappSessionOption |
     return String(session?.session_id || '').trim();
 }
 
-function renderFlowSessionScopeControls() {
-    const select = document.getElementById('flowSessionScope') as HTMLSelectElement | null;
-    if (!select) return;
+function getFlowWhatsappSessionStatusLabel(session?: FlowWhatsappSessionOption | null) {
+    return String(session?.connected ? 'Conectada' : (session?.status || 'Desconectada')).trim();
+}
 
+function getFlowSessionScopeLabel(sessionId?: string | null, options: { includeStatus?: boolean } = {}) {
+    const normalizedSessionId = normalizeFlowSessionId(sessionId);
+    if (!normalizedSessionId) {
+        return 'Todas as contas WhatsApp';
+    }
+
+    const session = flowWhatsappSessionsCache.find((item) => normalizeFlowSessionId(item.session_id) === normalizedSessionId);
+    if (!session) {
+        return `Conta indisponível (${normalizedSessionId})`;
+    }
+
+    const name = getFlowWhatsappSessionDisplayName(session);
+    if (!options.includeStatus) {
+        return name;
+    }
+
+    return `${name} - ${getFlowWhatsappSessionStatusLabel(session)}`;
+}
+
+function getFlowSessionScopeOptionLabel(session: FlowWhatsappSessionOption) {
+    const sessionId = normalizeFlowSessionId(session.session_id);
+    const status = getFlowWhatsappSessionStatusLabel(session);
+    const name = getFlowWhatsappSessionDisplayName(session);
+    return name === sessionId
+        ? `${sessionId} - ${status}`
+        : `${name} - ${sessionId} - ${status}`;
+}
+
+function buildFlowSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
     const options = [...flowWhatsappSessionsCache]
         .filter((item) => normalizeFlowSessionId(item.session_id))
         .sort((a, b) => getFlowWhatsappSessionDisplayName(a).localeCompare(getFlowWhatsappSessionDisplayName(b), 'pt-BR'));
     const knownIds = new Set(options.map((item) => normalizeFlowSessionId(item.session_id)));
-    const selectedSessionId = normalizeFlowSessionId(currentFlowSessionId);
+    const normalizedSelectedSessionId = normalizeFlowSessionId(selectedSessionId);
 
     const entries = [
         `<option value="${FLOW_ALL_SESSIONS_VALUE}">Todas as contas WhatsApp</option>`,
         ...options.map((item) => {
             const sessionId = normalizeFlowSessionId(item.session_id);
-            const status = String(item.connected ? 'Conectada' : (item.status || 'Desconectada')).trim();
-            const name = getFlowWhatsappSessionDisplayName(item);
-            const label = name === sessionId
-                ? `${sessionId} - ${status}`
-                : `${name} - ${sessionId} - ${status}`;
-            return `<option value="${escapeHtml(sessionId)}">${escapeHtml(label)}</option>`;
+            return `<option value="${escapeHtml(sessionId)}">${escapeHtml(getFlowSessionScopeOptionLabel(item))}</option>`;
         })
     ];
 
-    if (selectedSessionId && !knownIds.has(selectedSessionId)) {
-        entries.push(`<option value="${escapeHtml(selectedSessionId)}">Conta indisponível (${escapeHtml(selectedSessionId)})</option>`);
+    if (normalizedSelectedSessionId && !knownIds.has(normalizedSelectedSessionId)) {
+        entries.push(`<option value="${escapeHtml(normalizedSelectedSessionId)}">Conta indisponível (${escapeHtml(normalizedSelectedSessionId)})</option>`);
     }
 
-    select.innerHTML = entries.join('');
-    select.value = selectedSessionId || FLOW_ALL_SESSIONS_VALUE;
+    return entries.join('');
+}
+
+function renderFlowSessionScopeControls() {
+    const display = document.getElementById('currentFlowSessionScopeDisplay') as HTMLElement | null;
+    if (display) {
+        const label = getFlowSessionScopeLabel(currentFlowSessionId, { includeStatus: true });
+        display.textContent = label;
+        display.title = label;
+    }
 }
 
 function setCurrentFlowSessionScope(sessionId: unknown) {
@@ -1434,6 +1466,9 @@ async function loadFlowWhatsappSessions(options: { silent?: boolean } = {}) {
                 .map((item) => normalizeFlowWhatsappSessionOption(item))
                 .filter((item): item is FlowWhatsappSessionOption => Boolean(item));
             renderFlowSessionScopeControls();
+            if (flowsCache.length > 0) {
+                renderFlowsList(flowsCache);
+            }
             return;
         }
     } catch (_) {
@@ -1442,6 +1477,9 @@ async function loadFlowWhatsappSessions(options: { silent?: boolean } = {}) {
 
     flowWhatsappSessionsCache = [];
     renderFlowSessionScopeControls();
+    if (flowsCache.length > 0) {
+        renderFlowsList(flowsCache);
+    }
     if (!options.silent) {
         notify('warning', 'Fluxos', 'Não foi possível carregar as contas WhatsApp.');
     }
@@ -1552,14 +1590,6 @@ function initFlowBuilder() {
     if (currentFlowId === null) {
         setCurrentFlowActive(true);
     }
-    const flowSessionScopeSelect = document.getElementById('flowSessionScope') as HTMLSelectElement | null;
-    if (flowSessionScopeSelect && flowSessionScopeSelect.dataset.bound !== '1') {
-        flowSessionScopeSelect.dataset.bound = '1';
-        flowSessionScopeSelect.addEventListener('change', () => {
-            updateFlowSessionScopeFromSelect();
-        });
-    }
-
     renderCurrentFlowName();
     setFlowDirtyState(false);
     bindFlowAiAssistant();
@@ -4176,13 +4206,6 @@ function renderFlowsList(flows: FlowSummary[]) {
         return triggerType || 'manual';
     };
 
-    const getFlowSessionScopeLabel = (sessionId?: string | null) => {
-        const normalizedSessionId = normalizeFlowSessionId(sessionId);
-        if (!normalizedSessionId) return 'todas as contas';
-        const session = flowWhatsappSessionsCache.find((item) => normalizeFlowSessionId(item.session_id) === normalizedSessionId);
-        return getFlowWhatsappSessionDisplayName(session || { session_id: normalizedSessionId });
-    };
-
     container.innerHTML = flows.map(flow => {
         const isActive = toBoolean(flow.is_active, true);
         const isCurrent = Number(flow.id) === Number(currentFlowId);
@@ -4191,6 +4214,7 @@ function renderFlowsList(flows: FlowSummary[]) {
         const escapedFlowName = escapeHtml(flowName);
         const encodedName = encodeURIComponent(flowName);
         const inputValue = escapeHtml(renamingFlowDraft);
+        const sessionOptions = buildFlowSessionScopeOptionsMarkup(flow.session_id);
         const itemClasses = [
             'flow-list-item',
             isCurrent ? 'is-current' : '',
@@ -4235,6 +4259,15 @@ function renderFlowsList(flows: FlowSummary[]) {
                 <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | Conta: ${escapeHtml(getFlowSessionScopeLabel(flow.session_id))} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
             </div>
             <div class="flow-list-actions">
+                <select
+                    class="flow-list-scope-select"
+                    title="Conta do fluxo"
+                    onclick="event.stopPropagation()"
+                    onmousedown="event.stopPropagation()"
+                    onchange="updateFlowListSessionScope(${flow.id}, this.value, event)"
+                >
+                    ${sessionOptions}
+                </select>
                 <button class="flow-list-btn flow-list-toggle ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Desativar fluxo' : 'Ativar fluxo'}" onclick="toggleFlowActivation(${flow.id}, event)">
                     ${isActive ? 'Desativar' : 'Ativar'}
                 </button>
@@ -4483,6 +4516,47 @@ async function toggleFlowActivation(id: number, event?: Event) {
         await loadFlows();
     } catch (error) {
         await showFlowAlertDialog('Erro ao atualizar status: ' + (error instanceof Error ? error.message : 'Falha inesperada'), 'Status do fluxo');
+    }
+}
+
+async function updateFlowListSessionScope(id: number, value: string, event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    const flowId = Number(id);
+    if (!Number.isFinite(flowId)) return;
+
+    const nextSessionId = normalizeFlowSessionId(value);
+    const targetFlow = flowsCache.find((flow) => Number(flow.id) === flowId);
+    const currentSessionId = normalizeFlowSessionId(targetFlow?.session_id);
+
+    if (currentSessionId === nextSessionId) return;
+
+    try {
+        const response = await fetch(buildFlowApiUrl(`/api/flows/${flowId}`), {
+            method: 'PUT',
+            headers: buildAuthHeaders(true),
+            body: JSON.stringify({ session_id: nextSessionId || null })
+        });
+        const result = await readFlowJsonResponse<any>(response, {});
+
+        if (!result.success) {
+            await showFlowAlertDialog('Erro ao atualizar a conta do fluxo: ' + (result.error || 'Falha inesperada'), 'Conta do fluxo');
+            await loadFlows();
+            return;
+        }
+
+        if (Number(currentFlowId) === flowId) {
+            setCurrentFlowSessionScope(nextSessionId);
+        }
+
+        await loadFlows();
+    } catch (error) {
+        await showFlowAlertDialog(
+            'Erro ao atualizar a conta do fluxo: ' + (error instanceof Error ? error.message : 'Falha inesperada'),
+            'Conta do fluxo'
+        );
+        await loadFlows();
     }
 }
 
@@ -4815,6 +4889,7 @@ const windowAny = window as Window & {
     saveFlowRenameInline?: (id: number, event?: Event) => Promise<void>;
     editFlowFromList?: (id: number, currentName?: string, event?: Event) => Promise<void>;
     toggleFlowActivation?: (id: number, event?: Event) => Promise<void>;
+    updateFlowListSessionScope?: (id: number, value: string, event?: Event) => Promise<void>;
     duplicateFlow?: (id: number, event?: Event) => Promise<void>;
     discardFlow?: (id: number, event?: Event) => Promise<void>;
     closeFlowsModal?: () => void;
@@ -4873,6 +4948,7 @@ windowAny.handleRenameFlowKeydown = handleRenameFlowKeydown;
 windowAny.saveFlowRenameInline = saveFlowRenameInline;
 windowAny.editFlowFromList = editFlowFromList;
 windowAny.toggleFlowActivation = toggleFlowActivation;
+windowAny.updateFlowListSessionScope = updateFlowListSessionScope;
 windowAny.duplicateFlow = duplicateFlow;
 windowAny.discardFlow = discardFlow;
 windowAny.closeFlowsModal = closeFlowsModal;
