@@ -2496,26 +2496,26 @@ export default function FlowBuilder() {
         }
 
         .flow-list-toggle.is-active {
-            border-color: rgba(var(--primary-rgb), 0.5);
-            background: rgba(var(--primary-rgb), 0.2);
-            color: #eafff3;
-        }
-
-        .flow-list-toggle.is-active:hover {
-            border-color: rgba(var(--primary-rgb), 0.62);
-            background: rgba(var(--primary-rgb), 0.26);
-        }
-
-        .flow-list-toggle.is-inactive {
             border-color: rgba(148, 163, 184, 0.5);
             background: rgba(148, 163, 184, 0.14);
             color: #cbd5e1;
         }
 
-        .flow-list-toggle.is-inactive:hover {
+        .flow-list-toggle.is-active:hover {
             border-color: rgba(var(--primary-rgb), 0.42);
             background: rgba(var(--primary-rgb), 0.16);
             color: #ecfff4;
+        }
+
+        .flow-list-toggle.is-inactive {
+            border-color: rgba(var(--primary-rgb), 0.5);
+            background: rgba(var(--primary-rgb), 0.2);
+            color: #eafff3;
+        }
+
+        .flow-list-toggle.is-inactive:hover {
+            border-color: rgba(var(--primary-rgb), 0.62);
+            background: rgba(var(--primary-rgb), 0.26);
         }
 
         .flow-list-empty {
