@@ -2129,9 +2129,58 @@ async function sendQuickReplyAudio(quickReply: TemplateItem) {
 
 function getMediaUrl(url?: string | null) {
     if (!url) return '';
-    if (url.startsWith('http')) return url;
-    const base = (window as any).APP?.socketUrl || '';
-    return `${base}${url}`;
+
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+
+    const appBaseRaw = String((window as any).APP?.socketUrl || window.location.origin || '').trim();
+    const appOrigin = (() => {
+        try {
+            return new URL(appBaseRaw || window.location.origin).origin;
+        } catch (_) {
+            return window.location.origin;
+        }
+    })();
+
+    const normalizeUploadsPath = (value: string) => {
+        const normalized = String(value || '').trim().replace(/\\/g, '/');
+        if (!normalized) return '';
+
+        if (normalized.startsWith('/uploads/')) return normalized;
+        if (normalized.startsWith('uploads/')) return `/${normalized}`;
+
+        const markerIndex = normalized.toLowerCase().indexOf('/uploads/');
+        if (markerIndex >= 0) {
+            return normalized.slice(markerIndex);
+        }
+
+        return normalized;
+    };
+
+    if (/^https?:\/\//i.test(raw)) {
+        try {
+            const parsed = new URL(raw);
+            const host = String(parsed.hostname || '').toLowerCase();
+            const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+
+            if (isLocalHost) {
+                const normalizedLocalPath = normalizeUploadsPath(`${parsed.pathname || ''}${parsed.search || ''}${parsed.hash || ''}`);
+                if (normalizedLocalPath.startsWith('/')) {
+                    return `${appOrigin}${normalizedLocalPath}`;
+                }
+            }
+        } catch (_) {
+            // keep raw url fallback
+        }
+        return raw;
+    }
+
+    const normalizedPath = normalizeUploadsPath(raw);
+    if (normalizedPath.startsWith('/')) {
+        return `${appOrigin}${normalizedPath}`;
+    }
+    return `${appOrigin}/${normalizedPath}`;
 }
 
 function normalizeMessageStatus(status?: string) {
