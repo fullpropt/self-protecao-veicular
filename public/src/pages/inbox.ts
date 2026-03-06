@@ -1305,7 +1305,6 @@ function renderContactInfoPanel() {
             </div>
 
             <div class="contact-card-actions">
-                <button class="btn btn-outline btn-sm" onclick="openWhatsApp()">Abrir no WhatsApp</button>
                 <button class="btn btn-primary btn-sm" onclick="viewContact()">Abrir contato</button>
             </div>
         </div>
@@ -2665,7 +2664,6 @@ function renderChat() {
                 <div class="chat-header-status">${formatPhone(currentConversation.phone)}</div>
             </div>
             <div class="chat-header-actions">
-                <button class="btn btn-sm btn-outline btn-icon" onclick="openWhatsApp()" title="Abrir no WhatsApp"><span class="icon icon-whatsapp icon-sm"></span></button>
                 <button class="btn btn-sm btn-outline btn-icon" onclick="toggleContactInfo()" title="Dados do contato"><span class="icon icon-user icon-sm"></span></button>
             </div>
         </div>

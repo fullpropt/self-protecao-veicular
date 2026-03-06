@@ -1480,11 +1480,13 @@ export default function Inbox() {
         }
         .contact-card-muted { color: var(--gray-600); font-size: 12px; margin: 0; }
         .contact-card-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: flex;
             gap: 8px;
         }
-        .contact-card-actions .btn { width: 100%; }
+        .contact-card-actions .btn {
+            flex: 1 1 0;
+            width: auto;
+        }
 
         @media (min-width: 1025px) {
             .inbox-container.contact-info-collapsed {
@@ -1865,7 +1867,7 @@ export default function Inbox() {
                 font-size: 13px;
             }
             .contact-card-actions {
-                grid-template-columns: 1fr;
+                flex-direction: column;
             }
         }
         @media (max-width: 480px) {
