@@ -21,6 +21,7 @@ type Conversation = {
     lastMessageAt?: string;
     unread?: number;
     status?: LeadStatus;
+    hasConversation?: boolean;
 };
 
 type ChatMessage = {
@@ -37,6 +38,7 @@ type ChatMessage = {
 
 type ConversationsResponse = { conversations?: Array<Record<string, any>> };
 type MessagesResponse = { messages?: Array<Record<string, any>> };
+type InboxLeadsResponse = { leads?: Array<Record<string, any>>; total?: number };
 type QuickRepliesResponse = { templates?: Array<Record<string, any>> };
 type InboxHistoryResyncResponse = {
     success?: boolean;
@@ -89,6 +91,18 @@ type WhatsappSessionItem = {
     phone?: string;
 };
 
+type InboxLeadItem = {
+    id: number;
+    name?: string;
+    phone?: string;
+    avatar_url?: string;
+    avatarUrl?: string;
+    status?: LeadStatus | number | string;
+    updated_at?: string;
+    created_at?: string;
+    last_message_at?: string;
+};
+
 let conversations: Conversation[] = [];
 let currentConversation: Conversation | null = null;
 let messages: ChatMessage[] = [];
@@ -113,9 +127,19 @@ let activeChatScrollContainer: HTMLElement | null = null;
 let chatMediaPreviewBindingsBound = false;
 let chatMediaPreviewLastFocusedElement: HTMLElement | null = null;
 let pendingInboxOpenLeadId = 0;
+let inboxSearchVirtualConversations: Conversation[] = [];
+let inboxSearchLeadsCache: InboxLeadItem[] = [];
+let inboxSearchLeadsCacheKey = '';
+let inboxSearchLeadsCacheAt = 0;
+let inboxSearchLeadsFetchInFlight: Promise<InboxLeadItem[]> | null = null;
+let inboxSearchRequestToken = 0;
 
 const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 const INBOX_OPEN_LEAD_QUERY_KEYS = ['leadId', 'lead_id', 'id'] as const;
+const INBOX_SEARCH_CONTACTS_CACHE_TTL_MS = 30 * 1000;
+const INBOX_SEARCH_CONTACTS_BATCH_SIZE = 200;
+const INBOX_SEARCH_CONTACTS_MAX_PAGES = 20;
+const INBOX_NEW_CONVERSATION_PREVIEW = 'Digite para iniciar uma nova conversa';
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', is_default: true, source: 'name' },
@@ -568,12 +592,136 @@ async function loadInboxSessionFilters() {
 function changeInboxSessionFilter(sessionId: string) {
     inboxSessionFilter = sanitizeSessionId(sessionId);
     persistInboxSessionFilter(inboxSessionFilter);
+    inboxSearchLeadsCache = [];
+    inboxSearchLeadsCacheKey = '';
+    inboxSearchLeadsCacheAt = 0;
+    inboxSearchVirtualConversations = [];
     renderInboxSessionIndicator();
     currentConversation = null;
     currentLeadDetails = null;
     renderContactInfoPanel();
     setMobileConversationMode(false);
     loadConversations();
+}
+
+function getInboxSearchValue() {
+    const input = document.getElementById('searchConversations') as HTMLInputElement | null;
+    return String(input?.value || '').trim().toLowerCase();
+}
+
+function getInboxSearchLeadsCacheKey() {
+    return inboxSessionFilter ? `session:${inboxSessionFilter}` : 'session:all';
+}
+
+function normalizeInboxLeadId(value: unknown) {
+    const parsed = Number(value || 0);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function buildVirtualConversationFromLead(lead: InboxLeadItem): Conversation | null {
+    const leadId = normalizeInboxLeadId(lead.id);
+    if (!leadId) return null;
+
+    const leadPhone = String(lead.phone || '').trim();
+    return {
+        id: -leadId,
+        leadId,
+        sessionId: '',
+        sessionLabel: '',
+        name: String(lead.name || leadPhone || `Contato ${leadId}`).trim(),
+        phone: leadPhone,
+        avatarUrl: sanitizeAvatarUrl(lead.avatar_url || lead.avatarUrl),
+        lastMessage: INBOX_NEW_CONVERSATION_PREVIEW,
+        lastMessageAt: String(lead.last_message_at || lead.updated_at || lead.created_at || ''),
+        unread: 0,
+        status: Number(lead.status || 0) as LeadStatus,
+        hasConversation: false
+    };
+}
+
+async function fetchInboxSearchLeads(force = false) {
+    const cacheKey = getInboxSearchLeadsCacheKey();
+    const cacheValid =
+        !force &&
+        inboxSearchLeadsCacheKey === cacheKey &&
+        Array.isArray(inboxSearchLeadsCache) &&
+        (Date.now() - inboxSearchLeadsCacheAt) < INBOX_SEARCH_CONTACTS_CACHE_TTL_MS;
+
+    if (cacheValid) {
+        return inboxSearchLeadsCache;
+    }
+
+    if (inboxSearchLeadsFetchInFlight) {
+        return inboxSearchLeadsFetchInFlight;
+    }
+
+    inboxSearchLeadsFetchInFlight = (async () => {
+        const leads: InboxLeadItem[] = [];
+        let offset = 0;
+        let page = 0;
+        let totalExpected: number | null = null;
+
+        while (page < INBOX_SEARCH_CONTACTS_MAX_PAGES) {
+            const params = new URLSearchParams();
+            params.set('limit', String(INBOX_SEARCH_CONTACTS_BATCH_SIZE));
+            params.set('offset', String(offset));
+            if (inboxSessionFilter) {
+                params.set('session_id', inboxSessionFilter);
+            }
+
+            const response: InboxLeadsResponse = await api.get(`/api/leads?${params.toString()}`);
+            const batch = Array.isArray(response?.leads) ? response.leads : [];
+            const reportedTotal = Number(response?.total || 0);
+
+            if (Number.isFinite(reportedTotal) && reportedTotal > 0) {
+                totalExpected = reportedTotal;
+            }
+
+            leads.push(...batch.map((item) => ({
+                id: normalizeInboxLeadId(item.id),
+                name: String(item.name || '').trim(),
+                phone: String(item.phone || '').trim(),
+                avatar_url: String(item.avatar_url || '').trim(),
+                avatarUrl: String(item.avatarUrl || '').trim(),
+                status: item.status,
+                updated_at: String(item.updated_at || '').trim(),
+                created_at: String(item.created_at || '').trim(),
+                last_message_at: String(item.last_message_at || '').trim()
+            })).filter((item) => item.id > 0));
+
+            page += 1;
+            offset += batch.length;
+
+            if (batch.length < INBOX_SEARCH_CONTACTS_BATCH_SIZE) break;
+            if (totalExpected !== null && leads.length >= totalExpected) break;
+        }
+
+        inboxSearchLeadsCache = leads;
+        inboxSearchLeadsCacheKey = cacheKey;
+        inboxSearchLeadsCacheAt = Date.now();
+        return leads;
+    })().finally(() => {
+        inboxSearchLeadsFetchInFlight = null;
+    });
+
+    return inboxSearchLeadsFetchInFlight;
+}
+
+async function buildInboxConversationSearchPool() {
+    const leads = await fetchInboxSearchLeads();
+    const leadIdsWithConversation = new Set(
+        conversations
+            .map((conversation) => normalizeInboxLeadId(conversation.leadId))
+            .filter((leadId) => leadId > 0)
+    );
+
+    const virtualConversations = leads
+        .map((lead) => buildVirtualConversationFromLead(lead))
+        .filter((item): item is Conversation => !!item)
+        .filter((item) => !leadIdsWithConversation.has(item.leadId));
+
+    inboxSearchVirtualConversations = virtualConversations;
+    return conversations.concat(virtualConversations);
 }
 
 function resolveConversationSessionId(conversation: Conversation | null | undefined) {
@@ -778,12 +926,28 @@ function clearInboxOpenLeadIdFromRouteParams() {
     window.history.replaceState({}, '', nextUrl);
 }
 
-function tryOpenPendingLeadConversation() {
+async function tryOpenPendingLeadConversation() {
     if (!Number.isInteger(pendingInboxOpenLeadId) || pendingInboxOpenLeadId <= 0) return;
 
-    const targetConversation = conversations.find(
+    let targetConversation = conversations.find(
         (conversation) => Number(conversation.leadId) === pendingInboxOpenLeadId
     );
+    if (!targetConversation) {
+        try {
+            const leads = await fetchInboxSearchLeads();
+            const targetLead = leads.find((lead) => normalizeInboxLeadId(lead.id) === pendingInboxOpenLeadId) || null;
+            const virtualConversation = targetLead ? buildVirtualConversationFromLead(targetLead) : null;
+            if (virtualConversation) {
+                inboxSearchVirtualConversations = [
+                    virtualConversation,
+                    ...inboxSearchVirtualConversations.filter((conversation) => conversation.id !== virtualConversation.id)
+                ];
+                targetConversation = virtualConversation;
+            }
+        } catch (_) {
+            // Falha em carregar contatos nao deve quebrar a tela
+        }
+    }
     if (!targetConversation) return;
 
     const targetConversationId = Number(targetConversation.id || 0);
@@ -1259,6 +1423,7 @@ async function loadConversations() {
             : '';
         const response: ConversationsResponse = await api.get(`/api/conversations${query}`);
         const items = response.conversations || [];
+        inboxSearchVirtualConversations = [];
         conversations = items.map((c) => ({
             sessionId: sanitizeSessionId(c.session_id || c.sessionId),
             id: c.id,
@@ -1267,12 +1432,13 @@ async function loadConversations() {
             name: c.name || c.lead_name || c.phone,
             phone: c.phone,
             avatarUrl: sanitizeAvatarUrl(c.avatar_url || c.avatarUrl),
-            lastMessage: c.lastMessage || c.last_message || 'Clique para iniciar conversa',
+            lastMessage: c.lastMessage || c.last_message || INBOX_NEW_CONVERSATION_PREVIEW,
             lastMessageAt: c.lastMessageAt || c.last_message_at || c.updated_at || c.created_at,
             unread: activeOpenConversationId > 0 && Number(c.id) === activeOpenConversationId
                 ? 0
                 : (c.unread || c.unread_count || 0),
-            status: c.status
+            status: c.status,
+            hasConversation: true
         }));
 
         if (currentConversation) {
@@ -1297,7 +1463,10 @@ async function loadConversations() {
             }
         }
 
-        if (currentFilter === 'unread') {
+        const activeSearch = getInboxSearchValue();
+        if (activeSearch) {
+            await searchConversations();
+        } else if (currentFilter === 'unread') {
             renderFilteredConversations(conversations.filter((conversation) => (conversation.unread || 0) > 0));
         } else {
             renderConversations();
@@ -1410,13 +1579,20 @@ function filterConversations(filter: 'all' | 'unread') {
     document.querySelectorAll('.conversations-tabs button').forEach((button) => button.classList.remove('active'));
     document.getElementById('filterAllBtn')?.classList.toggle('active', filter === 'all');
     document.getElementById('filterUnreadBtn')?.classList.toggle('active', filter === 'unread');
-    
+
+    const activeSearch = getInboxSearchValue();
+    if (activeSearch) {
+        void searchConversations();
+        return;
+    }
+
     if (filter === 'unread') {
         const filtered = conversations.filter(c => c.unread > 0);
         renderFilteredConversations(filtered);
-    } else {
-        renderConversations();
+        return;
     }
+
+    renderConversations();
 }
 
 function renderFilteredConversations(filtered: Conversation[]) {
@@ -1434,7 +1610,7 @@ function renderFilteredConversations(filtered: Conversation[]) {
     }
     // Usar mesma lógica de renderConversations
     list.innerHTML = filtered.map(c => `
-        <div class="conversation-item ${c.unread > 0 ? 'unread' : ''}" onclick="selectConversation(${c.id})">
+        <div class="conversation-item ${c.unread > 0 ? 'unread' : ''} ${currentConversation?.id === c.id ? 'active' : ''}" onclick="selectConversation(${c.id})">
             ${renderAvatarMarkup({
                 name: c.name,
                 avatarUrl: resolveConversationAvatarUrl(c),
@@ -1455,17 +1631,68 @@ function renderFilteredConversations(filtered: Conversation[]) {
     `).join('');
 }
 
-function searchConversations() {
-    const search = (document.getElementById('searchConversations') as HTMLInputElement | null)?.value.toLowerCase() || '';
-    const filtered = conversations.filter(c => 
-        (c.name && c.name.toLowerCase().includes(search)) ||
-        (c.phone && c.phone.includes(search))
-    );
-    renderFilteredConversations(filtered);
+async function searchConversations() {
+    const requestToken = ++inboxSearchRequestToken;
+    const search = getInboxSearchValue();
+
+    if (!search) {
+        inboxSearchVirtualConversations = [];
+        if (currentFilter === 'unread') {
+            renderFilteredConversations(conversations.filter((conversation) => (conversation.unread || 0) > 0));
+        } else {
+            renderConversations();
+        }
+        return;
+    }
+
+    const normalizedSearch = search.toLowerCase();
+    const normalizedDigits = normalizedSearch.replace(/\D/g, '');
+    const matchesConversation = (conversation: Conversation) => {
+        const name = String(conversation.name || '').toLowerCase();
+        const phoneRaw = String(conversation.phone || '');
+        const phoneText = phoneRaw.toLowerCase();
+        const phoneDigits = phoneRaw.replace(/\D/g, '');
+
+        if (name.includes(normalizedSearch)) return true;
+        if (phoneText.includes(normalizedSearch)) return true;
+        if (normalizedDigits && phoneDigits.includes(normalizedDigits)) return true;
+        return false;
+    };
+
+    try {
+        const pool = await buildInboxConversationSearchPool();
+        if (requestToken !== inboxSearchRequestToken) return;
+
+        const filtered = pool
+            .filter((conversation) => matchesConversation(conversation))
+            .filter((conversation) => (currentFilter === 'unread' ? (conversation.unread || 0) > 0 : true))
+            .sort((left, right) => {
+                if (Boolean(left.hasConversation) !== Boolean(right.hasConversation)) {
+                    return left.hasConversation ? -1 : 1;
+                }
+
+                const leftTime = left.lastMessageAt ? new Date(left.lastMessageAt).getTime() : 0;
+                const rightTime = right.lastMessageAt ? new Date(right.lastMessageAt).getTime() : 0;
+                return rightTime - leftTime;
+            });
+
+        renderFilteredConversations(filtered);
+    } catch (_) {
+        if (requestToken !== inboxSearchRequestToken) return;
+
+        const fallback = conversations
+            .filter((conversation) => matchesConversation(conversation))
+            .filter((conversation) => (currentFilter === 'unread' ? (conversation.unread || 0) > 0 : true));
+
+        renderFilteredConversations(fallback);
+    }
 }
 
 async function selectConversation(id: number) {
-    currentConversation = conversations.find(c => c.id === id);
+    currentConversation =
+        conversations.find((conversation) => conversation.id === id)
+        || inboxSearchVirtualConversations.find((conversation) => conversation.id === id)
+        || null;
     if (!currentConversation) return;
     currentLeadDetails = null;
 
@@ -1485,18 +1712,19 @@ async function selectConversation(id: number) {
     document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('active'));
     document.querySelector(`.conversation-item[onclick="selectConversation(${id})"]`)?.classList.add('active');
 
-    // Persistir no backend que a conversa foi lida
-    try {
-        const conversationSessionId = resolveConversationSessionId(currentConversation);
-        socket?.emit('mark-read', {
-            sessionId: conversationSessionId,
-            conversationId: id
-        });
-        await api.post(`/api/conversations/${id}/read`, {});
-    } catch {
-        // Não bloqueia abertura da conversa se falhar sincronização de leitura
+    // Persistir no backend que a conversa foi lida apenas para conversas reais
+    if (Number(id) > 0) {
+        try {
+            const conversationSessionId = resolveConversationSessionId(currentConversation);
+            socket?.emit('mark-read', {
+                sessionId: conversationSessionId,
+                conversationId: id
+            });
+            await api.post(`/api/conversations/${id}/read`, {});
+        } catch {
+            // Nao bloqueia abertura da conversa se falhar sincronizacao de leitura
+        }
     }
-
     // Carregar mensagens e dados completos do contato
     const conversationSessionId = resolveConversationSessionId(currentConversation);
     await Promise.all([
@@ -2595,15 +2823,19 @@ async function sendMessage() {
     if (input) input.value = '';
 
     try {
-        const response = await api.post('/api/send', {
+        const sendPayload: Record<string, any> = {
             sessionId,
             to: activeConversation.phone,
             message: content,
-            type: 'text',
-            options: {
+            type: 'text'
+        };
+        if (Number(activeConversation.id) > 0) {
+            sendPayload.options = {
                 conversationId: activeConversation.id
-            }
-        });
+            };
+        }
+
+        const response = await api.post('/api/send', sendPayload);
         if (response?.messageId) {
             (newMessage as Record<string, any>).message_id = String(response.messageId);
         }
@@ -2749,3 +2981,4 @@ windowAny.toggleContactInfo = toggleContactInfo;
 windowAny.backToList = backToList;
 
 export { initInbox };
+
