@@ -654,6 +654,7 @@ function initContacts() {
         });
         contactsBootstrappedOnce = true;
     });
+    bindCreateContactTagsSuggestions();
     bindEditContactTagsSuggestions();
     void loadTags();
     loadTemplates();
@@ -812,6 +813,38 @@ function getNormalizedUniqueLeadTags(value: unknown) {
     return normalized;
 }
 
+function renderCreateContactTagSuggestions() {
+    const tagNames = getUniqueTagNames();
+    const datalist = document.getElementById('contactTagsOptions') as HTMLDataListElement | null;
+    const suggestions = document.getElementById('contactTagsSuggestions') as HTMLElement | null;
+    const contactTagsInput = document.getElementById('contactTags') as HTMLInputElement | null;
+
+    if (datalist) {
+        datalist.innerHTML = tagNames
+            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+            .join('');
+    }
+
+    if (!suggestions) return;
+
+    if (!tagNames.length) {
+        suggestions.innerHTML = '';
+        return;
+    }
+
+    const selectedTagKeys = new Set(
+        getNormalizedUniqueLeadTags(contactTagsInput?.value || '').map((tag) => tag.toLowerCase())
+    );
+
+    suggestions.innerHTML = tagNames
+        .map((name) => {
+            const selected = selectedTagKeys.has(name.toLowerCase());
+            const buttonClassName = selected ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
+            return `<button type="button" class="${buttonClassName}" data-contact-tag-option="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+        })
+        .join('');
+}
+
 function renderEditContactTagSuggestions() {
     const tagNames = getUniqueTagNames();
     const datalist = document.getElementById('editContactTagsOptions') as HTMLDataListElement | null;
@@ -879,6 +912,41 @@ function bindEditContactTagsSuggestions() {
     }
 }
 
+function bindCreateContactTagsSuggestions() {
+    const contactTagsInput = document.getElementById('contactTags') as HTMLInputElement | null;
+    const suggestions = document.getElementById('contactTagsSuggestions') as HTMLElement | null;
+
+    if (contactTagsInput && contactTagsInput.dataset.tagSuggestionsBound !== '1') {
+        contactTagsInput.dataset.tagSuggestionsBound = '1';
+        contactTagsInput.addEventListener('input', () => {
+            renderCreateContactTagSuggestions();
+        });
+    }
+
+    if (suggestions && suggestions.dataset.tagSuggestionsBound !== '1') {
+        suggestions.dataset.tagSuggestionsBound = '1';
+        suggestions.addEventListener('click', (event) => {
+            const target = event.target as HTMLElement | null;
+            const button = target?.closest('[data-contact-tag-option]') as HTMLElement | null;
+            if (!button || !contactTagsInput) return;
+
+            event.preventDefault();
+
+            const clickedTag = String(button.getAttribute('data-contact-tag-option') || '').trim();
+            if (!clickedTag) return;
+
+            const currentTags = getNormalizedUniqueLeadTags(contactTagsInput.value || '');
+            const hasTag = currentTags.some((tag) => tag.toLowerCase() === clickedTag.toLowerCase());
+            const nextTags = hasTag
+                ? currentTags.filter((tag) => tag.toLowerCase() !== clickedTag.toLowerCase())
+                : [...currentTags, clickedTag];
+
+            contactTagsInput.value = nextTags.join(', ');
+            renderCreateContactTagSuggestions();
+        });
+    }
+}
+
 async function loadTags() {
     try {
         const response: TagsResponse = await api.get('/api/tags');
@@ -908,6 +976,7 @@ async function loadTags() {
     } catch (e) {
         // ignore
     } finally {
+        renderCreateContactTagSuggestions();
         renderEditContactTagSuggestions();
     }
 }
@@ -1269,6 +1338,7 @@ async function saveContact() {
         await api.post('/api/leads', data);
         closeModal('addContactModal');
         (document.getElementById('addContactForm') as HTMLFormElement | null)?.reset();
+        renderCreateContactTagSuggestions();
         applyCustomFieldsValues('contact-custom-field', {});
         clearLeadViewCaches();
         await loadContacts({ forceRefresh: true, silent: true });

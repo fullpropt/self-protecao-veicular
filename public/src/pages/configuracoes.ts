@@ -793,9 +793,13 @@ async function loadSettingsTags() {
         const response = await api.get('/api/tags');
         settingsTagsCache = response?.tags || [];
         renderSettingsTags();
+        return true;
     } catch (error) {
-        settingsTagsCache = [];
-        renderSettingsTags();
+        if (!settingsTagsCache.length) {
+            settingsTagsCache = [];
+            renderSettingsTags();
+        }
+        return false;
     }
 }
 
@@ -843,10 +847,30 @@ async function createSettingsTag() {
     }
 
     try {
-        await api.post('/api/tags', { name, description });
+        const response = await api.post('/api/tags', { name, description });
         if (nameInput) nameInput.value = '';
         if (descriptionInput) descriptionInput.value = '';
-        await loadSettingsTags();
+
+        const createdTag = response?.tag && typeof response.tag === 'object'
+            ? response.tag as SettingsTag
+            : null;
+
+        if (createdTag && Number(createdTag.id || 0) > 0) {
+            const normalizedCreatedName = String(createdTag.name || '').trim().toLowerCase();
+            const mergedTags = settingsTagsCache
+                .filter((tag) => String(tag?.name || '').trim().toLowerCase() !== normalizedCreatedName);
+            mergedTags.push(createdTag);
+            settingsTagsCache = mergedTags.sort((a, b) =>
+                String(a?.name || '').localeCompare(String(b?.name || ''), 'pt-BR', { sensitivity: 'base' })
+            );
+            renderSettingsTags();
+        }
+
+        const reloadSucceeded = await loadSettingsTags();
+        if (!reloadSucceeded) {
+            showToast('warning', 'Aviso', 'Etiqueta criada, mas nÃ£o foi possÃ­vel atualizar a lista agora');
+            return;
+        }
         showToast('success', 'Sucesso', 'Etiqueta criada!');
     } catch (error: any) {
         const message = String(error?.message || '').toLowerCase();
@@ -876,7 +900,11 @@ async function updateSettingsTag(id: number) {
 
     try {
         await api.put(`/api/tags/${id}`, { name, description });
-        await loadSettingsTags();
+        const reloadSucceeded = await loadSettingsTags();
+        if (!reloadSucceeded) {
+            showToast('warning', 'Aviso', 'Etiqueta atualizada, mas nao foi possivel atualizar a lista agora');
+            return;
+        }
         showToast('success', 'Sucesso', 'Etiqueta atualizada!');
     } catch (error: any) {
         const message = String(error?.message || '').toLowerCase();
@@ -893,7 +921,11 @@ async function deleteSettingsTag(id: number) {
 
     try {
         await api.delete(`/api/tags/${id}`);
-        await loadSettingsTags();
+        const reloadSucceeded = await loadSettingsTags();
+        if (!reloadSucceeded) {
+            showToast('warning', 'Aviso', 'Etiqueta removida, mas nao foi possivel atualizar a lista agora');
+            return;
+        }
         showToast('success', 'Sucesso', 'Etiqueta removida!');
     } catch (error) {
         showToast('error', 'Erro', 'Não foi possível remover a etiqueta');

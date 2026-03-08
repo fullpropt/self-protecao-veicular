@@ -12187,7 +12187,11 @@ app.get('/api/tags', authenticate, async (req, res) => {
             owner_user_id: ownerScopeUserId || undefined
         };
 
-        await Tag.syncFromLeads(tagScope);
+        try {
+            await Tag.syncFromLeads(tagScope);
+        } catch (syncError) {
+            console.warn('Falha ao sincronizar tags a partir dos leads:', syncError);
+        }
         const tags = await Tag.list(tagScope);
         res.json({ success: true, tags });
     } catch (error) {

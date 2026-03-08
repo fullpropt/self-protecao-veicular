@@ -362,8 +362,19 @@ export default function Contatos() {
               </div>
               <div className="form-group">
                 <label className="form-label">Tags</label>
-                <input type="text" className="form-input" id="contactTags" placeholder="Ex.: VIP, Campanha Março" />
-                <p className="form-help">Separe múltiplas tags por vírgula.</p>
+                <input
+                  type="text"
+                  className="form-input"
+                  id="contactTags"
+                  list="contactTagsOptions"
+                  placeholder="Ex.: VIP, Renovacao"
+                />
+                <datalist id="contactTagsOptions"></datalist>
+                <div
+                  id="contactTagsSuggestions"
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}
+                ></div>
+                <p className="form-help">Use as etiquetas cadastradas abaixo ou separe multiplas tags por virgula.</p>
               </div>
               <div className="form-row" id="contactCustomFields"></div>
               <div className="form-row">

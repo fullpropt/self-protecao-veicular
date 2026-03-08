@@ -3120,20 +3120,29 @@ const Tag = {
             const key = normalizeTagKey(tagName);
             if (existingKeys.has(key)) continue;
 
-            if (hasCreatedByColumn && (createdBy || ownerUserId)) {
-                await run(
-                    `INSERT INTO tags (name, color, description, created_by)
-                     VALUES (?, ?, ?, ?)
-                     ON CONFLICT(name) DO NOTHING`,
-                    [tagName, DEFAULT_TAG_COLOR, null, createdBy || ownerUserId]
-                );
-            } else {
-                await run(
-                    `INSERT INTO tags (name, color, description)
-                     VALUES (?, ?, ?)
-                     ON CONFLICT(name) DO NOTHING`,
-                    [tagName, DEFAULT_TAG_COLOR, null]
-                );
+            try {
+                if (hasCreatedByColumn && (createdBy || ownerUserId)) {
+                    await run(
+                        `INSERT INTO tags (name, color, description, created_by)
+                         VALUES (?, ?, ?, ?)`,
+                        [tagName, DEFAULT_TAG_COLOR, null, createdBy || ownerUserId]
+                    );
+                } else {
+                    await run(
+                        `INSERT INTO tags (name, color, description)
+                         VALUES (?, ?, ?)`,
+                        [tagName, DEFAULT_TAG_COLOR, null]
+                    );
+                }
+            } catch (error) {
+                const code = String(error?.code || '').trim();
+                const message = String(error?.message || '').toLowerCase();
+                const isUniqueViolation = code === '23505'
+                    || message.includes('unique')
+                    || message.includes('duplicate key');
+                if (!isUniqueViolation) {
+                    throw error;
+                }
             }
             existingKeys.add(key);
         }
