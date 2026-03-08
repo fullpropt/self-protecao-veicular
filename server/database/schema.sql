@@ -294,6 +294,20 @@ CREATE TABLE IF NOT EXISTS webhooks (
     updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
+CREATE TABLE IF NOT EXISTS incoming_webhook_credentials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    secret_hash TEXT NOT NULL UNIQUE,
+    secret_prefix TEXT NOT NULL,
+    secret_suffix TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id),
+    last_rotated_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    last_used_at TEXT,
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    UNIQUE (owner_user_id)
+);
+
 -- Tabela de Log de Webhooks
 CREATE TABLE IF NOT EXISTS webhook_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -506,6 +520,8 @@ CREATE INDEX IF NOT EXISTS idx_api_rate_limits_reset ON api_rate_limits(reset_at
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_status ON webhook_delivery_queue(status);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_next_attempt ON webhook_delivery_queue(next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_webhook ON webhook_delivery_queue(webhook_id);
+CREATE INDEX IF NOT EXISTS idx_incoming_webhook_credentials_owner ON incoming_webhook_credentials(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_incoming_webhook_credentials_last_used ON incoming_webhook_credentials(last_used_at DESC);
 CREATE INDEX IF NOT EXISTS idx_support_inbox_messages_received_at ON support_inbox_messages(received_at DESC);
 CREATE INDEX IF NOT EXISTS idx_support_inbox_messages_is_read ON support_inbox_messages(is_read);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_support_inbox_messages_external_id_unique ON support_inbox_messages(external_message_id);
