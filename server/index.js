@@ -99,6 +99,13 @@ const {
     listDefaultSessionCandidates,
     sanitizeSessionId: sanitizeConfiguredSessionId
 } = require('./config/sessionDefaults');
+const {
+    normalizeTagLabel: normalizeUnifiedTagLabel,
+    normalizeTagKey: normalizeUnifiedTagKey,
+    parseTagList: parseUnifiedTagList,
+    uniqueTagLabels: uniqueUnifiedTagLabels,
+    normalizeTagFilterInput: normalizeUnifiedTagFilterInput
+} = require('./utils/tagUtils');
 
 
 
@@ -123,7 +130,7 @@ const {
 
 // Middleware
 
-const { authenticate, optionalAuth, requestLogger, verifyToken } = require('./middleware/auth');
+const { authenticate, requestLogger, verifyToken } = require('./middleware/auth');
 
 
 
@@ -1087,6 +1094,12 @@ const FLOW_AWAITING_INPUT_RECOVERY_MAX_MESSAGES_PER_EXECUTION = parsePositiveInt
     1,
     20
 );
+const FLOW_EXECUTION_RUNNING_TIMEOUT_HOURS = parsePositiveIntInRange(
+    process.env.FLOW_EXECUTION_RUNNING_TIMEOUT_HOURS,
+    72,
+    1,
+    720
+);
 
 senderAllocatorService.setRuntimeSessionsGetter(() => sessions);
 senderAllocatorService.setDefaultSessionId(DEFAULT_WHATSAPP_SESSION_ID);
@@ -1724,30 +1737,7 @@ async function syncLeadAvatarFromWhatsApp({ sessionId, lead, jid }) {
 }
 
 function parseLeadTagsForMerge(rawTags) {
-    if (Array.isArray(rawTags)) {
-        return rawTags
-            .map((tag) => String(tag || '').trim())
-            .filter(Boolean);
-    }
-
-    const raw = String(rawTags || '').trim();
-    if (!raw) return [];
-
-    try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-            return parsed
-                .map((tag) => String(tag || '').trim())
-                .filter(Boolean);
-        }
-    } catch {
-        // formato legado
-    }
-
-    return raw
-        .split(',')
-        .map((tag) => String(tag || '').trim())
-        .filter(Boolean);
+    return uniqueUnifiedTagLabels(parseUnifiedTagList(rawTags));
 }
 
 function normalizeImportedLeadPhone(value) {
@@ -4783,52 +4773,19 @@ function parseAutomationSessionScope(value) {
 }
 
 function normalizeAutomationTagLabel(value) {
-    return String(value || '').trim();
+    return normalizeUnifiedTagLabel(value);
 }
 
 function normalizeAutomationTagKey(value) {
-    return normalizeAutomationTagLabel(value).toLowerCase();
+    return normalizeUnifiedTagKey(value);
 }
 
 function parseAutomationTagFilters(value) {
-    if (value === undefined || value === null || value === '') return [];
-
-    let parsed = value;
-    if (typeof parsed === 'string') {
-        const trimmed = parsed.trim();
-        if (!trimmed) return [];
-        try {
-            parsed = JSON.parse(trimmed);
-        } catch (_) {
-            parsed = trimmed
-                .split(',')
-                .map((item) => normalizeAutomationTagLabel(item))
-                .filter(Boolean);
-        }
-    }
-
-    if (!Array.isArray(parsed)) {
-        parsed = [parsed];
-    }
-
-    const seen = new Set();
-    const normalized = [];
-    for (const item of parsed) {
-        const label = normalizeAutomationTagLabel(item);
-        const key = normalizeAutomationTagKey(label);
-        if (!label || !key || seen.has(key)) continue;
-        seen.add(key);
-        normalized.push(label);
-    }
-
-    return normalized;
+    return uniqueUnifiedTagLabels(parseUnifiedTagList(value));
 }
 
 function normalizeAutomationTagFilterInput(value) {
-    if (value === undefined) return undefined;
-    const tags = parseAutomationTagFilters(value);
-    if (!tags.length) return null;
-    return JSON.stringify(tags);
+    return normalizeUnifiedTagFilterInput(value);
 }
 
 function normalizeAutomationSessionScopeInput(value) {
@@ -6802,6 +6759,33 @@ async function recoverAwaitingInputFlowExecution(executionRow = {}, flowCache = 
     };
 }
 
+async function failStaleRunningFlowExecutions(options = {}) {
+    const timeoutHours = parsePositiveIntInRange(
+        options.timeoutHours,
+        FLOW_EXECUTION_RUNNING_TIMEOUT_HOURS,
+        1,
+        720
+    );
+    const timeoutMs = timeoutHours * 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() - timeoutMs).toISOString();
+
+    const result = await run(`
+        UPDATE flow_executions
+        SET status = 'failed',
+            completed_at = CURRENT_TIMESTAMP,
+            error_message = ?
+        WHERE status = 'running'
+          AND started_at IS NOT NULL
+          AND started_at <= ?
+    `, ['timeout recovery', cutoff]);
+
+    return {
+        timeoutHours,
+        cutoff,
+        changes: Number(result?.changes || 0)
+    };
+}
+
 async function runFlowAwaitingInputRecoveryCycle(options = {}) {
     const trigger = String(options.trigger || 'flow-awaiting-input-worker').trim() || 'flow-awaiting-input-worker';
     const force = options.force === true;
@@ -6821,11 +6805,17 @@ async function runFlowAwaitingInputRecoveryCycle(options = {}) {
         executionsRecovered: 0,
         messagesRecovered: 0,
         backfillInserted: 0,
+        timedOutExecutions: 0,
         skippedByReason: {},
         elapsedMs: 0
     };
 
     try {
+        const timeoutResult = await failStaleRunningFlowExecutions({
+            timeoutHours: FLOW_EXECUTION_RUNNING_TIMEOUT_HOURS
+        });
+        summary.timedOutExecutions = Math.max(0, Number(timeoutResult?.changes || 0));
+
         const maxExecutions = parsePositiveIntInRange(
             options.maxExecutions,
             FLOW_AWAITING_INPUT_RECOVERY_MAX_EXECUTIONS,
@@ -9070,9 +9060,26 @@ io.on('connection', (socket) => {
 
 // Status do WhatsApp (para Configurações > Conexão)
 
-app.get('/api/whatsapp/status', optionalAuth, (req, res) => {
+app.get('/api/whatsapp/status', authenticate, async (req, res) => {
 
     const sessionId = resolveSessionIdOrDefault(req.query?.sessionId);
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    if (ownerScopeUserId) {
+        const storedSession = await WhatsAppSession.findBySessionId(sessionId);
+        if (storedSession) {
+            const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
+                owner_user_id: ownerScopeUserId
+            });
+            if (!ownedSession) {
+                return res.status(404).json({ error: 'Conta nao encontrada' });
+            }
+        } else {
+            const runtimeOwnerUserId = normalizeOwnerUserId(sessions.get(sessionId)?.ownerUserId);
+            if (!runtimeOwnerUserId || runtimeOwnerUserId !== ownerScopeUserId) {
+                return res.status(404).json({ error: 'Conta nao encontrada' });
+            }
+        }
+    }
 
     const session = sessions.get(sessionId);
 
@@ -9331,38 +9338,28 @@ app.post('/api/whatsapp/disconnect', authenticate, requireActiveWhatsAppPlan, as
 
 // Status do servidor
 
-app.get('/api/status', async (req, res) => {
+app.get('/api/status', authenticate, async (req, res) => {
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    let scopedConnectedSessions = 0;
 
-    const activeSessions = Array.from(sessions.entries()).map(([id, session]) => ({
-
-        id,
-
-        connected: session.isConnected,
-
-        user: session.user?.name || null
-
-    }));
-
-    
+    for (const [sessionId, session] of sessions.entries()) {
+        const runtimeOwnerUserId = normalizeOwnerUserId(session?.ownerUserId);
+        const sessionOwnerUserId = runtimeOwnerUserId || await resolveSessionOwnerUserId(sessionId);
+        if (ownerScopeUserId && sessionOwnerUserId && Number(sessionOwnerUserId) !== Number(ownerScopeUserId)) {
+            continue;
+        }
+        if (session?.isConnected) {
+            scopedConnectedSessions += 1;
+        }
+    }
 
     res.json({
-
         status: 'online',
-
-        version: '4.0.0',
-
-        sessions: sessions.size,
-
-        activeSessions,
-
-        queue: await queueService.getStatus(),
-
+        version: '4.1.0',
+        connected_sessions: scopedConnectedSessions,
         uptime: process.uptime(),
-
         timestamp: new Date().toISOString()
-
     });
-
 });
 
 
@@ -13572,79 +13569,23 @@ function parseCampaignStartAt(startAt) {
 
 
 function parseLeadTags(rawTags) {
-    if (Array.isArray(rawTags)) {
-        return rawTags
-            .map((tag) => String(tag || '').trim())
-            .filter(Boolean);
-    }
-
-    const raw = String(rawTags || '').trim();
-    if (!raw) return [];
-
-    try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-            return parsed
-                .map((tag) => String(tag || '').trim())
-                .filter(Boolean);
-        }
-    } catch {
-        // Valor legado pode estar em formato livre.
-    }
-
-    return raw
-        .split(',')
-        .map((tag) => String(tag || '').trim())
-        .filter(Boolean);
+    return uniqueUnifiedTagLabels(parseUnifiedTagList(rawTags));
 }
 
 function normalizeCampaignTagLabel(value) {
-    return String(value || '').trim();
+    return normalizeUnifiedTagLabel(value);
 }
 
 function normalizeCampaignTag(value) {
-    return normalizeCampaignTagLabel(value).toLowerCase();
+    return normalizeUnifiedTagKey(value);
 }
 
 function parseCampaignTagFilters(value) {
-    if (value === undefined || value === null || value === '') return [];
-
-    let parsed = value;
-    if (typeof parsed === 'string') {
-        const trimmed = parsed.trim();
-        if (!trimmed) return [];
-        try {
-            parsed = JSON.parse(trimmed);
-        } catch (_) {
-            parsed = trimmed
-                .split(',')
-                .map((item) => normalizeCampaignTagLabel(item))
-                .filter(Boolean);
-        }
-    }
-
-    if (!Array.isArray(parsed)) {
-        parsed = [parsed];
-    }
-
-    const seen = new Set();
-    const normalized = [];
-    for (const item of parsed) {
-        const label = normalizeCampaignTagLabel(item);
-        const key = normalizeCampaignTag(label);
-        if (!label || !key || seen.has(key)) continue;
-        seen.add(key);
-        normalized.push(label);
-    }
-
-    return normalized;
+    return uniqueUnifiedTagLabels(parseUnifiedTagList(value));
 }
 
 function normalizeCampaignTagFilterInput(value) {
-    if (value === undefined) return undefined;
-    const tags = parseCampaignTagFilters(value);
-    if (!tags.length) return null;
-    return JSON.stringify(tags);
+    return normalizeUnifiedTagFilterInput(value);
 }
 
 function resolveCampaignSegmentStatus(segment) {
@@ -16238,50 +16179,80 @@ app.post('/api/admin/audits/tenant-integrity/run', authenticate, async (req, res
 
 // Webhook de entrada (para receber dados externos)
 
-app.post('/api/webhook/incoming', async (req, res) => {
+function resolveIncomingWebhookOwnerUserId() {
+    const value = normalizeOwnerUserId(process.env.WEBHOOK_INCOMING_OWNER_USER_ID);
+    return value || null;
+}
 
-    const { event, data, secret } = req.body;
+function normalizeIncomingWebhookLeadPayload(rawData, ownerUserId) {
+    const sourceData = rawData && typeof rawData === 'object' ? rawData : {};
+    const phone = normalizeImportedLeadPhone(
+        sourceData.phone
+        || sourceData.telefone
+        || sourceData.whatsapp
+        || sourceData.celular
+        || sourceData.numero
+    );
 
-    
+    const name = String(sourceData.name || sourceData.nome || '').trim() || 'Sem nome';
+    const email = String(sourceData.email || '').trim().toLowerCase();
+    const status = parsePositiveIntInRange(sourceData.status, 1, 1, 4);
+    const tags = Array.from(new Set(parseLeadTagsForMerge(sourceData.tags)));
+    const customFields = parseLeadCustomFields(sourceData.custom_fields);
 
-    // Validar secret se configurado
+    const payload = {
+        name,
+        phone,
+        email,
+        status,
+        tags,
+        source: 'webhook',
+        assigned_to: ownerUserId,
+        owner_user_id: ownerUserId
+    };
 
-    const expectedSecret = process.env.WEBHOOK_SECRET;
-
-    if (expectedSecret && secret !== expectedSecret) {
-
-        return res.status(401).json({ error: 'Unauthorized' });
-
+    if (Object.keys(customFields).length > 0) {
+        payload.custom_fields = customFields;
     }
 
-    
+    return payload;
+}
 
-    console.log(`?? Webhook recebido: ${event}`);
+app.post('/api/webhook/incoming', async (req, res) => {
+    const payload = req.body && typeof req.body === 'object' ? req.body : {};
+    const event = String(payload.event || '').trim().toLowerCase();
+    const data = payload.data;
+    const secret = String(payload.secret || '').trim();
 
-    
+    const expectedSecret = String(process.env.WEBHOOK_SECRET || '').trim();
+    if (!expectedSecret) {
+        return res.status(503).json({ error: 'Webhook incoming nao configurado' });
+    }
 
-    // Processar evento
+    if (secret !== expectedSecret) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
 
     if (event === 'lead.create' && data) {
-
-        try {
-
-            const result = await Lead.create(data);
-
-            res.json({ success: true, leadId: result.id });
-
-        } catch (error) {
-
-            res.status(400).json({ error: error.message });
-
+        const ownerUserId = resolveIncomingWebhookOwnerUserId();
+        if (!ownerUserId) {
+            return res.status(503).json({ error: 'WEBHOOK_INCOMING_OWNER_USER_ID nao configurado' });
         }
 
-    } else {
+        try {
+            const leadPayload = normalizeIncomingWebhookLeadPayload(data, ownerUserId);
+            if (!leadPayload.phone) {
+                return res.status(400).json({ error: 'Telefone obrigatorio para lead.create' });
+            }
 
-        res.json({ success: true, received: true });
-
+            const result = await Lead.create(leadPayload);
+            return res.json({ success: true, leadId: result.id });
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
     }
 
+    return res.json({ success: true, received: true });
 });
 
 

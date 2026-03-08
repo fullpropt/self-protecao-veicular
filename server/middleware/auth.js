@@ -8,7 +8,11 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { User } = require('../database/models');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'self-protecao-jwt-secret-2024';
+const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
+if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET is required in production');
+}
+const JWT_SECRET_EFFECTIVE = JWT_SECRET || 'self-protecao-jwt-secret-2024';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
 
@@ -55,7 +59,7 @@ function generateToken(user) {
         owner_user_id: user.owner_user_id
     };
     
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    return jwt.sign(payload, JWT_SECRET_EFFECTIVE, { expiresIn: JWT_EXPIRES_IN });
 }
 
 /**
@@ -68,7 +72,7 @@ function generateRefreshToken(user) {
         type: 'refresh'
     };
     
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN });
+    return jwt.sign(payload, JWT_SECRET_EFFECTIVE, { expiresIn: REFRESH_TOKEN_EXPIRES_IN });
 }
 
 /**
@@ -76,7 +80,7 @@ function generateRefreshToken(user) {
  */
 function verifyToken(token) {
     try {
-        return jwt.verify(token, JWT_SECRET);
+        return jwt.verify(token, JWT_SECRET_EFFECTIVE);
     } catch (error) {
         return null;
     }

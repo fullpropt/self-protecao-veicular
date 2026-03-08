@@ -4,6 +4,12 @@
  */
 
 const { query, queryOne, run, transaction, generateUUID } = require('./connection');
+const {
+    normalizeTagLabel: sharedNormalizeTagLabel,
+    normalizeTagKey: sharedNormalizeTagKey,
+    parseTagList: sharedParseTagList,
+    uniqueTagLabels: sharedUniqueTagLabels
+} = require('../utils/tagUtils');
 
 function normalizeDigits(value) {
     return String(value || '').replace(/\D/g, '');
@@ -164,11 +170,11 @@ function deriveUserName(name, email) {
 }
 
 function normalizeTagValue(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
+    return sharedNormalizeTagLabel(value);
 }
 
 function normalizeTagKey(value) {
-    return normalizeTagValue(value).toLowerCase();
+    return sharedNormalizeTagKey(value);
 }
 
 function normalizeCustomEventName(value) {
@@ -198,46 +204,11 @@ function buildCustomEventKey(name) {
 }
 
 function parseTagList(rawValue) {
-    if (!rawValue) return [];
-
-    if (Array.isArray(rawValue)) {
-        return rawValue
-            .map(normalizeTagValue)
-            .filter(Boolean);
-    }
-
-    const raw = String(rawValue).trim();
-    if (!raw) return [];
-
-    try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-            return parsed
-                .map(normalizeTagValue)
-                .filter(Boolean);
-        }
-    } catch (_) {
-        // fallback para lista separada por delimitadores
-    }
-
-    return raw
-        .split(/[,;|]/)
-        .map(normalizeTagValue)
-        .filter(Boolean);
+    return sharedParseTagList(rawValue);
 }
 
 function uniqueTags(list) {
-    const seen = new Set();
-    const result = [];
-
-    for (const tag of list.map(normalizeTagValue).filter(Boolean)) {
-        const key = normalizeTagKey(tag);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        result.push(tag);
-    }
-
-    return result;
+    return sharedUniqueTagLabels(list);
 }
 
 function normalizeFlowKeywordText(value = '') {
