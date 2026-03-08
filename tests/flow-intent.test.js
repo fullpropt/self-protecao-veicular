@@ -894,6 +894,60 @@ describe('FlowService intent routing compatibility', () => {
         startFlowSpy.mockRestore();
     });
 
+    test('processIncomingMessage preserves direct keyword match even with semantic no_match in strict mode', async () => {
+        process.env.FLOW_INTENT_CLASSIFIER_STRICT = '1';
+        process.env.GEMINI_API_KEY = 'mock-key';
+
+        const service = new FlowService();
+        const flow = {
+            id: 202,
+            name: 'Onde Comprar',
+            trigger_type: 'keyword',
+            session_id: 'momnt',
+            priority: 20,
+            nodes: [
+                {
+                    id: 'trigger-buy',
+                    type: 'trigger',
+                    subtype: 'intent',
+                    data: {
+                        intentRoutes: [
+                            { id: 'route-buy', label: 'Comprar', phrases: 'onde compro oculos' }
+                        ]
+                    }
+                }
+            ],
+            edges: []
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([flow]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([flow]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 789 });
+        intentClassifier.classifyKeywordFlowIntent.mockResolvedValue({ status: 'no_match', confidence: 0.99 });
+
+        const result = await service.processIncomingMessage(
+            { text: 'onde compro oculos momnt?' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
+        );
+
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            flow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'onde compro oculos momnt?' })
+        );
+        expect(result).toEqual({ id: 789 });
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
+    });
+
     test('continueFlow routes second unmatched reply through message_once output after reentry', async () => {
         const service = new FlowService();
         const triggerNode = {

@@ -1612,18 +1612,21 @@ class FlowService extends EventEmitter {
                 .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
             const semanticCandidates = (await Flow.findActiveKeywordFlows(flowScopeOptions))
                 .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
+            const hasExactKeywordMatch = keywordMatches.length > 0;
+
             if (semanticCandidates.length > 0) {
                 const intentDecision = await classifyKeywordFlowIntent(text, semanticCandidates);
                 if (intentDecision?.status === 'selected' && intentDecision.flowId) {
                     flow = semanticCandidates.find((item) => Number(item.id) === Number(intentDecision.flowId)) || null;
-                } else if (intentDecision?.status === 'no_match') {
+                } else if (intentDecision?.status === 'no_match' && !hasExactKeywordMatch) {
                     suppressKeywordFallback = true;
-                } else if (strictIntentRouting) {
+                } else if (strictIntentRouting && !hasExactKeywordMatch) {
                     suppressKeywordFallback = true;
                 }
             }
 
-            if (!flow && !suppressKeywordFallback && keywordMatches.length > 0) {
+            // Match direto por keyword nunca deve ser suprimido pelo classificador.
+            if (!flow && keywordMatches.length > 0) {
                 flow = keywordMatches[0];
             }
 
