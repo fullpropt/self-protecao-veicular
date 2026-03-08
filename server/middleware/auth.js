@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { User } = require('../database/models');
+const { queryOne, run } = require('../database/connection');
 
 const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
 if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
@@ -206,39 +207,135 @@ async function optionalAuth(req, res, next) {
  * Rate limiter por IP
  */
 const rateLimitStore = new Map();
+const RATE_LIMIT_STORAGE_MODE = String(process.env.RATE_LIMIT_STORAGE || 'database').trim().toLowerCase();
+const DISTRIBUTED_RATE_LIMIT_ENABLED = RATE_LIMIT_STORAGE_MODE !== 'memory';
+let rateLimitStorageReady = false;
+let rateLimitStorageReadyPromise = null;
+
+async function ensureRateLimitStorageReady() {
+    if (!DISTRIBUTED_RATE_LIMIT_ENABLED) return false;
+    if (rateLimitStorageReady) return true;
+    if (rateLimitStorageReadyPromise) return rateLimitStorageReadyPromise;
+
+    rateLimitStorageReadyPromise = (async () => {
+        await run(`
+            CREATE TABLE IF NOT EXISTS api_rate_limits (
+                bucket_key TEXT PRIMARY KEY,
+                count INTEGER NOT NULL DEFAULT 0,
+                reset_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await run('CREATE INDEX IF NOT EXISTS idx_api_rate_limits_reset ON api_rate_limits(reset_at)');
+        rateLimitStorageReady = true;
+        return true;
+    })().finally(() => {
+        rateLimitStorageReadyPromise = null;
+    });
+
+    return rateLimitStorageReadyPromise;
+}
+
+function applyInMemoryRateLimit(key, nowMs, windowMs, max) {
+    if (!rateLimitStore.has(key)) {
+        rateLimitStore.set(key, { count: 1, resetAt: nowMs + windowMs });
+        return { allowed: true, retryAfter: Math.ceil(windowMs / 1000) };
+    }
+
+    const record = rateLimitStore.get(key);
+    if (!record || nowMs > Number(record.resetAt || 0)) {
+        rateLimitStore.set(key, { count: 1, resetAt: nowMs + windowMs });
+        return { allowed: true, retryAfter: Math.ceil(windowMs / 1000) };
+    }
+
+    record.count = Number(record.count || 0) + 1;
+    const retryAfter = Math.max(1, Math.ceil((Number(record.resetAt || nowMs) - nowMs) / 1000));
+    return {
+        allowed: Number(record.count || 0) <= max,
+        retryAfter
+    };
+}
+
+async function applyDistributedRateLimit(key, nowMs, windowMs, max) {
+    await ensureRateLimitStorageReady();
+    const resetAtIso = new Date(nowMs + windowMs).toISOString();
+
+    const row = await queryOne(`
+        INSERT INTO api_rate_limits (bucket_key, count, reset_at, updated_at)
+        VALUES (?, 1, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT (bucket_key)
+        DO UPDATE SET
+            count = CASE
+                WHEN api_rate_limits.reset_at <= CURRENT_TIMESTAMP THEN 1
+                ELSE api_rate_limits.count + 1
+            END,
+            reset_at = CASE
+                WHEN api_rate_limits.reset_at <= CURRENT_TIMESTAMP THEN EXCLUDED.reset_at
+                ELSE api_rate_limits.reset_at
+            END,
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING count, reset_at
+    `, [key, resetAtIso]);
+
+    const count = Number(row?.count || 0);
+    const resetAtMs = Date.parse(String(row?.reset_at || ''));
+    const retryAfter = Number.isFinite(resetAtMs)
+        ? Math.max(1, Math.ceil((resetAtMs - nowMs) / 1000))
+        : Math.ceil(windowMs / 1000);
+
+    return {
+        allowed: count <= max,
+        retryAfter
+    };
+}
+
+function cleanupInMemoryRateLimit() {
+    const now = Date.now();
+    for (const [key, record] of rateLimitStore.entries()) {
+        if (now > Number(record?.resetAt || 0)) {
+            rateLimitStore.delete(key);
+        }
+    }
+}
+
+async function cleanupDistributedRateLimit() {
+    if (!DISTRIBUTED_RATE_LIMIT_ENABLED) return;
+    if (!rateLimitStorageReady) return;
+    await run(`
+        DELETE FROM api_rate_limits
+        WHERE reset_at <= (CURRENT_TIMESTAMP - INTERVAL '1 minute')
+    `);
+}
 
 function rateLimit(options = {}) {
     const windowMs = options.windowMs || 60000; // 1 minuto
     const max = options.max || 100;
     const message = options.message || 'Muitas requisições, tente novamente mais tarde';
     
-    return (req, res, next) => {
+    return async (req, res, next) => {
         const ip = req.ip || req.connection.remoteAddress;
         const key = `${ip}:${req.path}`;
         const now = Date.now();
-        
-        if (!rateLimitStore.has(key)) {
-            rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
-            return next();
+
+        let result;
+        if (DISTRIBUTED_RATE_LIMIT_ENABLED) {
+            try {
+                result = await applyDistributedRateLimit(key, now, windowMs, max);
+            } catch (_) {
+                result = applyInMemoryRateLimit(key, now, windowMs, max);
+            }
+        } else {
+            result = applyInMemoryRateLimit(key, now, windowMs, max);
         }
-        
-        const record = rateLimitStore.get(key);
-        
-        if (now > record.resetAt) {
-            rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
-            return next();
-        }
-        
-        record.count++;
-        
-        if (record.count > max) {
+
+        if (!result?.allowed) {
             return res.status(429).json({ 
                 error: message,
                 code: 'RATE_LIMIT_EXCEEDED',
-                retryAfter: Math.ceil((record.resetAt - now) / 1000)
+                retryAfter: Number(result?.retryAfter || Math.ceil(windowMs / 1000))
             });
         }
-        
+
         next();
     };
 }
@@ -247,12 +344,8 @@ function rateLimit(options = {}) {
  * Limpar rate limit store periodicamente
  */
 setInterval(() => {
-    const now = Date.now();
-    for (const [key, record] of rateLimitStore.entries()) {
-        if (now > record.resetAt) {
-            rateLimitStore.delete(key);
-        }
-    }
+    cleanupInMemoryRateLimit();
+    void cleanupDistributedRateLimit();
 }, 60000);
 
 /**

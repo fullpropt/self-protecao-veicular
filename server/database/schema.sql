@@ -269,6 +269,13 @@ CREATE TABLE IF NOT EXISTS message_queue (
     processed_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS api_rate_limits (
+    bucket_key TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    reset_at TEXT NOT NULL,
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
+);
+
 -- Tabela de Webhooks
 CREATE TABLE IF NOT EXISTS webhooks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -399,13 +406,8 @@ CREATE TABLE IF NOT EXISTS tags (
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
--- Tabela de relação Lead-Tag
-CREATE TABLE IF NOT EXISTS lead_tags (
-    lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-    tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
-    PRIMARY KEY (lead_id, tag_id)
-);
+-- lead_tags foi descontinuada. A fonte de verdade de etiquetas segue em leads.tags.
+DROP TABLE IF EXISTS lead_tags;
 
 -- ============================================
 -- ÍNDICES
@@ -433,6 +435,8 @@ ALTER TABLE whatsapp_sessions ADD COLUMN daily_limit INTEGER DEFAULT 0;
 ALTER TABLE whatsapp_sessions ADD COLUMN dispatch_weight INTEGER DEFAULT 1;
 ALTER TABLE whatsapp_sessions ADD COLUMN hourly_limit INTEGER DEFAULT 0;
 ALTER TABLE whatsapp_sessions ADD COLUMN cooldown_until TEXT;
+ALTER TABLE whatsapp_sessions ADD COLUMN created_by INTEGER REFERENCES users(id);
+ALTER TABLE tags ADD COLUMN created_by INTEGER REFERENCES users(id);
 
 UPDATE leads
 SET owner_user_id = (
@@ -498,6 +502,7 @@ CREATE INDEX IF NOT EXISTS idx_queue_scheduled ON message_queue(scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority DESC);
 CREATE INDEX IF NOT EXISTS idx_queue_campaign ON message_queue(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_queue_session ON message_queue(session_id);
+CREATE INDEX IF NOT EXISTS idx_api_rate_limits_reset ON api_rate_limits(reset_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_status ON webhook_delivery_queue(status);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_next_attempt ON webhook_delivery_queue(next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_webhook ON webhook_delivery_queue(webhook_id);
@@ -551,3 +556,5 @@ INSERT OR IGNORE INTO settings (key, value, type, description) VALUES
     ('working_hours_end', '18:00', 'string', 'Fim do horário de atendimento'),
     ('away_message', 'Olá! No momento estamos fora do horário de atendimento. Retornaremos em breve!', 'string', 'Mensagem de ausência'),
     ('welcome_message', 'Olá! Bem-vindo à SELF Proteção Veicular! Como posso ajudar?', 'string', 'Mensagem de boas-vindas');
+
+

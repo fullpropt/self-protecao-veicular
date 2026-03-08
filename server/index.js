@@ -238,6 +238,16 @@ const QUEUE_WORKER_ENABLED = parseBooleanEnv(
     process.env.QUEUE_WORKER_ENABLED,
     true
 );
+const FLOW_MESSAGE_QUEUE_ENABLED = parseBooleanEnv(
+    process.env.FLOW_MESSAGE_QUEUE_ENABLED,
+    true
+);
+const FLOW_MESSAGE_QUEUE_PRIORITY = parsePositiveIntInRange(
+    process.env.FLOW_MESSAGE_QUEUE_PRIORITY,
+    50,
+    1,
+    1000
+);
 const WEBHOOK_QUEUE_WORKER_ENABLED = parseBooleanEnv(
     process.env.WEBHOOK_QUEUE_WORKER_ENABLED,
     true
@@ -623,6 +633,21 @@ async function bootstrapDatabase() {
         const ok = await migrate();
         if (ok) {
             console.log('Banco de dados inicializado');
+        }
+
+        try {
+            const legacyTagRepair = await Tag.repairLegacyOwnership({ maxRows: 20000 });
+            const scannedLegacyTags = Number(legacyTagRepair?.scanned || 0);
+            const repairedLegacyTags = Number(legacyTagRepair?.updated || 0) + Number(legacyTagRepair?.inserted || 0);
+            if (scannedLegacyTags > 0 || repairedLegacyTags > 0 || Number(legacyTagRepair?.removed || 0) > 0 || Number(legacyTagRepair?.unresolved || 0) > 0) {
+                console.log(
+                    `[TagsRepair] scanned=${scannedLegacyTags} updated=${Number(legacyTagRepair?.updated || 0)} `
+                    + `inserted=${Number(legacyTagRepair?.inserted || 0)} removed=${Number(legacyTagRepair?.removed || 0)} `
+                    + `unresolved=${Number(legacyTagRepair?.unresolved || 0)}`
+                );
+            }
+        } catch (tagRepairError) {
+            console.error('[TagsRepair] Falha ao reparar ownership legado de tags:', tagRepairError.message);
         }
 
         await cleanupDuplicateMessages();
@@ -8296,14 +8321,71 @@ function sessionExists(sessionId) {
     });
 
     flowService.init(async (options = {}) => {
-        const resolvedSessionId = resolveSessionIdOrDefault(options?.sessionId || options?.session_id);
+        const requestedSessionId = sanitizeSessionId(options?.sessionId || options?.session_id);
+        const resolvedSessionId = resolveSessionIdOrDefault(requestedSessionId);
         const destination = String(options?.to || extractNumber(options?.jid || '') || '').trim();
         if (!destination) {
             throw new Error('Destino invalido para envio no fluxo');
         }
 
+        const normalizedConversationId = Number(options?.conversationId || options?.conversation_id || 0);
+        let normalizedLeadId = Number(options?.leadId || options?.lead_id || 0);
+        if ((!Number.isInteger(normalizedLeadId) || normalizedLeadId <= 0) && Number.isInteger(normalizedConversationId) && normalizedConversationId > 0) {
+            const conversationRow = await queryOne(
+                'SELECT lead_id FROM conversations WHERE id = ?',
+                [normalizedConversationId]
+            );
+            normalizedLeadId = Number(conversationRow?.lead_id || 0);
+        }
+
         const mediaType = String(options?.mediaType || options?.media_type || 'text').trim().toLowerCase() || 'text';
         const content = String(options?.content || '');
+        const mediaUrl = options?.mediaUrl || options?.url || null;
+
+        if (
+            FLOW_MESSAGE_QUEUE_ENABLED
+            && QUEUE_WORKER_ENABLED
+            && Number.isInteger(normalizedLeadId)
+            && normalizedLeadId > 0
+        ) {
+            let queuedSessionId = requestedSessionId || resolvedSessionId;
+            if (queuedSessionId) {
+                try {
+                    const sessionDispatch = await getSessionDispatchState(queuedSessionId);
+                    if (sessionDispatch?.available === false) {
+                        queuedSessionId = '';
+                    }
+                } catch (_) {
+                    // fallback para manter a sessao solicitada caso nao seja possivel ler o estado de runtime
+                }
+            }
+
+            const assignmentMeta = {
+                source: 'flow',
+                flow_id: Number(options?.flowId || options?.flow_id || 0) || null,
+                node_id: String(options?.nodeId || options?.node_id || '').trim() || null
+            };
+
+            const queueResult = await queueService.add({
+                leadId: normalizedLeadId,
+                conversationId: Number.isInteger(normalizedConversationId) && normalizedConversationId > 0
+                    ? normalizedConversationId
+                    : null,
+                content,
+                mediaType,
+                mediaUrl,
+                priority: FLOW_MESSAGE_QUEUE_PRIORITY,
+                sessionId: queuedSessionId || null,
+                isFirstContact: false,
+                assignmentMeta
+            });
+
+            return {
+                queued: true,
+                queueId: queueResult?.id || null,
+                sessionId: queuedSessionId || null
+            };
+        }
 
         return await sendMessage(
             resolvedSessionId,
@@ -8311,12 +8393,14 @@ function sessionExists(sessionId) {
             content,
             mediaType,
             {
-                url: options?.mediaUrl || options?.url || null,
+                url: mediaUrl,
                 mimetype: options?.mimetype,
                 fileName: options?.fileName,
                 ptt: options?.ptt,
                 duration: options?.duration,
-                conversationId: options?.conversationId || options?.conversation_id || null
+                conversationId: Number.isInteger(normalizedConversationId) && normalizedConversationId > 0
+                    ? normalizedConversationId
+                    : null
             }
         );
     });

@@ -46,6 +46,37 @@ const LEAD_ONCE_MESSAGE_FLAG_KEY = 'flow_once_message_nodes';
 const NODE_ENTRY_HANDLE_MAP_KEY = 'node_entry_handle_by_node';
 const PENDING_INCOMING_MESSAGES_KEY = 'pending_incoming_messages';
 const INTENT_DEFAULT_MESSAGE_ONCE_REENTRY_KEY = 'intent_default_message_once_reentry';
+const FLOW_OUTPUT_ACTION_ERROR_MODES = new Set(['continue', 'required', 'fail_all']);
+
+function normalizeBooleanFlag(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return Number.isFinite(value) && value > 0;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['1', 'true', 'yes', 'sim', 'on'].includes(normalized)) return true;
+        if (['0', 'false', 'no', 'nao', 'não', 'off'].includes(normalized)) return false;
+    }
+    return false;
+}
+
+function parseFlowOutputActionErrorMode() {
+    const raw = String(process.env.FLOW_OUTPUT_ACTION_ERROR_MODE || '').trim().toLowerCase();
+    if (FLOW_OUTPUT_ACTION_ERROR_MODES.has(raw)) return raw;
+    return 'required';
+}
+
+const FLOW_OUTPUT_ACTION_ERROR_MODE = parseFlowOutputActionErrorMode();
+
+function shouldFailOnOutputActionError(action = {}) {
+    if (FLOW_OUTPUT_ACTION_ERROR_MODE === 'fail_all') return true;
+    if (FLOW_OUTPUT_ACTION_ERROR_MODE === 'continue') return false;
+    return [
+        action?.required,
+        action?.critical,
+        action?.failOnError,
+        action?.mustSucceed
+    ].some((value) => normalizeBooleanFlag(value));
+}
 
 async function resolveOwnerScopeUserIdFromAssignee(...assignees) {
     for (const value of assignees) {
@@ -1549,7 +1580,17 @@ class FlowService extends EventEmitter {
         // Verificar se já há um fluxo em execução
         const activeExecution = await this.resolveActiveExecution(conversation, lead);
         if (activeExecution) {
-            return await this.continueFlow(activeExecution, message);
+            try {
+                return await this.continueFlow(activeExecution, message);
+            } catch (error) {
+                const details = String(error?.message || error || 'Erro ao continuar fluxo');
+                console.error(
+                    `[flow] Falha ao continuar fluxo ${activeExecution?.flow?.id || 'n/a'} `
+                    + `na conversa ${activeExecution?.conversation?.id || 'n/a'}: ${details}`
+                );
+                await this.endFlow(activeExecution, 'failed', details);
+                return null;
+            }
         }
         
         // Procurar fluxo por palavra-chave
@@ -1905,10 +1946,13 @@ class FlowService extends EventEmitter {
 
                     if (this.sendFunction && (mediaType !== 'text' || content)) {
                         await this.sendFunction({
+                            leadId: execution.lead?.id || null,
                             to: execution.lead.phone,
                             jid: execution.lead.jid,
                             sessionId: execution.conversation?.session_id || null,
                             conversationId: execution.conversation?.id || null,
+                            flowId: execution.flow?.id || null,
+                            nodeId: node?.id || null,
                             content,
                             mediaType,
                             mediaUrl: node?.data?.mediaUrl
@@ -1982,10 +2026,13 @@ class FlowService extends EventEmitter {
                     if (node.data.message && this.sendFunction) {
                         const transferMsg = this.replaceVariables(node.data.message, execution.variables);
                         await this.sendFunction({
+                            leadId: execution.lead?.id || null,
                             to: execution.lead.phone,
                             jid: execution.lead.jid,
                             sessionId: execution.conversation?.session_id || null,
                             conversationId: execution.conversation?.id || null,
+                            flowId: execution.flow?.id || null,
+                            nodeId: node?.id || null,
                             content: transferMsg
                         });
                     }
@@ -2233,10 +2280,13 @@ class FlowService extends EventEmitter {
             }
 
             await this.sendFunction({
+                leadId: execution.lead?.id || null,
                 to: execution.lead?.phone,
                 jid: execution.lead?.jid,
                 sessionId: execution.conversation?.session_id || null,
                 conversationId: execution.conversation?.id || null,
+                flowId: execution.flow?.id || null,
+                nodeId: node?.id || null,
                 content
             });
         }
@@ -2293,10 +2343,13 @@ class FlowService extends EventEmitter {
         }
 
         await this.sendFunction({
+            leadId: execution.lead?.id || null,
             to: execution.lead?.phone,
             jid: execution.lead?.jid,
             sessionId: execution.conversation?.session_id || null,
             conversationId: execution.conversation?.id || null,
+            flowId: execution.flow?.id || null,
+            nodeId: node?.id || null,
             content
         });
 
@@ -2542,11 +2595,13 @@ class FlowService extends EventEmitter {
                     });
                 }
             } catch (error) {
-                console.error(
-                    `[flow-actions] Falha ao executar acao de saida (${action.type || 'desconhecida'}) `
-                    + `no no ${currentNode?.id || 'n/a'}:`,
-                    error?.message || error
-                );
+                const actionType = String(action?.type || 'desconhecida').trim() || 'desconhecida';
+                const details = String(error?.message || error || 'erro desconhecido');
+                const baseMessage = `[flow-actions] Falha ao executar acao de saida (${actionType}) no no ${currentNode?.id || 'n/a'}: ${details}`;
+                if (shouldFailOnOutputActionError(action)) {
+                    throw new Error(baseMessage);
+                }
+                console.error(`${baseMessage}. Fluxo mantido em execucao.`);
             }
         }
     }
