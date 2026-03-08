@@ -417,7 +417,7 @@ function renderContactsTableHeader() {
     headerRow.innerHTML = `
         <th>
             <label class="checkbox-wrapper">
-                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <input type="checkbox" id="selectAll">
                 <span class="checkbox-custom"></span>
             </label>
         </th>
@@ -429,6 +429,25 @@ function renderContactsTableHeader() {
         <th>Última Interação</th>
         <th>Ações</th>
     `;
+}
+
+function bindContactsSelectionControls() {
+    const selectAll = document.getElementById('selectAll') as HTMLInputElement | null;
+    if (selectAll && selectAll.dataset.selectionBound !== '1') {
+        selectAll.dataset.selectionBound = '1';
+        selectAll.addEventListener('change', () => {
+            toggleSelectAll();
+        });
+    }
+
+    const checkboxes = document.querySelectorAll('.contact-checkbox') as NodeListOf<HTMLInputElement>;
+    checkboxes.forEach((checkbox) => {
+        if (checkbox.dataset.selectionBound === '1') return;
+        checkbox.dataset.selectionBound = '1';
+        checkbox.addEventListener('change', () => {
+            updateSelection();
+        });
+    });
 }
 
 function getStoredContactsSessionFilter() {
@@ -656,6 +675,7 @@ function initContacts() {
     });
     bindCreateContactTagsSuggestions();
     bindEditContactTagsSuggestions();
+    bindBulkRemoveTagSelect();
     void loadTags();
     loadTemplates();
 }
@@ -912,6 +932,29 @@ function bindEditContactTagsSuggestions() {
     }
 }
 
+function bindBulkRemoveTagSelect() {
+    const select = document.getElementById('bulkRemoveTagSelect') as HTMLSelectElement | null;
+    if (!select || select.dataset.bound === '1') return;
+
+    select.dataset.bound = '1';
+    select.addEventListener('change', () => {
+        const selectedTag = String(select.value || '').trim();
+        if (!selectedTag) return;
+
+        const input = document.getElementById('bulkRemoveTagInput') as HTMLInputElement | null;
+        if (!input) {
+            select.value = '';
+            return;
+        }
+
+        const currentTags = getNormalizedUniqueLeadTags(input.value || '');
+        const hasTag = currentTags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase());
+        input.value = (hasTag ? currentTags : [...currentTags, selectedTag]).join(', ');
+        select.value = '';
+        input.focus();
+    });
+}
+
 function bindCreateContactTagsSuggestions() {
     const contactTagsInput = document.getElementById('contactTags') as HTMLInputElement | null;
     const suggestions = document.getElementById('contactTagsSuggestions') as HTMLElement | null;
@@ -953,9 +996,15 @@ async function loadTags() {
         tags = response.tags || [];
         const filterSelect = document.getElementById('filterTag') as HTMLSelectElement | null;
         const importSelect = document.getElementById('importTag') as HTMLSelectElement | null;
+        const bulkTagOptions = document.getElementById('bulkTagOptions') as HTMLDataListElement | null;
+        const bulkRemoveTagOptions = document.getElementById('bulkRemoveTagOptions') as HTMLDataListElement | null;
+        const bulkRemoveTagSelect = document.getElementById('bulkRemoveTagSelect') as HTMLSelectElement | null;
         const tagNames = getUniqueTagNames();
         const tagOptions = tagNames
             .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+            .join('');
+        const datalistOptions = tagNames
+            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
             .join('');
 
         if (filterSelect) {
@@ -971,6 +1020,22 @@ async function loadTags() {
             importSelect.innerHTML = `<option value="">Sem etiqueta</option>${tagOptions}`;
             if (currentImportValue && tagNames.includes(currentImportValue)) {
                 importSelect.value = currentImportValue;
+            }
+        }
+
+        if (bulkTagOptions) {
+            bulkTagOptions.innerHTML = datalistOptions;
+        }
+
+        if (bulkRemoveTagOptions) {
+            bulkRemoveTagOptions.innerHTML = datalistOptions;
+        }
+
+        if (bulkRemoveTagSelect) {
+            const currentValue = String(bulkRemoveTagSelect.value || '').trim();
+            bulkRemoveTagSelect.innerHTML = `<option value="">Escolha uma tag...</option>${tagOptions}`;
+            if (currentValue && tagNames.includes(currentValue)) {
+                bulkRemoveTagSelect.value = currentValue;
             }
         }
     } catch (e) {
@@ -1182,7 +1247,7 @@ function renderContacts() {
                 <tr data-id="${c.id}" class="contacts-row-item">
                     <td data-label="Selecionar" class="contact-cell-select">
                         <label class="checkbox-wrapper">
-                            <input type="checkbox" class="contact-checkbox" value="${c.id}" onchange="updateSelection()" ${selectedIds.has(c.id) ? 'checked' : ''}>
+                            <input type="checkbox" class="contact-checkbox" value="${c.id}" ${selectedIds.has(c.id) ? 'checked' : ''}>
                             <span class="checkbox-custom"></span>
                         </label>
                     </td>
@@ -1216,6 +1281,8 @@ function renderContacts() {
             `;
         }).join('');
     }
+
+    bindContactsSelectionControls();
 
     // Paginação
     const totalPages = getContactsTotalPages(total);
@@ -1645,9 +1712,13 @@ function openBulkRemoveTagModal() {
     if (!hasSelectedContactsForBulkAction()) return;
     setBulkRecipientsText('bulkRemoveTagRecipients');
     const input = document.getElementById('bulkRemoveTagInput') as HTMLInputElement | null;
+    const select = document.getElementById('bulkRemoveTagSelect') as HTMLSelectElement | null;
     if (input) {
         input.value = '';
         setTimeout(() => input.focus(), 0);
+    }
+    if (select) {
+        select.value = '';
     }
     openModal('bulkRemoveTagModal');
 }

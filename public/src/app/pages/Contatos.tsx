@@ -654,8 +654,10 @@ Use {{nome}} para personalizar`}
                 type="text"
                 className="form-input"
                 id="bulkTagInput"
+                list="bulkTagOptions"
                 placeholder="Ex.: Lead, Campanha Março"
               />
+              <datalist id="bulkTagOptions"></datalist>
               <p className="form-help">Separe múltiplas tags por vírgula.</p>
             </div>
           </div>
@@ -685,8 +687,14 @@ Use {{nome}} para personalizar`}
                 type="text"
                 className="form-input"
                 id="bulkRemoveTagInput"
+                list="bulkRemoveTagOptions"
                 placeholder="Ex.: Lead, Campanha Março"
               />
+              <datalist id="bulkRemoveTagOptions"></datalist>
+              <label className="form-label" htmlFor="bulkRemoveTagSelect" style={{ marginTop: '12px' }}>Selecionar etiqueta existente</label>
+              <select className="form-select" id="bulkRemoveTagSelect" defaultValue="">
+                <option value="">Escolha uma tag...</option>
+              </select>
               <p className="form-help">Separe múltiplas tags por vírgula.</p>
             </div>
           </div>

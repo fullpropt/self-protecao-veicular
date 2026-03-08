@@ -436,6 +436,13 @@ function initSocket() {
     });
     
     APP.socket.on('error', (data) => {
+        const code = String(data?.code || '').trim().toUpperCase();
+        if (code === 'SESSION_FORBIDDEN') {
+            localStorage.removeItem('zapvender_active_whatsapp_session');
+            APP.sessionId = buildOwnerFallbackSessionId(getOwnerUserIdFromSessionToken(), DEFAULT_SESSION_ID);
+            APP.socket?.emit('check-session', { sessionId: APP.sessionId });
+            return;
+        }
         showToast('error', 'Erro', data.message || 'Ocorreu um erro');
     });
 }

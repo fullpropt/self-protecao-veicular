@@ -500,10 +500,16 @@ async function canAccessSessionRecordInOwnerScope(req, sessionId, ownerScopeUser
     const effectiveOwnerUserId = normalizeOwnerUserId(ownerScopeUserId) || await resolveRequesterOwnerUserId(req);
     if (!effectiveOwnerUserId) return true;
 
-    const session = await WhatsAppSession.findBySessionId(normalizedSessionId, {
+    const ownedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
         owner_user_id: effectiveOwnerUserId
     });
-    return !!session;
+    if (ownedSession) return true;
+
+    const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId);
+    if (storedSession) return false;
+
+    const runtimeOwnerUserId = await resolveSessionOwnerUserId(normalizedSessionId);
+    return Boolean(runtimeOwnerUserId && Number(runtimeOwnerUserId) === Number(effectiveOwnerUserId));
 }
 
 async function canAccessConversationInOwnerScope(req, conversation, ownerScopeUserId = null) {
@@ -8406,10 +8412,9 @@ io.on('connection', (socket) => {
         if (!planAccess.allowed) return;
         const ownerScopeUserId = planAccess.ownerScopeUserId;
         if (ownerScopeUserId) {
-            const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!storedSession) {
+            const socketReq = buildSocketRequestLike(socket);
+            const hasAccess = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+            if (!hasAccess) {
                 socket.emit('session-status', { status: 'disconnected', sessionId: normalizedSessionId });
                 return;
             }
@@ -8572,11 +8577,10 @@ io.on('connection', (socket) => {
             }
 
             const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+            const socketReq = buildSocketRequestLike(socket);
             if (ownerScopeUserId) {
-                const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
-                    owner_user_id: ownerScopeUserId
-                });
-                if (!allowedSession) {
+                const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+                if (!canAccessSession) {
                     socket.emit('error', { message: 'Sem permissao para usar esta conta WhatsApp', code: 'SESSION_FORBIDDEN' });
                     return;
                 }
@@ -8585,7 +8589,6 @@ io.on('connection', (socket) => {
             const safeOptions = options && typeof options === 'object' ? { ...options } : {};
             const normalizedConversationId = Number(safeOptions.conversationId);
             if (Number.isInteger(normalizedConversationId) && normalizedConversationId > 0) {
-                const socketReq = buildSocketRequestLike(socket);
                 const conversation = await Conversation.findById(normalizedConversationId);
                 const hasConversationAccess = conversation
                     ? await canAccessConversationInOwnerScope(socketReq, conversation, ownerScopeUserId)
@@ -8634,10 +8637,8 @@ io.on('connection', (socket) => {
         let resolvedLead = null;
 
         if (ownerScopeUserId && normalizedSessionId) {
-            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!allowedSession) {
+            const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+            if (!canAccessSession) {
                 socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
                 return;
             }
@@ -8748,10 +8749,8 @@ io.on('connection', (socket) => {
         const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
         const normalizedSessionId = sanitizeSessionId(sessionId);
         if (ownerScopeUserId && normalizedSessionId) {
-            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!allowedSession) {
+            const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+            if (!canAccessSession) {
                 socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
                 return;
             }
@@ -8836,10 +8835,8 @@ io.on('connection', (socket) => {
         const normalizedContactJid = normalizeJid(contactJid);
 
         if (ownerScopeUserId && normalizedSessionId) {
-            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!allowedSession) {
+            const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+            if (!canAccessSession) {
                 socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
                 return;
             }
@@ -8976,11 +8973,10 @@ io.on('connection', (socket) => {
         const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
         if (!planAccess.allowed) return;
         const ownerScopeUserId = planAccess.ownerScopeUserId;
+        const socketReq = buildSocketRequestLike(socket);
         if (ownerScopeUserId) {
-            const storedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!storedSession) {
+            const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+            if (!canAccessSession) {
                 socket.emit('error', { message: 'Sem permissao para remover esta conta', code: 'SESSION_FORBIDDEN' });
                 return;
             }
