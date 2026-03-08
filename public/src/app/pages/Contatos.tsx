@@ -542,6 +542,14 @@ João Silva,27999999999,joao@email.com`}
               </select>
               <p className="form-help">Aplicada em todos os contatos importados.</p>
             </div>
+            <div className="form-group">
+              <label className="form-label">Coluna de tags do CSV (opcional)</label>
+              <select className="form-select" id="importTagColumn" defaultValue="__auto__">
+                <option value="__auto__">Detectar automaticamente (tag/tags/etiqueta)</option>
+                <option value="">Não usar coluna de tags</option>
+              </select>
+              <p className="form-help">Mescla com a tag global. Célula pode ter várias tags separadas por vírgula, ponto e vírgula ou barra vertical.</p>
+            </div>
           </div>
           <div className="modal-footer">
             <button className="btn btn-outline" onClick={() => globals.closeModal?.('importModal')}>Cancelar</button>

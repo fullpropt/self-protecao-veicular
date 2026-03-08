@@ -106,7 +106,19 @@ const CONTACTS_CACHE_TTL_MS = 10 * 60 * 1000;
 const CONTACTS_CACHE_MIN_REVALIDATE_INTERVAL_MS = 45 * 1000;
 const CONTACTS_CACHE_PREFIX = 'zapvender_contacts_cache_v2';
 const FUNNEL_CACHE_PREFIX = 'zapvender_funnel_leads_cache_v1';
+const IMPORT_TAG_COLUMN_AUTO_VALUE = '__auto__';
+const IMPORT_TAG_COLUMN_ALIAS_CANDIDATES = [
+    'tag',
+    'tags',
+    'etiqueta',
+    'etiquetas',
+    'rotulo',
+    'rotulos',
+    'label',
+    'labels'
+];
 let contactsBootstrappedOnce = false;
+let importTagColumnRefreshTimer: number | null = null;
 
 function appConfirm(message: string, title = 'Confirmacao') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -300,6 +312,72 @@ function getImportValue(normalizedRow: Record<string, string>, aliases: string[]
         }
     }
     return '';
+}
+
+function getImportTagColumnSelect() {
+    return document.getElementById('importTagColumn') as HTMLSelectElement | null;
+}
+
+function detectTagColumnFromHeaders(rawHeaders: string[]) {
+    const normalizedHeaders = rawHeaders.map((header) => normalizeImportHeader(header)).filter(Boolean);
+    const aliasKeys = IMPORT_TAG_COLUMN_ALIAS_CANDIDATES.map((alias) => normalizeImportHeader(alias)).filter(Boolean);
+
+    for (const aliasKey of aliasKeys) {
+        if (normalizedHeaders.includes(aliasKey)) {
+            return aliasKey;
+        }
+    }
+    return '';
+}
+
+function updateImportTagColumnOptions(rawHeaders: string[] = []) {
+    const select = getImportTagColumnSelect();
+    if (!select) return;
+
+    const currentValue = String(select.value || '').trim() || IMPORT_TAG_COLUMN_AUTO_VALUE;
+    const headerMap = new Map<string, string>();
+    for (const header of rawHeaders) {
+        const raw = String(header || '').trim();
+        const normalized = normalizeImportHeader(raw);
+        if (!raw || !normalized || headerMap.has(normalized)) continue;
+        headerMap.set(normalized, raw);
+    }
+
+    const headerEntries = Array.from(headerMap.entries());
+    const autoDetectedKey = detectTagColumnFromHeaders(rawHeaders);
+    const autoDetectedLabel = autoDetectedKey ? (headerMap.get(autoDetectedKey) || autoDetectedKey) : '';
+    const autoLabel = autoDetectedLabel
+        ? `Detectar automaticamente (${autoDetectedLabel})`
+        : 'Detectar automaticamente (tag/tags/etiqueta)';
+
+    const options = [
+        `<option value="${IMPORT_TAG_COLUMN_AUTO_VALUE}">${escapeHtml(autoLabel)}</option>`,
+        '<option value="">Nao usar coluna de tags</option>',
+        ...headerEntries.map(([_, label]) => `<option value="${escapeHtml(label)}">${escapeHtml(label)}</option>`)
+    ];
+
+    select.innerHTML = options.join('');
+
+    const hasCurrent = currentValue === IMPORT_TAG_COLUMN_AUTO_VALUE
+        || currentValue === ''
+        || headerEntries.some(([_, label]) => label === currentValue);
+    select.value = hasCurrent ? currentValue : IMPORT_TAG_COLUMN_AUTO_VALUE;
+}
+
+async function refreshImportTagColumnOptionsFromInputs() {
+    const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
+    const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value || '';
+    let rows: Array<Record<string, string>> = [];
+
+    if (fileInput?.files && fileInput.files.length > 0) {
+        const text = await fileInput.files[0].text();
+        rows = parseCSV(text);
+    } else if (String(textInput).trim()) {
+        rows = parseCSV(String(textInput));
+    }
+
+    const headers = rows.length > 0 ? Object.keys(rows[0] || {}) : [];
+    updateImportTagColumnOptions(headers);
 }
 
 function escapeHtml(value: string) {
@@ -664,6 +742,7 @@ function initContacts() {
     }
     bindContactsPaginationControls();
     bindContactsMobileCascadeBehavior();
+    bindImportTagColumnMappingControls();
     loadContactFields();
     void loadContactsSessionFilters().finally(() => {
         void loadContacts({
@@ -678,6 +757,47 @@ function initContacts() {
     bindBulkRemoveTagSelect();
     void loadTags();
     loadTemplates();
+}
+
+function bindImportTagColumnMappingControls() {
+    const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
+    const textInput = document.getElementById('importText') as HTMLTextAreaElement | null;
+    const select = getImportTagColumnSelect();
+
+    const scheduleRefresh = () => {
+        if (importTagColumnRefreshTimer !== null) {
+            window.clearTimeout(importTagColumnRefreshTimer);
+        }
+        importTagColumnRefreshTimer = window.setTimeout(() => {
+            importTagColumnRefreshTimer = null;
+            void refreshImportTagColumnOptionsFromInputs();
+        }, 220);
+    };
+
+    if (fileInput && fileInput.dataset.tagColumnBound !== '1') {
+        fileInput.dataset.tagColumnBound = '1';
+        fileInput.addEventListener('change', () => {
+            void refreshImportTagColumnOptionsFromInputs();
+        });
+    }
+
+    if (textInput && textInput.dataset.tagColumnBound !== '1') {
+        textInput.dataset.tagColumnBound = '1';
+        textInput.addEventListener('input', () => {
+            scheduleRefresh();
+        });
+    }
+
+    if (select && select.dataset.tagColumnBound !== '1') {
+        select.dataset.tagColumnBound = '1';
+        select.addEventListener('focus', () => {
+            if (!select.options.length || select.options.length <= 2) {
+                void refreshImportTagColumnOptionsFromInputs();
+            }
+        });
+    }
+
+    updateImportTagColumnOptions([]);
 }
 
 function bindContactsPaginationControls() {
@@ -1994,6 +2114,7 @@ async function importContacts() {
     const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value.trim() || '';
     const status = parseInt((document.getElementById('importStatus') as HTMLSelectElement | null)?.value || '1', 10) as LeadStatus;
     const importTagValue = (document.getElementById('importTag') as HTMLSelectElement | null)?.value.trim() || '';
+    const importTagColumnValue = String(getImportTagColumnSelect()?.value || IMPORT_TAG_COLUMN_AUTO_VALUE).trim();
     const importTags = importTagValue ? [importTagValue] : [];
 
     let data: Array<Record<string, string>> = [];
@@ -2009,13 +2130,22 @@ async function importContacts() {
         return;
     }
 
+    const dataHeaders = Object.keys(data[0] || {});
+    const selectedTagColumnKey = importTagColumnValue && importTagColumnValue !== IMPORT_TAG_COLUMN_AUTO_VALUE
+        ? normalizeImportHeader(importTagColumnValue)
+        : '';
+    const autoTagColumnKey = detectTagColumnFromHeaders(dataHeaders);
+    const resolvedTagColumnKey = selectedTagColumnKey || autoTagColumnKey;
+
     const leadsToImport: Array<Record<string, any>> = [];
     for (const row of data) {
         const normalizedRow = buildNormalizedImportRow(row);
         const phone = getImportValue(normalizedRow, ['telefone', 'phone', 'whatsapp', 'celular', 'fone', 'numero']).replace(/\D/g, '');
         if (!phone) continue;
 
-        const mergedTags = Array.from(new Set(importTags));
+        const rowTagsRaw = resolvedTagColumnKey ? String(normalizedRow[resolvedTagColumnKey] || '').trim() : '';
+        const rowTags = Array.from(new Set(parseLeadTags(rowTagsRaw)));
+        const mergedTags = Array.from(new Set([...importTags, ...rowTags]));
         const customFields: Record<string, string> = {};
 
         for (const field of customContactFieldsCache) {
@@ -2074,6 +2204,11 @@ async function importContacts() {
         closeModal('importModal');
         const importTag = document.getElementById('importTag') as HTMLSelectElement | null;
         if (importTag) importTag.value = '';
+        const importTagColumn = getImportTagColumnSelect();
+        if (importTagColumn) {
+            importTagColumn.value = IMPORT_TAG_COLUMN_AUTO_VALUE;
+            updateImportTagColumnOptions([]);
+        }
         clearLeadViewCaches();
         await loadContacts({ forceRefresh: true, silent: true });
 
