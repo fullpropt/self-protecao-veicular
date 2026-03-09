@@ -165,6 +165,7 @@ const STATIC_DIR = process.env.NODE_ENV === 'production'
     ? path.join(__dirname, '..', 'dist')
 
     : path.join(__dirname, '..', 'public');
+const LANDING_BRUNO_DIR = path.join(__dirname, '..', 'landing-bruno');
 
 const MAX_RECONNECT_ATTEMPTS = parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 5;
 
@@ -952,6 +953,10 @@ app.use(express.static(STATIC_DIR, {
     }
 
 }));
+
+if (fs.existsSync(LANDING_BRUNO_DIR)) {
+    app.use('/landing-bruno', express.static(LANDING_BRUNO_DIR));
+}
 
 app.use('/uploads', express.static(UPLOADS_DIR));
 
