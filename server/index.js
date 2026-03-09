@@ -3644,8 +3644,6 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
             makeCacheableSignalKeyStore,
 
-            makeInMemoryStore,
-
             delay
 
         } = baileys;
@@ -3697,7 +3695,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
         const syncFullHistory = WHATSAPP_SYNC_FULL_HISTORY;
         const browserName = await resolveWhatsAppBrowserName();
 
-        const store = createRuntimeStore({ sessionId, makeInMemoryStore });
+        const store = createRuntimeStore();
 
 
 
@@ -6031,27 +6029,7 @@ function createFallbackRuntimeStore() {
     };
 }
 
-function createRuntimeStore({ sessionId = '', makeInMemoryStore = null } = {}) {
-    const normalizedSessionId = sanitizeSessionId(sessionId);
-    if (typeof makeInMemoryStore === 'function') {
-        try {
-            const store = makeInMemoryStore({ logger });
-            if (store && typeof store.bind === 'function' && typeof store.loadMessages === 'function') {
-                return store;
-            }
-            console.warn(
-                `[${normalizedSessionId || 'runtime'}] makeInMemoryStore retornou store sem loadMessages/bind; usando fallback local.`
-            );
-        } catch (error) {
-            console.warn(
-                `[${normalizedSessionId || 'runtime'}] Falha ao criar store via makeInMemoryStore; usando fallback local:`,
-                error.message
-            );
-        }
-    } else {
-        console.warn(`[${normalizedSessionId || 'runtime'}] makeInMemoryStore indisponivel; usando fallback local.`);
-    }
-
+function createRuntimeStore() {
     return createFallbackRuntimeStore();
 }
 
@@ -6090,10 +6068,7 @@ function ensureRuntimeSessionStore(sessionId, runtimeSession, options = {}) {
         return runtimeSession.store;
     }
 
-    const store = createRuntimeStore({
-        sessionId,
-        makeInMemoryStore: options.makeInMemoryStore
-    });
+    const store = createRuntimeStore();
 
     runtimeSession.store = store;
     bindRuntimeStoreToSocket(sessionId, store, options.socket || runtimeSession.socket);
