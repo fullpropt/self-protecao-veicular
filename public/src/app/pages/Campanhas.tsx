@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 
 import { Link } from 'react-router-dom';
 import { brandLogoUrl, brandName } from '../lib/brand';
@@ -851,6 +851,9 @@ export default function Campanhas() {
                                           <input type="number" min={1} step={1} className="form-input" id="campaignDelayMax" defaultValue="15" placeholder="Máximo (segundos)" />
                                       </div>
                                   </div>
+                                  <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--gray-500)' }}>
+                                      Ex.: com mínimo 5 e máximo 15, cada envio acontece de forma aleatória entre 5 e 15 segundos.
+                                  </p>
                               </div>
                               <div className="form-group">
                                   <label className="form-label">Início</label>
@@ -920,3 +923,4 @@ export default function Campanhas() {
     </div>
   );
 }
+
