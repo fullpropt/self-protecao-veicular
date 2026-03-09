@@ -754,7 +754,6 @@ function initContacts() {
     });
     bindCreateContactTagsSuggestions();
     bindEditContactTagsSuggestions();
-    bindBulkRemoveTagSelect();
     void loadTags();
     loadTemplates();
 }
@@ -1052,29 +1051,6 @@ function bindEditContactTagsSuggestions() {
     }
 }
 
-function bindBulkRemoveTagSelect() {
-    const select = document.getElementById('bulkRemoveTagSelect') as HTMLSelectElement | null;
-    if (!select || select.dataset.bound === '1') return;
-
-    select.dataset.bound = '1';
-    select.addEventListener('change', () => {
-        const selectedTag = String(select.value || '').trim();
-        if (!selectedTag) return;
-
-        const input = document.getElementById('bulkRemoveTagInput') as HTMLInputElement | null;
-        if (!input) {
-            select.value = '';
-            return;
-        }
-
-        const currentTags = getNormalizedUniqueLeadTags(input.value || '');
-        const hasTag = currentTags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase());
-        input.value = (hasTag ? currentTags : [...currentTags, selectedTag]).join(', ');
-        select.value = '';
-        input.focus();
-    });
-}
-
 function bindCreateContactTagsSuggestions() {
     const contactTagsInput = document.getElementById('contactTags') as HTMLInputElement | null;
     const suggestions = document.getElementById('contactTagsSuggestions') as HTMLElement | null;
@@ -1118,7 +1094,6 @@ async function loadTags() {
         const importSelect = document.getElementById('importTag') as HTMLSelectElement | null;
         const bulkTagOptions = document.getElementById('bulkTagOptions') as HTMLDataListElement | null;
         const bulkRemoveTagOptions = document.getElementById('bulkRemoveTagOptions') as HTMLDataListElement | null;
-        const bulkRemoveTagSelect = document.getElementById('bulkRemoveTagSelect') as HTMLSelectElement | null;
         const tagNames = getUniqueTagNames();
         const tagOptions = tagNames
             .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
@@ -1149,14 +1124,6 @@ async function loadTags() {
 
         if (bulkRemoveTagOptions) {
             bulkRemoveTagOptions.innerHTML = datalistOptions;
-        }
-
-        if (bulkRemoveTagSelect) {
-            const currentValue = String(bulkRemoveTagSelect.value || '').trim();
-            bulkRemoveTagSelect.innerHTML = `<option value="">Escolha uma tag...</option>${tagOptions}`;
-            if (currentValue && tagNames.includes(currentValue)) {
-                bulkRemoveTagSelect.value = currentValue;
-            }
         }
     } catch (e) {
         // ignore
@@ -1832,13 +1799,9 @@ function openBulkRemoveTagModal() {
     if (!hasSelectedContactsForBulkAction()) return;
     setBulkRecipientsText('bulkRemoveTagRecipients');
     const input = document.getElementById('bulkRemoveTagInput') as HTMLInputElement | null;
-    const select = document.getElementById('bulkRemoveTagSelect') as HTMLSelectElement | null;
     if (input) {
         input.value = '';
         setTimeout(() => input.focus(), 0);
-    }
-    if (select) {
-        select.value = '';
     }
     openModal('bulkRemoveTagModal');
 }
