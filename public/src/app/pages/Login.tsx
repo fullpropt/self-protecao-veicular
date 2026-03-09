@@ -54,11 +54,11 @@ export default function Login() {
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background:
-                radial-gradient(900px 520px at 85% 8%, rgba(23, 140, 73, 0.16) 0%, rgba(23, 140, 73, 0) 60%),
-                radial-gradient(700px 420px at 12% 86%, rgba(30, 64, 175, 0.14) 0%, rgba(30, 64, 175, 0) 65%),
-                linear-gradient(135deg, #020817 0%, #091224 50%, #020617 100%);
+                radial-gradient(900px 520px at 78% 10%, rgba(0, 255, 163, 0.12) 0%, rgba(0, 255, 163, 0) 58%),
+                radial-gradient(760px 440px at 18% 84%, rgba(0, 240, 255, 0.08) 0%, rgba(0, 240, 255, 0) 62%),
+                linear-gradient(170deg, #04080f 0%, #03060b 48%, #020202 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -66,13 +66,34 @@ export default function Login() {
         }
 
         .login-container {
-            background: linear-gradient(165deg, rgba(18, 33, 54, 0.97) 0%, rgba(12, 24, 40, 0.97) 100%);
+            background: linear-gradient(165deg, rgba(10, 18, 26, 0.96) 0%, rgba(8, 15, 24, 0.97) 100%);
             padding: 34px 34px 28px;
             border-radius: 22px;
-            border: 1px solid rgba(148, 163, 184, 0.22);
-            box-shadow: 0 26px 72px rgba(2, 6, 23, 0.58);
+            border: 1px solid rgba(89, 118, 133, 0.36);
+            box-shadow:
+                0 26px 72px rgba(2, 6, 23, 0.7),
+                0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+                0 0 44px rgba(0, 255, 163, 0.12);
             width: 100%;
             max-width: 430px;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+        }
+
+        .login-container::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(460px 240px at 80% -12%, rgba(0, 255, 163, 0.18) 0%, rgba(0, 255, 163, 0) 55%),
+                radial-gradient(520px 260px at -16% 118%, rgba(0, 240, 255, 0.1) 0%, rgba(0, 240, 255, 0) 54%);
+        }
+
+        .login-container > * {
+            position: relative;
+            z-index: 1;
         }
 
         .login-logo {
@@ -90,16 +111,17 @@ export default function Login() {
 
         .login-title {
             text-align: center;
-            color: #e8eef8;
+            color: #f4f8fb;
             margin-bottom: 6px;
             font-size: 30px;
             line-height: 1.15;
             font-weight: 700;
+            text-shadow: 0 0 16px rgba(255, 255, 255, 0.08);
         }
 
         .login-subtitle {
             text-align: center;
-            color: #9fb0c8;
+            color: #95a9b6;
             margin-bottom: 24px;
             font-size: 14px;
         }
@@ -107,7 +129,7 @@ export default function Login() {
         .form-section-title {
             font-size: 18px;
             font-weight: 700;
-            color: #dbe6f7;
+            color: #e6edf3;
             margin-bottom: 14px;
         }
 
@@ -118,30 +140,30 @@ export default function Login() {
         .form-label {
             display: block;
             margin-bottom: 7px;
-            color: #d8e4f6;
+            color: #d6e3ec;
             font-weight: 600;
         }
 
         .form-input {
             width: 100%;
             padding: 13px 14px;
-            border: 1px solid rgba(148, 163, 184, 0.32);
+            border: 1px solid rgba(86, 112, 126, 0.48);
             border-radius: 10px;
             font-size: 15px;
-            color: #eaf1ff;
-            background: rgba(30, 47, 72, 0.86);
+            color: #e8f6f0;
+            background: rgba(17, 27, 38, 0.9);
             transition: all 0.3s;
         }
 
         .form-input::placeholder {
-            color: #8ea3bf;
+            color: #7f97a8;
         }
 
         .form-input:focus {
             outline: none;
-            border-color: rgba(23, 140, 73, 0.78);
-            box-shadow: 0 0 0 3px rgba(23, 140, 73, 0.18);
-            background: rgba(34, 56, 84, 0.94);
+            border-color: rgba(0, 255, 163, 0.78);
+            box-shadow: 0 0 0 3px rgba(0, 255, 163, 0.18), 0 0 18px rgba(0, 255, 163, 0.12);
+            background: rgba(20, 33, 45, 0.96);
         }
 
         .remember-row {
@@ -152,7 +174,7 @@ export default function Login() {
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            color: #c8d7ec;
+            color: #c1d5d0;
             font-size: 14px;
             cursor: pointer;
             user-select: none;
@@ -162,14 +184,14 @@ export default function Login() {
             width: 16px;
             height: 16px;
             cursor: pointer;
-            accent-color: #1aae5e;
+            accent-color: #00dc8d;
         }
 
         .btn-login {
             width: 100%;
             padding: 15px;
-            background: linear-gradient(135deg, #1aae5e 0%, #178c49 100%);
-            color: white;
+            background: linear-gradient(135deg, #00ffa3 0%, #00d789 42%, #00c775 100%);
+            color: #042419;
             border: none;
             border-radius: 10px;
             font-size: 16px;
@@ -180,7 +202,7 @@ export default function Login() {
 
         .btn-login:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(23, 140, 73, 0.34);
+            box-shadow: 0 12px 32px rgba(0, 255, 163, 0.33), 0 0 28px rgba(0, 240, 255, 0.16);
         }
 
         .error-message {
@@ -208,14 +230,14 @@ export default function Login() {
         .auth-switch {
             margin-top: 14px;
             text-align: center;
-            color: #a8bbd4;
+            color: #9fb4bf;
             font-size: 13px;
         }
 
         .auth-switch-link {
             border: none;
             background: transparent;
-            color: #49c97d;
+            color: #00e39a;
             font-weight: 700;
             cursor: pointer;
             padding: 0;
@@ -224,7 +246,7 @@ export default function Login() {
         }
 
         .auth-switch-link:hover {
-            color: #7ce9a7;
+            color: #5df8c3;
             text-decoration: underline;
         }
 
@@ -236,7 +258,7 @@ export default function Login() {
         .auth-resend-btn {
             border: none;
             background: transparent;
-            color: #9cc4ff;
+            color: #79d8ff;
             font-size: 13px;
             cursor: pointer;
             text-decoration: underline;
@@ -251,7 +273,7 @@ export default function Login() {
         .security-badge {
             text-align: center;
             margin-top: 20px;
-            color: #9fb0c8;
+            color: #8ea2ae;
             font-size: 12px;
             letter-spacing: 0.02em;
         }
