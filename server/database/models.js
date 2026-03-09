@@ -2586,6 +2586,32 @@ const CustomEvent = {
 // MESSAGE QUEUE
 // ============================================
 
+function appendMessageQueueOwnerScopeFilter(sql, params, ownerUserId, tableAlias = 'message_queue') {
+    const normalizedOwnerUserId = parsePositiveInteger(ownerUserId, null);
+    if (!normalizedOwnerUserId) return sql;
+    params.push(normalizedOwnerUserId, normalizedOwnerUserId, normalizedOwnerUserId);
+
+    return `${sql}
+        AND EXISTS (
+            SELECT 1
+            FROM leads queue_leads
+            WHERE queue_leads.id = ${tableAlias}.lead_id
+              AND (
+                  queue_leads.owner_user_id = ?
+                  OR (
+                      queue_leads.owner_user_id IS NULL
+                      AND EXISTS (
+                          SELECT 1
+                          FROM users owner_scope
+                          WHERE owner_scope.id = queue_leads.assigned_to
+                            AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
+                      )
+                  )
+              )
+        )
+    `;
+}
+
 const MessageQueue = {
     async add(data) {
         const uuid = generateUUID();
@@ -2711,14 +2737,28 @@ const MessageQueue = {
         `, [sessionId || null, toJsonStringOrNull(assignmentMeta), id]);
     },
     
-    async cancel(id) {
-        return await run(`UPDATE message_queue SET status = 'cancelled' WHERE id = ?`, [id]);
+    async cancel(id, options = {}) {
+        const messageId = parsePositiveInteger(id, null);
+        if (!messageId) {
+            return { changes: 0, lastInsertRowid: null };
+        }
+
+        const ownerUserId = parsePositiveInteger(options?.owner_user_id, null);
+        const params = [messageId];
+        let sql = `UPDATE message_queue SET status = 'cancelled' WHERE id = ?`;
+
+        if (ownerUserId) {
+            sql = appendMessageQueueOwnerScopeFilter(sql, params, ownerUserId, 'message_queue');
+        }
+
+        return await run(sql, params);
     },
     
     async getPending(options = {}) {
         const params = [];
         const readyOnly = options?.ready_only === true || options?.readyOnly === true;
         const onlyActiveCampaigns = options?.only_active_campaigns === true || options?.onlyActiveCampaigns === true;
+        const ownerUserId = parsePositiveInteger(options?.owner_user_id, null);
         const limit = Number(options?.limit || 0);
 
         let sql = `
@@ -2745,6 +2785,10 @@ const MessageQueue = {
                     )
                 )
             `;
+        }
+
+        if (ownerUserId) {
+            sql = appendMessageQueueOwnerScopeFilter(sql, params, ownerUserId, 'message_queue');
         }
 
         sql += ' ORDER BY priority DESC, created_at ASC';

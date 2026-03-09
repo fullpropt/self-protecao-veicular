@@ -10,10 +10,14 @@ const { User } = require('../database/models');
 const { queryOne, run } = require('../database/connection');
 
 const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
+const JWT_SECRET_DEV = String(process.env.JWT_SECRET_DEV || '').trim();
 if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
     throw new Error('JWT_SECRET is required in production');
 }
-const JWT_SECRET_EFFECTIVE = JWT_SECRET || 'self-protecao-jwt-secret-2024';
+const JWT_SECRET_EFFECTIVE = JWT_SECRET || JWT_SECRET_DEV || crypto.randomBytes(32).toString('hex');
+if (!JWT_SECRET && process.env.NODE_ENV !== 'production' && !JWT_SECRET_DEV) {
+    console.warn('[Auth] JWT_SECRET nao definido; usando segredo efemero para ambiente local.');
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
 

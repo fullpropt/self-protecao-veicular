@@ -8501,12 +8501,15 @@ function sessionExists(sessionId) {
         workerEnabled: QUEUE_WORKER_ENABLED,
         leaderLock: queueWorkerLeaderLock,
         resolveSessionForMessage: async ({ message, lead }) => {
+            const leadOwnerUserId =
+                normalizeOwnerUserId(lead?.owner_user_id)
+                || await resolveOwnerScopeUserIdFromAssignees(lead?.assigned_to);
             const allocation = await senderAllocatorService.allocateForSingleLead({
                 leadId: lead?.id,
                 campaignId: message?.campaign_id || null,
                 sessionId: message?.session_id || null,
                 strategy: 'round_robin',
-                ownerUserId: Number(lead?.assigned_to || 0) > 0 ? Number(lead?.assigned_to) : undefined
+                ownerUserId: leadOwnerUserId || undefined
             });
             return {
                 sessionId: allocation?.sessionId || null,
@@ -9694,47 +9697,13 @@ app.post('/api/auth/login', async (req, res) => {
 
         const { User } = require('./database/models');
 
-        const { verifyPassword, generateToken, generateRefreshToken, hashPassword } = require('./middleware/auth');
+        const { verifyPassword, generateToken, generateRefreshToken } = require('./middleware/auth');
 
 
 
         const normalizedEmail = String(email || '').trim().toLowerCase();
 
         let user = await User.findByEmail(normalizedEmail);
-
-
-
-        // Compatibilidade com login legado (usuÃ¡rio: thyago / senha: thyago123)
-
-        if (!user && normalizedEmail === 'thyago' && password === 'thyago123') {
-
-            const legacyEmail = 'thyago@self.com.br';
-
-            user = await User.findByEmail(legacyEmail);
-
-
-
-            if (!user) {
-
-                const created = await User.create({
-
-                    name: 'thyago',
-
-                    email: legacyEmail,
-
-                    password_hash: hashPassword('thyago123'),
-
-                    role: 'admin'
-
-                });
-
-                user = await User.findByEmail(legacyEmail);
-
-            }
-
-        }
-
-
 
         if (!user || !verifyPassword(password, user.password_hash)) {
 
@@ -13151,158 +13120,261 @@ app.post('/api/messages/:leadId/rehydrate-missing-media', authenticate, async (r
 
 
 app.get('/api/queue/status', authenticate, async (req, res) => {
-
-    res.json({ success: true, ...(await queueService.getStatus()) });
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    res.json({
+        success: true,
+        ...(await queueService.getStatus({
+            ownerUserId: ownerScopeUserId || undefined
+        }))
+    });
 
 });
 
 
 
 app.post('/api/queue/add', authenticate, async (req, res) => {
-
-    const {
-        leadId,
-        conversationId,
-        campaignId,
-        content,
-        mediaType,
-        mediaUrl,
-        priority,
-        scheduledAt,
-        sessionId,
-        isFirstContact,
-        assignmentMeta
-    } = req.body;
-
-    
-
-    let resolvedSessionId = sanitizeSessionId(sessionId);
-    if (!resolvedSessionId) {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const allocation = await senderAllocatorService.allocateForSingleLead({
+    try {
+        const {
             leadId,
+            conversationId,
             campaignId,
-            strategy: 'round_robin',
-            ownerUserId: ownerScopeUserId || undefined
+            content,
+            mediaType,
+            mediaUrl,
+            priority,
+            scheduledAt,
+            sessionId,
+            isFirstContact,
+            assignmentMeta
+        } = req.body || {};
+
+        const normalizedLeadId = Number(leadId);
+        if (!Number.isInteger(normalizedLeadId) || normalizedLeadId <= 0) {
+            return res.status(400).json({ success: false, error: 'leadId invalido' });
+        }
+
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const lead = await Lead.findById(normalizedLeadId);
+        if (!lead) {
+            return res.status(404).json({ success: false, error: 'Lead nao encontrado' });
+        }
+
+        const hasLeadAccess = await canAccessLeadRecordInOwnerScope(req, lead, ownerScopeUserId || null);
+        if (!hasLeadAccess) {
+            return res.status(403).json({ success: false, error: 'Sem permissao para enfileirar mensagens para este lead' });
+        }
+
+        const normalizedConversationId = Number(conversationId);
+        let resolvedConversationId = null;
+        if (Number.isInteger(normalizedConversationId) && normalizedConversationId > 0) {
+            const conversation = await Conversation.findById(normalizedConversationId);
+            if (!conversation) {
+                return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
+            }
+
+            const hasConversationAccess = await canAccessConversationInOwnerScope(req, conversation, ownerScopeUserId || null);
+            if (!hasConversationAccess) {
+                return res.status(403).json({ success: false, error: 'Sem permissao para enfileirar nesta conversa' });
+            }
+
+            if (Number(conversation.lead_id) !== normalizedLeadId) {
+                return res.status(400).json({ success: false, error: 'Conversa informada nao pertence ao lead' });
+            }
+
+            resolvedConversationId = normalizedConversationId;
+        }
+
+        let resolvedSessionId = sanitizeSessionId(sessionId);
+        if (resolvedSessionId) {
+            const hasSessionAccess = await canAccessSessionRecordInOwnerScope(req, resolvedSessionId, ownerScopeUserId || null);
+            if (!hasSessionAccess) {
+                return res.status(403).json({ success: false, error: 'Sem permissao para usar esta conta de WhatsApp' });
+            }
+        } else {
+            const allocation = await senderAllocatorService.allocateForSingleLead({
+                leadId: normalizedLeadId,
+                campaignId,
+                strategy: 'round_robin',
+                ownerUserId: ownerScopeUserId || undefined
+            });
+            resolvedSessionId = sanitizeSessionId(allocation?.sessionId);
+        }
+
+        const result = await queueService.add({
+            leadId: normalizedLeadId,
+            conversationId: resolvedConversationId,
+            campaignId,
+            sessionId: resolvedSessionId || null,
+            isFirstContact: isFirstContact !== false,
+            assignmentMeta: assignmentMeta || null,
+            content,
+            mediaType,
+            mediaUrl,
+            priority,
+            scheduledAt
         });
-        resolvedSessionId = sanitizeSessionId(allocation?.sessionId);
+
+        return res.json({ success: true, ...result });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: error?.message || 'Falha ao adicionar mensagem na fila'
+        });
     }
-
-    const result = await queueService.add({
-
-        leadId,
-
-        conversationId,
-
-        campaignId,
-
-        sessionId: resolvedSessionId || null,
-
-        isFirstContact: isFirstContact !== false,
-
-        assignmentMeta: assignmentMeta || null,
-
-        content,
-
-        mediaType,
-
-        mediaUrl,
-
-        priority,
-
-        scheduledAt
-
-    });
-
-    
-
-    res.json({ success: true, ...result });
 
 });
 
 
 
 app.post('/api/queue/bulk', authenticate, async (req, res) => {
+    try {
+        const { leadIds, content } = req.body || {};
+        const options = (req.body && typeof req.body.options === 'object' && req.body.options !== null)
+            ? { ...req.body.options }
+            : {};
 
-    const { leadIds, content } = req.body || {};
-    const options = (req.body && typeof req.body.options === 'object' && req.body.options !== null)
-        ? { ...req.body.options }
-        : {};
-
-    const parseNonNegative = (value) => {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-    };
-
-    const legacyDelay = parseNonNegative(req.body?.delay);
-    const legacyDelayMin = parseNonNegative(req.body?.delayMin ?? req.body?.delay_min);
-    const legacyDelayMax = parseNonNegative(req.body?.delayMax ?? req.body?.delay_max);
-
-    if (options.delayMs === undefined && legacyDelay !== null) {
-        options.delayMs = legacyDelay;
-    }
-    if (options.delayMinMs === undefined && legacyDelayMin !== null) {
-        options.delayMinMs = legacyDelayMin;
-    }
-    if (options.delayMaxMs === undefined && legacyDelayMax !== null) {
-        options.delayMaxMs = legacyDelayMax;
-    }
-
-    const hasSessionAssignments = options.sessionAssignments && typeof options.sessionAssignments === 'object';
-    const normalizedLeadIds = Array.isArray(leadIds) ? leadIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0) : [];
-    const fixedSessionId = sanitizeSessionId(
-        options.sessionId || options.session_id || req.body?.sessionId || req.body?.session_id
-    );
-    const senderAccounts = normalizeSenderAccountsPayload(
-        options.senderAccounts || options.sender_accounts || req.body?.sender_accounts || req.body?.senderAccounts
-    );
-    const distributionStrategy = normalizeCampaignDistributionStrategy(
-        options.distributionStrategy || options.distribution_strategy || req.body?.distribution_strategy,
-        fixedSessionId ? 'single' : (senderAccounts.length ? 'weighted_round_robin' : 'round_robin')
-    );
-
-    let distribution = { strategyUsed: fixedSessionId ? 'single' : distributionStrategy, summary: {} };
-    if (!hasSessionAssignments) {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const allocationPlan = await senderAllocatorService.buildDistributionPlan({
-            leadIds: normalizedLeadIds,
-            campaignId: options.campaignId || req.body?.campaignId || null,
-            senderAccounts,
-            strategy: distributionStrategy,
-            sessionId: fixedSessionId || null,
-            ownerUserId: ownerScopeUserId || undefined
-        });
-        options.sessionAssignments = allocationPlan.assignmentsByLead;
-        options.assignmentMetaByLead = allocationPlan.assignmentMetaByLead;
-        distribution = {
-            strategyUsed: allocationPlan.strategyUsed,
-            summary: allocationPlan.summary || {}
+        const parseNonNegative = (value) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
         };
-    }
 
-    
+        const legacyDelay = parseNonNegative(req.body?.delay);
+        const legacyDelayMin = parseNonNegative(req.body?.delayMin ?? req.body?.delay_min);
+        const legacyDelayMax = parseNonNegative(req.body?.delayMax ?? req.body?.delay_max);
 
-    const results = await queueService.addBulk(leadIds, content, options);
-
-    
-
-    res.json({
-        success: true,
-        queued: results.length,
-        distribution: {
-            strategy: distribution.strategyUsed,
-            by_session: distribution.summary
+        if (options.delayMs === undefined && legacyDelay !== null) {
+            options.delayMs = legacyDelay;
         }
-    });
+        if (options.delayMinMs === undefined && legacyDelayMin !== null) {
+            options.delayMinMs = legacyDelayMin;
+        }
+        if (options.delayMaxMs === undefined && legacyDelayMax !== null) {
+            options.delayMaxMs = legacyDelayMax;
+        }
+
+        const hasSessionAssignments = options.sessionAssignments && typeof options.sessionAssignments === 'object';
+        const normalizedLeadIds = Array.from(
+            new Set(
+                Array.isArray(leadIds)
+                    ? leadIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+                    : []
+            )
+        );
+        if (!normalizedLeadIds.length) {
+            return res.status(400).json({ success: false, error: 'leadIds invalido' });
+        }
+
+        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+        const leadRows = await query(
+            'SELECT id, assigned_to, owner_user_id FROM leads WHERE id = ANY(?::int[])',
+            [normalizedLeadIds]
+        );
+        const leadById = new Map((leadRows || []).map((lead) => [Number(lead.id), lead]));
+        const missingLeadIds = normalizedLeadIds.filter((id) => !leadById.has(id));
+        if (missingLeadIds.length > 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Um ou mais leads nao foram encontrados',
+                missing_lead_ids: missingLeadIds
+            });
+        }
+
+        for (const leadIdValue of normalizedLeadIds) {
+            const leadRecord = leadById.get(leadIdValue);
+            const allowed = await canAccessLeadRecordInOwnerScope(req, leadRecord, ownerScopeUserId || null);
+            if (!allowed) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Sem permissao para enfileirar para um ou mais leads'
+                });
+            }
+        }
+
+        const fixedSessionId = sanitizeSessionId(
+            options.sessionId || options.session_id || req.body?.sessionId || req.body?.session_id
+        );
+        const senderAccounts = normalizeSenderAccountsPayload(
+            options.senderAccounts || options.sender_accounts || req.body?.sender_accounts || req.body?.senderAccounts
+        );
+        const distributionStrategy = normalizeCampaignDistributionStrategy(
+            options.distributionStrategy || options.distribution_strategy || req.body?.distribution_strategy,
+            fixedSessionId ? 'single' : (senderAccounts.length ? 'weighted_round_robin' : 'round_robin')
+        );
+
+        const sessionIdsToValidate = new Set();
+        if (fixedSessionId) sessionIdsToValidate.add(fixedSessionId);
+        for (const account of senderAccounts) {
+            const accountSessionId = sanitizeSessionId(account?.session_id || account?.sessionId);
+            if (accountSessionId) sessionIdsToValidate.add(accountSessionId);
+        }
+        if (hasSessionAssignments) {
+            for (const leadIdValue of normalizedLeadIds) {
+                const assignedSessionId = sanitizeSessionId(
+                    options.sessionAssignments[String(leadIdValue)]
+                    || options.sessionAssignments[leadIdValue]
+                );
+                if (assignedSessionId) sessionIdsToValidate.add(assignedSessionId);
+            }
+        }
+
+        for (const sessionIdToValidate of sessionIdsToValidate) {
+            const hasSessionAccess = await canAccessSessionRecordInOwnerScope(req, sessionIdToValidate, ownerScopeUserId || null);
+            if (!hasSessionAccess) {
+                return res.status(403).json({
+                    success: false,
+                    error: `Sem permissao para usar a conta de WhatsApp ${sessionIdToValidate}`
+                });
+            }
+        }
+
+        let distribution = { strategyUsed: fixedSessionId ? 'single' : distributionStrategy, summary: {} };
+        if (!hasSessionAssignments) {
+            const allocationPlan = await senderAllocatorService.buildDistributionPlan({
+                leadIds: normalizedLeadIds,
+                campaignId: options.campaignId || req.body?.campaignId || null,
+                senderAccounts,
+                strategy: distributionStrategy,
+                sessionId: fixedSessionId || null,
+                ownerUserId: ownerScopeUserId || undefined
+            });
+            options.sessionAssignments = allocationPlan.assignmentsByLead;
+            options.assignmentMetaByLead = allocationPlan.assignmentMetaByLead;
+            distribution = {
+                strategyUsed: allocationPlan.strategyUsed,
+                summary: allocationPlan.summary || {}
+            };
+        }
+
+        options.ownerUserId = ownerScopeUserId || undefined;
+        const results = await queueService.addBulk(normalizedLeadIds, content, options);
+
+        return res.json({
+            success: true,
+            queued: results.length,
+            distribution: {
+                strategy: distribution.strategyUsed,
+                by_session: distribution.summary
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            error: error?.message || 'Falha ao enfileirar disparo em massa'
+        });
+    }
 
 });
 
 
 
 app.delete('/api/queue/:id', authenticate, async (req, res) => {
-
-    await queueService.cancel(req.params.id);
-
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const cancelled = await queueService.cancel(req.params.id, {
+        ownerUserId: ownerScopeUserId || undefined
+    });
+    if (!cancelled) {
+        return res.status(404).json({ success: false, error: 'Mensagem da fila nao encontrada' });
+    }
     res.json({ success: true });
 
 });
@@ -13310,8 +13382,10 @@ app.delete('/api/queue/:id', authenticate, async (req, res) => {
 
 
 app.delete('/api/queue', authenticate, async (req, res) => {
-
-    const count = await queueService.cancelAll();
+    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+    const count = await queueService.cancelAll({
+        ownerUserId: ownerScopeUserId || undefined
+    });
 
     res.json({ success: true, cancelled: count });
 
@@ -16926,6 +17000,14 @@ app.get('/api/settings', authenticate, async (req, res) => {
 
 
 app.put('/api/settings', authenticate, async (req, res) => {
+
+    const requesterRole = getRequesterRole(req);
+    if (!isUserAdminRole(requesterRole)) {
+        return res.status(403).json({
+            success: false,
+            error: 'Sem permissao para atualizar configuracoes da conta'
+        });
+    }
 
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
     const incomingSettings = req.body && typeof req.body === 'object' ? req.body : {};

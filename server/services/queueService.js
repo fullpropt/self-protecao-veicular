@@ -884,35 +884,48 @@ class QueueService extends EventEmitter {
      * Cancelar mensagem na fila
      */
     async cancel(messageId, options = {}) {
-        const ownerUserId = Number(options.ownerUserId || 0) || null;
-        await MessageQueue.cancel(messageId, {
+        const normalizedMessageId = Number(messageId);
+        if (!Number.isInteger(normalizedMessageId) || normalizedMessageId <= 0) {
+            return false;
+        }
+
+        const ownerUserId = this.normalizeOwnerUserId(options.ownerUserId || options.owner_user_id || null) || null;
+        const result = await MessageQueue.cancel(normalizedMessageId, {
             owner_user_id: ownerUserId || undefined
         });
-        this.emit('message:cancelled', { id: messageId });
+        const cancelled = Number(result?.changes || 0) > 0;
+        if (cancelled) {
+            this.emit('message:cancelled', { id: normalizedMessageId });
+        }
+        return cancelled;
     }
     
     /**
      * Cancelar todas as mensagens pendentes
      */
     async cancelAll(options = {}) {
-        const ownerUserId = Number(options.ownerUserId || 0) || null;
+        const ownerUserId = this.normalizeOwnerUserId(options.ownerUserId || options.owner_user_id || null) || null;
         const pending = await MessageQueue.getPending({
             owner_user_id: ownerUserId || undefined
         });
+        let cancelledCount = 0;
         for (const message of pending) {
-            await MessageQueue.cancel(message.id, {
+            const result = await MessageQueue.cancel(message.id, {
                 owner_user_id: ownerUserId || undefined
             });
+            if (Number(result?.changes || 0) > 0) {
+                cancelledCount += 1;
+            }
         }
-        this.emit('queue:cleared', { count: pending.length });
-        return pending.length;
+        this.emit('queue:cleared', { count: cancelledCount });
+        return cancelledCount;
     }
     
     /**
      * Obter status da fila
      */
     async getStatus(options = {}) {
-        const ownerUserId = Number(options.ownerUserId || 0) || null;
+        const ownerUserId = this.normalizeOwnerUserId(options.ownerUserId || options.owner_user_id || null) || null;
         const pending = await MessageQueue.getPending({
             owner_user_id: ownerUserId || undefined
         });
@@ -932,7 +945,7 @@ class QueueService extends EventEmitter {
      * Obter mensagens pendentes
      */
     async getPending(options = {}) {
-        const ownerUserId = Number(options.ownerUserId || 0) || null;
+        const ownerUserId = this.normalizeOwnerUserId(options.ownerUserId || options.owner_user_id || null) || null;
         const limit = Number(options.limit || 0) || null;
         return await MessageQueue.getPending({
             owner_user_id: ownerUserId || undefined,
