@@ -845,15 +845,15 @@ export default function Campanhas() {
                                   <label className="form-label">Intervalo entre envios (aleatório, em segundos)</label>
                                   <div className="form-row">
                                       <div className="form-group" style={{ marginBottom: 0 }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                              <input type="number" min={1} step={1} className="form-input" id="campaignDelayMin" defaultValue="5" placeholder="Mínimo" style={{ marginBottom: 0 }} />
-                                              <span style={{ color: 'var(--gray-500)', fontSize: 13, fontWeight: 600, lineHeight: 1 }}>s</span>
+                                          <div style={{ position: 'relative' }}>
+                                              <input type="number" min={1} step={1} className="form-input" id="campaignDelayMin" defaultValue="5" placeholder="Mínimo" style={{ marginBottom: 0, paddingRight: 44 }} />
+                                              <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-500)', fontSize: 13, fontWeight: 600, lineHeight: 1, pointerEvents: 'none' }}>s</span>
                                           </div>
                                       </div>
                                       <div className="form-group" style={{ marginBottom: 0 }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                              <input type="number" min={1} step={1} className="form-input" id="campaignDelayMax" defaultValue="15" placeholder="Máximo" style={{ marginBottom: 0 }} />
-                                              <span style={{ color: 'var(--gray-500)', fontSize: 13, fontWeight: 600, lineHeight: 1 }}>s</span>
+                                          <div style={{ position: 'relative' }}>
+                                              <input type="number" min={1} step={1} className="form-input" id="campaignDelayMax" defaultValue="15" placeholder="Máximo" style={{ marginBottom: 0, paddingRight: 44 }} />
+                                              <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-500)', fontSize: 13, fontWeight: 600, lineHeight: 1, pointerEvents: 'none' }}>s</span>
                                           </div>
                                       </div>
                                   </div>
