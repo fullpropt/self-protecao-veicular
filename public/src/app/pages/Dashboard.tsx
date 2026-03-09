@@ -129,9 +129,9 @@ function DashboardStyles() {
         .events-summary { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: var(--gray-500); }
         .events-summary strong { color: var(--gray-700); }
         .events-list { display: flex; flex-direction: column; gap: 10px; }
-        .events-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(15, 23, 42, 0.24); }
+        .events-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(12, 24, 40, 0.58); }
         .events-row-main { min-width: 0; }
-        .events-row-name { font-weight: 700; color: #e7edf7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .events-row-name { font-weight: 700; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .events-row-key { font-size: 11px; color: var(--gray-500); }
         .events-row-count { font-size: 13px; color: var(--gray-600); white-space: nowrap; }
         .events-row-last { font-size: 12px; color: var(--gray-500); white-space: nowrap; }
@@ -140,9 +140,9 @@ function DashboardStyles() {
         .info-icon { cursor: help; opacity: 0.7; }
         .events-empty { text-align: center; padding: 40px 20px; color: var(--gray-500); }
         .events-empty-emoji { width: 48px; height: 48px; display: block; margin: 0 auto 16px; opacity: 0.6; background-color: var(--gray-400); }
-        .custom-event-status { font-size: 11px; border-radius: 999px; padding: 3px 8px; border: 1px solid rgba(var(--primary-rgb), 0.25); color: var(--gray-500); background: rgba(15, 23, 42, 0.24); white-space: nowrap; }
+        .custom-event-status { font-size: 11px; border-radius: 999px; padding: 3px 8px; border: 1px solid rgba(var(--primary-rgb), 0.25); color: var(--gray-500); background: rgba(12, 24, 40, 0.58); white-space: nowrap; }
         .custom-event-status.active { border-color: rgba(var(--primary-rgb), 0.45); color: #d8f4e6; background: rgba(var(--primary-rgb), 0.13); }
-        .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.4); color: #cbd5e1; }
+        .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.4); color: var(--gray-800); }
         @media (max-width: 768px) {
           .events-create-btn,
           .events-empty-create-btn { display: none !important; }

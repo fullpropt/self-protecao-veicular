@@ -60,9 +60,9 @@ export default function FlowBuilder() {
     <div className="flow-builder-react is-selector-screen">
       <style>{`
         .flow-builder-react {
-            --primary: #178C49;
-            --primary-light: #1FAE5E;
-            --primary-rgb: 23, 140, 73;
+            --primary: #1ef2a3;
+            --primary-light: #59f7be;
+            --primary-rgb: 30, 242, 163;
             --flow-ai-scroll-track: rgba(7, 13, 23, 0.94);
             --flow-ai-scroll-track-border: rgba(255, 255, 255, 0.03);
             --flow-ai-scroll-thumb: rgba(var(--primary-rgb), 0.46);
@@ -184,31 +184,31 @@ export default function FlowBuilder() {
         }
 
         .flow-builder-react .flow-selector-actions .btn-outline {
-            color: #eefbf4;
-            border-color: rgba(25, 195, 125, 0.58);
+            color: #f0fdf6;
+            border-color: rgba(30, 242, 163, 0.62);
             background: rgba(15, 23, 42, 0.44);
-            box-shadow: inset 0 0 0 1px rgba(25, 195, 125, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(30, 242, 163, 0.12);
         }
 
         .flow-builder-react .flow-selector-actions .btn-outline:hover:not(:disabled) {
-            border-color: rgba(52, 211, 153, 0.78);
+            border-color: rgba(89, 247, 190, 0.9);
             background: rgba(18, 44, 38, 0.62);
             color: #f8fff9;
-            box-shadow: 0 10px 24px rgba(25, 195, 125, 0.14);
+            box-shadow: 0 12px 26px rgba(30, 242, 163, 0.2);
         }
 
         .flow-builder-react .flow-selector-actions .btn-primary,
         .flow-builder-react .flow-selector-footer .btn-primary {
             color: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            background: linear-gradient(135deg, #19c37d 0%, #22c55e 100%);
-            box-shadow: 0 10px 24px rgba(25, 195, 125, 0.22);
+            background: linear-gradient(135deg, #1ef2a3 0%, #0fbf7d 100%);
+            box-shadow: 0 12px 28px rgba(30, 242, 163, 0.24);
         }
 
         .flow-builder-react .flow-selector-actions .btn-primary:hover:not(:disabled),
         .flow-builder-react .flow-selector-footer .btn-primary:hover:not(:disabled) {
             background: linear-gradient(135deg, #20cf85 0%, #29d26b 100%);
-            box-shadow: 0 14px 28px rgba(25, 195, 125, 0.28);
+            box-shadow: 0 14px 30px rgba(30, 242, 163, 0.3);
         }
 
         .flow-builder-react .flow-name-highlight {
@@ -410,30 +410,30 @@ export default function FlowBuilder() {
         }
 
         .flow-builder-react .flow-canvas-toolbar .toolbar-btn.secondary {
-            color: #eefbf4;
-            border-color: rgba(25, 195, 125, 0.58);
+            color: #f0fdf6;
+            border-color: rgba(30, 242, 163, 0.62);
             background: rgba(15, 23, 42, 0.92);
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
         }
 
         .flow-builder-react .flow-canvas-toolbar .toolbar-btn.secondary:hover:not(:disabled) {
             color: #f8fff9;
-            border-color: rgba(52, 211, 153, 0.78);
+            border-color: rgba(89, 247, 190, 0.9);
             background: rgba(18, 44, 38, 0.94);
-            box-shadow: 0 12px 28px rgba(25, 195, 125, 0.18);
+            box-shadow: 0 12px 28px rgba(30, 242, 163, 0.22);
             transform: translateY(-1px);
         }
 
         .flow-builder-react .flow-canvas-toolbar .toolbar-btn.primary {
             color: #ffffff;
             border-color: rgba(255, 255, 255, 0.08);
-            background: linear-gradient(135deg, #19c37d 0%, #22c55e 100%);
-            box-shadow: 0 10px 24px rgba(25, 195, 125, 0.24);
+            background: linear-gradient(135deg, #1ef2a3 0%, #0fbf7d 100%);
+            box-shadow: 0 10px 24px rgba(30, 242, 163, 0.26);
         }
 
         .flow-builder-react .flow-canvas-toolbar .toolbar-btn.primary:hover:not(:disabled) {
             background: linear-gradient(135deg, #20cf85 0%, #29d26b 100%);
-            box-shadow: 0 14px 28px rgba(25, 195, 125, 0.3);
+            box-shadow: 0 14px 30px rgba(30, 242, 163, 0.34);
             transform: translateY(-1px);
         }
 
