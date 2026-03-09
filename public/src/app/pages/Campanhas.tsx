@@ -103,6 +103,8 @@ export default function Campanhas() {
             font-size: 18px;
             font-weight: 700;
             margin: 0 0 5px;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
         }
         .campaign-date {
             font-size: 12px;
@@ -110,11 +112,18 @@ export default function Campanhas() {
         }
         .campaign-body {
             padding: 20px;
+            min-width: 0;
+        }
+        .campaign-description {
+            color: var(--gray-600);
+            margin-bottom: 15px;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
         }
         .campaign-stats {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 12px;
             margin-bottom: 20px;
             width: 100%;
         }
@@ -124,15 +133,23 @@ export default function Campanhas() {
             background: var(--gray-50);
             border-radius: var(--border-radius);
             min-width: 0;
+            min-height: 74px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         .campaign-stat-value {
             font-size: 20px;
             font-weight: 700;
+            line-height: 1.1;
+            overflow-wrap: anywhere;
         }
         .campaign-stat-label {
             font-size: 11px;
             color: var(--gray-500);
             text-transform: uppercase;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
         }
         .campaign-progress {
             margin-top: 15px;
@@ -142,7 +159,7 @@ export default function Campanhas() {
             background: var(--gray-50);
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
             flex-wrap: wrap;
         }
@@ -155,9 +172,13 @@ export default function Campanhas() {
             flex-wrap: wrap;
             justify-content: flex-end;
             margin-left: auto;
+            flex: 1 1 220px;
+            min-width: 0;
         }
         .campaign-actions .btn {
-            flex: 0 0 auto;
+            flex: 0 1 auto;
+            min-width: 0;
+            white-space: nowrap;
         }
         @media (max-width: 900px) {
             .campaign-stats {
@@ -166,7 +187,7 @@ export default function Campanhas() {
             }
             .campaign-footer {
                 flex-direction: column;
-                align-items: center;
+                align-items: stretch;
             }
             .campaign-footer > .badge {
                 margin-bottom: 4px;
@@ -174,7 +195,7 @@ export default function Campanhas() {
             .campaign-actions {
                 width: 100%;
                 margin-left: 0;
-                justify-content: center;
+                justify-content: flex-start;
             }
         }
         @media (max-width: 768px) {

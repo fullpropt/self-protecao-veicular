@@ -1884,7 +1884,7 @@ function renderCampaigns() {
                 </div>
                 <div class="campaign-details" id="campaign-details-${c.id}">
                     <div class="campaign-body">
-                        <p style="color: var(--gray-600); margin-bottom: 15px;">${c.description || 'Sem descrição'}</p>
+                        <p class="campaign-description">${c.description || 'Sem descrição'}</p>
                         <div class="campaign-stats">
                             <div class="campaign-stat">
                                 <div class="campaign-stat-value">${formatNumber(c.sent || 0)}</div>
@@ -2218,5 +2218,4 @@ windowAny.switchCampaignTab = switchCampaignTab;
 windowAny.toggleCampaignCardDetails = toggleCampaignCardDetails;
 
 export { initCampanhas };
-
 
