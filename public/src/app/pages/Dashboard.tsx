@@ -88,8 +88,7 @@ function DashboardStyles() {
         .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.4); color: #cbd5e1; }
         @media (max-width: 768px) {
           .events-create-btn,
-          .events-empty-create-btn,
-          .dashboard-fab-add-lead { display: none !important; }
+          .events-empty-create-btn { display: none !important; }
         }
         @media (max-width: 640px) {
           .dashboard-botconversa { gap: 14px; margin-bottom: 16px; }
@@ -683,30 +682,6 @@ function LeadModals() {
   );
 }
 
-function FloatingAddLeadButton() {
-  const globals = window as Window & DashboardGlobals;
-
-  return (
-    <button
-      type="button"
-      className="btn btn-whatsapp btn-icon dashboard-fab-add-lead"
-      style={{
-        position: 'fixed',
-        bottom: '30px',
-        right: '30px',
-        width: '60px',
-        height: '60px',
-        borderRadius: '50%',
-        boxShadow: 'var(--shadow-lg)'
-      }}
-      onClick={() => globals.openModal?.('addLeadModal')}
-      title="Adicionar Lead"
-    >
-      <span className="icon icon-add icon-lg"></span>
-    </button>
-  );
-}
-
 export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
@@ -833,7 +808,6 @@ export default function Dashboard() {
         <Funnel />
       </main>
       <LeadModals />
-      <FloatingAddLeadButton />
     </div>
   );
 }
