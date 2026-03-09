@@ -750,8 +750,8 @@ function renderAutomations() {
         container.innerHTML = `
             <div class="empty-state" style="grid-column: 1 / -1;">
                 <div class="empty-state-icon icon icon-empty icon-lg"></div>
-                <p>Nenhuma automaÃ§Ã£o criada</p>
-                <button class="btn btn-primary mt-3 automation-empty-create-btn" onclick="openAutomationModal()"><span class="icon icon-add icon-sm"></span> Criar AutomaÃ§Ã£o</button>
+                <p>Nenhuma automação criada</p>
+                <button class="btn btn-primary mt-3 automation-empty-create-btn" onclick="openAutomationModal()"><span class="icon icon-add icon-sm"></span> Criar Automação</button>
             </div>
         `;
         return;
@@ -785,7 +785,7 @@ function renderAutomations() {
             </div>
             <div class="automation-details" id="automation-details-${a.id}">
                 <div class="automation-body">
-                    <p style="color: var(--gray-600); margin-bottom: 10px; font-size: 13px;">${escapeAutomationText(a.description || 'Sem descriÃ§Ã£o')}</p>
+                    <p style="color: var(--gray-600); margin-bottom: 10px; font-size: 13px;">${escapeAutomationText(a.description || 'Sem descrição')}</p>
                     <p style="color: var(--gray-500); margin-bottom: 6px; font-size: 12px;"><strong>Contas:</strong> ${escapeAutomationText(getAutomationSessionScopeSummary(a))}</p>
                     <p style="color: var(--gray-500); margin-bottom: 15px; font-size: 12px;"><strong>Tags:</strong> ${escapeAutomationText(getAutomationTagFilterSummary(a))}</p>
                     
@@ -797,20 +797,20 @@ function renderAutomations() {
                         </div>
                     </div>
                     
-                    <div class="automation-arrow">â†“</div>
+                    <div class="automation-arrow">↓</div>
                     
                     <div class="automation-trigger">
                         <div class="automation-trigger-icon action"><span class="icon icon-target icon-sm"></span></div>
                         <div>
-                            <div style="font-weight: 600; font-size: 13px;">AÃ§Ã£o</div>
+                            <div style="font-weight: 600; font-size: 13px;">Ação</div>
                             <div style="font-size: 12px; color: var(--gray-500);">${getActionLabel(a.action_type)}</div>
                         </div>
                     </div>
                 </div>
                 <div class="automation-footer">
                     <div style="font-size: 12px; color: var(--gray-500);">
-                        <strong>${formatNumber(a.executions || 0)}</strong> execuÃ§Ãµes
-                        ${a.last_execution ? `â€¢ Ãšltima: ${timeAgo(a.last_execution)}` : ''}
+                        <strong>${formatNumber(a.executions || 0)}</strong> execuções
+                        ${a.last_execution ? `• Última: ${timeAgo(a.last_execution)}` : ''}
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button class="btn btn-sm btn-outline" onclick="editAutomation(${a.id})"><span class="icon icon-edit icon-sm"></span></button>
@@ -834,7 +834,7 @@ function toggleAutomationCardDetails(id: number, event?: Event) {
 function getTriggerLabel(type: TriggerType | string) {
     const labels = {
         'new_lead': 'Novo lead cadastrado',
-        'status_change': 'MudanÃ§a de status',
+        'status_change': 'Mudança de status',
         'message_received': 'Mensagem recebida',
         'keyword': 'Palavra-chave detectada',
         'schedule': 'Agendamento',
@@ -1167,4 +1167,3 @@ windowAny.editAutomation = editAutomation;
 windowAny.deleteAutomation = deleteAutomation;
 
 export { initAutomacao };
-
