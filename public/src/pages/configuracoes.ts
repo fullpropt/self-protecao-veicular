@@ -1,4 +1,4 @@
-// Configuracoes page logic migrated to module
+﻿// Configuracoes page logic migrated to module
 
 type Settings = {
     company?: { name?: string; cnpj?: string; phone?: string; email?: string };
@@ -145,7 +145,7 @@ const DEFAULT_BUSINESS_HOURS_SETTINGS = {
     start: '08:00',
     end: '18:00'
 };
-const DEFAULT_OUTSIDE_HOURS_AUTO_REPLY_MESSAGE = 'Olá! Nosso atendimento está fora do horário de funcionamento no momento. Retornaremos assim que estivermos online.';
+const DEFAULT_OUTSIDE_HOURS_AUTO_REPLY_MESSAGE = 'OlÃ¡! Nosso atendimento estÃ¡ fora do horÃ¡rio de funcionamento no momento. Retornaremos assim que estivermos online.';
 
 const DEFAULT_NOTIFICATION_SETTINGS = {
     notifyNewLead: true,
@@ -525,7 +525,7 @@ function renderBusinessHoursAccountsManager() {
 
         const businessHours = getBusinessHoursSessionSettings(sessionId);
         const businessStatusClass = businessHours.enabled ? 'connected' : 'disconnected';
-        const businessStatusLabel = businessHours.enabled ? 'Horário comercial ativo' : 'Horário comercial inativo';
+        const businessStatusLabel = businessHours.enabled ? 'HorÃ¡rio comercial ativo' : 'HorÃ¡rio comercial inativo';
         const toggleChecked = businessHours.enabled ? 'checked' : '';
 
         return `
@@ -538,7 +538,7 @@ function renderBusinessHoursAccountsManager() {
                     <span class="connection-status-pill ${businessStatusClass}">${businessStatusLabel}</span>
                 </div>
                 <div class="business-hours-account-controls">
-                    <label class="connection-campaign-toggle">
+                    <label class="business-hours-toggle">
                         <input
                             type="checkbox"
                             class="business-hours-session-enabled-input"
@@ -546,22 +546,24 @@ function renderBusinessHoursAccountsManager() {
                             ${toggleChecked}
                             onchange="toggleBusinessHoursSession('${sessionToken}', this.checked)"
                         />
-                        Ativar horário comercial
+                        <span class="business-hours-toggle-switch" aria-hidden="true"></span>
+                        <span>Ativar horÃ¡rio comercial</span>
                     </label>
+                    <div class="business-hours-toggle-hint">Ative para exibir e configurar mensagem e horÃ¡rio desta conta.</div>
                 </div>
                 ${businessHours.enabled ? `<div class="business-hours-account-body">
                     <div class="form-group business-hours-account-message">
-                        <label class="form-label">Mensagem automática fora do horário</label>
+                        <label class="form-label">Mensagem automÃ¡tica fora do horÃ¡rio</label>
                         <textarea
                             class="form-textarea business-hours-session-message-input"
                             data-session-id="${escapeHtml(sessionId)}"
                             rows="2"
-                            placeholder="Digite a mensagem enviada fora do horário"
+                            placeholder="Digite a mensagem enviada fora do horÃ¡rio"
                             onchange="saveBusinessHoursSession('${sessionToken}')"
                         >${escapeHtml(businessHours.autoReplyMessage)}</textarea>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Início do expediente</label>
+                        <label class="form-label">InÃ­cio do expediente</label>
                         <input
                             type="time"
                             class="form-input business-hours-session-start-input"
@@ -614,9 +616,9 @@ async function saveBusinessHoursSession(sessionToken: string) {
     try {
         await persistBusinessHoursBySessionToServer();
         renderBusinessHoursAccountsManager();
-        showToast('success', 'Sucesso', 'Horários da conta atualizados.');
+        showToast('success', 'Sucesso', 'HorÃ¡rios da conta atualizados.');
     } catch (error) {
-        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nÃ£o foi possÃ­vel sincronizar no servidor');
     }
 }
 
@@ -636,9 +638,9 @@ async function toggleBusinessHoursSession(sessionToken: string, explicitEnabled?
     try {
         await persistBusinessHoursBySessionToServer();
         renderBusinessHoursAccountsManager();
-        showToast('success', 'Sucesso', `Horário comercial ${nextEnabled ? 'ativado' : 'desativado'} para a conta.`);
+        showToast('success', 'Sucesso', `HorÃ¡rio comercial ${nextEnabled ? 'ativado' : 'desativado'} para a conta.`);
     } catch (error) {
-        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nÃ£o foi possÃ­vel sincronizar no servidor');
     }
 }
 
@@ -814,7 +816,7 @@ function normalizePlanStatus(status: unknown) {
     return allowed.has(normalized) ? normalized : 'unknown';
 }
 
-function getPlanStatusLabel(status: string, fallback = 'Não configurado') {
+function getPlanStatusLabel(status: string, fallback = 'NÃ£o configurado') {
     const normalized = normalizePlanStatus(status);
     const labels: Record<string, string> = {
         active: 'Ativo',
@@ -874,10 +876,10 @@ function buildFallbackPlanStatus(): PlanStatusViewModel {
         statusLabel: 'Ativo',
         renewalDate: null,
         lastVerifiedAt: null,
-        provider: 'API não configurada',
+        provider: 'API nÃ£o configurada',
         source: 'local',
         apiConfigured: false,
-        message: 'A confirmação automática do plano via API será habilitada após configurar a integração.'
+        message: 'A confirmaÃ§Ã£o automÃ¡tica do plano via API serÃ¡ habilitada apÃ³s configurar a integraÃ§Ã£o.'
     };
 }
 
@@ -947,7 +949,7 @@ function renderPlanStatus() {
                     <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.renewalDate))}" readonly />
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Última confirmação</label>
+                    <label class="form-label">Ãšltima confirmaÃ§Ã£o</label>
                     <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.lastVerifiedAt))}" readonly />
                 </div>
             </div>
@@ -970,7 +972,7 @@ async function loadPlanStatus(options: { silent?: boolean } = {}) {
             planStatusCache = buildFallbackPlanStatus();
         }
         if (shouldShowLoading) {
-            showToast('warning', 'Aviso', 'Não foi possível carregar o status do plano');
+            showToast('warning', 'Aviso', 'NÃ£o foi possÃ­vel carregar o status do plano');
         }
     } finally {
         planStatusLoading = false;
@@ -987,7 +989,7 @@ async function refreshPlanStatus() {
         showToast('success', 'Sucesso', 'Situacao do plano atualizada');
     } catch (error) {
         await loadPlanStatus({ silent: true });
-        showToast('warning', 'Aviso', 'Não foi possível confirmar o plano via API');
+        showToast('warning', 'Aviso', 'NÃ£o foi possÃ­vel confirmar o plano via API');
     } finally {
         planStatusLoading = false;
         renderPlanStatus();
@@ -1013,9 +1015,9 @@ async function saveGeneralSettings() {
             company_phone: company.phone,
             company_email: company.email
         });
-        showToast('success', 'Sucesso', 'Configurações salvas!');
+        showToast('success', 'Sucesso', 'ConfiguraÃ§Ãµes salvas!');
     } catch (error) {
-        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nÃ£o foi possÃ­vel sincronizar no servidor');
     }
 }
 
@@ -1023,9 +1025,9 @@ async function saveBusinessHoursSettings() {
     try {
         await persistBusinessHoursBySessionToServer();
         renderBusinessHoursAccountsManager();
-        showToast('success', 'Sucesso', 'Horários atualizados!');
+        showToast('success', 'Sucesso', 'HorÃ¡rios atualizados!');
     } catch (error) {
-        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nÃ£o foi possÃ­vel sincronizar no servidor');
     }
 }
 
@@ -1109,17 +1111,17 @@ async function createSettingsTag() {
 
         const reloadSucceeded = await loadSettingsTags();
         if (!reloadSucceeded) {
-            showToast('warning', 'Aviso', 'Etiqueta criada, mas nÃ£o foi possÃ­vel atualizar a lista agora');
+            showToast('warning', 'Aviso', 'Etiqueta criada, mas nÃƒÂ£o foi possÃƒÂ­vel atualizar a lista agora');
             return;
         }
         showToast('success', 'Sucesso', 'Etiqueta criada!');
     } catch (error: any) {
         const message = String(error?.message || '').toLowerCase();
         if (message.includes('409') || message.includes('ja existe')) {
-            showToast('warning', 'Aviso', 'Já existe uma etiqueta com esse nome');
+            showToast('warning', 'Aviso', 'JÃ¡ existe uma etiqueta com esse nome');
             return;
         }
-        showToast('error', 'Erro', 'Não foi possível criar a etiqueta');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel criar a etiqueta');
     }
 }
 
@@ -1135,7 +1137,7 @@ async function updateSettingsTag(id: number) {
     const description = ((row.querySelector('.settings-tag-description') as HTMLInputElement | null)?.value || '').trim();
 
     if (!name) {
-        showToast('warning', 'Aviso', 'Nome da etiqueta é obrigatório');
+        showToast('warning', 'Aviso', 'Nome da etiqueta Ã© obrigatÃ³rio');
         return;
     }
 
@@ -1150,10 +1152,10 @@ async function updateSettingsTag(id: number) {
     } catch (error: any) {
         const message = String(error?.message || '').toLowerCase();
         if (message.includes('409') || message.includes('ja existe')) {
-            showToast('warning', 'Aviso', 'Já existe uma etiqueta com esse nome');
+            showToast('warning', 'Aviso', 'JÃ¡ existe uma etiqueta com esse nome');
             return;
         }
-        showToast('error', 'Erro', 'Não foi possível atualizar a etiqueta');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel atualizar a etiqueta');
     }
 }
 
@@ -1169,7 +1171,7 @@ async function deleteSettingsTag(id: number) {
         }
         showToast('success', 'Sucesso', 'Etiqueta removida!');
     } catch (error) {
-        showToast('error', 'Erro', 'Não foi possível remover a etiqueta');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel remover a etiqueta');
     }
 }
 
@@ -1307,7 +1309,7 @@ async function persistContactFields(showSuccess = true) {
     await api.put('/api/contact-fields', { fields: payload });
     await loadContactFields();
     if (showSuccess) {
-        showToast('success', 'Sucesso', 'Campos dinâmicos atualizados!');
+        showToast('success', 'Sucesso', 'Campos dinÃ¢micos atualizados!');
     }
 }
 
@@ -1521,9 +1523,9 @@ function renderTemplateCard(template: TemplateItem) {
     const body = mediaType === 'audio'
         ? `
             <div class="template-audio">
-                ${audioUrl ? `<audio controls preload="metadata" src="${audioUrl}"></audio>` : `<p class="text-muted">Nenhum áudio enviado.</p>`}
+                ${audioUrl ? `<audio controls preload="metadata" src="${audioUrl}"></audio>` : `<p class="text-muted">Nenhum Ã¡udio enviado.</p>`}
                 <input type="file" class="form-input template-audio-input" accept="audio/*" onchange="replaceTemplateAudio(${template.id}, event)" />
-                <small class="text-muted">Envie um novo áudio para substituir o atual.</small>
+                <small class="text-muted">Envie um novo Ã¡udio para substituir o atual.</small>
             </div>
         `
         : `
@@ -1553,7 +1555,7 @@ async function saveTemplateInternal(card: HTMLElement, showToastMessage = true) 
     const name = nameInput?.value.trim() || '';
 
     if (!id || !name) {
-        if (showToastMessage) showToast('warning', 'Aviso', 'Preencha o título da resposta rápida');
+        if (showToastMessage) showToast('warning', 'Aviso', 'Preencha o tÃ­tulo da resposta rÃ¡pida');
         return;
     }
 
@@ -1564,7 +1566,7 @@ async function saveTemplateInternal(card: HTMLElement, showToastMessage = true) 
 
     if (mediaType === 'audio') {
         if (!mediaUrl) {
-            if (showToastMessage) showToast('warning', 'Aviso', 'Envie um áudio para a resposta rápida');
+            if (showToastMessage) showToast('warning', 'Aviso', 'Envie um Ã¡udio para a resposta rÃ¡pida');
             return;
         }
         payload.media_type = 'audio';
@@ -1572,7 +1574,7 @@ async function saveTemplateInternal(card: HTMLElement, showToastMessage = true) 
     } else {
         const content = contentInput?.value.trim() || '';
         if (!content) {
-            if (showToastMessage) showToast('warning', 'Aviso', 'Preencha a mensagem da resposta rápida');
+            if (showToastMessage) showToast('warning', 'Aviso', 'Preencha a mensagem da resposta rÃ¡pida');
             return;
         }
         payload.content = content;
@@ -1580,7 +1582,7 @@ async function saveTemplateInternal(card: HTMLElement, showToastMessage = true) 
 
     await api.put(`/api/templates/${id}`, payload);
     if (showToastMessage) {
-        showToast('success', 'Sucesso', 'Resposta rápida atualizada!');
+        showToast('success', 'Sucesso', 'Resposta rÃ¡pida atualizada!');
     }
 }
 
@@ -1590,14 +1592,14 @@ async function saveTemplate(id: number) {
     try {
         await saveTemplateInternal(card, true);
     } catch (error) {
-        showToast('error', 'Erro', 'Não foi possível salvar');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel salvar');
     }
 }
 
 async function saveCopysSettings() {
     const cards = Array.from(document.querySelectorAll('.template-card')) as HTMLElement[];
     if (!cards.length) {
-        showToast('info', 'Info', 'Nenhuma resposta rápida para salvar');
+        showToast('info', 'Info', 'Nenhuma resposta rÃ¡pida para salvar');
         return;
     }
 
@@ -1606,9 +1608,9 @@ async function saveCopysSettings() {
             await saveTemplateInternal(card, false);
         }
         await loadTemplates();
-        showToast('success', 'Sucesso', 'Respostas rápidas salvas!');
+        showToast('success', 'Sucesso', 'Respostas rÃ¡pidas salvas!');
     } catch (error) {
-        showToast('error', 'Erro', 'Não foi possível salvar as respostas rápidas');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel salvar as respostas rÃ¡pidas');
     }
 }
 
@@ -1617,9 +1619,9 @@ async function deleteTemplate(id: number) {
     try {
         await api.delete(`/api/templates/${id}`);
         await loadTemplates();
-        showToast('success', 'Sucesso', 'Resposta rápida removida!');
+        showToast('success', 'Sucesso', 'Resposta rÃ¡pida removida!');
     } catch (error) {
-        showToast('error', 'Erro', 'Não foi possível remover');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel remover');
     }
 }
 
@@ -1629,7 +1631,7 @@ async function replaceTemplateAudio(id: number, event: Event) {
     if (!file) return;
 
     try {
-        showLoading('Enviando áudio...');
+        showLoading('Enviando Ã¡udio...');
         const uploaded = await uploadFile(file);
         hideLoading();
 
@@ -1638,17 +1640,17 @@ async function replaceTemplateAudio(id: number, event: Event) {
         const name = nameInput?.value.trim() || '';
 
         await api.put(`/api/templates/${id}`, {
-            name: name || `Resposta rápida ${id}`,
+            name: name || `Resposta rÃ¡pida ${id}`,
             category: 'quick_reply',
             media_type: 'audio',
             media_url: uploaded.url,
             content: ''
         });
         await loadTemplates();
-        showToast('success', 'Sucesso', 'Áudio atualizado!');
+        showToast('success', 'Sucesso', 'Ãudio atualizado!');
     } catch (error) {
         hideLoading();
-        showToast('error', 'Erro', 'Não foi possível atualizar o áudio');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel atualizar o Ã¡udio');
     } finally {
         if (target) target.value = '';
     }
@@ -1692,14 +1694,14 @@ async function saveNewTemplate() {
     const message = (document.getElementById('newTemplateMessage') as HTMLTextAreaElement | null)?.value.trim() || '';
     const audioInput = document.getElementById('newTemplateAudio') as HTMLInputElement | null;
     const audioFile = audioInput?.files?.[0];
-    if (!name) { showToast('error', 'Erro', 'Preencha o título da resposta rápida'); return; }
+    if (!name) { showToast('error', 'Erro', 'Preencha o tÃ­tulo da resposta rÃ¡pida'); return; }
     try {
         if (type === 'audio') {
             if (!audioFile) {
-                showToast('error', 'Erro', 'Selecione um arquivo de áudio');
+                showToast('error', 'Erro', 'Selecione um arquivo de Ã¡udio');
                 return;
             }
-            showLoading('Enviando áudio...');
+            showLoading('Enviando Ã¡udio...');
             const uploaded = await uploadFile(audioFile);
             hideLoading();
             await api.post('/api/templates', {
@@ -1728,10 +1730,10 @@ async function saveNewTemplate() {
         if (newTemplateType) newTemplateType.value = 'text';
         updateNewTemplateForm();
         await loadTemplates();
-        showToast('success', 'Sucesso', 'Resposta rápida adicionada!');
+        showToast('success', 'Sucesso', 'Resposta rÃ¡pida adicionada!');
     } catch (error) {
         hideLoading();
-        showToast('error', 'Erro', 'Não foi possível adicionar a resposta rápida');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel adicionar a resposta rÃ¡pida');
     }
 }
 
@@ -1800,7 +1802,7 @@ function renderWhatsAppAccountsManager() {
                         />
                     </div>
                     <div class="form-group connection-account-inline-field">
-                        <label class="form-label">Limite diário</label>
+                        <label class="form-label">Limite diÃ¡rio</label>
                         <input
                             type="number"
                             min="0"
@@ -1810,7 +1812,7 @@ function renderWhatsAppAccountsManager() {
                             value="${dailyLimit}"
                         />
                     </div>
-                    <label class="connection-campaign-toggle" title="Participa de campanhas e transmissões">
+                    <label class="connection-campaign-toggle" title="Participa de campanhas e transmissÃµes">
                         <input
                             type="checkbox"
                             class="connection-session-enabled-input"
@@ -1871,10 +1873,10 @@ async function saveWhatsAppSessionName(sessionToken: string) {
             daily_limit: dailyLimit,
             dispatch_weight: dispatchWeight
         });
-        showToast('success', 'Sucesso', 'Configurações da conta atualizadas.');
+        showToast('success', 'Sucesso', 'ConfiguraÃ§Ãµes da conta atualizadas.');
         await refreshWhatsAppAccounts();
     } catch (error) {
-        showToast('error', 'Erro', 'Não foi possível atualizar a conta.');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel atualizar a conta.');
     }
 }
 
@@ -1894,7 +1896,7 @@ async function removeWhatsAppSession(sessionToken: string) {
         showToast('success', 'Sucesso', 'Conta removida.');
         await refreshWhatsAppAccounts();
     } catch (error) {
-        showToast('error', 'Erro', 'Não foi possível remover a conta.');
+        showToast('error', 'Erro', 'NÃ£o foi possÃ­vel remover a conta.');
     }
 }
 
@@ -1909,7 +1911,7 @@ async function connectWhatsApp() {
             if (qrContainer) qrContainer.style.display = 'block';
             if (qrCode) qrCode.innerHTML = `<img src="${response.qr}" alt="QR Code" style="max-width: 250px;">`;
         }
-    } catch (error) { hideLoading(); showToast('error', 'Erro', 'Não foi possível gerar o QR Code'); }
+    } catch (error) { hideLoading(); showToast('error', 'Erro', 'NÃ£o foi possÃ­vel gerar o QR Code'); }
 }
 
 async function disconnectWhatsApp() {
@@ -1925,7 +1927,7 @@ function saveWhatsAppSettings() {
         workEnd: (document.getElementById('workEnd') as HTMLInputElement | null)?.value || ''
     };
     writeLocalSettingsStorage(settings);
-    showToast('success', 'Sucesso', 'Configurações salvas!');
+    showToast('success', 'Sucesso', 'ConfiguraÃ§Ãµes salvas!');
 }
 
 async function saveAiSettings() {
@@ -1939,9 +1941,9 @@ async function saveAiSettings() {
         await api.put('/api/settings', {
             ai_assistant: ai
         });
-        showToast('success', 'Sucesso', 'Configurações de Inteligência Artificial salvas!');
+        showToast('success', 'Sucesso', 'ConfiguraÃ§Ãµes de InteligÃªncia Artificial salvas!');
     } catch (error) {
-        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nÃ£o foi possÃ­vel sincronizar no servidor');
     }
 }
 
@@ -1960,7 +1962,7 @@ async function saveNotificationSettings() {
         });
         showToast('success', 'Sucesso', 'Notificacoes salvas!');
     } catch (error) {
-        showToast('warning', 'Aviso', 'Salvo localmente, mas não foi possível sincronizar no servidor');
+        showToast('warning', 'Aviso', 'Salvo localmente, mas nÃ£o foi possÃ­vel sincronizar no servidor');
     }
 }
 
@@ -1975,7 +1977,7 @@ function getUserRoleLabel(role: unknown) {
     const normalized = normalizeUserRole(role);
     if (normalized === 'admin') return 'Administrador';
     if (normalized === 'supervisor') return 'Supervisor';
-    return 'Usuário';
+    return 'UsuÃ¡rio';
 }
 
 function getUserRoleBadgeClass(role: unknown) {
@@ -2086,7 +2088,7 @@ function renderUsersTable() {
             <tr>
                 <td colspan="5" class="table-empty">
                     <div class="table-empty-icon icon icon-empty icon-lg"></div>
-                    <p>Nenhum usuário encontrado</p>
+                    <p>Nenhum usuÃ¡rio encontrado</p>
                 </td>
             </tr>
         `;
@@ -2110,7 +2112,7 @@ function renderUsersTable() {
                 <td><span class="badge ${active ? 'badge-success' : 'badge-secondary'}">${active ? 'Ativo' : 'Inativo'}</span></td>
                 <td>
                     ${canEdit ? `
-                    <button class="btn btn-sm btn-outline" onclick="openEditUserModal(${userId})" title="Editar usuário">
+                    <button class="btn btn-sm btn-outline" onclick="openEditUserModal(${userId})" title="Editar usuÃ¡rio">
                         <span class="icon icon-edit icon-sm"></span>
                     </button>
                     ` : ''}
@@ -2133,7 +2135,7 @@ async function loadUsers(options: { silent?: boolean } = {}) {
             <tr>
                 <td colspan="5" class="table-empty">
                     <div class="table-empty-icon icon icon-empty icon-lg"></div>
-                    <p>Carregando usuários...</p>
+                    <p>Carregando usuÃ¡rios...</p>
                 </td>
             </tr>
         `;
@@ -2152,14 +2154,14 @@ async function loadUsers(options: { silent?: boolean } = {}) {
                 <tr>
                     <td colspan="5" class="table-empty">
                         <div class="table-empty-icon icon icon-empty icon-lg"></div>
-                        <p>Não foi possível carregar os usuários</p>
+                        <p>NÃ£o foi possÃ­vel carregar os usuÃ¡rios</p>
                     </td>
                 </tr>
             `;
         }
         const message = String(error?.message || '').toLowerCase();
         if (message.includes('permiss')) {
-            showToast('warning', 'Aviso', 'Sua conta não tem permissão para listar todos os usuários.');
+            showToast('warning', 'Aviso', 'Sua conta nÃ£o tem permissÃ£o para listar todos os usuÃ¡rios.');
         }
     }
 }
@@ -2170,12 +2172,12 @@ function openEditUserModal(id: number) {
 
     const user = usersCache.find((item) => Number(item.id) === userId);
     if (!user) {
-        showToast('warning', 'Aviso', 'Usuário não encontrado');
+        showToast('warning', 'Aviso', 'UsuÃ¡rio nÃ£o encontrado');
         return;
     }
     const isPrimaryAdmin = isManagedUserPrimaryAdmin(user);
     if (isPrimaryAdmin && !isCurrentUserOwnerAdmin()) {
-        showToast('warning', 'Aviso', 'Somente o admin principal pode editar os próprios dados');
+        showToast('warning', 'Aviso', 'Somente o admin principal pode editar os prÃ³prios dados');
         return;
     }
 
@@ -2210,14 +2212,14 @@ async function updateUser() {
     const name = String(editUserName?.value || '').trim();
 
     if (!id || !name) {
-        showToast('error', 'Erro', 'Nome é obrigatório');
+        showToast('error', 'Erro', 'Nome Ã© obrigatÃ³rio');
         return;
     }
 
     const editedUser = usersCache.find((item) => Number(item.id) === id);
     const isPrimaryAdmin = isManagedUserPrimaryAdmin(editedUser);
     if (isPrimaryAdmin && !isCurrentUserOwnerAdmin()) {
-        showToast('warning', 'Aviso', 'Somente o admin principal pode editar os próprios dados');
+        showToast('warning', 'Aviso', 'Somente o admin principal pode editar os prÃ³prios dados');
         return;
     }
     const payload: Record<string, unknown> = { name };
@@ -2230,9 +2232,9 @@ async function updateUser() {
         await api.put(`/api/users/${id}`, payload);
         closeModal('editUserModal');
         await loadUsers();
-        showToast('success', 'Sucesso', 'Usuário atualizado!');
+        showToast('success', 'Sucesso', 'UsuÃ¡rio atualizado!');
     } catch (error: any) {
-        showToast('error', 'Erro', error?.message || 'Não foi possível atualizar o usuário');
+        showToast('error', 'Erro', error?.message || 'NÃ£o foi possÃ­vel atualizar o usuÃ¡rio');
     }
 }
 
@@ -2269,9 +2271,9 @@ async function addUser() {
         if (newUserPassword) newUserPassword.value = '';
         if (newUserRole) newUserRole.value = 'agent';
         await loadUsers();
-        showToast('success', 'Sucesso', 'Usuário adicionado!');
+        showToast('success', 'Sucesso', 'UsuÃ¡rio adicionado!');
     } catch (error: any) {
-        showToast('error', 'Erro', error?.message || 'Não foi possível adicionar o usuário');
+        showToast('error', 'Erro', error?.message || 'NÃ£o foi possÃ­vel adicionar o usuÃ¡rio');
     }
 }
 
@@ -2283,13 +2285,13 @@ async function deleteUser(id: number) {
 
     const userId = Number(id);
     if (!Number.isFinite(userId) || userId <= 0) {
-        showToast('error', 'Erro', 'Usuário inválido');
+        showToast('error', 'Erro', 'UsuÃ¡rio invÃ¡lido');
         return;
     }
 
     const user = usersCache.find((item) => Number(item.id) === userId);
     if (isManagedUserPrimaryAdmin(user)) {
-        showToast('warning', 'Aviso', 'Não é permitido remover o admin principal da conta');
+        showToast('warning', 'Aviso', 'NÃ£o Ã© permitido remover o admin principal da conta');
         return;
     }
     const name = String(user?.name || 'este usuario');
@@ -2309,14 +2311,14 @@ async function confirmDeleteUser() {
     const confirmDeleteUserId = document.getElementById('confirmDeleteUserId') as HTMLInputElement | null;
     const userId = Number(confirmDeleteUserId?.value || 0);
     if (!Number.isFinite(userId) || userId <= 0) {
-        showToast('error', 'Erro', 'Usuário inválido');
+        showToast('error', 'Erro', 'UsuÃ¡rio invÃ¡lido');
         return;
     }
     const user = usersCache.find((item) => Number(item.id) === userId);
     if (isManagedUserPrimaryAdmin(user)) {
         closeModal('confirmDeleteUserModal');
         if (confirmDeleteUserId) confirmDeleteUserId.value = '';
-        showToast('warning', 'Aviso', 'Não é permitido remover o admin principal da conta');
+        showToast('warning', 'Aviso', 'NÃ£o Ã© permitido remover o admin principal da conta');
         return;
     }
 
@@ -2325,9 +2327,9 @@ async function confirmDeleteUser() {
         closeModal('confirmDeleteUserModal');
         if (confirmDeleteUserId) confirmDeleteUserId.value = '';
         await loadUsers();
-        showToast('success', 'Sucesso', 'Usuário removido!');
+        showToast('success', 'Sucesso', 'UsuÃ¡rio removido!');
     } catch (error: any) {
-        showToast('error', 'Erro', error?.message || 'Não foi possível remover o usuário');
+        showToast('error', 'Erro', error?.message || 'NÃ£o foi possÃ­vel remover o usuÃ¡rio');
     }
 }
 
@@ -2368,7 +2370,7 @@ async function confirmDeleteAccount() {
             window.location.reload();
         }, 400);
     } catch (error: any) {
-        showToast('error', 'Erro', error?.message || 'Não foi possível excluir a conta');
+        showToast('error', 'Erro', error?.message || 'NÃ£o foi possÃ­vel excluir a conta');
     }
 }
 
@@ -2381,7 +2383,7 @@ async function changePassword() {
     const newPass = (document.getElementById('newPassword') as HTMLInputElement | null)?.value || '';
     const confirm = (document.getElementById('confirmPassword') as HTMLInputElement | null)?.value || '';
     if (!current || !newPass || !confirm) { showToast('error', 'Erro', 'Preencha todos os campos'); return; }
-    if (newPass !== confirm) { showToast('error', 'Erro', 'As senhas não conferem'); return; }
+    if (newPass !== confirm) { showToast('error', 'Erro', 'As senhas nÃ£o conferem'); return; }
     if (newPass.length < 6) { showToast('error', 'Erro', 'A senha deve ter pelo menos 6 caracteres'); return; }
 
     try {
@@ -2397,7 +2399,7 @@ async function changePassword() {
         if (newPassword) newPassword.value = '';
         if (confirmPassword) confirmPassword.value = '';
     } catch (error: any) {
-        showToast('error', 'Erro', error?.message || 'Não foi possível alterar a senha');
+        showToast('error', 'Erro', error?.message || 'NÃ£o foi possÃ­vel alterar a senha');
     }
 }
 
@@ -2412,8 +2414,8 @@ async function regenerateApiKey() {
     if (apiKey) apiKey.value = 'sk_live_' + Math.random().toString(36).substring(2, 15);
     showToast('success', 'Sucesso', 'Nova API Key gerada!');
 }
-function testWebhook() { showToast('info', 'Testando', 'Enviando requisição de teste...'); setTimeout(() => { showToast('success', 'Sucesso', 'Webhook respondeu corretamente!'); }, 1500); }
-function saveApiSettings() { showToast('success', 'Sucesso', 'Configurações de API salvas!'); }
+function testWebhook() { showToast('info', 'Testando', 'Enviando requisiÃ§Ã£o de teste...'); setTimeout(() => { showToast('success', 'Sucesso', 'Webhook respondeu corretamente!'); }, 1500); }
+function saveApiSettings() { showToast('success', 'Sucesso', 'ConfiguraÃ§Ãµes de API salvas!'); }
 
 const windowAny = window as Window & {
     initConfiguracoes?: () => void;
@@ -2513,3 +2515,4 @@ windowAny.saveApiSettings = saveApiSettings;
 windowAny.loadPlanStatus = loadPlanStatus;
 
 export { initConfiguracoes };
+
