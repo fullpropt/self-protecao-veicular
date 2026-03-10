@@ -5038,16 +5038,26 @@ function normalizeAutomationContext(context = {}) {
 async function resolveAutomationOwnerScopeUserId(context = {}) {
     const normalizedContext = normalizeAutomationContext(context);
 
+    const leadOwnerUserId = normalizeOwnerUserId(normalizedContext?.lead?.owner_user_id);
+    if (leadOwnerUserId) {
+        return leadOwnerUserId;
+    }
+
+    const assigneeOwnerUserId = await resolveOwnerScopeUserIdFromAssignees(
+        normalizedContext?.conversation?.assigned_to,
+        normalizedContext?.lead?.assigned_to
+    );
+    if (assigneeOwnerUserId) {
+        return assigneeOwnerUserId;
+    }
+
     const rawSessionId = String(context?.sessionId || context?.session_id || '').trim();
     if (rawSessionId) {
         const sessionOwnerUserId = await resolveSessionOwnerUserId(normalizedContext.sessionId);
         if (sessionOwnerUserId) return sessionOwnerUserId;
     }
 
-    return await resolveOwnerScopeUserIdFromAssignees(
-        normalizedContext?.conversation?.assigned_to,
-        normalizedContext?.lead?.assigned_to
-    );
+    return null;
 }
 
 function parseAutomationSessionScope(value) {
