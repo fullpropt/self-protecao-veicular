@@ -14439,7 +14439,7 @@ async function reschedulePendingCampaignQueueByStartAt(campaign, previousStartAt
 
         const result = await run(`
             UPDATE message_queue
-            SET scheduled_at = ?, updated_at = CURRENT_TIMESTAMP
+            SET scheduled_at = ?
             WHERE id = ?
               AND status = 'pending'
         `, [new Date(shiftedScheduledAtMs).toISOString(), queueId]);
