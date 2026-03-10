@@ -14396,6 +14396,66 @@ function parseCampaignStartAt(startAt) {
 
 }
 
+async function reschedulePendingCampaignQueueByStartAt(campaign, previousStartAt = null) {
+    const campaignId = Number(campaign?.id || 0);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+        return { updated: 0, reason: 'invalid_campaign' };
+    }
+
+    const pendingQueueRows = await query(`
+        SELECT id, scheduled_at
+        FROM message_queue
+        WHERE campaign_id = ?
+          AND status = 'pending'
+        ORDER BY id ASC
+    `, [campaignId]);
+
+    if (!pendingQueueRows.length) {
+        return { updated: 0, reason: 'no_pending_messages' };
+    }
+
+    const previousStartAtMs = parseCampaignStartAt(previousStartAt);
+    const nextStartAtMs = parseCampaignStartAt(campaign?.start_at) || Date.now();
+    const sendWindowConfig = normalizeCampaignSendWindowConfig(campaign);
+
+    let referenceStartAtMs = previousStartAtMs;
+    if (!Number.isFinite(referenceStartAtMs)) {
+        const firstScheduledAtMs = parseCampaignStartAt(pendingQueueRows[0]?.scheduled_at);
+        referenceStartAtMs = Number.isFinite(firstScheduledAtMs) ? firstScheduledAtMs : Date.now();
+    }
+
+    const deltaMs = Number(nextStartAtMs) - Number(referenceStartAtMs);
+    let updated = 0;
+
+    for (const queueRow of pendingQueueRows) {
+        const queueId = Number(queueRow?.id || 0);
+        if (!Number.isInteger(queueId) || queueId <= 0) continue;
+
+        const currentScheduledAtMs = parseCampaignStartAt(queueRow?.scheduled_at) || Number(referenceStartAtMs);
+        const shiftedScheduledAtMs = alignCampaignScheduleToSendWindow(
+            Number(currentScheduledAtMs) + deltaMs,
+            sendWindowConfig
+        );
+
+        const result = await run(`
+            UPDATE message_queue
+            SET scheduled_at = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND status = 'pending'
+        `, [new Date(shiftedScheduledAtMs).toISOString(), queueId]);
+
+        if (Number(result?.changes || 0) > 0) {
+            updated += 1;
+        }
+    }
+
+    return {
+        updated,
+        totalPending: pendingQueueRows.length,
+        delta_ms: deltaMs
+    };
+}
+
 
 function parseLeadTags(rawTags) {
     return uniqueUnifiedTagLabels(parseUnifiedTagList(rawTags));
@@ -15251,6 +15311,12 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
             : null;
         const payload = sanitizeCampaignPayload(req.body, { applyDefaultType: false });
         const requestedStatus = String(payload?.status || '').trim().toLowerCase();
+        const startAtProvided = Object.prototype.hasOwnProperty.call(payload, 'start_at');
+        const previousStartAtMs = parseCampaignStartAt(campaign?.start_at);
+        const nextStartAtMs = startAtProvided
+            ? parseCampaignStartAt(payload?.start_at)
+            : previousStartAtMs;
+        const startAtChanged = startAtProvided && previousStartAtMs !== nextStartAtMs;
         const shouldActivate = requestedStatus === 'active' && (campaign.status !== 'active' || restartRequested);
         let shouldQueue = false;
         if (shouldActivate) {
@@ -15263,6 +15329,11 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
             }
             shouldQueue = restartRequested ? true : !hasPendingOrProcessing;
         }
+        const shouldReschedulePendingStartAt = startAtChanged
+            && !shouldQueue
+            && !restartRequested
+            && (!requestedStatus || requestedStatus === 'active')
+            && String(campaign.status || '').trim().toLowerCase() === 'active';
         const payloadBeforeQueue = { ...payload };
         if (shouldQueue) {
             // Evita deixar campanha "ativa" quando o enfileiramento falha.
@@ -15287,6 +15358,38 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
                 ownerUserId: ownerScopeUserId || undefined,
                 forceRequeueAll: restartRequested
             });
+            updatedCampaign = await attachCampaignSenderAccounts(await Campaign.findById(req.params.id, {
+                created_by: scopedUserId || undefined,
+                owner_user_id: ownerScopeUserId || undefined
+            }));
+            updatedCampaign = await attachCampaignQueueState(updatedCampaign);
+        } else if (
+            shouldReschedulePendingStartAt
+            && updatedCampaign
+            && String(updatedCampaign.status || '').trim().toLowerCase() === 'active'
+        ) {
+            const progress = await MessageQueue.getCampaignProgress(updatedCampaign.id);
+            if (Number(progress?.processing || 0) > 0) {
+                queueResult = {
+                    ...queueResult,
+                    rescheduled: false,
+                    reschedule_reason: 'queue_processing',
+                    queue_progress: progress
+                };
+            } else {
+                const rescheduleResult = await reschedulePendingCampaignQueueByStartAt(
+                    updatedCampaign,
+                    campaign.start_at
+                );
+                queueResult = {
+                    ...queueResult,
+                    rescheduled: Number(rescheduleResult?.updated || 0) > 0,
+                    rescheduled_pending: Number(rescheduleResult?.updated || 0),
+                    reschedule_reason: rescheduleResult?.reason || null,
+                    reschedule_delta_ms: Number(rescheduleResult?.delta_ms || 0) || 0
+                };
+            }
+
             updatedCampaign = await attachCampaignSenderAccounts(await Campaign.findById(req.params.id, {
                 created_by: scopedUserId || undefined,
                 owner_user_id: ownerScopeUserId || undefined

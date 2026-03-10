@@ -224,10 +224,44 @@ export default function Contatos() {
           display: none;
         }
         .contatos-react .edit-contact-tags-suggestions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 8px;
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          z-index: 80;
+          border: 1px solid var(--border-color);
+          border-radius: 0 0 var(--border-radius) var(--border-radius);
+          background: var(--surface);
+          max-height: 220px;
+          overflow-y: auto;
+          box-shadow: var(--shadow-lg);
+        }
+        .contatos-react .edit-contact-tags-option {
+          width: 100%;
+          border: 0;
+          border-bottom: 1px solid rgba(var(--primary-rgb), 0.12);
+          background: transparent;
+          color: var(--dark);
+          padding: 10px 14px;
+          text-align: left;
+          cursor: pointer;
+          font-size: 14px;
+          line-height: 1.2;
+        }
+        .contatos-react .edit-contact-tags-option:last-child {
+          border-bottom: 0;
+        }
+        .contatos-react .edit-contact-tags-option:hover {
+          background: rgba(var(--primary-rgb), 0.12);
+        }
+        .contatos-react .edit-contact-tags-option.is-selected {
+          background: rgba(var(--primary-rgb), 0.32);
+          color: #ffffff;
+        }
+        .contatos-react .edit-contact-tags-empty {
+          padding: 10px 14px;
+          color: var(--gray-500);
+          font-size: 13px;
         }
       `}</style>
       <button
@@ -606,13 +640,13 @@ export default function Contatos() {
                     >
                       ▾
                     </button>
+                    <div
+                      id="editContactTagsSuggestions"
+                      className="edit-contact-tags-suggestions"
+                      hidden
+                    ></div>
                   </div>
                   <datalist id="editContactTagsOptions"></datalist>
-                  <div
-                    id="editContactTagsSuggestions"
-                    className="edit-contact-tags-suggestions"
-                    hidden
-                  ></div>
                   <p className="form-help">Use as etiquetas cadastradas abaixo ou separe multiplas tags por virgula.</p>
                 </div>
                 <div className="form-row" id="editContactCustomFields"></div>

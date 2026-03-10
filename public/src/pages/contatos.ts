@@ -1151,7 +1151,7 @@ function renderEditContactTagSuggestions() {
     if (!suggestions) return;
 
     if (!tagNames.length) {
-        suggestions.innerHTML = '';
+        suggestions.innerHTML = '<div class="edit-contact-tags-empty">Nenhuma tag cadastrada</div>';
         return;
     }
 
@@ -1162,8 +1162,10 @@ function renderEditContactTagSuggestions() {
     suggestions.innerHTML = tagNames
         .map((name) => {
             const selected = selectedTagKeys.has(name.toLowerCase());
-            const buttonClassName = selected ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
-            return `<button type="button" class="${buttonClassName}" data-edit-contact-tag-option="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+            const optionClassName = selected
+                ? 'edit-contact-tags-option is-selected'
+                : 'edit-contact-tags-option';
+            return `<button type="button" class="${optionClassName}" data-edit-contact-tag-option="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
         })
         .join('');
 }
