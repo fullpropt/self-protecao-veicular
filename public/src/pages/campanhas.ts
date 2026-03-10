@@ -1953,10 +1953,6 @@ function renderCampaigns() {
                                 <div class="campaign-stat-label">Enviadas</div>
                             </div>
                             <div class="campaign-stat">
-                                <div class="campaign-stat-value">${formatPercent(sentRate)}</div>
-                                <div class="campaign-stat-label">Enviadas (%)</div>
-                            </div>
-                            <div class="campaign-stat">
                                 <div class="campaign-stat-value">${formatPercent(deliveryRate)}</div>
                                 <div class="campaign-stat-label">Entregues</div>
                             </div>
