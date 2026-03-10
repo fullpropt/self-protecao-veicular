@@ -46,6 +46,7 @@ type NodeData = {
     responseMode?: 'text' | 'menu';
     menuPrompt?: string;
     menuButtonText?: string;
+    menuButtonUrl?: string;
     menuTitle?: string;
     menuFooter?: string;
     menuSectionTitle?: string;
@@ -152,6 +153,7 @@ let currentFlowIsActive = true;
 let currentFlowSessionId = '';
 let currentFlowBuilderMode: FlowBuilderMode = 'humanized';
 let flowHasUnsavedChanges = false;
+let flowPreviewOpen = false;
 let pendingNodeDraft: Partial<NodeData> | null = null;
 let pendingNodeDraftId: string | null = null;
 let intentPropertySectionExpandedState: Record<string, boolean> = {};
@@ -804,6 +806,10 @@ function isMenuInteractiveIntentNode(node?: FlowNode | null) {
     return isIntentTrigger(node) && isMenuInteractiveFlowMode(node?.data?.flowBuilderMode || currentFlowBuilderMode);
 }
 
+function getIntentMenuButtonUrl(node?: FlowNode | null) {
+    return String(node?.data?.menuButtonUrl || '').trim();
+}
+
 function isProtectedFlowBoundaryNode(node?: FlowNode | null) {
     if (!node) return false;
     return node.type === 'trigger' || node.type === 'end';
@@ -827,6 +833,7 @@ function applyFlowBuilderModeToIntentNode(node: FlowNode | null | undefined, mod
     node.data.responseMode = normalizedMode === 'menu' ? 'menu' : 'text';
     node.data.menuPrompt = String(node.data.menuPrompt || '').trim() || 'Escolha uma opção no menu abaixo:';
     node.data.menuButtonText = String(node.data.menuButtonText || '').trim() || 'Ver Menu';
+    node.data.menuButtonUrl = String(node.data.menuButtonUrl || '').trim();
     node.data.menuSectionTitle = String(node.data.menuSectionTitle || '').trim() || 'Opções';
     node.data.menuTitle = String(node.data.menuTitle || '').trim();
     node.data.menuFooter = String(node.data.menuFooter || '').trim();
@@ -1066,6 +1073,9 @@ function getOutputHandles(node: FlowNode) {
     }));
 
     if (isMenuInteractiveIntentNode(node)) {
+        if (getIntentMenuButtonUrl(node)) {
+            return [{ handle: DEFAULT_HANDLE, label: '' }];
+        }
         return routeHandles;
     }
 
@@ -1303,6 +1313,14 @@ function getNodeTypeLabel(node: FlowNode) {
     };
 
     return labels[node.type] || 'Bloco';
+}
+
+function getNodePropertiesSummaryLabel(node: FlowNode) {
+    if (isIntentTrigger(node)) {
+        return node.type === 'trigger' ? 'Início' : 'Bloco';
+    }
+
+    return getNodeTypeLabel(node);
 }
 
 function clientToFlowCoords(clientX: number, clientY: number) {
@@ -1682,6 +1700,7 @@ function initFlowBuilder() {
     renderCurrentFlowName();
     setFlowDirtyState(false);
     bindFlowAiAssistant();
+    setFlowPreviewOpen(false);
     renderFlowVariableTags();
     loadFlowVariableFields();
     loadFlowWhatsappSessions({ silent: true });
@@ -1927,6 +1946,7 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             responseMode: isMenuInteractiveFlowMode() ? 'menu' : 'text',
             menuPrompt: 'Escolha uma opção no menu abaixo:',
             menuButtonText: 'Ver Menu',
+            menuButtonUrl: '',
             menuSectionTitle: 'Opções',
             menuTitle: '',
             menuFooter: '',
@@ -1951,6 +1971,7 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             responseMode: isMenuInteractiveFlowMode() ? 'menu' : 'text',
             menuPrompt: 'Escolha uma opção no menu abaixo:',
             menuButtonText: 'Ver Menu',
+            menuButtonUrl: '',
             menuSectionTitle: 'Opções',
             menuTitle: '',
             menuFooter: '',
@@ -2586,6 +2607,271 @@ function getNodePreview(node: FlowNode) {
     }
 }
 
+function getWhatsappPreviewMessageText(text: unknown, fallback = '') {
+    const normalized = String(text ?? '').trim();
+    return normalized || fallback;
+}
+
+function getWhatsappPreviewNodeLabel(node: FlowNode) {
+    return getWhatsappPreviewMessageText(
+        selectedNode?.id === node.id
+            ? getNodePropValue('label', node.data.label || getNodeTypeLabel(node))
+            : (node.data.label || getNodeTypeLabel(node)),
+        getNodeTypeLabel(node)
+    );
+}
+
+function buildWhatsappPreviewTextHtml(text: string) {
+    return escapeHtml(String(text || '')).replace(/\n/g, '<br>');
+}
+
+function getIntentMenuPreviewOptions(node: FlowNode) {
+    if (!isIntentTrigger(node)) return [];
+
+    const draftRoutes = selectedNode?.id === node.id
+        ? getNodePropValue('intentRoutes', null as any)
+        : null;
+    const routes = Array.isArray(draftRoutes) && draftRoutes.length > 0
+        ? draftRoutes
+        : getIntentRoutes(node);
+
+    return routes
+        .map((route: any, index: number) => getWhatsappPreviewMessageText(route?.label, `Opção ${index + 1}`))
+        .filter(Boolean)
+        .slice(0, 10);
+}
+
+function getAwaitingInputPreviewOptions(node: FlowNode) {
+    const outputEntryLabels = sanitizeOutputEntryLabelsMap(
+        selectedNode?.id === node.id
+            ? getNodePropValue('outputEntryLabels', node.data.outputEntryLabels || {})
+            : (node.data.outputEntryLabels || {})
+    );
+
+    return getOutputHandles(node)
+        .map((item, index) => {
+            const handle = edgeHandle(item.handle);
+            const title = getWhatsappPreviewMessageText(
+                outputEntryLabels[handle] || item.label,
+                handle === DEFAULT_HANDLE ? 'Outra resposta' : `Opção ${index + 1}`
+            );
+            return title;
+        })
+        .filter(Boolean)
+        .slice(0, 10);
+}
+
+function buildWhatsappPreviewBubbleHtml(options: {
+    text: string;
+    title?: string;
+    footer?: string;
+    buttonText?: string;
+    buttonIcon?: string;
+}) {
+    const bubbleText = getWhatsappPreviewMessageText(options.text, 'Mensagem vazia');
+    const bubbleTitle = getWhatsappPreviewMessageText(options.title, '');
+    const bubbleFooter = getWhatsappPreviewMessageText(options.footer, '');
+    const actionText = getWhatsappPreviewMessageText(options.buttonText, '');
+    const actionIcon = getWhatsappPreviewMessageText(options.buttonIcon, '≡');
+
+    return `
+        <div class="flow-whatsapp-preview-row">
+            <div class="flow-whatsapp-preview-bubble">
+                ${bubbleTitle ? `<div class="flow-whatsapp-preview-bubble-title">${buildWhatsappPreviewTextHtml(bubbleTitle)}</div>` : ''}
+                <div class="flow-whatsapp-preview-bubble-text">${buildWhatsappPreviewTextHtml(bubbleText)}</div>
+                ${actionText ? `
+                    <div class="flow-whatsapp-preview-action">
+                        <span class="flow-whatsapp-preview-action-icon">${escapeHtml(actionIcon)}</span>
+                        <span>${buildWhatsappPreviewTextHtml(actionText)}</span>
+                    </div>
+                ` : ''}
+                ${bubbleFooter ? `<div class="flow-whatsapp-preview-bubble-footer">${buildWhatsappPreviewTextHtml(bubbleFooter)}</div>` : ''}
+                <div class="flow-whatsapp-preview-bubble-time">15:02</div>
+            </div>
+        </div>
+    `;
+}
+
+function buildWhatsappPreviewMenuSheetHtml(sectionTitle: string, items: string[]) {
+    const safeItems = Array.isArray(items) ? items.filter(Boolean).slice(0, 10) : [];
+    return `
+        <div class="flow-whatsapp-preview-sheet">
+            <div class="flow-whatsapp-preview-sheet-header">
+                <span>Menu</span>
+                <span class="flow-whatsapp-preview-sheet-meta">${safeItems.length} opção${safeItems.length === 1 ? '' : 'ões'}</span>
+            </div>
+            <div class="flow-whatsapp-preview-sheet-section">${buildWhatsappPreviewTextHtml(sectionTitle || 'Opções')}</div>
+            <div class="flow-whatsapp-preview-sheet-list">
+                ${safeItems.length > 0 ? safeItems.map((item) => `
+                    <div class="flow-whatsapp-preview-sheet-item">
+                        <span class="flow-whatsapp-preview-sheet-item-title">${buildWhatsappPreviewTextHtml(item)}</span>
+                    </div>
+                `).join('') : `
+                    <div class="flow-whatsapp-preview-sheet-empty">Adicione opções para visualizar o menu.</div>
+                `}
+            </div>
+        </div>
+    `;
+}
+
+function renderWhatsappPreview() {
+    const container = document.getElementById('flowPreviewContent') as HTMLElement | null;
+    if (!container) return;
+
+    if (!selectedNode) {
+        container.innerHTML = `
+            <div class="flow-preview-empty-state">
+                <strong>Nenhum bloco selecionado</strong>
+                <span>Selecione um bloco para ver como a mensagem ou o menu aparecem no WhatsApp.</span>
+            </div>
+        `;
+        return;
+    }
+
+    const node = selectedNode;
+    const nodeTypeLabel = getNodeTypeLabel(node);
+    const nodeLabel = getWhatsappPreviewNodeLabel(node);
+    let bodyHtml = '';
+    let helperHtml = '';
+
+    if (node.type === 'message' || node.type === 'message_once') {
+        const content = getWhatsappPreviewMessageText(
+            getNodePropValue('content', node.data.content || ''),
+            'Digite a mensagem para visualizar a prévia.'
+        );
+        bodyHtml = buildWhatsappPreviewBubbleHtml({ text: content });
+    } else if (node.type === 'transfer') {
+        const content = getWhatsappPreviewMessageText(
+            getNodePropValue('message', node.data.message || ''),
+            'Transferindo para um atendente...'
+        );
+        bodyHtml = buildWhatsappPreviewBubbleHtml({ text: content });
+    } else {
+        const isIntentMenuNode = isIntentTrigger(node) && isMenuInteractiveIntentNode(node);
+        const isAwaitingMenuNode = (node.type === 'wait' || node.type === 'condition')
+            && String(getNodePropValue('responseMode', node.data.responseMode || 'text')).trim().toLowerCase() === 'menu';
+
+        if (isIntentMenuNode || isAwaitingMenuNode) {
+            const promptFallback = isIntentMenuNode
+                ? 'Escolha uma opção no menu abaixo:'
+                : 'Selecione uma opção no menu abaixo:';
+            const prompt = getWhatsappPreviewMessageText(
+                getNodePropValue('menuPrompt', node.data.menuPrompt || promptFallback),
+                promptFallback
+            );
+            const buttonText = getWhatsappPreviewMessageText(
+                getNodePropValue('menuButtonText', node.data.menuButtonText || 'Ver Menu'),
+                'Ver Menu'
+            );
+            const menuTitle = getWhatsappPreviewMessageText(
+                getNodePropValue('menuTitle', node.data.menuTitle || ''),
+                ''
+            );
+            const menuFooter = getWhatsappPreviewMessageText(
+                getNodePropValue('menuFooter', node.data.menuFooter || ''),
+                ''
+            );
+            const buttonUrl = getWhatsappPreviewMessageText(
+                getNodePropValue('menuButtonUrl', node.data.menuButtonUrl || ''),
+                ''
+            );
+
+            bodyHtml = buildWhatsappPreviewBubbleHtml({
+                text: prompt,
+                title: menuTitle,
+                footer: menuFooter,
+                buttonText,
+                buttonIcon: buttonUrl ? '↗' : '≡'
+            });
+
+            if (buttonUrl) {
+                helperHtml = `
+                    <div class="flow-preview-helper-card">
+                        <div class="flow-preview-helper-title">Ação do botão</div>
+                        <div class="flow-preview-helper-text">Ao tocar no botão, o WhatsApp abre este link:</div>
+                        <div class="flow-preview-helper-link">${buildWhatsappPreviewTextHtml(buttonUrl)}</div>
+                    </div>
+                `;
+            } else {
+                const sectionTitle = getWhatsappPreviewMessageText(
+                    getNodePropValue('menuSectionTitle', node.data.menuSectionTitle || 'Opções'),
+                    'Opções'
+                );
+                const menuItems = isIntentMenuNode
+                    ? getIntentMenuPreviewOptions(node)
+                    : getAwaitingInputPreviewOptions(node);
+                bodyHtml += buildWhatsappPreviewMenuSheetHtml(sectionTitle, menuItems);
+            }
+        } else {
+            let message = 'Este bloco não envia uma mensagem visual no WhatsApp.';
+            if (isIntentTrigger(node)) {
+                message = 'Este bloco classifica a mensagem do lead e segue o fluxo sem exibir um menu.';
+            } else if (node.type === 'wait' || node.type === 'condition') {
+                message = 'Este bloco aguarda uma resposta do lead sem exibir um menu interativo.';
+            }
+
+            bodyHtml = `
+                <div class="flow-whatsapp-preview-info-card">
+                    <strong>Sem prévia visual</strong>
+                    <span>${buildWhatsappPreviewTextHtml(message)}</span>
+                </div>
+            `;
+        }
+    }
+
+    container.innerHTML = `
+        <div class="flow-preview-context">
+            <span class="flow-preview-node-kind">${escapeHtml(nodeTypeLabel)}</span>
+            <h4 class="flow-preview-node-title">${escapeHtml(nodeLabel)}</h4>
+        </div>
+        <div class="flow-whatsapp-preview-device">
+            <div class="flow-whatsapp-preview-screen">
+                <div class="flow-whatsapp-preview-topbar">
+                    <div class="flow-whatsapp-preview-avatar">R</div>
+                    <div class="flow-whatsapp-preview-contact">
+                        <strong>ROBO</strong>
+                        <span>Agente virtual</span>
+                    </div>
+                </div>
+                <div class="flow-whatsapp-preview-chat">
+                    ${bodyHtml}
+                </div>
+            </div>
+        </div>
+        ${helperHtml}
+    `;
+}
+
+function setFlowPreviewOpen(forceOpen?: boolean) {
+    const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !flowPreviewOpen;
+    flowPreviewOpen = nextOpen;
+
+    const container = document.getElementById('flowBuilderContainer') as HTMLElement | null;
+    const previewPanel = document.getElementById('flowPreviewPanel') as HTMLElement | null;
+    const toggleBtn = document.getElementById('flowPreviewToggleBtn') as HTMLButtonElement | null;
+    const toggleLabel = document.getElementById('flowPreviewToggleLabel') as HTMLElement | null;
+
+    container?.classList.toggle('is-preview-open', nextOpen);
+    previewPanel?.setAttribute('aria-hidden', nextOpen ? 'false' : 'true');
+    toggleBtn?.classList.toggle('is-open', nextOpen);
+
+    const label = nextOpen ? '<' : '>';
+    const title = nextOpen ? 'Ocultar prévia do WhatsApp' : 'Mostrar prévia do WhatsApp';
+    if (toggleLabel) {
+        toggleLabel.textContent = label;
+    }
+    if (toggleBtn) {
+        toggleBtn.title = title;
+        toggleBtn.setAttribute('aria-label', title);
+    }
+
+    renderWhatsappPreview();
+}
+
+function toggleFlowPreview(forceOpen?: boolean) {
+    setFlowPreviewOpen(forceOpen);
+}
+
 // Selecionar no
 function selectNode(id: string) {
     deselectNode();
@@ -2597,6 +2883,7 @@ function selectNode(id: string) {
     if (nodeEl) nodeEl.classList.add('selected');
     
     renderProperties();
+    renderWhatsappPreview();
 }
 
 // Deselecionar no
@@ -2613,6 +2900,7 @@ function deselectNode() {
     if (propertiesContent) {
         propertiesContent.innerHTML = '<p style="color: var(--gray); font-size: 14px;">Selecione um bloco para editar suas propriedades.</p>';
     }
+    renderWhatsappPreview();
 }
 
 // Deletar no
@@ -2711,7 +2999,7 @@ function renderProperties() {
     const container = document.getElementById('propertiesContent') as HTMLElement | null;
     if (!container) return;
     let html = '';
-    const selectedTypeLabel = getNodeTypeLabel(selectedNode);
+    const selectedTypeLabel = getNodePropertiesSummaryLabel(selectedNode);
     const nodeLabelValue = String(getNodePropValue('label', selectedNode.data.label || ''));
     const isIntentPropertiesMode = isIntentTrigger(selectedNode);
     const isOutputActionMode = Boolean(
@@ -2845,6 +3133,16 @@ function renderProperties() {
         </div>
     `;
 
+    if (selectedNode.type === 'end') {
+        html += `
+            <div class="output-actions-empty">
+                Este bloco apenas finaliza o fluxo. Nenhuma configuração é necessária.
+            </div>
+        `;
+        container.innerHTML = html;
+        return;
+    }
+
     if (!isIntentPropertiesMode) {
         html += `
             <div class="property-group">
@@ -2868,6 +3166,8 @@ function renderProperties() {
                     : 0;
                 const intentMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Escolha uma opção no menu abaixo:'));
                 const intentMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+                const intentMenuButtonUrl = String(getNodePropValue('menuButtonUrl', selectedNode.data.menuButtonUrl || ''));
+                const hasIntentMenuButtonUrl = intentMenuButtonUrl.trim().length > 0;
                 const intentDefaultResponse = String(getNodePropValue('intentDefaultResponse', selectedNode.data.intentDefaultResponse || ''));
                 const intentDefaultFollowupResponse = String(getNodePropValue('intentDefaultFollowupResponse', selectedNode.data.intentDefaultFollowupResponse || ''));
                 const intentDefaultFollowupResponses = coerceIntentMessageListForEditor(
@@ -2905,7 +3205,7 @@ function renderProperties() {
                             <input type="text" value="${escapeHtml(nodeLabelValue)}" onchange="updateNodeProperty('label', this.value)">
                         </div>
                         <div class="property-group">
-                            <label>Mensagem do Menu</label>
+                            <label>${hasIntentMenuButtonUrl ? 'Mensagem' : 'Mensagem do Menu'}</label>
                             <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(intentMenuPrompt)}</textarea>
                         </div>
                         <div class="property-group">
@@ -2913,24 +3213,31 @@ function renderProperties() {
                             <input type="text" value="${escapeHtml(intentMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
                         </div>
                         <div class="property-group">
-                            <label>Opções</label>
-                            <div class="intent-routes-editor">
-                                ${routes.map((route, index) => `
-                                    <div class="intent-menu-option-row">
-                                        <input
-                                            class="intent-route-name-input"
-                                            type="text"
-                                            value="${escapeHtml(String(route.label || ''))}"
-                                            title="${escapeHtml(String(route.label || '').trim() || ('Opção ' + (index + 1)))}"
-                                            placeholder="Ex.: Ver modelos"
-                                            onchange="updateIntentRoute(${index}, 'label', this.value)"
-                                        >
-                                        <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opção" onclick="removeIntentRoute(${index})">×</button>
-                                    </div>
-                                `).join('')}
-                                <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addIntentRoute()">+ Adicionar opção</button>
-                            </div>
+                            <label>Link do Botão</label>
+                            <input type="url" value="${escapeHtml(intentMenuButtonUrl)}" onchange="updateNodeProperty('menuButtonUrl', this.value)" placeholder="https://...">
+                            <span class="property-helper-text">Se preencher, o botão abre esse link e o fluxo segue pela saída padrão.</span>
                         </div>
+                        ${hasIntentMenuButtonUrl ? '' : `
+                            <div class="property-group">
+                                <label>Opções</label>
+                                <div class="intent-routes-editor">
+                                    ${routes.map((route, index) => `
+                                        <div class="intent-menu-option-row">
+                                            <input
+                                                class="intent-route-name-input"
+                                                type="text"
+                                                value="${escapeHtml(String(route.label || ''))}"
+                                                title="${escapeHtml(String(route.label || '').trim() || ('Opção ' + (index + 1)))}"
+                                                placeholder="Ex.: Ver modelos"
+                                                onchange="updateIntentRoute(${index}, 'label', this.value)"
+                                            >
+                                            <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opção" onclick="removeIntentRoute(${index})">×</button>
+                                        </div>
+                                    `).join('')}
+                                    <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addIntentRoute()">+ Adicionar opção</button>
+                                </div>
+                            </div>
+                        `}
                     `;
                 } else {
                     html += `
@@ -3452,9 +3759,12 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
         || key === 'outputActions'
         || key === 'triggerWelcomeEnabled'
         || key === 'triggerWelcomeRepeatMode'
+        || key === 'menuButtonUrl'
     ) {
         renderProperties();
     }
+
+    renderWhatsappPreview();
 }
 
 function confirmNodePropertyChanges() {
@@ -3510,6 +3820,7 @@ function confirmNodePropertyChanges() {
         rerenderNode(targetNodeId);
     });
     renderProperties();
+    renderWhatsappPreview();
     markFlowDirty();
     notify('success', 'Bloco atualizado', 'Alterações confirmadas com sucesso.');
 }
@@ -4347,6 +4658,7 @@ function normalizeLoadedFlowData() {
             node.data.responseMode = currentFlowBuilderMode === 'menu' ? 'menu' : 'text';
             node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Escolha uma opção no menu abaixo:';
             node.data.menuButtonText = String((node.data as any)?.menuButtonText || '').trim() || 'Ver Menu';
+            node.data.menuButtonUrl = String((node.data as any)?.menuButtonUrl || '').trim();
             node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Opções';
             node.data.menuTitle = String((node.data as any)?.menuTitle || '').trim();
             node.data.menuFooter = String((node.data as any)?.menuFooter || '').trim();
@@ -5252,6 +5564,7 @@ const windowAny = window as Window & {
     saveFlow?: () => Promise<void>;
     generateFlowWithAi?: () => Promise<void>;
     toggleFlowAiAssistant?: (forceOpen?: boolean) => void;
+    toggleFlowPreview?: (forceOpen?: boolean) => void;
     closeFlowAiAssistant?: () => void;
     sendFlowAiAssistantPrompt?: () => Promise<void>;
     handleFlowAiAssistantInputKeydown?: (event: KeyboardEvent) => void;
@@ -5312,6 +5625,7 @@ windowAny.clearCanvas = clearCanvas;
 windowAny.saveFlow = saveFlow;
 windowAny.generateFlowWithAi = generateFlowWithAi;
 windowAny.toggleFlowAiAssistant = toggleFlowAiAssistant;
+windowAny.toggleFlowPreview = toggleFlowPreview;
 windowAny.closeFlowAiAssistant = closeFlowAiAssistant;
 windowAny.sendFlowAiAssistantPrompt = sendFlowAiAssistantPrompt;
 windowAny.handleFlowAiAssistantInputKeydown = handleFlowAiAssistantInputKeydown;

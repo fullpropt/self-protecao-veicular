@@ -8420,6 +8420,25 @@ function normalizeListSectionsForSend(rawSections, lead, messageText = '') {
     return normalizedSections;
 }
 
+function normalizeButtonUrlForSend(value) {
+    const raw = normalizeText(String(value || '').trim());
+    if (!raw) return '';
+
+    const normalized = /^https?:\/\//i.test(raw)
+        ? raw
+        : `https://${raw}`;
+
+    try {
+        const parsed = new URL(normalized);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return '';
+        }
+        return parsed.toString();
+    } catch (_) {
+        return '';
+    }
+}
+
 /**
 
  * Enviar mensagem
@@ -8515,8 +8534,8 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     }
 
     const normalizedType = String(type || 'text').trim().toLowerCase() || 'text';
-    const persistedMediaType = normalizedType === 'list' ? 'text' : normalizedType;
-    const isTextLikeMessage = normalizedType === 'text' || normalizedType === 'list';
+    const persistedMediaType = (normalizedType === 'list' || normalizedType === 'button_url') ? 'text' : normalizedType;
+    const isTextLikeMessage = normalizedType === 'text' || normalizedType === 'list' || normalizedType === 'button_url';
     const isMediaWithUrl = normalizedType === 'image'
         || normalizedType === 'video'
         || normalizedType === 'document'
@@ -8565,6 +8584,64 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
                 buttonText: listButtonText,
                 sections
             });
+
+        } else if (normalizedType === 'button_url') {
+            const buttonTextRaw = String(options.buttonText || options.listButtonText || '').trim();
+            const buttonText = buttonTextRaw
+                ? applyLeadTemplate(buttonTextRaw, lead, { mensagem: buttonTextRaw })
+                : 'Acessar site';
+            const buttonUrlRaw = String(options.buttonUrl || options.url || '').trim();
+            const buttonUrl = normalizeButtonUrlForSend(
+                buttonUrlRaw
+                    ? applyLeadTemplate(buttonUrlRaw, lead, { mensagem: renderedTextMessage || buttonUrlRaw })
+                    : ''
+            );
+            if (!buttonUrl) {
+                throw new Error('Mensagem com botao de link sem URL valida');
+            }
+
+            const buttonTitleRaw = String(options.buttonTitle || options.title || '').trim();
+            const buttonFooterRaw = String(options.buttonFooter || options.footer || '').trim();
+            const buttonTitle = buttonTitleRaw
+                ? applyLeadTemplate(buttonTitleRaw, lead, { mensagem: renderedTextMessage || buttonTitleRaw })
+                : '';
+            const buttonFooter = buttonFooterRaw
+                ? applyLeadTemplate(buttonFooterRaw, lead, { mensagem: renderedTextMessage || buttonFooterRaw })
+                : '';
+
+            const baileys = await baileysLoader.getBaileys();
+            const hydratedTemplate = {
+                hydratedContentText: renderedTextMessage || buttonText,
+                hydratedButtons: [
+                    {
+                        index: 1,
+                        urlButton: {
+                            displayText: buttonText,
+                            url: buttonUrl
+                        }
+                    }
+                ]
+            };
+
+            if (buttonTitle) {
+                hydratedTemplate.hydratedTitleText = buttonTitle;
+            }
+            if (buttonFooter) {
+                hydratedTemplate.hydratedFooterText = buttonFooter;
+            }
+
+            const outboundMessage = baileys.generateWAMessageFromContent(jid, {
+                templateMessage: {
+                    hydratedTemplate
+                }
+            }, {
+                userJid: session.socket?.user?.id || undefined
+            });
+
+            await session.socket.relayMessage(jid, outboundMessage.message, {
+                messageId: outboundMessage.key.id
+            });
+            result = outboundMessage;
 
         } else if (normalizedType === 'image') {
 
@@ -8857,14 +8934,17 @@ function sessionExists(sessionId) {
         const listButtonText = String(options?.listButtonText || options?.buttonText || '').trim();
         const listTitle = String(options?.listTitle || options?.title || '').trim();
         const listFooter = String(options?.listFooter || options?.footer || '').trim();
-        const isListMessage = mediaType === 'list';
+        const buttonUrl = String(options?.buttonUrl || options?.url || '').trim();
+        const buttonTitle = String(options?.buttonTitle || options?.title || '').trim();
+        const buttonFooter = String(options?.buttonFooter || options?.footer || '').trim();
+        const isInteractiveDirectMessage = mediaType === 'list' || mediaType === 'button_url';
 
         if (
             FLOW_MESSAGE_QUEUE_ENABLED
             && QUEUE_WORKER_ENABLED
             && Number.isInteger(normalizedLeadId)
             && normalizedLeadId > 0
-            && !isListMessage
+            && !isInteractiveDirectMessage
         ) {
             let queuedSessionId = requestedSessionId || resolvedSessionId;
             if (queuedSessionId) {
@@ -8938,6 +9018,10 @@ function sessionExists(sessionId) {
                 listButtonText,
                 listTitle,
                 listFooter,
+                buttonText: listButtonText,
+                buttonUrl,
+                buttonTitle,
+                buttonFooter,
                 conversationId: Number.isInteger(normalizedConversationId) && normalizedConversationId > 0
                     ? normalizedConversationId
                     : null

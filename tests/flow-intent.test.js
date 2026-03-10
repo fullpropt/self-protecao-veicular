@@ -199,6 +199,70 @@ describe('FlowService intent routing compatibility', () => {
         ]);
     });
 
+    test('buildIntentNodeLinkPayload monta botao de link e ignora menu interativo', () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-link',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Acesse nosso site:',
+                menuButtonText: 'Acessar site',
+                menuButtonUrl: 'zapvender.com'
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-link', target: 'next-node', sourceHandle: 'default' }
+                ]
+            },
+            variables: {}
+        };
+
+        const linkPayload = service.buildIntentNodeLinkPayload(execution, intentNode);
+        expect(linkPayload).toEqual(expect.objectContaining({
+            mediaType: 'button_url',
+            content: 'Acesse nosso site:',
+            buttonText: 'Acessar site',
+            buttonUrl: 'https://zapvender.com/'
+        }));
+        expect(service.buildIntentNodeMenuPayload(execution, intentNode)).toBeNull();
+    });
+
+    test('buildIntentNodeMenuPayload preserva emoji na mensagem do menu', () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-menu-emoji',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Escolha uma opção 👨‍👩‍👧‍👦✨',
+                menuButtonText: 'Ver Menu',
+                menuSectionTitle: 'Intenções',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Física', phrases: '' }
+                ]
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-menu-emoji', target: 'store-node', sourceHandle: 'route-store' }
+                ]
+            },
+            variables: {}
+        };
+
+        const payload = service.buildIntentNodeMenuPayload(execution, intentNode);
+        expect(payload).toBeTruthy();
+        expect(payload.content).toBe('Escolha uma opção 👨‍👩‍👧‍👦✨');
+    });
+
     test('continueFlow em intencao modo menu prioriza selectionId para escolher a rota', async () => {
         const service = new FlowService();
         const intentNode = {
@@ -288,6 +352,84 @@ describe('FlowService intent routing compatibility', () => {
             mediaType: 'list',
             content: 'Qual categoria voce procura?'
         }));
+    });
+
+    test('maybeSendIntentNodeLinkButton envia botao de link para no de intencao', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const intentNode = {
+            id: 'intent-link',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Clique abaixo para acessar o site.',
+                menuButtonText: 'Acessar site',
+                menuButtonUrl: 'https://zapvender.com'
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 98,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-link', target: 'next-node', sourceHandle: 'default' }
+                ]
+            },
+            conversation: { id: 100, session_id: 'session-1' },
+            lead: { id: 10, phone: '5511999999999', jid: '5511999999999@s.whatsapp.net' },
+            variables: {}
+        };
+
+        const sent = await service.maybeSendIntentNodeLinkButton(execution, intentNode);
+
+        expect(sent).toBe(true);
+        expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+            mediaType: 'button_url',
+            content: 'Clique abaixo para acessar o site.',
+            buttonText: 'Acessar site',
+            buttonUrl: 'https://zapvender.com/'
+        }));
+    });
+
+    test('goToNextNode on intent em modo link nao envia resposta oculta da saida default', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const intentNode = {
+            id: 'intent-link',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuButtonUrl: 'https://zapvender.com',
+                intentDefaultResponse: 'Mensagem antiga'
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 39,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-link', target: 'next-node', sourceHandle: 'default', targetHandle: 'default' }
+                ]
+            },
+            conversation: { id: 56, session_id: 'session-1' },
+            lead: { id: 27, phone: '5511966666666', jid: '5511966666666@s.whatsapp.net' },
+            variables: {}
+        };
+
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
+
+        await service.goToNextNode(execution, intentNode, 'default');
+
+        expect(sendMock).not.toHaveBeenCalled();
+        expect(executeSpy).toHaveBeenCalledWith(execution, 'next-node', 'default');
+
+        executeSpy.mockRestore();
     });
 
     test('maybeSendTriggerWelcomeMessage ignora boas-vindas ocultas em trigger modo menu', async () => {

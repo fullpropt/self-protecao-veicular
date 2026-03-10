@@ -11,6 +11,7 @@ type FlowBuilderGlobals = {
   saveFlow?: () => void;
   generateFlowWithAi?: () => Promise<void>;
   toggleFlowAiAssistant?: (forceOpen?: boolean) => void;
+  toggleFlowPreview?: (forceOpen?: boolean) => void;
   closeFlowAiAssistant?: () => void;
   sendFlowAiAssistantPrompt?: () => Promise<void>;
   handleFlowAiAssistantInputKeydown?: (event: KeyboardEvent) => void;
@@ -745,8 +746,9 @@ export default function FlowBuilder() {
         }
         
         .flow-container {
+            --flow-preview-width: 0px;
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 380px;
+            grid-template-columns: minmax(0, 1fr) 380px var(--flow-preview-width);
             height: 100%;
             min-height: 0;
             gap: 0;
@@ -757,6 +759,16 @@ export default function FlowBuilder() {
             min-width: 0;
             grid-column: 1;
             grid-row: 2;
+            transition: grid-template-columns 0.28s ease;
+        }
+
+        .flow-container.is-preview-open {
+            --flow-preview-width: 340px;
+        }
+
+        .flow-side-panel {
+            position: relative;
+            min-width: 0;
         }
         
         /* Painel de Nos */
@@ -1332,8 +1344,407 @@ export default function FlowBuilder() {
             padding: 18px;
             overflow-y: auto;
             min-width: 0;
+            height: 100%;
         }
-        
+
+        .flow-preview-toggle {
+            position: absolute;
+            top: 26px;
+            right: -14px;
+            z-index: 6;
+            width: 28px;
+            height: 44px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.86);
+            color: #d7e2f0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
+            transition: all 0.2s ease;
+        }
+
+        .flow-preview-toggle:hover {
+            border-color: rgba(var(--primary-rgb), 0.5);
+            background: rgba(8, 19, 34, 0.95);
+            color: #f8fffb;
+        }
+
+        .flow-preview-toggle.is-open {
+            background: rgba(var(--primary-rgb), 0.15);
+            border-color: rgba(var(--primary-rgb), 0.4);
+            color: #0f5132;
+        }
+
+        .flow-preview-toggle-label {
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1;
+            margin-top: -1px;
+        }
+
+        .flow-preview-panel {
+            min-width: 0;
+            background:
+                linear-gradient(180deg, rgba(244, 247, 251, 0.98), rgba(235, 241, 247, 0.96)),
+                radial-gradient(circle at top right, rgba(var(--primary-rgb), 0.1), transparent 42%);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            overflow: hidden;
+            transition: opacity 0.22s ease, visibility 0.22s ease;
+        }
+
+        .flow-container.is-preview-open .flow-preview-panel {
+            border-left: 1px solid var(--border);
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .flow-preview-panel-inner {
+            height: 100%;
+            min-height: 0;
+            padding: 18px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .flow-preview-panel-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.26);
+        }
+
+        .flow-preview-panel-eyebrow {
+            display: inline-flex;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: #128c7e;
+            margin-bottom: 5px;
+        }
+
+        .flow-preview-panel-header h3 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--dark);
+        }
+
+        .flow-preview-panel-header p {
+            margin: 4px 0 0;
+            color: var(--gray);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .flow-preview-close {
+            width: 28px;
+            min-width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--gray);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .flow-preview-close:hover {
+            border-color: rgba(var(--primary-rgb), 0.42);
+            color: var(--dark);
+            background: #ffffff;
+        }
+
+        .flow-preview-content {
+            min-height: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .flow-preview-empty-state,
+        .flow-preview-helper-card,
+        .flow-whatsapp-preview-info-card {
+            border: 1px solid rgba(148, 163, 184, 0.24);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+        }
+
+        .flow-preview-empty-state {
+            padding: 18px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            color: var(--gray);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .flow-preview-empty-state strong {
+            color: var(--dark);
+            font-size: 14px;
+        }
+
+        .flow-preview-context {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .flow-preview-node-kind {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: #128c7e;
+            text-transform: uppercase;
+        }
+
+        .flow-preview-node-title {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.2;
+            color: var(--dark);
+        }
+
+        .flow-whatsapp-preview-device {
+            border-radius: 28px;
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            padding: 10px;
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+        }
+
+        .flow-whatsapp-preview-screen {
+            min-height: 540px;
+            border-radius: 20px;
+            padding: 14px 12px;
+            background:
+                radial-gradient(circle at top left, rgba(255, 255, 255, 0.22), transparent 38%),
+                linear-gradient(180deg, #e7ddd4 0%, #ece5dd 100%);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .flow-whatsapp-preview-topbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #075e54 0%, #128c7e 100%);
+            color: #f8fffb;
+        }
+
+        .flow-whatsapp-preview-avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.18);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .flow-whatsapp-preview-contact {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .flow-whatsapp-preview-contact strong {
+            font-size: 13px;
+            line-height: 1.2;
+        }
+
+        .flow-whatsapp-preview-contact span {
+            font-size: 11px;
+            opacity: 0.84;
+        }
+
+        .flow-whatsapp-preview-chat {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .flow-whatsapp-preview-row {
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .flow-whatsapp-preview-bubble {
+            position: relative;
+            max-width: 88%;
+            border-radius: 18px 18px 18px 6px;
+            background: #ffffff;
+            padding: 12px 14px 18px;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+            color: #0f172a;
+        }
+
+        .flow-whatsapp-preview-bubble-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #0f766e;
+            margin-bottom: 6px;
+        }
+
+        .flow-whatsapp-preview-bubble-text,
+        .flow-preview-helper-text,
+        .flow-preview-helper-link,
+        .flow-whatsapp-preview-sheet-item-title,
+        .flow-whatsapp-preview-info-card span {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .flow-whatsapp-preview-bubble-text {
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .flow-whatsapp-preview-action {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(226, 232, 240, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #128c7e;
+        }
+
+        .flow-whatsapp-preview-action-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            background: rgba(18, 140, 126, 0.12);
+            font-size: 12px;
+        }
+
+        .flow-whatsapp-preview-bubble-footer {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .flow-whatsapp-preview-bubble-time {
+            position: absolute;
+            right: 12px;
+            bottom: 6px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .flow-whatsapp-preview-sheet {
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+            overflow: hidden;
+        }
+
+        .flow-whatsapp-preview-sheet-header {
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.04);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .flow-whatsapp-preview-sheet-meta {
+            font-size: 11px;
+            color: var(--gray);
+            font-weight: 600;
+        }
+
+        .flow-whatsapp-preview-sheet-section {
+            padding: 10px 14px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            color: #0f766e;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        }
+
+        .flow-whatsapp-preview-sheet-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .flow-whatsapp-preview-sheet-item {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+
+        .flow-whatsapp-preview-sheet-item:last-child {
+            border-bottom: none;
+        }
+
+        .flow-whatsapp-preview-sheet-item-title {
+            font-size: 13px;
+            color: var(--dark);
+            line-height: 1.4;
+        }
+
+        .flow-whatsapp-preview-sheet-empty {
+            padding: 14px;
+            font-size: 13px;
+            color: var(--gray);
+        }
+
+        .flow-preview-helper-card,
+        .flow-whatsapp-preview-info-card {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .flow-preview-helper-title,
+        .flow-whatsapp-preview-info-card strong {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--dark);
+        }
+
+        .flow-preview-helper-text,
+        .flow-whatsapp-preview-info-card span {
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--gray);
+        }
+
+        .flow-preview-helper-link {
+            font-size: 12px;
+            line-height: 1.45;
+            color: #0f766e;
+            font-weight: 700;
+        }
+
         .properties-panel h3 {
             font-size: 16px;
             color: var(--dark);
@@ -1935,6 +2346,14 @@ export default function FlowBuilder() {
             border-color: rgba(239, 68, 68, 0.4);
             background: rgba(239, 68, 68, 0.08);
             color: var(--danger);
+        }
+
+        .property-helper-text {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            line-height: 1.4;
+            color: var(--gray);
         }
 
         .intent-route-response-input {
@@ -2684,6 +3103,8 @@ export default function FlowBuilder() {
             .flow-container {
                 grid-template-columns: 1fr;
             }
+            .flow-side-panel,
+            .flow-preview-panel,
             .properties-panel {
                 display: none;
             }
@@ -3247,21 +3668,59 @@ export default function FlowBuilder() {
                       </div>
                   </div>
                   
-                  <div className="properties-panel" id="propertiesPanel">
-                      <h3 id="propertiesPanelTitle">Propriedade</h3>
-                      <div id="propertiesContent">
-                          <p style={{ color: 'var(--gray)', fontSize: '14px' }}>Selecione um bloco para editar suas propriedades.</p>
-                      </div>
-                      
-                      <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
-                          <h4 style={{ fontSize: '13px', color: 'var(--gray)', marginBottom: '10px' }}>Variáveis Disponíveis</h4>
-                          <div className="variables-list" id="flowVariablesList">
-                              <span className="variable-tag" onClick={() => globals.insertVariable?.('nome')}>{'{{nome}}'}</span>
-                              <span className="variable-tag" onClick={() => globals.insertVariable?.('telefone')}>{'{{telefone}}'}</span>
-                              <span className="variable-tag" onClick={() => globals.insertVariable?.('email')}>{'{{email}}'}</span>
+                  <div className="flow-side-panel">
+                      <div className="properties-panel" id="propertiesPanel">
+                          <h3 id="propertiesPanelTitle">Propriedade</h3>
+                          <div id="propertiesContent">
+                              <p style={{ color: 'var(--gray)', fontSize: '14px' }}>Selecione um bloco para editar suas propriedades.</p>
+                          </div>
+                          
+                          <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
+                              <h4 style={{ fontSize: '13px', color: 'var(--gray)', marginBottom: '10px' }}>Variáveis Disponíveis</h4>
+                              <div className="variables-list" id="flowVariablesList">
+                                  <span className="variable-tag" onClick={() => globals.insertVariable?.('nome')}>{'{{nome}}'}</span>
+                                  <span className="variable-tag" onClick={() => globals.insertVariable?.('telefone')}>{'{{telefone}}'}</span>
+                                  <span className="variable-tag" onClick={() => globals.insertVariable?.('email')}>{'{{email}}'}</span>
+                              </div>
                           </div>
                       </div>
+                      <button
+                          className="flow-preview-toggle"
+                          id="flowPreviewToggleBtn"
+                          type="button"
+                          title="Mostrar prévia do WhatsApp"
+                          aria-label="Mostrar prévia do WhatsApp"
+                          onClick={() => globals.toggleFlowPreview?.()}
+                      >
+                          <span className="flow-preview-toggle-label" id="flowPreviewToggleLabel">{'>'}</span>
+                      </button>
                   </div>
+                  <aside className="flow-preview-panel" id="flowPreviewPanel" aria-hidden="true">
+                      <div className="flow-preview-panel-inner">
+                          <div className="flow-preview-panel-header">
+                              <div>
+                                  <span className="flow-preview-panel-eyebrow">PRÉVIA</span>
+                                  <h3>WhatsApp</h3>
+                                  <p>Visualize como a mensagem e o menu aparecem para o lead.</p>
+                              </div>
+                              <button
+                                  className="flow-preview-close"
+                                  type="button"
+                                  title="Ocultar prévia"
+                                  aria-label="Ocultar prévia"
+                                  onClick={() => globals.toggleFlowPreview?.(false)}
+                              >
+                                  ×
+                              </button>
+                          </div>
+                          <div className="flow-preview-content" id="flowPreviewContent">
+                              <div className="flow-preview-empty-state">
+                                  <strong>Nenhum bloco selecionado</strong>
+                                  <span>Selecione um bloco para ver como a mensagem ou o menu aparecem no WhatsApp.</span>
+                              </div>
+                          </div>
+                      </div>
+                  </aside>
               </div>
           </main>
 

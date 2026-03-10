@@ -204,7 +204,7 @@ function sanitizeOutgoingFlowText(value = '') {
         .normalize('NFC')
         .replace(/\r\n/g, '\n')
         .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/[\u200B\u200C\uFEFF]/g, '')
         .trim();
 }
 
@@ -980,6 +980,25 @@ class FlowService extends EventEmitter {
         return 'text';
     }
 
+    normalizeMenuButtonUrl(value = '') {
+        const rawValue = String(value || '').trim();
+        if (!rawValue) return '';
+
+        const normalizedValue = /^https?:\/\//i.test(rawValue)
+            ? rawValue
+            : `https://${rawValue}`;
+
+        try {
+            const parsed = new URL(normalizedValue);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                return '';
+            }
+            return parsed.toString();
+        } catch (_) {
+            return '';
+        }
+    }
+
     resolveAwaitingInputMode(node = null) {
         return this.normalizeFlowResponseMode(node?.data?.responseMode || 'text');
     }
@@ -1154,6 +1173,11 @@ class FlowService extends EventEmitter {
         return sanitizeOutgoingFlowText(rawText);
     }
 
+    resolveMenuButtonUrl(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuButtonUrl || '', execution?.variables || {});
+        return this.normalizeMenuButtonUrl(rawText);
+    }
+
     buildAwaitingInputMenuPayload(execution = null, node = null) {
         if (!this.isAwaitingInputMenuEnabled(node)) return null;
 
@@ -1218,6 +1242,11 @@ class FlowService extends EventEmitter {
     isIntentMenuEnabled(node = null) {
         if (!this.isIntentRoutingNode(node)) return false;
         return this.normalizeFlowResponseMode(node?.data?.responseMode || 'text') === 'menu';
+    }
+
+    isIntentLinkButtonEnabled(node = null, execution = null) {
+        if (!this.isIntentMenuEnabled(node)) return false;
+        return Boolean(this.resolveMenuButtonUrl(node, execution));
     }
 
     getIntentMenuOptions(flow = null, node = null) {
@@ -1348,6 +1377,7 @@ class FlowService extends EventEmitter {
 
     buildIntentNodeMenuPayload(execution = null, node = null) {
         if (!this.isIntentMenuEnabled(node)) return null;
+        if (this.isIntentLinkButtonEnabled(node, execution)) return null;
 
         const options = this.getIntentMenuOptions(execution?.flow, node);
         if (options.length === 0) return null;
@@ -1375,6 +1405,22 @@ class FlowService extends EventEmitter {
         };
     }
 
+    buildIntentNodeLinkPayload(execution = null, node = null) {
+        if (!this.isIntentLinkButtonEnabled(node, execution)) return null;
+
+        const buttonUrl = this.resolveMenuButtonUrl(node, execution);
+        if (!buttonUrl) return null;
+
+        return {
+            mediaType: 'button_url',
+            content: this.resolveMenuPrompt(node, execution),
+            buttonText: this.resolveMenuButtonText(node, execution),
+            buttonUrl,
+            buttonTitle: this.resolveMenuTitle(node, execution) || undefined,
+            buttonFooter: this.resolveMenuFooter(node, execution) || undefined
+        };
+    }
+
     async maybeSendIntentNodeMenu(execution = null, node = null) {
         if (!this.sendFunction) return false;
         const payload = this.buildIntentNodeMenuPayload(execution, node);
@@ -1394,6 +1440,29 @@ class FlowService extends EventEmitter {
             listTitle: payload.listTitle,
             listFooter: payload.listFooter,
             listSections: payload.listSections
+        });
+        return true;
+    }
+
+    async maybeSendIntentNodeLinkButton(execution = null, node = null) {
+        if (!this.sendFunction) return false;
+        const payload = this.buildIntentNodeLinkPayload(execution, node);
+        if (!payload) return false;
+
+        await this.sendFunction({
+            leadId: execution?.lead?.id || null,
+            to: execution?.lead?.phone || '',
+            jid: execution?.lead?.jid || '',
+            sessionId: execution?.conversation?.session_id || null,
+            conversationId: execution?.conversation?.id || null,
+            flowId: execution?.flow?.id || null,
+            nodeId: node?.id || null,
+            content: payload.content,
+            mediaType: payload.mediaType,
+            buttonText: payload.buttonText,
+            buttonUrl: payload.buttonUrl,
+            buttonTitle: payload.buttonTitle,
+            buttonFooter: payload.buttonFooter
         });
         return true;
     }
@@ -2484,6 +2553,12 @@ class FlowService extends EventEmitter {
 
                 case 'intent':
                     // Aguarda resposta para classificar a intencao no meio do fluxo
+                    if (this.isIntentLinkButtonEnabled(node, execution)) {
+                        await this.maybeSendIntentNodeLinkButton(execution, node);
+                        await this.goToNextNode(execution, node, 'default');
+                        break;
+                    }
+
                     if (this.isIntentMenuEnabled(node)) {
                         const pendingBeforeIntent = this.readPendingIncomingMessages(execution);
                         if (pendingBeforeIntent.length === 0) {
@@ -2851,6 +2926,24 @@ class FlowService extends EventEmitter {
 
     async executeTriggerNode(execution, node) {
         const welcomeSent = await this.maybeSendTriggerWelcomeMessage(execution, node);
+        if (this.isIntentLinkButtonEnabled(node, execution)) {
+            delete execution.variables.trigger_intent_handle;
+            this.clearIntentNoMatchCounter(execution, node?.id);
+            this.clearIntentHistory(execution, node?.id);
+            this.clearIntentDefaultMessageOnceReentry(execution);
+
+            await this.maybeSendIntentNodeLinkButton(execution, node);
+
+            await run(`
+                UPDATE flow_executions
+                SET variables = ?
+                WHERE id = ?
+            `, [JSON.stringify(execution.variables), execution.id]);
+
+            await this.goToNextNode(execution, node, 'default');
+            return;
+        }
+
         if (this.isIntentMenuEnabled(node)) {
             delete execution.variables.trigger_intent_handle;
             this.clearIntentNoMatchCounter(execution, node?.id);
@@ -3224,7 +3317,9 @@ class FlowService extends EventEmitter {
                 this.clearIntentDefaultMessageOnceReentry(execution);
             }
 
-            if (isIntentNode) {
+            const shouldSendIntentRouteResponse = isIntentNode
+                && !(this.isIntentLinkButtonEnabled(currentNode, execution) && selectedSourceHandle === 'default');
+            if (shouldSendIntentRouteResponse) {
                 await this.sendIntentRouteResponse(execution, currentNode, selectedSourceHandle);
             }
             await this.executeOutputActions(execution, currentNode, selectedSourceHandle);
@@ -3430,4 +3525,3 @@ class FlowService extends EventEmitter {
 
 module.exports = new FlowService();
 module.exports.FlowService = FlowService;
-
