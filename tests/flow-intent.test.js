@@ -155,6 +155,141 @@ describe('FlowService intent routing compatibility', () => {
         expect(edge.target).toBe('human-node');
     });
 
+    test('buildIntentNodeMenuPayload monta menu com rotas de intencao', () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-menu',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Escolha sua opcao:',
+                menuButtonText: 'Abrir Menu',
+                menuSectionTitle: 'Intencoes',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Fisica', phrases: 'loja fisica' },
+                    { id: 'route-models', label: 'Modelos', phrases: 'modelos' }
+                ],
+                outputEntryLabels: {
+                    'route-store': 'Quero loja física'
+                }
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-menu', target: 'store-node', sourceHandle: 'route-store' },
+                    { source: 'intent-menu', target: 'models-node', sourceHandle: 'route-models' },
+                    { source: 'intent-menu', target: 'fallback-node', sourceHandle: 'default' }
+                ]
+            },
+            variables: {}
+        };
+
+        const payload = service.buildIntentNodeMenuPayload(execution, intentNode);
+        expect(payload).toBeTruthy();
+        expect(payload.mediaType).toBe('list');
+        expect(payload.content).toBe('Escolha sua opcao:');
+        expect(payload.listButtonText).toBe('Abrir Menu');
+        expect(payload.listSections[0].rows).toEqual([
+            expect.objectContaining({ rowId: 'flow-handle:route-store', title: 'Quero loja física' }),
+            expect.objectContaining({ rowId: 'flow-handle:route-models', title: 'Modelos' }),
+            expect.objectContaining({ rowId: 'flow-handle:default', title: 'Outra resposta' })
+        ]);
+    });
+
+    test('continueFlow em intencao modo menu prioriza selectionId para escolher a rota', async () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-menu',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Fisica', phrases: 'loja fisica' },
+                    { id: 'route-models', label: 'Modelos', phrases: 'modelos' }
+                ]
+            }
+        };
+
+        const execution = {
+            id: 321,
+            flow: {
+                id: 77,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-menu', target: 'store-node', sourceHandle: 'route-store' },
+                    { source: 'intent-menu', target: 'models-node', sourceHandle: 'route-models' },
+                    { source: 'intent-menu', target: 'fallback-node', sourceHandle: 'default' }
+                ]
+            },
+            conversation: { id: 99 },
+            currentNode: 'intent-menu',
+            variables: {}
+        };
+
+        const pickSpy = jest.spyOn(service, 'pickTriggerIntentHandle').mockResolvedValue(null);
+        const goToNextSpy = jest.spyOn(service, 'goToNextNode').mockResolvedValue();
+
+        await service.continueFlow(execution, {
+            text: 'Loja Fisica',
+            selectionId: 'flow-handle:route-store',
+            selectionText: 'Loja Fisica'
+        });
+
+        expect(goToNextSpy).toHaveBeenCalledWith(execution, intentNode, 'route-store');
+        expect(pickSpy).not.toHaveBeenCalled();
+
+        pickSpy.mockRestore();
+        goToNextSpy.mockRestore();
+    });
+
+    test('maybeSendIntentNodeMenu envia menu para no trigger em modo menu', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const triggerNode = {
+            id: 'trigger-intent-menu',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Qual categoria voce procura?',
+                menuButtonText: 'Ver Categorias',
+                menuSectionTitle: 'Categorias',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Fisica', phrases: 'loja fisica' },
+                    { id: 'route-models', label: 'Modelos', phrases: 'modelos' }
+                ]
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 88,
+                nodes: [triggerNode],
+                edges: [
+                    { source: 'trigger-intent-menu', target: 'store-node', sourceHandle: 'route-store' },
+                    { source: 'trigger-intent-menu', target: 'models-node', sourceHandle: 'route-models' },
+                    { source: 'trigger-intent-menu', target: 'fallback-node', sourceHandle: 'default' }
+                ]
+            },
+            conversation: { id: 100, session_id: 'session-1' },
+            lead: { id: 10, phone: '5511999999999', jid: '5511999999999@s.whatsapp.net' },
+            variables: {}
+        };
+
+        const sent = await service.maybeSendIntentNodeMenu(execution, triggerNode);
+
+        expect(sent).toBe(true);
+        expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+            mediaType: 'list',
+            content: 'Qual categoria voce procura?'
+        }));
+    });
+
     test('continueFlow treats trigger keyword node as intent routing node', async () => {
         const service = new FlowService();
         const node = {

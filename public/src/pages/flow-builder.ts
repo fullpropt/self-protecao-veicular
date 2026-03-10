@@ -1832,6 +1832,12 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             keyword: '',
             intentRoutes: [],
             intentResponseDelaySeconds: 0,
+            responseMode: 'text',
+            menuPrompt: 'Escolha uma intenção no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuSectionTitle: 'Intenções',
+            menuTitle: '',
+            menuFooter: '',
             intentDefaultResponse: '',
             intentDefaultFollowupResponse: '',
             intentDefaultFollowupResponses: [],
@@ -1849,6 +1855,12 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             keyword: '',
             intentRoutes: [],
             intentResponseDelaySeconds: 0,
+            responseMode: 'text',
+            menuPrompt: 'Escolha uma intenção no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuSectionTitle: 'Intenções',
+            menuTitle: '',
+            menuFooter: '',
             intentDefaultResponse: '',
             intentDefaultFollowupResponse: '',
             intentDefaultFollowupResponses: [],
@@ -2750,6 +2762,13 @@ function renderProperties() {
                 const intentResponseDelaySeconds = Number.isFinite(Number(getNodePropValue('intentResponseDelaySeconds', selectedNode.data.intentResponseDelaySeconds)))
                     ? Math.max(0, Number(getNodePropValue('intentResponseDelaySeconds', selectedNode.data.intentResponseDelaySeconds)))
                     : 0;
+                const intentResponseModeRaw = String(getNodePropValue('responseMode', selectedNode.data.responseMode || 'text')).trim().toLowerCase();
+                const intentResponseMode = intentResponseModeRaw === 'menu' ? 'menu' : 'text';
+                const intentMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Escolha uma intenção no menu abaixo:'));
+                const intentMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+                const intentMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Intenções'));
+                const intentMenuTitle = String(getNodePropValue('menuTitle', selectedNode.data.menuTitle || ''));
+                const intentMenuFooter = String(getNodePropValue('menuFooter', selectedNode.data.menuFooter || ''));
                 const intentDefaultResponse = String(getNodePropValue('intentDefaultResponse', selectedNode.data.intentDefaultResponse || ''));
                 const intentDefaultFollowupResponse = String(getNodePropValue('intentDefaultFollowupResponse', selectedNode.data.intentDefaultFollowupResponse || ''));
                 const intentDefaultFollowupResponses = coerceIntentMessageListForEditor(
@@ -2794,6 +2813,35 @@ function renderProperties() {
                             </div>
                         </div>
                     </div>
+                    <div class="property-group">
+                        <label>Modo de Resposta</label>
+                        <select onchange="updateNodeProperty('responseMode', this.value)">
+                            <option value="text" ${intentResponseMode === 'text' ? 'selected' : ''}>Texto livre (atual)</option>
+                            <option value="menu" ${intentResponseMode === 'menu' ? 'selected' : ''}>Menu interativo</option>
+                        </select>
+                    </div>
+                    ${intentResponseMode === 'menu' ? `
+                        <div class="property-group">
+                            <label>Mensagem do Menu</label>
+                            <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(intentMenuPrompt)}</textarea>
+                        </div>
+                        <div class="property-group">
+                            <label>Texto do Botão</label>
+                            <input type="text" value="${escapeHtml(intentMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
+                        </div>
+                        <div class="property-group">
+                            <label>Título da Seção</label>
+                            <input type="text" value="${escapeHtml(intentMenuSectionTitle)}" onchange="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Intenções">
+                        </div>
+                        <div class="property-group">
+                            <label>Título (opcional)</label>
+                            <input type="text" value="${escapeHtml(intentMenuTitle)}" onchange="updateNodeProperty('menuTitle', this.value)">
+                        </div>
+                        <div class="property-group">
+                            <label>Rodapé (opcional)</label>
+                            <input type="text" value="${escapeHtml(intentMenuFooter)}" onchange="updateNodeProperty('menuFooter', this.value)">
+                        </div>
+                    ` : ''}
                     <div class="property-group">
                         <label>Intenções</label>
                         <div class="intent-routes-editor">
@@ -4169,6 +4217,13 @@ function normalizeLoadedFlowData() {
             node.data.intentResponseDelaySeconds = Number.isFinite(rawIntentDelay)
                 ? Math.max(0, Math.trunc(rawIntentDelay))
                 : 0;
+            const rawIntentResponseMode = String((node.data as any)?.responseMode || '').trim().toLowerCase();
+            node.data.responseMode = rawIntentResponseMode === 'menu' ? 'menu' : 'text';
+            node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Escolha uma intenção no menu abaixo:';
+            node.data.menuButtonText = String((node.data as any)?.menuButtonText || '').trim() || 'Ver Menu';
+            node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Intenções';
+            node.data.menuTitle = String((node.data as any)?.menuTitle || '').trim();
+            node.data.menuFooter = String((node.data as any)?.menuFooter || '').trim();
             node.data.intentDefaultResponse = String(node.data?.intentDefaultResponse || '').trim();
             const intentDefaultFollowupResponses = coerceIntentMessageListForEditor(
                 (node.data as any)?.intentDefaultFollowupResponses,

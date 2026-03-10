@@ -1139,7 +1139,9 @@ class FlowService extends EventEmitter {
     resolveMenuSectionTitle(node = null, execution = null) {
         const rawText = this.replaceVariables(node?.data?.menuSectionTitle || '', execution?.variables || {});
         const sanitized = sanitizeOutgoingFlowText(rawText);
-        return sanitized || FLOW_MENU_SECTION_TITLE_DEFAULT;
+        if (sanitized) return sanitized;
+        if (this.isIntentRoutingNode(node)) return 'Intencoes';
+        return FLOW_MENU_SECTION_TITLE_DEFAULT;
     }
 
     resolveMenuTitle(node = null, execution = null) {
@@ -1187,6 +1189,195 @@ class FlowService extends EventEmitter {
     async maybeSendAwaitingInputMenu(execution = null, node = null) {
         if (!this.sendFunction) return false;
         const payload = this.buildAwaitingInputMenuPayload(execution, node);
+        if (!payload) return false;
+
+        await this.sendFunction({
+            leadId: execution?.lead?.id || null,
+            to: execution?.lead?.phone || '',
+            jid: execution?.lead?.jid || '',
+            sessionId: execution?.conversation?.session_id || null,
+            conversationId: execution?.conversation?.id || null,
+            flowId: execution?.flow?.id || null,
+            nodeId: node?.id || null,
+            content: payload.content,
+            mediaType: payload.mediaType,
+            listButtonText: payload.listButtonText,
+            listTitle: payload.listTitle,
+            listFooter: payload.listFooter,
+            listSections: payload.listSections
+        });
+        return true;
+    }
+
+    isIntentRoutingNode(node = null) {
+        const nodeType = String(node?.type || '').trim().toLowerCase();
+        if (nodeType === 'intent') return true;
+        return this.isIntentTriggerNode(node);
+    }
+
+    isIntentMenuEnabled(node = null) {
+        if (!this.isIntentRoutingNode(node)) return false;
+        return this.normalizeFlowResponseMode(node?.data?.responseMode || 'text') === 'menu';
+    }
+
+    getIntentMenuOptions(flow = null, node = null) {
+        if (!this.isIntentRoutingNode(node)) return [];
+
+        const routes = this.resolveTriggerIntentRoutes(node);
+        const routeHandleOrder = routes.map((route) => this.normalizeFlowHandle(route?.id || route?.label || ''));
+        const routeHandleOrderMap = new Map(routeHandleOrder.map((handle, index) => [handle, index]));
+        const outputEntryLabels = this.normalizeOutputEntryLabelsMap(node?.data?.outputEntryLabels || {});
+        const outgoingEdges = (Array.isArray(flow?.edges) ? flow.edges : [])
+            .filter((edge) => String(edge?.source || '').trim() === String(node?.id || '').trim());
+
+        const handlesFromEdges = [];
+        const handlesSeen = new Set();
+        for (const edge of outgoingEdges) {
+            const handle = this.normalizeFlowHandle(edge?.sourceHandle);
+            if (handlesSeen.has(handle)) continue;
+            handlesSeen.add(handle);
+            handlesFromEdges.push(handle);
+        }
+
+        const hasDefaultFromEdges = handlesFromEdges.includes('default');
+        const handles = handlesFromEdges.length > 0
+            ? handlesFromEdges
+            : routeHandleOrder.filter(Boolean);
+        if (hasDefaultFromEdges && !handles.includes('default')) {
+            handles.push('default');
+        }
+
+        const normalizedHandles = handles
+            .map((handle) => this.normalizeFlowHandle(handle))
+            .filter(Boolean);
+
+        const sortedHandles = normalizedHandles.sort((a, b) => {
+            if (a === 'default' && b !== 'default') return 1;
+            if (b === 'default' && a !== 'default') return -1;
+            const aOrder = routeHandleOrderMap.has(a) ? routeHandleOrderMap.get(a) : Number.MAX_SAFE_INTEGER;
+            const bOrder = routeHandleOrderMap.has(b) ? routeHandleOrderMap.get(b) : Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.localeCompare(b, 'pt-BR');
+        });
+
+        return sortedHandles.map((handle, index) => {
+            const route = this.resolveTriggerIntentRouteByHandle(node, handle);
+            const mappedLabel = sanitizeOutgoingFlowText(outputEntryLabels[handle] || '');
+            const title = handle === 'default'
+                ? (mappedLabel || 'Outra resposta')
+                : (mappedLabel || sanitizeOutgoingFlowText(route?.label || '') || `Intencao ${index + 1}`);
+            const responseDescription = handle === 'default'
+                ? ''
+                : sanitizeOutgoingFlowText(route?.response || '');
+            const description = responseDescription.length > 60
+                ? `${responseDescription.slice(0, 57)}...`
+                : responseDescription;
+            const aliases = [];
+            if (handle === 'default') {
+                aliases.push('default', 'padrao', 'outra resposta');
+            } else {
+                aliases.push(handle);
+                if (route?.id) aliases.push(String(route.id));
+                if (route?.label) aliases.push(String(route.label));
+            }
+
+            return {
+                handle,
+                rowId: `${FLOW_MENU_ROW_PREFIX}${handle}`,
+                title,
+                description,
+                aliases: aliases
+                    .map((alias) => normalizeIntentRouteHandle(alias))
+                    .filter(Boolean)
+            };
+        });
+    }
+
+    resolveIntentMenuHandleFromInboundMessage(execution = null, node = null, message = {}, responseText = '') {
+        const options = this.getIntentMenuOptions(execution?.flow, node);
+        if (options.length === 0) return '';
+
+        const optionByHandle = new Map();
+        for (const option of options) {
+            const handle = this.normalizeFlowHandle(option?.handle);
+            optionByHandle.set(handle, option);
+        }
+
+        const candidates = [
+            message?.selectionId,
+            message?.selectedRowId,
+            message?.optionId,
+            message?.choiceId,
+            message?.selectionText,
+            responseText
+        ];
+
+        for (const candidateRaw of candidates) {
+            const candidate = String(candidateRaw || '').trim();
+            if (!candidate) continue;
+
+            const candidateLower = candidate.toLowerCase();
+            if (candidateLower.startsWith(FLOW_MENU_ROW_PREFIX)) {
+                const rowHandle = this.normalizeFlowHandle(candidateLower.slice(FLOW_MENU_ROW_PREFIX.length));
+                if (optionByHandle.has(rowHandle)) return rowHandle;
+            }
+
+            const directHandle = this.normalizeFlowHandle(candidate);
+            if (optionByHandle.has(directHandle)) return directHandle;
+
+            if (/^\d+$/.test(candidateLower)) {
+                const index = Number.parseInt(candidateLower, 10);
+                if (Number.isFinite(index) && index > 0 && index <= options.length) {
+                    return this.normalizeFlowHandle(options[index - 1]?.handle);
+                }
+            }
+
+            const normalizedCandidate = normalizeIntentRouteHandle(candidate);
+            if (!normalizedCandidate) continue;
+            const matchedOption = options.find((option) => {
+                const aliases = Array.isArray(option?.aliases) ? option.aliases : [];
+                return aliases.includes(normalizedCandidate);
+            });
+            if (matchedOption?.handle) {
+                return this.normalizeFlowHandle(matchedOption.handle);
+            }
+        }
+
+        return '';
+    }
+
+    buildIntentNodeMenuPayload(execution = null, node = null) {
+        if (!this.isIntentMenuEnabled(node)) return null;
+
+        const options = this.getIntentMenuOptions(execution?.flow, node);
+        if (options.length === 0) return null;
+
+        const rows = options
+            .slice(0, 10)
+            .map((item) => ({
+                rowId: item.rowId,
+                title: item.title,
+                description: item.description || undefined
+            }));
+
+        return {
+            mediaType: 'list',
+            content: this.resolveMenuPrompt(node, execution),
+            listButtonText: this.resolveMenuButtonText(node, execution),
+            listTitle: this.resolveMenuTitle(node, execution) || undefined,
+            listFooter: this.resolveMenuFooter(node, execution) || undefined,
+            listSections: [
+                {
+                    title: this.resolveMenuSectionTitle(node, execution),
+                    rows
+                }
+            ]
+        };
+    }
+
+    async maybeSendIntentNodeMenu(execution = null, node = null) {
+        if (!this.sendFunction) return false;
+        const payload = this.buildIntentNodeMenuPayload(execution, node);
         if (!payload) return false;
 
         await this.sendFunction({
@@ -2033,19 +2224,25 @@ class FlowService extends EventEmitter {
         if (isIntentNode) {
             await this.maybeSendTriggerWelcomeMessage(execution, currentNode);
             this.ensureExecutionVariables(execution).last_response = messageText;
+            const intentMenuEnabled = this.isIntentMenuEnabled(currentNode);
+            let selectedHandle = intentMenuEnabled
+                ? this.resolveIntentMenuHandleFromInboundMessage(execution, currentNode, message, messageText)
+                : '';
             const intentInputText = this.resolveIntentInputText(execution, currentNode, messageText);
-            let selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, intentInputText);
-            const normalizedIntentContext = normalizeIntentText(intentInputText);
-            const normalizedLatestMessage = normalizeIntentText(messageText);
-            if (
-                !selectedHandle
-                && normalizedLatestMessage
-                && normalizedIntentContext
-                && normalizedLatestMessage !== normalizedIntentContext
-            ) {
-                // O contexto historico ajuda em muitos casos, mas pode diluir respostas curtas
-                // como "Gostei". Sem match no contexto, tentamos a ultima mensagem isolada.
-                selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, messageText);
+            if (!selectedHandle) {
+                selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, intentInputText);
+                const normalizedIntentContext = normalizeIntentText(intentInputText);
+                const normalizedLatestMessage = normalizeIntentText(messageText);
+                if (
+                    !selectedHandle
+                    && normalizedLatestMessage
+                    && normalizedIntentContext
+                    && normalizedLatestMessage !== normalizedIntentContext
+                ) {
+                    // O contexto historico ajuda em muitos casos, mas pode diluir respostas curtas
+                    // como "Gostei". Sem match no contexto, tentamos a ultima mensagem isolada.
+                    selectedHandle = await this.pickTriggerIntentHandle(execution, currentNode, messageText);
+                }
             }
 
             if (selectedHandle) {
@@ -2287,6 +2484,12 @@ class FlowService extends EventEmitter {
 
                 case 'intent':
                     // Aguarda resposta para classificar a intencao no meio do fluxo
+                    if (this.isIntentMenuEnabled(node)) {
+                        const pendingBeforeIntent = this.readPendingIncomingMessages(execution);
+                        if (pendingBeforeIntent.length === 0) {
+                            await this.maybeSendIntentNodeMenu(execution, node);
+                        }
+                    }
                     await this.drainPendingIncomingMessages(execution);
                     break;
 
@@ -2645,6 +2848,27 @@ class FlowService extends EventEmitter {
 
     async executeTriggerNode(execution, node) {
         const welcomeSent = await this.maybeSendTriggerWelcomeMessage(execution, node);
+        if (this.isIntentMenuEnabled(node)) {
+            delete execution.variables.trigger_intent_handle;
+            this.clearIntentNoMatchCounter(execution, node?.id);
+            this.clearIntentHistory(execution, node?.id);
+            this.clearIntentDefaultMessageOnceReentry(execution);
+
+            const pendingBeforeTriggerIntentMenu = this.readPendingIncomingMessages(execution);
+            if (pendingBeforeTriggerIntentMenu.length === 0) {
+                await this.maybeSendIntentNodeMenu(execution, node);
+            }
+
+            await run(`
+                UPDATE flow_executions
+                SET variables = ?
+                WHERE id = ?
+            `, [JSON.stringify(execution.variables), execution.id]);
+
+            await this.drainPendingIncomingMessages(execution);
+            return;
+        }
+
         if (welcomeSent && this.isIntentTriggerNode(node)) {
             delete execution.variables.trigger_intent_handle;
 
