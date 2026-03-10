@@ -41,6 +41,12 @@ type NodeData = {
     onceRepeatMode?: string;
     onceRepeatValue?: number;
     timeout?: number;
+    responseMode?: 'text' | 'menu';
+    menuPrompt?: string;
+    menuButtonText?: string;
+    menuTitle?: string;
+    menuFooter?: string;
+    menuSectionTitle?: string;
     conditions?: Array<{ value: string; next?: string }>;
     seconds?: number;
     message?: string;
@@ -1843,8 +1849,32 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             outputActions: {},
             outputEntryLabels: {}
         },
-        wait: { label: 'Aguardar Resposta', collapsed: false, timeout: 300, outputActions: {}, outputEntryLabels: {} },
-        condition: { label: 'Condição', collapsed: false, conditions: [], outputActions: {}, outputEntryLabels: {} },
+        wait: {
+            label: 'Aguardar Resposta',
+            collapsed: false,
+            timeout: 300,
+            responseMode: 'text',
+            menuPrompt: 'Selecione uma opção no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuSectionTitle: 'Opções',
+            menuTitle: '',
+            menuFooter: '',
+            outputActions: {},
+            outputEntryLabels: {}
+        },
+        condition: {
+            label: 'Condição',
+            collapsed: false,
+            conditions: [],
+            responseMode: 'text',
+            menuPrompt: 'Selecione uma opção no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuSectionTitle: 'Opções',
+            menuTitle: '',
+            menuFooter: '',
+            outputActions: {},
+            outputEntryLabels: {}
+        },
         delay: { label: 'Delay', collapsed: false, seconds: 5, outputActions: {}, outputEntryLabels: {} },
         transfer: { label: 'Transferir', collapsed: false, message: 'Transferindo para um atendente...', outputActions: {}, outputEntryLabels: {} },
         tag: { label: 'Adicionar Tag', collapsed: false, tag: '' },
@@ -2945,18 +2975,63 @@ function renderProperties() {
             const waitTimeout = Number.isFinite(Number(getNodePropValue('timeout', selectedNode.data.timeout || 300)))
                 ? Math.max(1, Number(getNodePropValue('timeout', selectedNode.data.timeout || 300)))
                 : 300;
+            const waitResponseModeRaw = String(getNodePropValue('responseMode', selectedNode.data.responseMode || 'text')).trim().toLowerCase();
+            const waitResponseMode = waitResponseModeRaw === 'menu' ? 'menu' : 'text';
+            const waitMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Selecione uma opção no menu abaixo:'));
+            const waitMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+            const waitMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Opções'));
+            const waitMenuTitle = String(getNodePropValue('menuTitle', selectedNode.data.menuTitle || ''));
+            const waitMenuFooter = String(getNodePropValue('menuFooter', selectedNode.data.menuFooter || ''));
             html += `
                 <div class="property-group">
                     <label>Timeout (segundos)</label>
                     <input type="number" value="${waitTimeout}" onchange="updateNodeProperty('timeout', Math.max(1, parseInt(this.value || '300', 10) || 300))">
                 </div>
+                <div class="property-group">
+                    <label>Modo de Resposta</label>
+                    <select onchange="updateNodeProperty('responseMode', this.value)">
+                        <option value="text" ${waitResponseMode === 'text' ? 'selected' : ''}>Texto livre (atual)</option>
+                        <option value="menu" ${waitResponseMode === 'menu' ? 'selected' : ''}>Menu interativo</option>
+                    </select>
+                </div>
             `;
+            if (waitResponseMode === 'menu') {
+                html += `
+                    <div class="property-group">
+                        <label>Mensagem do Menu</label>
+                        <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(waitMenuPrompt)}</textarea>
+                    </div>
+                    <div class="property-group">
+                        <label>Texto do Botão</label>
+                        <input type="text" value="${escapeHtml(waitMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
+                    </div>
+                    <div class="property-group">
+                        <label>Título da Seção</label>
+                        <input type="text" value="${escapeHtml(waitMenuSectionTitle)}" onchange="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Opções">
+                    </div>
+                    <div class="property-group">
+                        <label>Título (opcional)</label>
+                        <input type="text" value="${escapeHtml(waitMenuTitle)}" onchange="updateNodeProperty('menuTitle', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <label>Rodapé (opcional)</label>
+                        <input type="text" value="${escapeHtml(waitMenuFooter)}" onchange="updateNodeProperty('menuFooter', this.value)">
+                    </div>
+                `;
+            }
             break;
             
         case 'condition':
             const conditionItems = Array.isArray(getNodePropValue('conditions', selectedNode.data.conditions || []))
                 ? (getNodePropValue('conditions', selectedNode.data.conditions || []) as Array<{ value: string; next?: string }>)
                 : [];
+            const conditionResponseModeRaw = String(getNodePropValue('responseMode', selectedNode.data.responseMode || 'text')).trim().toLowerCase();
+            const conditionResponseMode = conditionResponseModeRaw === 'menu' ? 'menu' : 'text';
+            const conditionMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Selecione uma opção no menu abaixo:'));
+            const conditionMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+            const conditionMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Opções'));
+            const conditionMenuTitle = String(getNodePropValue('menuTitle', selectedNode.data.menuTitle || ''));
+            const conditionMenuFooter = String(getNodePropValue('menuFooter', selectedNode.data.menuFooter || ''));
             html += `
                 <div class="property-group">
                     <label>Condições</label>
@@ -2970,7 +3045,38 @@ function renderProperties() {
                     </div>
                     <button class="add-condition-btn" onclick="addCondition()">+ Adicionar Condição</button>
                 </div>
+                <div class="property-group">
+                    <label>Modo de Resposta</label>
+                    <select onchange="updateNodeProperty('responseMode', this.value)">
+                        <option value="text" ${conditionResponseMode === 'text' ? 'selected' : ''}>Texto livre (atual)</option>
+                        <option value="menu" ${conditionResponseMode === 'menu' ? 'selected' : ''}>Menu interativo</option>
+                    </select>
+                </div>
             `;
+            if (conditionResponseMode === 'menu') {
+                html += `
+                    <div class="property-group">
+                        <label>Mensagem do Menu</label>
+                        <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(conditionMenuPrompt)}</textarea>
+                    </div>
+                    <div class="property-group">
+                        <label>Texto do Botão</label>
+                        <input type="text" value="${escapeHtml(conditionMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
+                    </div>
+                    <div class="property-group">
+                        <label>Título da Seção</label>
+                        <input type="text" value="${escapeHtml(conditionMenuSectionTitle)}" onchange="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Opções">
+                    </div>
+                    <div class="property-group">
+                        <label>Título (opcional)</label>
+                        <input type="text" value="${escapeHtml(conditionMenuTitle)}" onchange="updateNodeProperty('menuTitle', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <label>Rodapé (opcional)</label>
+                        <input type="text" value="${escapeHtml(conditionMenuFooter)}" onchange="updateNodeProperty('menuFooter', this.value)">
+                    </div>
+                `;
+            }
             break;
             
         case 'delay':
@@ -3994,6 +4100,16 @@ function normalizeLoadedFlowData() {
             node.data.onceRepeatValue = Number.isFinite(valueRaw) && valueRaw > 0
                 ? Math.max(1, Math.trunc(valueRaw))
                 : 1;
+        }
+
+        if (node.type === 'wait' || node.type === 'condition') {
+            const rawResponseMode = String((node.data as any)?.responseMode || '').trim().toLowerCase();
+            node.data.responseMode = rawResponseMode === 'menu' ? 'menu' : 'text';
+            node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Selecione uma opção no menu abaixo:';
+            node.data.menuButtonText = String((node.data as any)?.menuButtonText || '').trim() || 'Ver Menu';
+            node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Opções';
+            node.data.menuTitle = String((node.data as any)?.menuTitle || '').trim();
+            node.data.menuFooter = String((node.data as any)?.menuFooter || '').trim();
         }
 
         if (node.type === 'event') {

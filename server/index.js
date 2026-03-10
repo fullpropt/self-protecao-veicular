@@ -2199,14 +2199,80 @@ function unwrapMessageContent(message) {
 
 function extractTextFromMessageContent(content) {
     if (!content) return '';
+    const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
     return (
         content.conversation ||
         content.extendedTextMessage?.text ||
         content.imageMessage?.caption ||
         content.videoMessage?.caption ||
         content.documentMessage?.caption ||
+        interactiveSelection?.text ||
+        interactiveSelection?.id ||
         ''
     );
+}
+
+function extractInteractiveSelectionFromMessageContent(content) {
+    if (!content) return null;
+
+    const listReply = content?.listResponseMessage?.singleSelectReply;
+    if (listReply) {
+        const id = normalizeText(listReply.selectedRowId || listReply.selectedId || '');
+        const text = normalizeText(listReply.title || listReply.selectedDisplayText || listReply.description || '');
+        const description = normalizeText(listReply.description || '');
+        if (id || text || description) {
+            return { id, text, description, source: 'list' };
+        }
+    }
+
+    const buttonReply = content?.buttonsResponseMessage;
+    if (buttonReply) {
+        const id = normalizeText(buttonReply.selectedButtonId || buttonReply.selectedId || '');
+        const text = normalizeText(buttonReply.selectedDisplayText || buttonReply.text || '');
+        if (id || text) {
+            return { id, text, description: '', source: 'buttons' };
+        }
+    }
+
+    const templateButtonReply = content?.templateButtonReplyMessage;
+    if (templateButtonReply) {
+        const id = normalizeText(templateButtonReply.selectedId || templateButtonReply.id || '');
+        const text = normalizeText(templateButtonReply.selectedDisplayText || templateButtonReply.displayText || '');
+        if (id || text) {
+            return { id, text, description: '', source: 'template_button' };
+        }
+    }
+
+    const paramsJson = content?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson;
+    if (paramsJson) {
+        try {
+            const parsed = typeof paramsJson === 'string' ? JSON.parse(paramsJson) : paramsJson;
+            const id = normalizeText(
+                parsed?.id
+                || parsed?.selectedId
+                || parsed?.selected_id
+                || parsed?.selectedRowId
+                || parsed?.selected_row_id
+                || parsed?.optionId
+                || ''
+            );
+            const text = normalizeText(
+                parsed?.text
+                || parsed?.title
+                || parsed?.display_text
+                || parsed?.selectedDisplayText
+                || ''
+            );
+            const description = normalizeText(parsed?.description || '');
+            if (id || text || description) {
+                return { id, text, description, source: 'interactive' };
+            }
+        } catch (_) {
+            // payload invalido nao impede o processamento da mensagem
+        }
+    }
+
+    return null;
 }
 
 function detectMediaTypeFromMessageContent(content) {
@@ -7844,6 +7910,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
     }
 
     const content = contentForRouting;
+    const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
     let text = extractTextFromMessageContent(content);
     let mediaType = detectMediaTypeFromMessageContent(content);
     let persistedMedia = null;
@@ -8153,7 +8220,12 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
                 conversation.created = convCreated;
 
                 await flowService.processIncomingMessage(
-                    { text, mediaType },
+                    {
+                        text,
+                        mediaType,
+                        selectionId: interactiveSelection?.id || '',
+                        selectionText: interactiveSelection?.text || ''
+                    },
                     lead,
                     conversation
                 );
@@ -8176,6 +8248,62 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 }
 
 
+
+/**
+
+ * Normalizar seções de menu/lista para envio WhatsApp
+ */
+function normalizeListSectionsForSend(rawSections, lead, messageText = '') {
+    const sourceSections = Array.isArray(rawSections) ? rawSections : [];
+    if (sourceSections.length === 0) return [];
+
+    const normalizedSections = [];
+    let totalRows = 0;
+
+    for (const section of sourceSections) {
+        if (totalRows >= 10) break;
+
+        const rawRows = Array.isArray(section?.rows) ? section.rows : [];
+        const rows = [];
+
+        for (const row of rawRows) {
+            if (totalRows >= 10) break;
+
+            const rowId = normalizeText(row?.rowId || row?.id || '');
+            const rawTitle = String(row?.title || row?.text || '').trim();
+            if (!rawTitle) continue;
+
+            const title = normalizeText(applyLeadTemplate(rawTitle, lead, { mensagem: messageText || rawTitle }));
+            if (!title) continue;
+
+            const rawDescription = String(row?.description || '').trim();
+            const description = rawDescription
+                ? normalizeText(applyLeadTemplate(rawDescription, lead, { mensagem: rawDescription }))
+                : '';
+
+            rows.push({
+                rowId: rowId || `option-${totalRows + 1}`,
+                title,
+                description: description || undefined
+            });
+            totalRows += 1;
+        }
+
+        if (rows.length === 0) continue;
+
+        const rawSectionTitle = String(section?.title || '').trim();
+        const sectionTitle = rawSectionTitle
+            ? normalizeText(applyLeadTemplate(rawSectionTitle, lead, { mensagem: messageText || rawSectionTitle }))
+            : '';
+
+        normalizedSections.push({
+            title: sectionTitle || `Opcoes ${normalizedSections.length + 1}`,
+            rows
+        });
+    }
+
+    return normalizedSections;
+}
 
 /**
 
@@ -8271,10 +8399,18 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
         conversation = await Conversation.findById(conversation.id);
     }
 
-    const renderedTextMessage = type === 'text'
+    const normalizedType = String(type || 'text').trim().toLowerCase() || 'text';
+    const persistedMediaType = normalizedType === 'list' ? 'text' : normalizedType;
+    const isTextLikeMessage = normalizedType === 'text' || normalizedType === 'list';
+    const isMediaWithUrl = normalizedType === 'image'
+        || normalizedType === 'video'
+        || normalizedType === 'document'
+        || normalizedType === 'audio';
+
+    const renderedTextMessage = isTextLikeMessage
         ? applyLeadTemplate(message, lead, { mensagem: message || '' })
         : message;
-    const renderedCaption = type !== 'text' && String(options.caption || '').trim()
+    const renderedCaption = !isTextLikeMessage && String(options.caption || '').trim()
         ? applyLeadTemplate(options.caption || '', lead, { mensagem: options.caption || '' })
         : (options.caption || '');
 
@@ -8283,11 +8419,39 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     let result;
 
     try {
-        if (type === 'text') {
+        if (normalizedType === 'text') {
 
             result = await session.socket.sendMessage(jid, { text: renderedTextMessage });
 
-        } else if (type === 'image') {
+        } else if (normalizedType === 'list') {
+            const sectionsInput = options.listSections || options.sections || [];
+            const sections = normalizeListSectionsForSend(sectionsInput, lead, renderedTextMessage);
+            if (sections.length === 0) {
+                throw new Error('Mensagem de menu sem opcoes validas');
+            }
+
+            const listButtonTextRaw = String(options.listButtonText || options.buttonText || '').trim();
+            const listButtonText = listButtonTextRaw
+                ? applyLeadTemplate(listButtonTextRaw, lead, { mensagem: listButtonTextRaw })
+                : 'Ver Menu';
+            const listTitleRaw = String(options.listTitle || options.title || '').trim();
+            const listFooterRaw = String(options.listFooter || options.footer || '').trim();
+            const listTitle = listTitleRaw
+                ? applyLeadTemplate(listTitleRaw, lead, { mensagem: renderedTextMessage || listTitleRaw })
+                : '';
+            const listFooter = listFooterRaw
+                ? applyLeadTemplate(listFooterRaw, lead, { mensagem: renderedTextMessage || listFooterRaw })
+                : '';
+
+            result = await session.socket.sendMessage(jid, {
+                text: renderedTextMessage || 'Selecione uma opcao:',
+                title: listTitle || undefined,
+                footer: listFooter || undefined,
+                buttonText: listButtonText,
+                sections
+            });
+
+        } else if (normalizedType === 'image') {
 
             result = await session.socket.sendMessage(jid, {
 
@@ -8297,7 +8461,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             });
 
-        } else if (type === 'video') {
+        } else if (normalizedType === 'video') {
 
             result = await session.socket.sendMessage(jid, {
 
@@ -8307,7 +8471,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             });
 
-        } else if (type === 'document') {
+        } else if (normalizedType === 'document') {
 
             result = await session.socket.sendMessage(jid, {
 
@@ -8319,7 +8483,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             });
 
-        } else if (type === 'audio') {
+        } else if (normalizedType === 'audio') {
 
             result = await session.socket.sendMessage(jid, {
 
@@ -8331,6 +8495,8 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             });
 
+        } else {
+            throw new Error(`Tipo de mensagem nao suportado: ${normalizedType}`);
         }
     } catch (sendError) {
         if (isDisconnectedSessionRuntimeError(sendError)) {
@@ -8395,17 +8561,17 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             sender_type: 'agent',
 
-            content: type === 'text' ? renderedTextMessage : (renderedCaption || ''),
+            content: isTextLikeMessage ? renderedTextMessage : (renderedCaption || ''),
 
-            content_encrypted: encryptMessage(type === 'text' ? renderedTextMessage : (renderedCaption || '')),
+            content_encrypted: encryptMessage(isTextLikeMessage ? renderedTextMessage : (renderedCaption || '')),
 
-            media_type: type,
+            media_type: persistedMediaType,
 
-            media_url: type !== 'text' ? (options.url || message) : null,
+            media_url: isMediaWithUrl ? (options.url || message) : null,
 
-            media_mime_type: type !== 'text' ? (options.mimetype || null) : null,
+            media_mime_type: isMediaWithUrl ? (options.mimetype || null) : null,
 
-            media_filename: type !== 'text' ? (options.fileName || null) : null,
+            media_filename: isMediaWithUrl ? (options.fileName || null) : null,
 
             status: 'sent',
 
@@ -8445,9 +8611,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         to,
 
-        content: type === 'text' ? renderedTextMessage : (renderedCaption || ''),
+        content: isTextLikeMessage ? renderedTextMessage : (renderedCaption || ''),
 
-        type
+        type: normalizedType
 
     }, {
         ownerUserId: Number(sessionOwnerUserId || lead?.owner_user_id || 0) || undefined
@@ -8570,12 +8736,20 @@ function sessionExists(sessionId) {
         const mediaType = String(options?.mediaType || options?.media_type || 'text').trim().toLowerCase() || 'text';
         const content = String(options?.content || '');
         const mediaUrl = options?.mediaUrl || options?.url || null;
+        const listSections = Array.isArray(options?.listSections)
+            ? options.listSections
+            : (Array.isArray(options?.sections) ? options.sections : []);
+        const listButtonText = String(options?.listButtonText || options?.buttonText || '').trim();
+        const listTitle = String(options?.listTitle || options?.title || '').trim();
+        const listFooter = String(options?.listFooter || options?.footer || '').trim();
+        const isListMessage = mediaType === 'list';
 
         if (
             FLOW_MESSAGE_QUEUE_ENABLED
             && QUEUE_WORKER_ENABLED
             && Number.isInteger(normalizedLeadId)
             && normalizedLeadId > 0
+            && !isListMessage
         ) {
             let queuedSessionId = requestedSessionId || resolvedSessionId;
             if (queuedSessionId) {
@@ -8645,6 +8819,10 @@ function sessionExists(sessionId) {
                 fileName: options?.fileName,
                 ptt: options?.ptt,
                 duration: options?.duration,
+                listSections,
+                listButtonText,
+                listTitle,
+                listFooter,
                 conversationId: Number.isInteger(normalizedConversationId) && normalizedConversationId > 0
                     ? normalizedConversationId
                     : null

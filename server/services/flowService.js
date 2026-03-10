@@ -48,6 +48,11 @@ const NODE_ENTRY_HANDLE_MAP_KEY = 'node_entry_handle_by_node';
 const PENDING_INCOMING_MESSAGES_KEY = 'pending_incoming_messages';
 const INTENT_DEFAULT_MESSAGE_ONCE_REENTRY_KEY = 'intent_default_message_once_reentry';
 const FLOW_OUTPUT_ACTION_ERROR_MODES = new Set(['continue', 'required', 'fail_all']);
+const FLOW_INPUT_RESPONSE_MODES = new Set(['text', 'menu']);
+const FLOW_MENU_ROW_PREFIX = 'flow-handle:';
+const FLOW_MENU_BUTTON_TEXT_DEFAULT = 'Ver Menu';
+const FLOW_MENU_SECTION_TITLE_DEFAULT = 'Opcoes';
+const FLOW_MENU_PROMPT_DEFAULT = 'Selecione uma opcao no menu abaixo:';
 
 function normalizeBooleanFlag(value) {
     if (typeof value === 'boolean') return value;
@@ -212,6 +217,18 @@ function parseIntentResponseList(value = null, fallbackValue = '') {
 
     const fallback = sanitizeOutgoingFlowText(value || fallbackValue || '');
     return fallback ? [fallback] : [];
+}
+
+function parsePathHandleIndex(handleValue = '') {
+    const normalized = String(handleValue || '').trim().toLowerCase();
+    if (!normalized || normalized === 'default') return 1;
+
+    const match = normalized.match(/^path-(\d+)$/);
+    if (!match) return null;
+
+    const parsed = Number.parseInt(match[1], 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return null;
+    return parsed;
 }
 
 function parseLeadCustomFields(value) {
@@ -957,6 +974,239 @@ class FlowService extends EventEmitter {
         return normalized || 'default';
     }
 
+    normalizeFlowResponseMode(value = 'text') {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (FLOW_INPUT_RESPONSE_MODES.has(normalized)) return normalized;
+        return 'text';
+    }
+
+    resolveAwaitingInputMode(node = null) {
+        return this.normalizeFlowResponseMode(node?.data?.responseMode || 'text');
+    }
+
+    isAwaitingInputMenuEnabled(node = null) {
+        const nodeType = String(node?.type || '').trim().toLowerCase();
+        if (nodeType !== 'wait' && nodeType !== 'condition') return false;
+        return this.resolveAwaitingInputMode(node) === 'menu';
+    }
+
+    normalizeOutputEntryLabelsMap(value = {}) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return {};
+        }
+
+        const normalizedMap = {};
+        for (const [rawHandle, rawLabel] of Object.entries(value)) {
+            const handle = this.normalizeFlowHandle(rawHandle);
+            const label = sanitizeOutgoingFlowText(rawLabel);
+            if (!label) continue;
+            normalizedMap[handle] = label;
+        }
+
+        return normalizedMap;
+    }
+
+    getAwaitingInputEdges(flow = null, node = null) {
+        const nodeId = String(node?.id || '').trim();
+        if (!nodeId) return [];
+
+        const edges = (Array.isArray(flow?.edges) ? flow.edges : [])
+            .filter((edge) => String(edge?.source || '').trim() === nodeId);
+        if (edges.length === 0) return [];
+
+        const uniqueByHandle = new Map();
+        for (const edge of edges) {
+            const handle = this.normalizeFlowHandle(edge?.sourceHandle);
+            if (!uniqueByHandle.has(handle)) {
+                uniqueByHandle.set(handle, edge);
+            }
+        }
+
+        return Array.from(uniqueByHandle.values()).sort((a, b) => {
+            const aHandle = this.normalizeFlowHandle(a?.sourceHandle);
+            const bHandle = this.normalizeFlowHandle(b?.sourceHandle);
+            const aIndex = parsePathHandleIndex(aHandle);
+            const bIndex = parsePathHandleIndex(bHandle);
+
+            if (aIndex !== null && bIndex !== null) return aIndex - bIndex;
+            if (aIndex !== null) return -1;
+            if (bIndex !== null) return 1;
+            return aHandle.localeCompare(bHandle, 'pt-BR');
+        });
+    }
+
+    resolveAwaitingInputOptionLabel(node = null, edge = null, index = 1) {
+        const handle = this.normalizeFlowHandle(edge?.sourceHandle);
+        const labelsMap = this.normalizeOutputEntryLabelsMap(node?.data?.outputEntryLabels || {});
+        const mappedLabel = sanitizeOutgoingFlowText(labelsMap[handle] || '');
+        if (mappedLabel) return mappedLabel;
+
+        const inputLabel = sanitizeOutgoingFlowText(edge?.inputLabel || '');
+        if (inputLabel) return inputLabel;
+
+        const edgeLabel = sanitizeOutgoingFlowText(edge?.label || '');
+        if (edgeLabel && !/^\d+$/.test(edgeLabel)) return edgeLabel;
+
+        const optionIndex = Number.isFinite(index) && index > 0 ? Math.trunc(index) : 1;
+        return `Opcao ${optionIndex}`;
+    }
+
+    getAwaitingInputMenuOptions(flow = null, node = null) {
+        const edges = this.getAwaitingInputEdges(flow, node);
+        if (edges.length === 0) return [];
+
+        return edges.map((edge, position) => {
+            const handle = this.normalizeFlowHandle(edge?.sourceHandle);
+            const index = parsePathHandleIndex(handle) || (position + 1);
+            const title = this.resolveAwaitingInputOptionLabel(node, edge, index);
+            const rawEdgeLabel = sanitizeOutgoingFlowText(edge?.label || '');
+            const description = rawEdgeLabel
+                && rawEdgeLabel !== title
+                && !/^\d+$/.test(rawEdgeLabel)
+                ? rawEdgeLabel
+                : '';
+
+            return {
+                handle,
+                rowId: `${FLOW_MENU_ROW_PREFIX}${handle}`,
+                title,
+                description
+            };
+        });
+    }
+
+    normalizeFlowHandleFromToken(value = '') {
+        const rawToken = String(value || '').trim();
+        if (!rawToken) return '';
+
+        const normalizedToken = rawToken.toLowerCase();
+        if (normalizedToken.startsWith(FLOW_MENU_ROW_PREFIX)) {
+            const rawHandle = normalizedToken.slice(FLOW_MENU_ROW_PREFIX.length);
+            return this.normalizeFlowHandleFromToken(rawHandle);
+        }
+
+        if (normalizedToken === 'default' || normalizedToken === 'padrao' || normalizedToken === 'padrão') {
+            return 'default';
+        }
+
+        if (/^\d+$/.test(normalizedToken)) {
+            const optionNumber = Number.parseInt(normalizedToken, 10);
+            if (Number.isFinite(optionNumber) && optionNumber > 0) {
+                return optionNumber <= 1 ? 'default' : `path-${optionNumber}`;
+            }
+        }
+
+        const pathMatch = normalizedToken.match(/^path-(\d+)$/);
+        if (pathMatch) {
+            const parsed = Number.parseInt(pathMatch[1], 10);
+            if (Number.isFinite(parsed) && parsed > 0) {
+                return parsed <= 1 ? 'default' : `path-${parsed}`;
+            }
+        }
+
+        return '';
+    }
+
+    resolveFlowHandleFromInboundMessage(message = {}, responseText = '') {
+        const candidates = [
+            message?.selectionId,
+            message?.selectedRowId,
+            message?.optionId,
+            message?.choiceId,
+            responseText
+        ];
+
+        for (const candidate of candidates) {
+            const handle = this.normalizeFlowHandleFromToken(candidate);
+            if (handle) return handle;
+        }
+
+        return '';
+    }
+
+    resolveMenuPrompt(node = null, execution = null) {
+        const rawPrompt = this.replaceVariables(node?.data?.menuPrompt || '', execution?.variables || {});
+        const sanitized = sanitizeOutgoingFlowText(rawPrompt);
+        return sanitized || FLOW_MENU_PROMPT_DEFAULT;
+    }
+
+    resolveMenuButtonText(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuButtonText || '', execution?.variables || {});
+        const sanitized = sanitizeOutgoingFlowText(rawText);
+        return sanitized || FLOW_MENU_BUTTON_TEXT_DEFAULT;
+    }
+
+    resolveMenuSectionTitle(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuSectionTitle || '', execution?.variables || {});
+        const sanitized = sanitizeOutgoingFlowText(rawText);
+        return sanitized || FLOW_MENU_SECTION_TITLE_DEFAULT;
+    }
+
+    resolveMenuTitle(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuTitle || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText);
+    }
+
+    resolveMenuFooter(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuFooter || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText);
+    }
+
+    buildAwaitingInputMenuPayload(execution = null, node = null) {
+        if (!this.isAwaitingInputMenuEnabled(node)) return null;
+
+        const options = this.getAwaitingInputMenuOptions(execution?.flow, node);
+        if (options.length === 0) return null;
+
+        const rows = options
+            .slice(0, 10)
+            .map((item) => ({
+                rowId: item.rowId,
+                title: item.title,
+                description: item.description || undefined
+            }));
+        const sectionTitle = this.resolveMenuSectionTitle(node, execution);
+        const menuTitle = this.resolveMenuTitle(node, execution);
+        const menuFooter = this.resolveMenuFooter(node, execution);
+
+        return {
+            mediaType: 'list',
+            content: this.resolveMenuPrompt(node, execution),
+            listButtonText: this.resolveMenuButtonText(node, execution),
+            listTitle: menuTitle || undefined,
+            listFooter: menuFooter || undefined,
+            listSections: [
+                {
+                    title: sectionTitle,
+                    rows
+                }
+            ]
+        };
+    }
+
+    async maybeSendAwaitingInputMenu(execution = null, node = null) {
+        if (!this.sendFunction) return false;
+        const payload = this.buildAwaitingInputMenuPayload(execution, node);
+        if (!payload) return false;
+
+        await this.sendFunction({
+            leadId: execution?.lead?.id || null,
+            to: execution?.lead?.phone || '',
+            jid: execution?.lead?.jid || '',
+            sessionId: execution?.conversation?.session_id || null,
+            conversationId: execution?.conversation?.id || null,
+            flowId: execution?.flow?.id || null,
+            nodeId: node?.id || null,
+            content: payload.content,
+            mediaType: payload.mediaType,
+            listButtonText: payload.listButtonText,
+            listTitle: payload.listTitle,
+            listFooter: payload.listFooter,
+            listSections: payload.listSections
+        });
+        return true;
+    }
+
     normalizeFlowSessionScope(value = '') {
         const normalized = String(value ?? '').trim();
         return normalized || '';
@@ -1382,9 +1632,13 @@ class FlowService extends EventEmitter {
         return value
             .map((entry) => {
                 const text = String(entry?.text || '').trim();
-                if (!text) return null;
+                const selectionId = String(entry?.selectionId || '').trim();
+                const selectionText = String(entry?.selectionText || '').trim();
+                if (!text && !selectionId && !selectionText) return null;
                 return {
                     text,
+                    selectionId,
+                    selectionText,
                     mediaType: String(entry?.mediaType || 'text').trim().toLowerCase() || 'text',
                     receivedAt: String(entry?.receivedAt || '').trim() || new Date().toISOString()
                 };
@@ -1394,19 +1648,23 @@ class FlowService extends EventEmitter {
 
     enqueuePendingIncomingMessage(execution, message = {}) {
         const text = String(message?.text || '').trim();
-        if (!text) return 0;
+        const selectionId = String(message?.selectionId || '').trim();
+        const selectionText = String(message?.selectionText || '').trim();
+        if (!text && !selectionId && !selectionText) return 0;
 
         const variables = this.ensureExecutionVariables(execution);
         const queue = this.readPendingIncomingMessages(execution);
-        const normalizedText = normalizeIntentText(text);
+        const normalizedText = normalizeIntentText(text || selectionText || selectionId);
         const lastEntry = queue[queue.length - 1] || null;
-        const lastText = normalizeIntentText(lastEntry?.text || '');
+        const lastText = normalizeIntentText(lastEntry?.text || lastEntry?.selectionText || lastEntry?.selectionId || '');
         if (normalizedText && normalizedText === lastText) {
             return queue.length;
         }
 
         queue.push({
             text,
+            selectionId,
+            selectionText,
             mediaType: String(message?.mediaType || 'text').trim().toLowerCase() || 'text',
             receivedAt: new Date().toISOString()
         });
@@ -1758,7 +2016,10 @@ class FlowService extends EventEmitter {
      */
     async continueFlow(execution, message) {
         const currentNode = this.findNode(execution.flow, execution.currentNode);
-        const messageText = String(message?.text || '').trim();
+        const incomingText = String(message?.text || '').trim();
+        const selectionText = String(message?.selectionText || '').trim();
+        const selectionId = String(message?.selectionId || '').trim();
+        const messageText = incomingText || selectionText || selectionId;
 
         if (!currentNode) {
             await this.endFlow(execution, 'completed');
@@ -1845,7 +2106,13 @@ class FlowService extends EventEmitter {
             execution.variables.last_response = messageText;
 
             const currentEntryHandle = this.getNodeEntryHandle(execution, currentNode.id);
-            const nextEdge = this.evaluateConditionEdge(execution.flow, currentNode, messageText, currentEntryHandle);
+            const nextEdge = this.evaluateConditionEdge(
+                execution.flow,
+                currentNode,
+                messageText,
+                currentEntryHandle,
+                message
+            );
             const nextNodeId = nextEdge?.target || null;
             const nextTargetHandle = this.normalizeFlowHandle(nextEdge?.targetHandle);
             const nextSourceHandle = this.normalizeFlowHandle(nextEdge?.sourceHandle);
@@ -1854,6 +2121,10 @@ class FlowService extends EventEmitter {
                 await this.executeOutputActions(execution, currentNode, nextSourceHandle);
                 await this.executeNode(execution, nextNodeId, nextTargetHandle);
             } else {
+                if (this.isAwaitingInputMenuEnabled(currentNode)) {
+                    await this.persistExecutionVariables(execution);
+                    return execution;
+                }
                 await this.endFlow(execution, 'completed');
             }
 
@@ -2005,6 +2276,12 @@ class FlowService extends EventEmitter {
                 case 'wait':
                     // Aguarda resposta do usuario
                     // O fluxo sera continuado quando chegar nova mensagem
+                    if (this.isAwaitingInputMenuEnabled(node)) {
+                        const pendingBeforeWait = this.readPendingIncomingMessages(execution);
+                        if (pendingBeforeWait.length === 0) {
+                            await this.maybeSendAwaitingInputMenu(execution, node);
+                        }
+                    }
                     await this.drainPendingIncomingMessages(execution);
                     break;
 
@@ -2014,7 +2291,12 @@ class FlowService extends EventEmitter {
                     break;
 
                 case 'condition':
-                    // Aguardar resposta para avaliar condição
+                    if (this.isAwaitingInputMenuEnabled(node)) {
+                        const pendingBeforeCondition = this.readPendingIncomingMessages(execution);
+                        if (pendingBeforeCondition.length === 0) {
+                            await this.maybeSendAwaitingInputMenu(execution, node);
+                        }
+                    }
                     await this.drainPendingIncomingMessages(execution);
                     break;
                     
@@ -2737,41 +3019,86 @@ class FlowService extends EventEmitter {
     /**
      * Avaliar condição e retornar próximo nó
      */
-    evaluateConditionEdge(flow, node, response, preferredSourceHandle = 'default') {
-        const text = response?.toLowerCase().trim() || '';
-
-        if (node?.data?.conditions) {
-            for (const condition of node.data.conditions) {
-                const conditionValue = String(condition?.value || '').toLowerCase().trim();
-                if (!conditionValue) continue;
-                if (text === conditionValue || text.includes(conditionValue)) {
-                    const explicitNext = String(condition?.next || '').trim();
-                    if (explicitNext) {
-                        return {
-                            source: node?.id,
-                            target: explicitNext,
-                            sourceHandle: 'default',
-                            targetHandle: 'default'
-                        };
-                    }
-                }
-            }
-        }
-
+    evaluateConditionEdge(flow, node, response, preferredSourceHandle = 'default', message = {}) {
+        const responseText = String(response || '').trim();
+        const text = responseText.toLowerCase();
+        const normalizedText = normalizeIntentText(responseText);
         const edges = (flow?.edges || []).filter((edge) => edge.source === node?.id);
         if (edges.length === 0) return null;
 
         const normalizedPreferredHandle = this.normalizeFlowHandle(preferredSourceHandle);
+        const explicitHandle = this.resolveFlowHandleFromInboundMessage(message, responseText);
+        if (explicitHandle) {
+            const explicitEdge = edges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === explicitHandle);
+            if (explicitEdge) {
+                return explicitEdge;
+            }
+        }
+
+        if (node?.data?.conditions) {
+            for (const condition of node.data.conditions) {
+                const conditionValueRaw = String(condition?.value || '').trim();
+                if (!conditionValueRaw) continue;
+
+                const conditionValue = conditionValueRaw.toLowerCase();
+                const normalizedConditionValue = normalizeIntentText(conditionValueRaw);
+                const hasTextMatch = (
+                    (text && (text === conditionValue || text.includes(conditionValue)))
+                    || (normalizedText && normalizedConditionValue && (
+                        normalizedText === normalizedConditionValue
+                        || normalizedText.includes(normalizedConditionValue)
+                    ))
+                );
+
+                if (!hasTextMatch) continue;
+
+                const explicitNext = String(condition?.next || '').trim();
+                if (explicitNext) {
+                    return {
+                        source: node?.id,
+                        target: explicitNext,
+                        sourceHandle: 'default',
+                        targetHandle: 'default'
+                    };
+                }
+            }
+        }
+
+        const outputEntryLabels = this.normalizeOutputEntryLabelsMap(node?.data?.outputEntryLabels || {});
 
         for (const edge of edges) {
-            const edgeLabel = String(edge?.label || '').toLowerCase().trim();
-            if (!edgeLabel) continue;
-            if (text === edgeLabel || text.includes(edgeLabel)) {
+            const edgeHandle = this.normalizeFlowHandle(edge?.sourceHandle);
+            const edgeLabel = String(edge?.label || '').trim();
+            const edgeInputLabel = String(edge?.inputLabel || '').trim();
+            const mapLabel = String(outputEntryLabels[edgeHandle] || '').trim();
+            const handleIndex = parsePathHandleIndex(edgeHandle);
+            const aliases = [
+                edgeLabel,
+                edgeInputLabel,
+                mapLabel,
+                handleIndex ? String(handleIndex) : '',
+                edgeHandle === 'default' ? 'default' : edgeHandle,
+                edgeHandle === 'default' ? 'padrao' : ''
+            ]
+                .map((value) => normalizeIntentText(value))
+                .filter(Boolean);
+
+            if (aliases.length === 0 || !normalizedText) continue;
+            const hasAliasMatch = aliases.some((alias) => (
+                normalizedText === alias || normalizedText.includes(alias)
+            ));
+            if (hasAliasMatch) {
                 return edge;
             }
         }
 
-        const unlabeledEdges = edges.filter((edge) => !String(edge?.label || '').trim());
+        const unlabeledEdges = edges.filter((edge) => {
+            const handle = this.normalizeFlowHandle(edge?.sourceHandle);
+            const edgeLabel = String(edge?.label || '').trim();
+            const edgeInputLabel = String(edge?.inputLabel || '').trim();
+            const mapLabel = String(outputEntryLabels[handle] || '').trim();
+            return !edgeLabel && !edgeInputLabel && !mapLabel;
+        });
         const preferredEdge = unlabeledEdges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === normalizedPreferredHandle);
         if (preferredEdge) return preferredEdge;
 
@@ -2779,6 +3106,8 @@ class FlowService extends EventEmitter {
         if (defaultEdge) return defaultEdge;
 
         if (unlabeledEdges.length > 0) return unlabeledEdges[0];
+        const preferredAnyEdge = edges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === normalizedPreferredHandle);
+        if (preferredAnyEdge) return preferredAnyEdge;
         return edges[0] || null;
     }
 
@@ -2874,3 +3203,4 @@ class FlowService extends EventEmitter {
 
 module.exports = new FlowService();
 module.exports.FlowService = FlowService;
+

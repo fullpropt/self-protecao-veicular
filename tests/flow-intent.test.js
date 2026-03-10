@@ -82,6 +82,79 @@ describe('FlowService intent routing', () => {
 });
 
 describe('FlowService intent routing compatibility', () => {
+    test('buildAwaitingInputMenuPayload monta menu com opcoes das saidas do no', () => {
+        const service = new FlowService();
+        const waitNode = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Escolha uma opcao:',
+                menuButtonText: 'Abrir menu',
+                menuSectionTitle: 'Menu principal',
+                outputEntryLabels: {
+                    default: 'Quero comprar',
+                    'path-2': 'Quero atendimento humano'
+                }
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [waitNode],
+                edges: [
+                    { source: 'wait-menu', target: 'buy-node', sourceHandle: 'default' },
+                    { source: 'wait-menu', target: 'human-node', sourceHandle: 'path-2' }
+                ]
+            },
+            variables: {}
+        };
+
+        const payload = service.buildAwaitingInputMenuPayload(execution, waitNode);
+        expect(payload).toBeTruthy();
+        expect(payload.mediaType).toBe('list');
+        expect(payload.content).toBe('Escolha uma opcao:');
+        expect(payload.listButtonText).toBe('Abrir menu');
+        expect(payload.listSections[0].title).toBe('Menu principal');
+        expect(payload.listSections[0].rows).toEqual([
+            expect.objectContaining({ rowId: 'flow-handle:default', title: 'Quero comprar' }),
+            expect.objectContaining({ rowId: 'flow-handle:path-2', title: 'Quero atendimento humano' })
+        ]);
+    });
+
+    test('evaluateConditionEdge usa selectionId do menu para escolher a saida correta', () => {
+        const service = new FlowService();
+        const flow = {
+            nodes: [],
+            edges: [
+                { source: 'wait-menu', target: 'buy-node', sourceHandle: 'default' },
+                { source: 'wait-menu', target: 'human-node', sourceHandle: 'path-2' }
+            ]
+        };
+        const node = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                outputEntryLabels: {
+                    default: 'Comprar',
+                    'path-2': 'Humano'
+                }
+            }
+        };
+
+        const edge = service.evaluateConditionEdge(
+            flow,
+            node,
+            'qualquer texto',
+            'default',
+            { selectionId: 'flow-handle:path-2' }
+        );
+
+        expect(edge).toBeTruthy();
+        expect(edge.target).toBe('human-node');
+    });
+
     test('continueFlow treats trigger keyword node as intent routing node', async () => {
         const service = new FlowService();
         const node = {
