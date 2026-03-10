@@ -10635,6 +10635,37 @@ function normalizeLegacyEmailTemplateValue(value, currentDefault, legacyDefault)
     return normalized;
 }
 
+function normalizeLegacyEmailHtmlTemplateLayout(value, currentDefault) {
+    const normalized = String(value || '');
+    if (!normalized.trim()) return normalized;
+
+    const defaultTrimmed = String(currentDefault || '').trim();
+    if (defaultTrimmed && normalized.trim() === defaultTrimmed) {
+        return normalized;
+    }
+
+    const looksLikeDefaultTemplateFamily = (
+        normalized.includes('<tr><td style="padding:28px 24px;">')
+        && normalized.includes('{{confirmation_url}}')
+        && normalized.includes('{{expires_in_text}}')
+        && normalized.includes('Confirmar e-mail')
+        && normalized.includes('ZapVender')
+    );
+
+    if (!looksLikeDefaultTemplateFamily) {
+        return normalized;
+    }
+
+    return normalized
+        .split('<tr><td style="padding:28px 24px;">').join('<tr><td style="padding:28px 24px;text-align:center;" align="center">')
+        .split('font-size:16px;line-height:1.5;color:#142033;">').join('font-size:16px;line-height:1.5;color:#142033;text-align:center;">')
+        .split('font-size:15px;line-height:1.6;color:#344054;">').join('font-size:15px;line-height:1.6;color:#344054;text-align:center;">')
+        .split('margin:0 0 20px 0;"><a href="{{confirmation_url}}"').join('margin:0 0 20px 0;text-align:center;"><a href="{{confirmation_url}}"')
+        .split('font-size:13px;line-height:1.6;color:#667085;">').join('font-size:13px;line-height:1.6;color:#667085;text-align:center;">')
+        .split('<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;">').join('<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;text-align:center;" align="center">')
+        .split('font-size:12px;line-height:1.5;color:#667085;">').join('font-size:12px;line-height:1.5;color:#667085;text-align:center;">');
+}
+
 function normalizeEmailDeliverySettingsInput(payload = {}, currentSettings = {}) {
     const source = payload && typeof payload === 'object' ? payload : {};
     const current = currentSettings && typeof currentSettings === 'object' ? currentSettings : {};
@@ -10661,10 +10692,13 @@ function normalizeEmailDeliverySettingsInput(payload = {}, currentSettings = {})
         DEFAULT_EMAIL_SUBJECT_TEMPLATE
     );
     const htmlTemplate = sanitizeEmailTemplateValue(
-        normalizeLegacyEmailTemplateValue(
-            source.htmlTemplate ?? current.htmlTemplate,
-            DEFAULT_EMAIL_HTML_TEMPLATE,
-            [LEGACY_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE_V2]
+        normalizeLegacyEmailHtmlTemplateLayout(
+            normalizeLegacyEmailTemplateValue(
+                source.htmlTemplate ?? current.htmlTemplate,
+                DEFAULT_EMAIL_HTML_TEMPLATE,
+                [LEGACY_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE_V2]
+            ),
+            DEFAULT_EMAIL_HTML_TEMPLATE
         ),
         DEFAULT_EMAIL_HTML_TEMPLATE
     );
