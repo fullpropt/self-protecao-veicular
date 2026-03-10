@@ -194,6 +194,13 @@ function getCampaignStatusLabel(status: CampaignStatus) {
     return 'Rascunho';
 }
 
+function getCampaignStatusBadgeVariant(status: CampaignStatus) {
+    if (status === 'active') return 'success';
+    if (status === 'paused') return 'warning';
+    if (status === 'completed') return 'info';
+    return 'secondary';
+}
+
 function isCampaignFinalized(campaign: Partial<Campaign> | undefined) {
     if (!campaign) return false;
     if (campaign.status === 'completed') return true;
@@ -207,6 +214,17 @@ function isCampaignFinalized(campaign: Partial<Campaign> | undefined) {
     const queuePending = Number(campaign.queue_pending || 0);
     const queueProcessing = Number(campaign.queue_processing || 0);
     return queueTotal > 0 && queuePending === 0 && queueProcessing === 0;
+}
+
+function getCampaignDisplayStatus(campaign: Partial<Campaign> | undefined): CampaignStatus {
+    if (!campaign) return 'draft';
+    if (isCampaignFinalized(campaign)) return 'completed';
+
+    const status = String(campaign.status || '').trim().toLowerCase();
+    if (status === 'active' || status === 'paused' || status === 'completed' || status === 'draft') {
+        return status as CampaignStatus;
+    }
+    return 'draft';
 }
 
 function getCampaignTypeLabel(type: CampaignType | string) {
@@ -1250,6 +1268,7 @@ function isCampaignDetailsModalOpen() {
 function renderCampaignOverviewContent(campaign: Campaign) {
     const campaignOverview = document.getElementById('campaignOverview') as HTMLElement | null;
     if (!campaignOverview) return;
+    const displayStatus = getCampaignDisplayStatus(campaign);
 
     campaignOverview.innerHTML = `
         <div class="stats-grid" style="margin-bottom: 20px;">
@@ -1280,7 +1299,7 @@ function renderCampaignOverviewContent(campaign: Campaign) {
         </div>
         <p><strong>Descrição:</strong> ${campaign.description || 'Sem descrição'}</p>
         <p><strong>Tipo:</strong> ${getCampaignTypeLabel(campaign.type)}</p>
-        <p><strong>Status:</strong> ${getCampaignStatusLabel(campaign.status)}</p>
+        <p><strong>Status:</strong> ${getCampaignStatusLabel(displayStatus)}</p>
         <p><strong>Distribuição:</strong> ${escapeCampaignText(getDistributionStrategyLabel(campaign.distribution_strategy || 'round_robin'))}</p>
         <p><strong>Contas de envio:</strong> ${escapeCampaignText(renderCampaignSenderAccountsSummary(campaign))}</p>
         <p><strong>Horário de envio:</strong> ${escapeCampaignText(formatCampaignSendWindowLabel(campaign))}</p>
@@ -1885,6 +1904,9 @@ function renderCampaigns() {
     }
 
     container.innerHTML = campaigns.map(c => {
+        const displayStatus = getCampaignDisplayStatus(c);
+        const queueTotal = Math.max(Number(c.queue_total || 0), Number(c.sent || 0));
+        const sentRate = queueTotal > 0 ? (Number(c.sent || 0) / queueTotal * 100) : 0;
         const deliveryRate = c.sent > 0 ? (c.delivered / c.sent * 100) : 0;
         const readRate = c.delivered > 0 ? (c.read / c.delivered * 100) : 0;
         const replyRate = c.read > 0 ? (c.replied / c.read * 100) : 0;
@@ -1912,8 +1934,8 @@ function renderCampaigns() {
                             <div class="campaign-date">Criada em ${formatDate(c.created_at, 'short')}</div>
                         </div>
                         <div class="campaign-header-meta">
-                            <span class="badge badge-${c.status === 'active' ? 'success' : c.status === 'paused' ? 'warning' : c.status === 'completed' ? 'info' : 'secondary'}">
-                                ${getCampaignStatusLabel(c.status)}
+                            <span class="badge badge-${getCampaignStatusBadgeVariant(displayStatus)}">
+                                ${getCampaignStatusLabel(displayStatus)}
                             </span>
                             <span class="campaign-expand-icon" aria-hidden="true">&#9662;</span>
                         </div>
@@ -1926,6 +1948,10 @@ function renderCampaigns() {
                             <div class="campaign-stat">
                                 <div class="campaign-stat-value">${formatNumber(c.sent || 0)}</div>
                                 <div class="campaign-stat-label">Enviadas</div>
+                            </div>
+                            <div class="campaign-stat">
+                                <div class="campaign-stat-value">${formatPercent(sentRate)}</div>
+                                <div class="campaign-stat-label">Enviadas (%)</div>
                             </div>
                             <div class="campaign-stat">
                                 <div class="campaign-stat-value">${formatPercent(deliveryRate)}</div>
@@ -1942,7 +1968,7 @@ function renderCampaigns() {
                         </div>
                         <div class="campaign-progress">
                             <div class="progress" style="height: 8px;">
-                                <div class="progress-bar" style="width: ${deliveryRate}%; background: var(--success);"></div>
+                                <div class="progress-bar" style="width: ${Math.max(0, Math.min(100, sentRate))}%; background: var(--success);"></div>
                             </div>
                         </div>
                     </div>
