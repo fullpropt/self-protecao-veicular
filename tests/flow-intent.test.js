@@ -1271,6 +1271,127 @@ describe('FlowService intent routing compatibility', () => {
         startFlowSpy.mockRestore();
     });
 
+    test('processIncomingMessage starts session-scoped menu flow on first received message', async () => {
+        const service = new FlowService();
+        intentClassifier.classifyKeywordFlowIntent.mockReset();
+
+        const scopedMenuFlow = {
+            id: 301,
+            name: 'Menu MOMNT',
+            trigger_type: 'keyword',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [
+                {
+                    id: 'trigger-menu-session',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opção'
+                    }
+                }
+            ],
+            edges: []
+        };
+        const globalMenuFlow = {
+            id: 302,
+            name: 'Menu Global',
+            trigger_type: 'keyword',
+            session_id: null,
+            priority: 999,
+            nodes: [
+                {
+                    id: 'trigger-menu-global',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opção global'
+                    }
+                }
+            ],
+            edges: []
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([globalMenuFlow, scopedMenuFlow]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 901 });
+
+        const result = await service.processIncomingMessage(
+            { text: 'oi' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: true }
+        );
+
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            scopedMenuFlow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'oi' })
+        );
+        expect(keywordSpy).not.toHaveBeenCalled();
+        expect(intentClassifier.classifyKeywordFlowIntent).not.toHaveBeenCalled();
+        expect(newContactSpy).not.toHaveBeenCalled();
+        expect(result).toEqual({ id: 901 });
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
+    });
+
+    test('processIncomingMessage does not auto-start menu flow after first message', async () => {
+        const service = new FlowService();
+        intentClassifier.classifyKeywordFlowIntent.mockReset();
+        const menuFlow = {
+            id: 303,
+            name: 'Menu MOMNT',
+            trigger_type: 'keyword',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [
+                {
+                    id: 'trigger-menu-session',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opção'
+                    }
+                }
+            ],
+            edges: []
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([menuFlow]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 902 });
+        intentClassifier.classifyKeywordFlowIntent.mockResolvedValue({ status: 'no_match' });
+
+        const result = await service.processIncomingMessage(
+            { text: 'oi de novo' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
+        );
+
+        expect(startFlowSpy).not.toHaveBeenCalled();
+        expect(keywordSpy).toHaveBeenCalled();
+        expect(newContactSpy).not.toHaveBeenCalled();
+        expect(result).toBeNull();
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
+    });
+
     test('processIncomingMessage preserves direct keyword match even with semantic no_match in strict mode', async () => {
         process.env.FLOW_INTENT_CLASSIFIER_STRICT = '1';
         process.env.GEMINI_API_KEY = 'mock-key';

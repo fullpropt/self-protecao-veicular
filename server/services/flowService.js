@@ -1552,6 +1552,46 @@ class FlowService extends EventEmitter {
         return null;
     }
 
+    pickScopedFlowByPriority(candidateFlows = [], conversationSessionId = '') {
+        const eligible = Array.isArray(candidateFlows) ? candidateFlows.filter(Boolean) : [];
+        if (eligible.length === 0) return null;
+        if (eligible.length === 1) return eligible[0];
+
+        const normalizedConversationSessionId = this.normalizeFlowSessionScope(conversationSessionId);
+        const sessionScoped = eligible.filter((item) => {
+            const flowSessionId = this.normalizeFlowSessionScope(item?.session_id);
+            return Boolean(flowSessionId) && flowSessionId === normalizedConversationSessionId;
+        });
+
+        const pool = sessionScoped.length > 0 ? sessionScoped : eligible;
+        if (pool.length === 1) return pool[0];
+
+        const highestPriority = Math.max(...pool.map((item) => Number(item?.priority || 0)));
+        const topPriorityFlows = pool.filter((item) => Number(item?.priority || 0) === highestPriority);
+        if (topPriorityFlows.length === 1) return topPriorityFlows[0];
+
+        return null;
+    }
+
+    isKeywordFlowWithIntentTriggerFirstMessageMenu(flow = null) {
+        const triggerType = String(flow?.trigger_type || '').trim().toLowerCase();
+        if (triggerType !== 'keyword') return false;
+
+        const triggerNode = this.resolveFlowTriggerStartNode(flow);
+        if (!this.isIntentTriggerNode(triggerNode)) {
+            return false;
+        }
+
+        return this.isIntentMenuEnabled(triggerNode);
+    }
+
+    pickKeywordFlowByIntentTriggerFirstMessageMenu(candidateFlows = [], conversationSessionId = '') {
+        const eligible = (Array.isArray(candidateFlows) ? candidateFlows : [])
+            .filter((item) => this.isKeywordFlowWithIntentTriggerFirstMessageMenu(item));
+
+        return this.pickScopedFlowByPriority(eligible, conversationSessionId);
+    }
+
     isKeywordFlowWithIntentTriggerCatchAllFallback(flow = null) {
         const triggerType = String(flow?.trigger_type || '').trim().toLowerCase();
         if (triggerType !== 'keyword') return false;
@@ -1581,23 +1621,7 @@ class FlowService extends EventEmitter {
     pickKeywordFlowByIntentTriggerCatchAllFallback(candidateFlows = [], conversationSessionId = '') {
         const eligible = (Array.isArray(candidateFlows) ? candidateFlows : [])
             .filter((item) => this.isKeywordFlowWithIntentTriggerCatchAllFallback(item));
-
-        if (eligible.length === 0) return null;
-
-        const normalizedConversationSessionId = this.normalizeFlowSessionScope(conversationSessionId);
-        const sessionScoped = eligible.filter((item) => {
-            const flowSessionId = this.normalizeFlowSessionScope(item?.session_id);
-            return Boolean(flowSessionId) && flowSessionId === normalizedConversationSessionId;
-        });
-
-        const pool = sessionScoped.length > 0 ? sessionScoped : eligible;
-        if (pool.length === 1) return pool[0];
-
-        const highestPriority = Math.max(...pool.map((item) => Number(item?.priority || 0)));
-        const topPriorityFlows = pool.filter((item) => Number(item?.priority || 0) === highestPriority);
-        if (topPriorityFlows.length === 1) return topPriorityFlows[0];
-
-        return null;
+        return this.pickScopedFlowByPriority(eligible, conversationSessionId);
     }
 
     readNodeEntryHandleMap(execution) {
@@ -2124,13 +2148,39 @@ class FlowService extends EventEmitter {
         const flowScopeOptions = ownerScopeUserId
             ? { owner_user_id: ownerScopeUserId, session_id: conversationSessionId || undefined }
             : { session_id: conversationSessionId || undefined };
+        let activeKeywordFlowsCache = null;
+        const loadActiveKeywordFlows = async () => {
+            if (activeKeywordFlowsCache !== null) {
+                return activeKeywordFlowsCache;
+            }
 
-        if (text) {
+            activeKeywordFlowsCache = (await Flow.findActiveKeywordFlows(flowScopeOptions))
+                .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
+
+            return activeKeywordFlowsCache;
+        };
+
+        if (conversation?.created) {
+            const activeKeywordFlows = await loadActiveKeywordFlows();
+            const firstMessageMenuFlow = this.pickKeywordFlowByIntentTriggerFirstMessageMenu(
+                activeKeywordFlows,
+                conversationSessionId
+            );
+
+            if (firstMessageMenuFlow) {
+                flow = firstMessageMenuFlow;
+                console.info(
+                    `[flow-intent] Fluxo menu selecionado na primeira mensagem ${flow.id} `
+                    + `(${flow.name || 'sem-nome'}).`
+                );
+            }
+        }
+
+        if (!flow && text) {
             const strictIntentRouting = isStrictFlowIntentRoutingEnabled() && isFlowIntentClassifierConfigured();
             const keywordMatches = (await Flow.findKeywordMatches(text, flowScopeOptions))
                 .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
-            const semanticCandidates = (await Flow.findActiveKeywordFlows(flowScopeOptions))
-                .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
+            const semanticCandidates = await loadActiveKeywordFlows();
             const hasExactKeywordMatch = keywordMatches.length > 0;
 
             if (semanticCandidates.length > 0) {
