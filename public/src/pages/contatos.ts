@@ -91,6 +91,8 @@ let selectedContacts: number[] = [];
 let bulkRemoveSelectedTags: string[] = [];
 let createContactSelectedTags: string[] = [];
 let createContactTagFilterGlobalEventsBound = false;
+let editContactTagSuggestionsOpen = false;
+let editContactTagSuggestionsGlobalEventsBound = false;
 let currentPage = 1;
 const perPage = 20;
 let tags: Tag[] = [];
@@ -1166,9 +1168,41 @@ function renderEditContactTagSuggestions() {
         .join('');
 }
 
+function setEditContactTagSuggestionsOpen(nextOpen: boolean) {
+    editContactTagSuggestionsOpen = nextOpen;
+    const suggestions = document.getElementById('editContactTagsSuggestions') as HTMLElement | null;
+    const toggleButton = document.getElementById('editContactTagsToggle') as HTMLButtonElement | null;
+
+    if (suggestions) {
+        suggestions.hidden = !nextOpen;
+    }
+    if (toggleButton) {
+        toggleButton.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+        toggleButton.classList.toggle('is-open', nextOpen);
+    }
+}
+
+function closeEditContactTagSuggestions() {
+    setEditContactTagSuggestionsOpen(false);
+}
+
+function toggleEditContactTagSuggestions() {
+    setEditContactTagSuggestionsOpen(!editContactTagSuggestionsOpen);
+}
+
 function bindEditContactTagsSuggestions() {
     const editTagsInput = document.getElementById('editContactTags') as HTMLInputElement | null;
     const suggestions = document.getElementById('editContactTagsSuggestions') as HTMLElement | null;
+    const toggleButton = document.getElementById('editContactTagsToggle') as HTMLButtonElement | null;
+
+    if (toggleButton && toggleButton.dataset.tagSuggestionsBound !== '1') {
+        toggleButton.dataset.tagSuggestionsBound = '1';
+        toggleButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleEditContactTagSuggestions();
+        });
+    }
 
     if (editTagsInput && editTagsInput.dataset.tagSuggestionsBound !== '1') {
         editTagsInput.dataset.tagSuggestionsBound = '1';
@@ -1179,6 +1213,9 @@ function bindEditContactTagsSuggestions() {
 
     if (suggestions && suggestions.dataset.tagSuggestionsBound !== '1') {
         suggestions.dataset.tagSuggestionsBound = '1';
+        suggestions.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
         suggestions.addEventListener('click', (event) => {
             const target = event.target as HTMLElement | null;
             const button = target?.closest('[data-edit-contact-tag-option]') as HTMLElement | null;
@@ -1199,6 +1236,27 @@ function bindEditContactTagsSuggestions() {
             renderEditContactTagSuggestions();
         });
     }
+
+    if (!editContactTagSuggestionsGlobalEventsBound) {
+        editContactTagSuggestionsGlobalEventsBound = true;
+        document.addEventListener('click', (event) => {
+            const target = event.target;
+            if (target instanceof Element) {
+                if (target.closest('#editContactTagsToggle') || target.closest('#editContactTagsSuggestions')) {
+                    return;
+                }
+            }
+            closeEditContactTagSuggestions();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeEditContactTagSuggestions();
+            }
+        });
+    }
+
+    setEditContactTagSuggestionsOpen(false);
 }
 
 function bindCreateContactTagsSuggestions() {
@@ -1703,6 +1761,7 @@ function editContact(id: number) {
     if (editContactEmail) editContactEmail.value = contact.email || '';
     if (editContactStatus) editContactStatus.value = String(contact.status || 1);
     if (editContactTags) editContactTags.value = parseLeadTags(contact.tags).join(', ');
+    closeEditContactTagSuggestions();
     renderEditContactTagSuggestions();
     void loadTags();
     const currentCustomFields = parseLeadCustomFields(contact.custom_fields);

@@ -188,6 +188,47 @@ export default function Contatos() {
           border-radius: 999px;
           flex-shrink: 0;
         }
+
+        .contatos-react .edit-contact-tags-input-wrap {
+          position: relative;
+        }
+        .contatos-react .edit-contact-tags-input-wrap .form-input {
+          padding-right: 40px;
+        }
+        .contatos-react .edit-contact-tags-toggle {
+          position: absolute;
+          right: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          border: 0;
+          background: transparent;
+          color: var(--gray-500);
+          width: 24px;
+          height: 24px;
+          border-radius: 999px;
+          font-size: 12px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: transform 0.2s ease;
+        }
+        .contatos-react .edit-contact-tags-toggle:hover {
+          background: rgba(var(--primary-rgb), 0.08);
+          color: var(--primary);
+        }
+        .contatos-react .edit-contact-tags-toggle.is-open {
+          transform: translateY(-50%) rotate(180deg);
+        }
+        .contatos-react .edit-contact-tags-suggestions[hidden] {
+          display: none;
+        }
+        .contatos-react .edit-contact-tags-suggestions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 8px;
+        }
       `}</style>
       <button
         className="mobile-menu-toggle"
@@ -548,17 +589,29 @@ export default function Contatos() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Tags</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    id="editContactTags"
-                    list="editContactTagsOptions"
-                    placeholder="Ex.: VIP, Renovacao"
-                  />
+                  <div className="edit-contact-tags-input-wrap">
+                    <input
+                      type="text"
+                      className="form-input"
+                      id="editContactTags"
+                      list="editContactTagsOptions"
+                      placeholder="Ex.: VIP, Renovacao"
+                    />
+                    <button
+                      type="button"
+                      className="edit-contact-tags-toggle"
+                      id="editContactTagsToggle"
+                      aria-label="Mostrar tags"
+                      aria-expanded="false"
+                    >
+                      ▾
+                    </button>
+                  </div>
                   <datalist id="editContactTagsOptions"></datalist>
                   <div
                     id="editContactTagsSuggestions"
-                    style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}
+                    className="edit-contact-tags-suggestions"
+                    hidden
                   ></div>
                   <p className="form-help">Use as etiquetas cadastradas abaixo ou separe multiplas tags por virgula.</p>
                 </div>

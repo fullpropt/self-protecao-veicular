@@ -443,7 +443,6 @@ export default function Automacao() {
                           <div className="form-group">
                               <label className="form-label required">Tipo de Gatilho</label>
                               <select className="form-select" id="triggerType" onChange={() => globals.updateTriggerOptions?.()}>
-                                  <option value="status_change">Mudança de status</option>
                                   <option value="message_received">Mensagem recebida</option>
                                   <option value="keyword">Palavra-chave detectada</option>
                                   <option value="inactivity">Inatividade</option>
