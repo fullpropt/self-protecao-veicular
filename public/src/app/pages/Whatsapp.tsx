@@ -6,7 +6,7 @@ type WhatsappGlobals = {
   initWhatsapp?: () => void;
   startConnection?: () => void;
   disconnect?: () => void;
-  changeSession?: (sessionId: string) => void;
+  changeSession?: (sessionId: string, options?: { revealReconnectUi?: boolean }) => void;
   createSessionPrompt?: () => void;
   toggleSidebar?: () => void;
   logout?: () => void;
@@ -312,6 +312,24 @@ export default function Whatsapp() {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+        }
+        .whatsapp-react .connection-idle-state {
+            border: 1px dashed var(--border);
+            border-radius: 16px;
+            background: rgba(16, 33, 54, 0.45);
+            padding: 22px;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+        .whatsapp-react .connection-idle-state h3 {
+            font-size: 18px;
+            color: var(--dark);
+            margin-bottom: 8px;
+        }
+        .whatsapp-react .connection-idle-state p {
+            color: var(--gray);
+            font-size: 14px;
+            margin: 0;
         }
         .whatsapp-react .card-body {
             padding: 28px;
@@ -871,7 +889,7 @@ export default function Whatsapp() {
                                   defaultValue=""
                                   onChange={(event) => {
                                     const value = (event.target as HTMLSelectElement).value;
-                                    if (value) globals.changeSession?.(value);
+                                    if (value) globals.changeSession?.(value, { revealReconnectUi: true });
                                   }}
                               >
                                   <option value="">Carregando contas...</option>
@@ -888,7 +906,12 @@ export default function Whatsapp() {
                       </div>
                       
                       <div className="card-body">
-                          <div id="disconnected-state">
+                          <div id="connection-idle-state" className="connection-idle-state">
+                              <h3>Selecione uma conta para reconectar</h3>
+                              <p>Clique em uma conta na lista acima ou em <strong>+ Nova Conta</strong> para abrir o painel de conexao.</p>
+                          </div>
+
+                          <div id="disconnected-state" style={{ display: 'none' }}>
                               <div className="qr-container">
                                   <div className="qr-wrapper">
                                       <div id="qr-code">

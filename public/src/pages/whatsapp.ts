@@ -53,6 +53,7 @@ let pairingCodeHideTimer: number | null = null;
 let pairingCodeVisible = false;
 let lastPairingCode = '';
 let qrGenerationWatchdog: number | null = null;
+const reconnectUiRequestedSessionIds = new Set<string>();
 
 function appConfirm(message: string, title = 'Confirmacao') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -209,6 +210,40 @@ function getSessionListElement() {
     return document.getElementById('whatsapp-session-list') as HTMLElement | null;
 }
 
+function getConnectionIdleStateElement() {
+    return document.getElementById('connection-idle-state') as HTMLElement | null;
+}
+
+function markReconnectUiRequested(sessionId: string) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return;
+    reconnectUiRequestedSessionIds.add(normalizedSessionId);
+}
+
+function shouldShowReconnectUiForSession(sessionId: string) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return false;
+    return reconnectUiRequestedSessionIds.has(normalizedSessionId);
+}
+
+function syncConnectionSectionVisibility() {
+    const disconnected = document.getElementById('disconnected-state') as HTMLElement | null;
+    const connected = document.getElementById('connected-state') as HTMLElement | null;
+    const idleState = getConnectionIdleStateElement();
+
+    if (isConnected) {
+        if (connected) connected.style.display = 'block';
+        if (disconnected) disconnected.style.display = 'none';
+        if (idleState) idleState.style.display = 'none';
+        return;
+    }
+
+    const showReconnectUi = shouldShowReconnectUiForSession(getCurrentSessionId());
+    if (connected) connected.style.display = 'none';
+    if (disconnected) disconnected.style.display = showReconnectUi ? 'block' : 'none';
+    if (idleState) idleState.style.display = showReconnectUi ? 'none' : 'block';
+}
+
 function syncCurrentSessionFromSelect() {
     const select = getSessionSelectElement();
     if (!select) return getCurrentSessionId();
@@ -310,8 +345,18 @@ function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
     buttons.forEach((button) => {
         button.addEventListener('click', () => {
             const nextSessionId = sanitizeSessionId(button.dataset.sessionId);
-            if (!nextSessionId || nextSessionId === getCurrentSessionId()) return;
-            changeSession(nextSessionId);
+            if (!nextSessionId) return;
+            if (nextSessionId === getCurrentSessionId()) {
+                markReconnectUiRequested(nextSessionId);
+                if (!isConnected) {
+                    resetConnectionUi();
+                } else {
+                    syncConnectionSectionVisibility();
+                }
+                socket?.emit('check-session', { sessionId: nextSessionId });
+                return;
+            }
+            changeSession(nextSessionId, { revealReconnectUi: true });
         });
     });
 }
@@ -377,6 +422,7 @@ function renderSessionOptions() {
         select.value = currentId;
     }
     renderSessionList(uniqueSessions, currentId);
+    syncConnectionSectionVisibility();
 }
 
 async function loadSessionOptions(preferredSessionId?: string) {
@@ -430,19 +476,22 @@ function resetConnectionUi() {
     updatePairingButton(false);
     updateStatus('disconnected', 'Desconectado');
 
-    const disconnected = document.getElementById('disconnected-state') as HTMLElement | null;
-    const connected = document.getElementById('connected-state') as HTMLElement | null;
     const connectBtn = document.getElementById('connect-btn') as HTMLElement | null;
     const qrTimerEl = document.getElementById('qr-timer') as HTMLElement | null;
-    if (disconnected) disconnected.style.display = 'block';
-    if (connected) connected.style.display = 'none';
     if (connectBtn) connectBtn.style.display = 'flex';
     if (qrTimerEl) qrTimerEl.style.display = 'none';
-    showQRLoading('Aguardando conexao...');
+
+    if (shouldShowReconnectUiForSession(getCurrentSessionId())) {
+        showQRLoading('Aguardando conexao...');
+    }
+    syncConnectionSectionVisibility();
 }
 
-function changeSession(sessionId: string) {
+function changeSession(sessionId: string, options: { revealReconnectUi?: boolean } = {}) {
     const normalizedSessionId = sanitizeSessionId(sessionId, getDefaultSessionId());
+    if (options.revealReconnectUi) {
+        markReconnectUiRequested(normalizedSessionId);
+    }
     currentSessionId = normalizedSessionId;
     persistCurrentSessionId(normalizedSessionId);
     syncGlobalAppSessionId(normalizedSessionId);
@@ -484,7 +533,7 @@ async function createSessionPrompt() {
         });
     }
 
-    changeSession(normalized);
+    changeSession(normalized, { revealReconnectUi: true });
     showToast('info', `Conta selecionada: ${normalized}`);
 }
 
@@ -707,6 +756,8 @@ function initSocket() {
 function startConnection() {
     if (isConnecting) return;
     const sessionId = syncCurrentSessionFromSelect();
+    markReconnectUiRequested(sessionId);
+    syncConnectionSectionVisibility();
     if (!socket) {
         initSocket();
     }
@@ -742,6 +793,8 @@ function startConnection() {
 function requestPairingCode() {
     if (isConnecting) return;
     const sessionId = syncCurrentSessionFromSelect();
+    markReconnectUiRequested(sessionId);
+    syncConnectionSectionVisibility();
     if (!socket) {
         initSocket();
     }
@@ -941,10 +994,7 @@ function handleConnected(user: { name?: string; phone?: string } | undefined) {
     
     // Atualizar UI
     updateStatus('connected', 'Conectado');
-    const disconnected = document.getElementById('disconnected-state') as HTMLElement | null;
-    const connected = document.getElementById('connected-state') as HTMLElement | null;
-    if (disconnected) disconnected.style.display = 'none';
-    if (connected) connected.style.display = 'block';
+    syncConnectionSectionVisibility();
     
     // Atualizar informações do usuário
     if (user) {
@@ -971,18 +1021,16 @@ function handleDisconnected() {
     updateConnectButton(false);
     updatePairingButton(false);
     
-    // Atualizar UI
     updateStatus('disconnected', 'Desconectado');
-    const disconnected = document.getElementById('disconnected-state') as HTMLElement | null;
-    const connected = document.getElementById('connected-state') as HTMLElement | null;
     const connectBtn = document.getElementById('connect-btn') as HTMLElement | null;
     const qrTimerEl = document.getElementById('qr-timer') as HTMLElement | null;
-    if (disconnected) disconnected.style.display = 'block';
-    if (connected) connected.style.display = 'none';
     if (connectBtn) connectBtn.style.display = 'flex';
     if (qrTimerEl) qrTimerEl.style.display = 'none';
-    
-    showQRLoading('Aguardando conexão...');
+
+    if (shouldShowReconnectUiForSession(getCurrentSessionId())) {
+        showQRLoading('Aguardando conexão...');
+    }
+    syncConnectionSectionVisibility();
 }
 
 // Atualizar status
@@ -1151,7 +1199,7 @@ const windowAny = window as Window & {
     startConnection?: () => void;
     requestPairingCode?: () => void;
     disconnect?: () => Promise<void>;
-    changeSession?: (sessionId: string) => void;
+    changeSession?: (sessionId: string, options?: { revealReconnectUi?: boolean }) => void;
     createSessionPrompt?: () => void;
     toggleSidebar?: () => void;
     logout?: () => void;
