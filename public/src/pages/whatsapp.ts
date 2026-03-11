@@ -186,6 +186,21 @@ function getSessionSelectElement() {
     return document.getElementById('whatsapp-session-select') as HTMLSelectElement | null;
 }
 
+function syncCurrentSessionFromSelect() {
+    const select = getSessionSelectElement();
+    if (!select) return getCurrentSessionId();
+
+    const selectedSessionId = sanitizeSessionId(select.value);
+    if (!selectedSessionId) return getCurrentSessionId();
+
+    if (currentSessionId !== selectedSessionId) {
+        currentSessionId = selectedSessionId;
+        persistCurrentSessionId(selectedSessionId);
+        syncGlobalAppSessionId(selectedSessionId);
+    }
+    return selectedSessionId;
+}
+
 function syncGlobalAppSessionId(sessionId: string) {
     const app = (window as Window & { APP?: { sessionId?: string } }).APP;
     if (app) {
@@ -589,7 +604,7 @@ function initSocket() {
 // Iniciar conexão
 function startConnection() {
     if (isConnecting) return;
-    const sessionId = getCurrentSessionId();
+    const sessionId = syncCurrentSessionFromSelect();
     
     isConnecting = true;
     updateConnectButton(true);
@@ -610,7 +625,7 @@ function startConnection() {
 
 function requestPairingCode() {
     if (isConnecting) return;
-    const sessionId = getCurrentSessionId();
+    const sessionId = syncCurrentSessionFromSelect();
 
     const phoneInput = document.getElementById('pairing-phone') as HTMLInputElement | null;
     const normalizedPhone = normalizePairingPhoneInput(phoneInput?.value || '');
@@ -637,7 +652,7 @@ function requestPairingCode() {
 
 // Desconectar
 async function disconnect() {
-    const sessionId = getCurrentSessionId();
+    const sessionId = syncCurrentSessionFromSelect();
     if (await appConfirm(`Tem certeza que deseja desconectar a conta ${sessionId}?`, 'Desconectar conta')) {
         socket?.emit('logout', { sessionId });
         handleDisconnected();
