@@ -465,9 +465,14 @@ function initSocket() {
         reconnectionAttempts: number;
         reconnectionDelay: number;
         timeout: number;
+        tryAllTransports?: boolean;
+        upgrade?: boolean;
         auth?: { token: string };
     } = {
-        transports: ['websocket', 'polling'],
+        // Polling primeiro para funcionar mesmo quando proxy/rede bloqueia WSS.
+        transports: ['polling', 'websocket'],
+        tryAllTransports: true,
+        upgrade: true,
         reconnection: true,
         reconnectionAttempts: 10,
         reconnectionDelay: 1000,
