@@ -479,10 +479,10 @@ function initSocket() {
         upgrade?: boolean;
         auth?: { token: string };
     } = {
-        // Polling primeiro para funcionar mesmo quando proxy/rede bloqueia WSS.
-        transports: ['polling', 'websocket'],
-        tryAllTransports: true,
-        upgrade: true,
+        // Forca polling para evitar falhas de WSS em ambientes com proxy/rede restritiva.
+        transports: ['polling'],
+        tryAllTransports: false,
+        upgrade: false,
         reconnection: true,
         reconnectionAttempts: 10,
         reconnectionDelay: 1000,

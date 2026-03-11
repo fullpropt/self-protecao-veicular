@@ -29,7 +29,9 @@ const WhatsApp = {
         try {
             const token = sessionStorage.getItem('selfDashboardToken');
             const socketOptions = {
-                transports: ['websocket', 'polling'],
+                transports: ['polling'],
+                tryAllTransports: false,
+                upgrade: false,
                 reconnection: true,
                 reconnectionAttempts: 10,
                 reconnectionDelay: 1000,
