@@ -239,7 +239,7 @@ export default function Whatsapp() {
         }
         .whatsapp-react .session-list {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: 1fr;
             gap: 10px;
         }
         .whatsapp-react .whatsapp-session-list-empty {
@@ -932,10 +932,7 @@ export default function Whatsapp() {
                       </div>
                       
                       <div className="card-body">
-                          <div id="connection-idle-state" className="connection-idle-state">
-                              <h3>Detalhes de conexao ocultos</h3>
-                              <p>Clique na <strong>seta</strong> de uma conta na lista acima ou em <strong>+ Nova Conta</strong> para abrir o painel.</p>
-                          </div>
+                          <div id="connection-idle-state"></div>
 
                           <div id="disconnected-state" style={{ display: 'none' }}>
                               <div className="qr-container">
