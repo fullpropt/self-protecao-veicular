@@ -9680,6 +9680,10 @@ io.on('connection', (socket) => {
             const pairingPhone = normalizePairingPhoneNumber(payload.phoneNumber);
             const shouldRequestPairingCode = Boolean(payload.requestPairingCode && pairingPhone);
             const forceFreshQrRequested = parseBooleanInput(payload.forceNewQr, false);
+            console.log(
+                `[start-session] socket=${socket.id} requested_session=${sessionId || 'n/a'} ` +
+                `force_new_qr=${forceFreshQrRequested ? 'yes' : 'no'} pairing=${shouldRequestPairingCode ? 'yes' : 'no'}`
+            );
             if (!sessionId) {
                 socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
                 return;
@@ -9694,6 +9698,7 @@ io.on('connection', (socket) => {
                     owner_user_id: ownerScopeUserId
                 });
                 if (!ownedSession) {
+                    console.warn(`[start-session] acesso negado para session=${sessionId} owner_scope_user=${ownerScopeUserId}`);
                     socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
                     return;
                 }
@@ -9812,6 +9817,10 @@ io.on('connection', (socket) => {
         try {
             const sessionId = sanitizeSessionId(payload.sessionId);
             const forceFreshQrRequested = parseBooleanInput(payload.forceNewQr, false);
+            console.log(
+                `[refresh-qr] socket=${socket.id} requested_session=${sessionId || 'n/a'} ` +
+                `force_new_qr=${forceFreshQrRequested ? 'yes' : 'no'}`
+            );
             if (!sessionId) {
                 socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
                 return;
