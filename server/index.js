@@ -457,7 +457,7 @@ function parseBaileysVersionFromEnv(value) {
 }
 
 async function resolveBaileysSocketVersion(fetchLatestBaileysVersion, sessionId = '') {
-    if (WHATSAPP_BAILEYS_VERSION_PIN) {
+    if (WHATSAPP_BAILEYS_VERSION_PIN && !forceLatestBaileysVersionByRuntime) {
         cachedBaileysSocketVersion = [...WHATSAPP_BAILEYS_VERSION_PIN];
         cachedBaileysSocketVersionSource = 'env-pin';
         return [...cachedBaileysSocketVersion];
