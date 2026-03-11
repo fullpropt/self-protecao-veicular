@@ -1248,6 +1248,7 @@ const sessionReconnectCatchupInFlight = new Set();
 const sessionHistorySyncQueues = new Map();
 const sessionSendRateStateBySessionId = new Map();
 const reconnectInFlight = new Set();
+const sessionStartupErrors = new Map();
 let isServerShuttingDown = false;
 let inboxReconciliationIntervalId = null;
 let inboxReconciliationBootstrapTimeoutId = null;
@@ -1287,6 +1288,40 @@ const WHATSAPP_MANUAL_RECONNECT_CATCHUP_MAX_CONVERSATIONS = parsePositiveIntEnv(
     process.env.WHATSAPP_MANUAL_RECONNECT_CATCHUP_MAX_CONVERSATIONS,
     Math.max(200, WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS)
 );
+
+function setSessionStartupError(sessionId, payload = {}) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return;
+
+    const statusCodeRaw = Number(payload?.statusCode);
+    const statusCode = Number.isFinite(statusCodeRaw) ? Math.floor(statusCodeRaw) : null;
+    const message = String(payload?.message || '').trim().slice(0, 400);
+    const errorType = String(payload?.errorType || '').trim().slice(0, 80) || null;
+    const attemptRaw = Number(payload?.attempt);
+    const attempt = Number.isFinite(attemptRaw) && attemptRaw > 0 ? Math.floor(attemptRaw) : null;
+    const occurredAt = String(payload?.at || new Date().toISOString());
+
+    sessionStartupErrors.set(normalizedSessionId, {
+        message: message || 'Falha ao inicializar sessao WhatsApp',
+        statusCode,
+        errorType,
+        attempt,
+        at: occurredAt
+    });
+
+    if (sessionStartupErrors.size > 500) {
+        const oldestKey = sessionStartupErrors.keys().next().value;
+        if (oldestKey) {
+            sessionStartupErrors.delete(oldestKey);
+        }
+    }
+}
+
+function clearSessionStartupError(sessionId) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return;
+    sessionStartupErrors.delete(normalizedSessionId);
+}
 const WHATSAPP_MANUAL_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION = parsePositiveIntEnv(
     process.env.WHATSAPP_MANUAL_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION,
     Math.max(220, WHATSAPP_RECONNECT_CATCHUP_MESSAGES_PER_CONVERSATION)
@@ -3895,6 +3930,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
     
 
     try {
+        clearSessionStartupError(sessionId);
 
         console.log(`[${sessionId}] Criando sessÃ£o... (Tentativa ${attempt + 1}/${MAX_RECONNECT_ATTEMPTS})`);
 
@@ -4094,6 +4130,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                         qr_code: qrDataUrl,
                         ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
                     });
+                    clearSessionStartupError(sessionId);
 
                     
 
@@ -4185,6 +4222,12 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                     message: String(lastDisconnect?.error?.message || '').slice(0, 300) || null,
                     at: new Date().toISOString()
                 };
+                setSessionStartupError(sessionId, {
+                    message: session.lastDisconnectReason?.message || `Conexao fechada (status ${Number(statusCode) || 'n/a'})`,
+                    statusCode: session.lastDisconnectReason?.statusCode,
+                    errorType: session.lastDisconnectReason?.errorType || 'connection_close',
+                    at: session.lastDisconnectReason?.at
+                });
                 setRuntimeSessionDispatchBackoff(session);
 
                 console.log(`[${sessionId}] Tipo de erro: ${errorInfo.type}, AÃ§Ã£o: ${errorInfo.action}`);
@@ -4349,6 +4392,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
                         last_connected_at: new Date().toISOString(),
                         ownerUserId: Number(session?.ownerUserId || ownerUserId || 0) || null
                     });
+                    clearSessionStartupError(sessionId);
 
                     
 
@@ -4731,9 +4775,14 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
         console.error(`[${sessionId}] ? Erro ao criar sessÃ£o:`, error.message);
 
-        
+        const startupErrorMessage = String(error?.message || 'Erro ao criar sessao WhatsApp').slice(0, 300);
 
         const currentAttempt = reconnectAttempts.get(sessionId) || 0;
+        setSessionStartupError(sessionId, {
+            message: startupErrorMessage,
+            errorType: 'startup_exception',
+            attempt: currentAttempt + 1
+        });
 
         if (currentAttempt < MAX_RECONNECT_ATTEMPTS) {
 
@@ -4745,7 +4794,10 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
         } else {
 
-            clientSocket.emit('error', { message: 'Erro ao criar sessÃ£o WhatsApp' });
+            clientSocket?.emit('error', {
+                message: `Erro ao criar sessao WhatsApp: ${startupErrorMessage}`,
+                code: 'CREATE_SESSION_ERROR'
+            });
 
             return null;
 
@@ -9431,8 +9483,9 @@ io.on('connection', (socket) => {
                 ownerUserId: resolvedOwnerUserId || undefined
             });
         } catch (error) {
+            const detail = String(error?.message || '').trim().slice(0, 250);
             socket.emit('error', {
-                message: 'Falha ao iniciar sessao WhatsApp',
+                message: detail ? `Falha ao iniciar sessao WhatsApp: ${detail}` : 'Falha ao iniciar sessao WhatsApp',
                 code: 'START_SESSION_ERROR'
             });
         }
@@ -10075,6 +10128,7 @@ app.get('/api/whatsapp/status', authenticate, async (req, res) => {
     }
 
     const session = sessions.get(sessionId);
+    const lastStartupError = sessionStartupErrors.get(sessionId) || null;
 
     const connected = !!(session && session.isConnected);
     const dispatchState = getSessionDispatchState(sessionId);
@@ -10098,7 +10152,8 @@ app.get('/api/whatsapp/status', authenticate, async (req, res) => {
         dispatchBlockedUntil: Number(session?.dispatchBlockedUntilMs || 0) > Date.now()
             ? new Date(Number(session.dispatchBlockedUntilMs)).toISOString()
             : null,
-        lastDisconnectReason: session?.lastDisconnectReason || null
+        lastDisconnectReason: session?.lastDisconnectReason || null,
+        lastStartupError
     });
 
 });
