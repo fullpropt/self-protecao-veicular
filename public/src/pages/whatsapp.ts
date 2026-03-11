@@ -43,6 +43,7 @@ let timerCountdown = 30;
 let pairingCodeHideTimer: number | null = null;
 let pairingCodeVisible = false;
 let lastPairingCode = '';
+let qrGenerationWatchdog: number | null = null;
 
 function appConfirm(message: string, title = 'Confirmacao') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -63,6 +64,13 @@ function appPrompt(message: string, options: { title?: string; defaultValue?: st
         return win.showAppPrompt(message, options);
     }
     return Promise.resolve(window.prompt(message, options.defaultValue || ''));
+}
+
+function clearQrGenerationWatchdog() {
+    if (qrGenerationWatchdog) {
+        clearTimeout(qrGenerationWatchdog);
+        qrGenerationWatchdog = null;
+    }
 }
 
 // Inicialização
@@ -498,6 +506,7 @@ function initSocket() {
     socket.on('qr', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
         console.log('📷 QR Code recebido');
+        clearQrGenerationWatchdog();
         displayQRCode(data.qr);
         startQRTimer();
         // Garantir que o botão de conectar suma e o timer apareça
@@ -511,6 +520,7 @@ function initSocket() {
     socket.on('pairing-code', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
         console.log('Pairing code recebido');
+        clearQrGenerationWatchdog();
         displayPairingCode(data?.code || '', data?.phoneNumber || data?.phone || '');
         isConnecting = false;
         updateConnectButton(false);
@@ -524,10 +534,17 @@ function initSocket() {
         updateStatus('connecting', 'Conectando...');
         showQRLoading('Conectando ao WhatsApp...');
     });
+
+    socket.on('reconnecting', function(data) {
+        if (!isPayloadForCurrentSession(data)) return;
+        updateStatus('connecting', 'Reconectando...');
+        showQRLoading('Reconectando sessao...');
+    });
     
     socket.on('connected', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
         console.log('✅ WhatsApp conectado:', data);
+        clearQrGenerationWatchdog();
         void loadSessionOptions(getCurrentSessionId());
         handleConnected(data.user);
     });
@@ -535,12 +552,21 @@ function initSocket() {
     socket.on('disconnected', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
         console.log('❌ WhatsApp desconectado');
+        clearQrGenerationWatchdog();
         void loadSessionOptions(getCurrentSessionId());
         handleDisconnected();
+    });
+
+    socket.on('qr-expired', function(data) {
+        if (!isPayloadForCurrentSession(data)) return;
+        if (isConnected) return;
+        showQRLoading('QR expirado. Gerando novo QR Code...');
+        socket?.emit('refresh-qr', { sessionId: getCurrentSessionId() });
     });
     
     socket.on('error', function(data) {
         console.error('❌ Erro:', data);
+        clearQrGenerationWatchdog();
         showToast('error', data.message || 'Erro na operação');
         
         if (isConnecting) {
@@ -573,6 +599,13 @@ function startConnection() {
     
     console.log('🚀 Iniciando conexão...');
     socket?.emit('start-session', { sessionId });
+    clearQrGenerationWatchdog();
+    qrGenerationWatchdog = window.setTimeout(() => {
+        if (!isConnected && isConnecting) {
+            showQRLoading('Demorou para gerar QR. Tentando novamente...');
+            socket?.emit('refresh-qr', { sessionId });
+        }
+    }, 25000);
 }
 
 function requestPairingCode() {
@@ -616,6 +649,7 @@ async function disconnect() {
 // Exibir QR Code
 function displayQRCode(qrData: string) {
     console.log('🖼️ Renderizando QR Code...');
+    clearQrGenerationWatchdog();
     const qrContainer = document.getElementById('qr-code') as HTMLElement | null;
     
     if (!qrData) {
@@ -757,6 +791,7 @@ function handleConnected(user: { name?: string; phone?: string } | undefined) {
     const wasConnected = isConnected;
     isConnected = true;
     isConnecting = false;
+    clearQrGenerationWatchdog();
     if (qrTimer) clearInterval(qrTimer);
     hidePairingCode();
     updatePairingButton(false);
@@ -786,6 +821,7 @@ function handleConnected(user: { name?: string; phone?: string } | undefined) {
 function handleDisconnected() {
     isConnected = false;
     isConnecting = false;
+    clearQrGenerationWatchdog();
     if (qrTimer) clearInterval(qrTimer);
     if (!pairingCodeVisible) {
         hidePairingCode();

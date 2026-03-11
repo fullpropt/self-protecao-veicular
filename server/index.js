@@ -9206,21 +9206,34 @@ async function requireActiveWhatsAppPlan(req, res, next) {
 }
 
 async function ensureSocketActiveWhatsAppPlan(socket, sessionId = null) {
-    const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
-    const hasActivePlan = await hasOwnerActiveWhatsAppPlan(ownerScopeUserId);
-    if (!hasActivePlan) {
+    try {
+        const ownerScopeUserId = await ensureSocketOwnerScopeRoom(socket);
+        const hasActivePlan = await hasOwnerActiveWhatsAppPlan(ownerScopeUserId);
+        if (!hasActivePlan) {
+            const normalizedSessionId = sanitizeSessionId(sessionId);
+            socket.emit('error', {
+                message: 'Sua assinatura nÃ£o estÃ¡ ativa. Reative para poder usar a aplicaÃ§Ã£o.',
+                code: 'PLAN_INACTIVE'
+            });
+            socket.emit('session-status', {
+                status: 'disconnected',
+                sessionId: normalizedSessionId || null
+            });
+            return { allowed: false, ownerScopeUserId };
+        }
+        return { allowed: true, ownerScopeUserId };
+    } catch (error) {
         const normalizedSessionId = sanitizeSessionId(sessionId);
         socket.emit('error', {
-            message: 'Sua assinatura nÃ£o estÃ¡ ativa. Reative para poder usar a aplicaÃ§Ã£o.',
-            code: 'PLAN_INACTIVE'
+            message: 'Nao foi possivel validar o plano WhatsApp. Tente novamente.',
+            code: 'PLAN_VALIDATION_ERROR'
         });
         socket.emit('session-status', {
             status: 'disconnected',
             sessionId: normalizedSessionId || null
         });
-        return { allowed: false, ownerScopeUserId };
+        return { allowed: false, ownerScopeUserId: null };
     }
-    return { allowed: true, ownerScopeUserId };
 }
 
 io.on('connection', (socket) => {
@@ -9233,168 +9246,238 @@ io.on('connection', (socket) => {
     
 
     socket.on('check-session', async ({ sessionId }) => {
-
-        const normalizedSessionId = sanitizeSessionId(sessionId);
-        if (!normalizedSessionId) {
-            socket.emit('session-status', { status: 'disconnected', sessionId: null });
-            return;
-        }
-
-        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
-        if (!planAccess.allowed) return;
-        const ownerScopeUserId = planAccess.ownerScopeUserId;
-        if (ownerScopeUserId) {
-            const socketReq = buildSocketRequestLike(socket);
-            const hasAccess = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
-            if (!hasAccess) {
-                socket.emit('session-status', { status: 'disconnected', sessionId: normalizedSessionId });
+        try {
+            const normalizedSessionId = sanitizeSessionId(sessionId);
+            if (!normalizedSessionId) {
+                socket.emit('session-status', { status: 'disconnected', sessionId: null });
                 return;
             }
-        }
 
-        const session = sessions.get(normalizedSessionId);
+            const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
+            if (!planAccess.allowed) return;
+            const ownerScopeUserId = planAccess.ownerScopeUserId;
+            if (ownerScopeUserId) {
+                const socketReq = buildSocketRequestLike(socket);
+                const hasAccess = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+                if (!hasAccess) {
+                    socket.emit('session-status', { status: 'disconnected', sessionId: normalizedSessionId });
+                    return;
+                }
+            }
 
-        
-        if (session) {
-            session.clientSocket = socket;
-            socket.emit('session-status', {
-                status: session.isConnected ? 'connected' : 'reconnecting',
-                sessionId: normalizedSessionId,
-                user: session.user
+            const session = sessions.get(normalizedSessionId);
+
+            if (session) {
+                session.clientSocket = socket;
+                socket.emit('session-status', {
+                    status: session.isConnected ? 'connected' : 'reconnecting',
+                    sessionId: normalizedSessionId,
+                    user: session.user
+                });
+                return;
+            }
+
+            const hasLocalSession = sessionExists(normalizedSessionId);
+            const hasDbAuthState = !hasLocalSession && WHATSAPP_AUTH_STATE_DRIVER !== 'multi_file'
+                ? await hasPersistedBaileysAuthState(normalizedSessionId)
+                : false;
+
+            if (hasLocalSession || hasDbAuthState) {
+                socket.emit('session-status', { status: 'reconnecting', sessionId: normalizedSessionId });
+                await createSession(normalizedSessionId, socket, 0, {
+                    ownerUserId: ownerScopeUserId || undefined
+                });
+                return;
+            }
+
+            socket.emit('session-status', { status: 'disconnected', sessionId: normalizedSessionId });
+        } catch (error) {
+            socket.emit('error', {
+                message: 'Falha ao verificar sessao WhatsApp',
+                code: 'CHECK_SESSION_ERROR'
             });
-            return;
         }
-
-        const hasLocalSession = sessionExists(normalizedSessionId);
-        const hasDbAuthState = !hasLocalSession && WHATSAPP_AUTH_STATE_DRIVER !== 'multi_file'
-            ? await hasPersistedBaileysAuthState(normalizedSessionId)
-            : false;
-
-        if (hasLocalSession || hasDbAuthState) {
-            socket.emit('session-status', { status: 'reconnecting', sessionId: normalizedSessionId });
-            await createSession(normalizedSessionId, socket, 0, {
-                ownerUserId: ownerScopeUserId || undefined
-            });
-            return;
-        }
-
-        socket.emit('session-status', { status: 'disconnected', sessionId: normalizedSessionId });
-
     });
 
     
 
     socket.on('start-session', async (payload = {}) => {
-        const sessionId = sanitizeSessionId(payload.sessionId);
-        const pairingPhone = normalizePairingPhoneNumber(payload.phoneNumber);
-        const shouldRequestPairingCode = Boolean(payload.requestPairingCode && pairingPhone);
-        if (!sessionId) {
-            socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
-            return;
-        }
-
-        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, sessionId);
-        if (!planAccess.allowed) return;
-        const ownerScopeUserId = planAccess.ownerScopeUserId;
-        const storedSession = await WhatsAppSession.findBySessionId(sessionId);
-        if (ownerScopeUserId && storedSession) {
-            const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!ownedSession) {
-                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+        try {
+            const sessionId = sanitizeSessionId(payload.sessionId);
+            const pairingPhone = normalizePairingPhoneNumber(payload.phoneNumber);
+            const shouldRequestPairingCode = Boolean(payload.requestPairingCode && pairingPhone);
+            if (!sessionId) {
+                socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
                 return;
             }
-        }
-        const storedOwnerUserId = Number(storedSession?.created_by || 0);
-        const resolvedOwnerUserId = ownerScopeUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
 
-        const existingSession = sessions.get(sessionId);
-
-        if (existingSession) {
-            existingSession.clientSocket = socket;
-            socket.emit('session-status', {
-                status: existingSession.isConnected ? 'connected' : 'reconnecting',
-                sessionId,
-                user: existingSession.user
-            });
-            let pairingHandledByCreate = false;
-            if (!existingSession.isConnected && !existingSession.reconnecting && !sessionInitLocks.has(sessionId)) {
-                await createSession(sessionId, socket, 0, {
-                    requestPairingCode: shouldRequestPairingCode,
-                    pairingPhone,
-                    ownerUserId: resolvedOwnerUserId || undefined
+            const planAccess = await ensureSocketActiveWhatsAppPlan(socket, sessionId);
+            if (!planAccess.allowed) return;
+            const ownerScopeUserId = planAccess.ownerScopeUserId;
+            const storedSession = await WhatsAppSession.findBySessionId(sessionId);
+            if (ownerScopeUserId && storedSession) {
+                const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
+                    owner_user_id: ownerScopeUserId
                 });
-                pairingHandledByCreate = shouldRequestPairingCode;
+                if (!ownedSession) {
+                    socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                    return;
+                }
             }
-            if (shouldRequestPairingCode && !pairingHandledByCreate) {
-                await requestSessionPairingCode(sessionId, socket, pairingPhone);
+            const storedOwnerUserId = Number(storedSession?.created_by || 0);
+            const resolvedOwnerUserId = ownerScopeUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
+
+            const existingSession = sessions.get(sessionId);
+
+            if (existingSession) {
+                existingSession.clientSocket = socket;
+                socket.emit('session-status', {
+                    status: existingSession.isConnected ? 'connected' : 'reconnecting',
+                    sessionId,
+                    user: existingSession.user
+                });
+                let pairingHandledByCreate = false;
+                if (!existingSession.isConnected && !sessionInitLocks.has(sessionId)) {
+                    await createSession(sessionId, socket, 0, {
+                        requestPairingCode: shouldRequestPairingCode,
+                        pairingPhone,
+                        ownerUserId: resolvedOwnerUserId || undefined
+                    });
+                    pairingHandledByCreate = shouldRequestPairingCode;
+                }
+                if (shouldRequestPairingCode && !pairingHandledByCreate) {
+                    await requestSessionPairingCode(sessionId, socket, pairingPhone);
+                }
+                return;
             }
-            return;
+
+            await createSession(sessionId, socket, 0, {
+                requestPairingCode: shouldRequestPairingCode,
+                pairingPhone,
+                ownerUserId: resolvedOwnerUserId || undefined
+            });
+        } catch (error) {
+            socket.emit('error', {
+                message: 'Falha ao iniciar sessao WhatsApp',
+                code: 'START_SESSION_ERROR'
+            });
         }
-
-        await createSession(sessionId, socket, 0, {
-            requestPairingCode: shouldRequestPairingCode,
-            pairingPhone,
-            ownerUserId: resolvedOwnerUserId || undefined
-        });
-
     });
 
     socket.on('request-pairing-code', async (payload = {}) => {
-        const sessionId = sanitizeSessionId(payload.sessionId);
-        const pairingPhone = normalizePairingPhoneNumber(payload.phoneNumber);
-        if (!sessionId) {
-            socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
-            return;
-        }
-        if (!pairingPhone) {
-            socket.emit('error', {
-                message: 'Numero invalido para pareamento. Use DDI + DDD + numero.',
-                code: 'PAIRING_PHONE_INVALID'
-            });
-            return;
-        }
-
-        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, sessionId);
-        if (!planAccess.allowed) return;
-        const ownerScopeUserId = planAccess.ownerScopeUserId;
-        const storedSession = await WhatsAppSession.findBySessionId(sessionId);
-        if (ownerScopeUserId && storedSession) {
-            const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!ownedSession) {
-                socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+        try {
+            const sessionId = sanitizeSessionId(payload.sessionId);
+            const pairingPhone = normalizePairingPhoneNumber(payload.phoneNumber);
+            if (!sessionId) {
+                socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
                 return;
             }
-        }
-        const storedOwnerUserId = Number(storedSession?.created_by || 0);
-        const resolvedOwnerUserId = ownerScopeUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
+            if (!pairingPhone) {
+                socket.emit('error', {
+                    message: 'Numero invalido para pareamento. Use DDI + DDD + numero.',
+                    code: 'PAIRING_PHONE_INVALID'
+                });
+                return;
+            }
 
-        const existingSession = sessions.get(sessionId);
-        if (existingSession) {
-            existingSession.clientSocket = socket;
-            let pairingHandledByCreate = false;
-            if (!existingSession.isConnected && !existingSession.reconnecting && !sessionInitLocks.has(sessionId)) {
+            const planAccess = await ensureSocketActiveWhatsAppPlan(socket, sessionId);
+            if (!planAccess.allowed) return;
+            const ownerScopeUserId = planAccess.ownerScopeUserId;
+            const storedSession = await WhatsAppSession.findBySessionId(sessionId);
+            if (ownerScopeUserId && storedSession) {
+                const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
+                    owner_user_id: ownerScopeUserId
+                });
+                if (!ownedSession) {
+                    socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                    return;
+                }
+            }
+            const storedOwnerUserId = Number(storedSession?.created_by || 0);
+            const resolvedOwnerUserId = ownerScopeUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
+
+            const existingSession = sessions.get(sessionId);
+            if (existingSession) {
+                existingSession.clientSocket = socket;
+                let pairingHandledByCreate = false;
+                if (!existingSession.isConnected && !sessionInitLocks.has(sessionId)) {
+                    await createSession(sessionId, socket, 0, {
+                        requestPairingCode: true,
+                        pairingPhone,
+                        ownerUserId: resolvedOwnerUserId || undefined
+                    });
+                    pairingHandledByCreate = true;
+                }
+                if (!pairingHandledByCreate) {
+                    await requestSessionPairingCode(sessionId, socket, pairingPhone);
+                }
+                return;
+            }
+
+            await createSession(sessionId, socket, 0, {
+                requestPairingCode: true,
+                pairingPhone,
+                ownerUserId: resolvedOwnerUserId || undefined
+            });
+        } catch (error) {
+            socket.emit('error', {
+                message: 'Falha ao gerar codigo de pareamento',
+                code: 'PAIRING_REQUEST_ERROR'
+            });
+        }
+    });
+
+    socket.on('refresh-qr', async (payload = {}) => {
+        try {
+            const sessionId = sanitizeSessionId(payload.sessionId);
+            if (!sessionId) {
+                socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
+                return;
+            }
+
+            const planAccess = await ensureSocketActiveWhatsAppPlan(socket, sessionId);
+            if (!planAccess.allowed) return;
+            const ownerScopeUserId = planAccess.ownerScopeUserId;
+
+            const storedSession = await WhatsAppSession.findBySessionId(sessionId);
+            if (ownerScopeUserId && storedSession) {
+                const ownedSession = await WhatsAppSession.findBySessionId(sessionId, {
+                    owner_user_id: ownerScopeUserId
+                });
+                if (!ownedSession) {
+                    socket.emit('error', { message: 'Sem permissao para acessar esta conta', code: 'SESSION_FORBIDDEN' });
+                    return;
+                }
+            }
+
+            const storedOwnerUserId = Number(storedSession?.created_by || 0);
+            const resolvedOwnerUserId = ownerScopeUserId || (storedOwnerUserId > 0 ? storedOwnerUserId : null);
+            const existingSession = sessions.get(sessionId);
+
+            if (existingSession?.isConnected) {
+                socket.emit('session-status', {
+                    status: 'connected',
+                    sessionId,
+                    user: existingSession.user || null
+                });
+                return;
+            }
+
+            if (existingSession) {
+                existingSession.clientSocket = socket;
+            }
+
+            if (!sessionInitLocks.has(sessionId)) {
                 await createSession(sessionId, socket, 0, {
-                    requestPairingCode: true,
-                    pairingPhone,
                     ownerUserId: resolvedOwnerUserId || undefined
                 });
-                pairingHandledByCreate = true;
             }
-            if (!pairingHandledByCreate) {
-                await requestSessionPairingCode(sessionId, socket, pairingPhone);
-            }
-            return;
+        } catch (error) {
+            socket.emit('error', {
+                message: 'Falha ao atualizar QR Code',
+                code: 'REFRESH_QR_ERROR'
+            });
         }
-
-        await createSession(sessionId, socket, 0, {
-            requestPairingCode: true,
-            pairingPhone,
-            ownerUserId: resolvedOwnerUserId || undefined
-        });
     });
 
     
