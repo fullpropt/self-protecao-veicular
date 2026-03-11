@@ -343,6 +343,38 @@ CREATE TABLE IF NOT EXISTS support_inbox_messages (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS checkout_registrations (
+    id SERIAL PRIMARY KEY,
+    uuid TEXT UNIQUE NOT NULL,
+    email TEXT NOT NULL,
+    stripe_checkout_session_id TEXT UNIQUE NOT NULL,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    stripe_price_id TEXT,
+    stripe_plan_key TEXT,
+    stripe_plan_code TEXT,
+    stripe_plan_name TEXT,
+    status TEXT DEFAULT 'pending_email_confirmation' CHECK(status IN (
+        'pending_email_confirmation',
+        'email_confirmed',
+        'completed',
+        'linked_existing_account',
+        'email_delivery_failed',
+        'expired'
+    )),
+    email_confirmed INTEGER DEFAULT 0,
+    email_confirmed_at TIMESTAMPTZ,
+    email_confirmation_token_hash TEXT,
+    email_confirmation_expires_at TIMESTAMPTZ,
+    linked_user_id INTEGER REFERENCES users(id),
+    owner_user_id INTEGER REFERENCES users(id),
+    metadata TEXT,
+    completed_at TIMESTAMPTZ,
+    last_email_sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS whatsapp_sessions (
     id SERIAL PRIMARY KEY,
     session_id TEXT UNIQUE NOT NULL,
@@ -550,6 +582,11 @@ CREATE INDEX IF NOT EXISTS idx_incoming_webhook_credentials_last_used ON incomin
 CREATE INDEX IF NOT EXISTS idx_support_inbox_messages_received_at ON support_inbox_messages(received_at DESC);
 CREATE INDEX IF NOT EXISTS idx_support_inbox_messages_is_read ON support_inbox_messages(is_read);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_support_inbox_messages_external_id_unique ON support_inbox_messages(external_message_id) WHERE external_message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_checkout_registrations_email ON checkout_registrations(email);
+CREATE INDEX IF NOT EXISTS idx_checkout_registrations_subscription ON checkout_registrations(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_checkout_registrations_customer ON checkout_registrations(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_checkout_registrations_token_hash ON checkout_registrations(email_confirmation_token_hash);
+CREATE INDEX IF NOT EXISTS idx_checkout_registrations_status ON checkout_registrations(status);
 CREATE INDEX IF NOT EXISTS idx_campaign_sender_accounts_campaign ON campaign_sender_accounts(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_sender_accounts_session ON campaign_sender_accounts(session_id);
 CREATE INDEX IF NOT EXISTS idx_whatsapp_sessions_created_by ON whatsapp_sessions(created_by);

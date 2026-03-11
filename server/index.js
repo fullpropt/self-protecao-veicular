@@ -57,7 +57,8 @@ const {
     Settings,
     User,
     WhatsAppSession,
-    SupportInboxMessage
+    SupportInboxMessage,
+    CheckoutRegistration
 } = require('./database/models');
 
 
@@ -75,6 +76,7 @@ const openAiFlowDraftService = require('./services/openAiFlowDraftService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
+const stripeCheckoutService = require('./services/stripeCheckoutService');
 const {
     DEFAULT_APP_NAME,
     DEFAULT_EMAIL_HTML_TEMPLATE,
@@ -670,6 +672,242 @@ function normalizeSettingsForResponse(settings = {}, scopedUserId = null) {
     return result;
 }
 
+function trimTrailingSlash(value) {
+    return String(value || '').replace(/\/+$/, '');
+}
+
+function buildPublicAppBaseUrl(req) {
+    const resolved = trimTrailingSlash(
+        resolveAppUrl(req)
+        || process.env.APP_URL
+        || process.env.FRONTEND_URL
+        || ''
+    );
+
+    if (resolved) return resolved;
+
+    const host = String(req?.get?.('host') || '').trim();
+    const protocol = String(req?.protocol || 'https').trim() || 'https';
+    return host ? trimTrailingSlash(`${protocol}://${host}`) : '';
+}
+
+function normalizeCheckoutRegistrationStatusValue(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    const allowed = new Set([
+        'pending_email_confirmation',
+        'email_confirmed',
+        'completed',
+        'linked_existing_account',
+        'email_delivery_failed',
+        'expired'
+    ]);
+    return allowed.has(normalized) ? normalized : 'pending_email_confirmation';
+}
+
+function isCheckoutRegistrationExpired(registration, now = Date.now()) {
+    const expiresAtRaw = registration?.email_confirmation_expires_at;
+    if (!expiresAtRaw) return false;
+    const expiresAtMs = new Date(expiresAtRaw).getTime();
+    if (!Number.isFinite(expiresAtMs)) return true;
+    return expiresAtMs < now;
+}
+
+function buildStripePlanMessage(status, planName = 'plano') {
+    const normalizedStatus = stripeCheckoutService.normalizePlanStatus(status);
+    const normalizedPlanName = String(planName || 'plano').trim() || 'plano';
+
+    if (normalizedStatus === 'trialing') {
+        return `Assinatura ${normalizedPlanName} em periodo de teste via Stripe.`;
+    }
+    if (normalizedStatus === 'past_due') {
+        return `Pagamento pendente para o plano ${normalizedPlanName} na Stripe.`;
+    }
+    if (normalizedStatus === 'canceled') {
+        return `Assinatura ${normalizedPlanName} cancelada na Stripe.`;
+    }
+    if (normalizedStatus === 'suspended') {
+        return `Assinatura ${normalizedPlanName} suspensa na Stripe.`;
+    }
+    if (normalizedStatus === 'expired') {
+        return `Assinatura ${normalizedPlanName} expirada na Stripe.`;
+    }
+    return `Assinatura ${normalizedPlanName} ativa e sincronizada via Stripe.`;
+}
+
+function resolveStripePlanStatusFromRegistration(registration, fallback = 'active') {
+    const metadata = registration?.metadata && typeof registration.metadata === 'object'
+        ? registration.metadata
+        : {};
+    return stripeCheckoutService.normalizePlanStatus(
+        metadata.subscriptionStatus
+        || metadata.stripeSubscriptionStatus
+        || metadata.planStatus
+        || fallback
+    );
+}
+
+async function applyStripePlanSettingsToOwner(ownerUserId, plan = {}) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    if (!normalizedOwnerUserId) return;
+
+    const planName = String(plan?.name || 'Plano').trim() || 'Plano';
+    const planCode = String(plan?.code || '').trim();
+    const planStatus = stripeCheckoutService.normalizePlanStatus(plan?.status);
+    const renewalDate = normalizeOptionalIsoDate(plan?.renewalDate || null);
+    const externalReference = String(
+        plan?.externalReference
+        || plan?.subscriptionId
+        || plan?.checkoutSessionId
+        || ''
+    ).trim();
+    const message = String(plan?.message || buildStripePlanMessage(planStatus, planName)).trim();
+    const nowIso = new Date().toISOString();
+
+    await Promise.all([
+        Settings.set(buildScopedSettingsKey('plan_name', normalizedOwnerUserId), planName, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_code', normalizedOwnerUserId), planCode, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_status', normalizedOwnerUserId), planStatus, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_provider', normalizedOwnerUserId), 'stripe', 'string'),
+        Settings.set(buildScopedSettingsKey('plan_message', normalizedOwnerUserId), message, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_renewal_date', normalizedOwnerUserId), renewalDate || '', 'string'),
+        Settings.set(buildScopedSettingsKey('plan_last_verified_at', normalizedOwnerUserId), nowIso, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_external_reference', normalizedOwnerUserId), externalReference, 'string')
+    ]);
+}
+
+function buildStripePlanSnapshot(payload = {}) {
+    return {
+        name: String(payload?.planName || 'Plano').trim() || 'Plano',
+        code: String(payload?.planCode || payload?.planKey || '').trim(),
+        status: stripeCheckoutService.normalizePlanStatus(payload?.subscriptionStatus || payload?.status),
+        renewalDate: payload?.renewalDate || null,
+        externalReference: String(payload?.subscriptionId || payload?.sessionId || '').trim(),
+        checkoutSessionId: String(payload?.sessionId || '').trim(),
+        subscriptionId: String(payload?.subscriptionId || '').trim()
+    };
+}
+
+async function sendCheckoutRegistrationConfirmationEmail(req, registration, tokenPayload) {
+    const emailSettings = await getRegistrationEmailRuntimeConfig();
+    await sendRegistrationConfirmationEmail(req, {
+        id: null,
+        email: registration.email,
+        name: registration.email
+    }, tokenPayload, { emailSettings });
+}
+
+async function resendCheckoutRegistrationConfirmation(req, registration) {
+    const confirmationTokenPayload = createEmailConfirmationTokenPayload();
+    await CheckoutRegistration.update(registration.id, {
+        email_confirmation_token_hash: confirmationTokenPayload.tokenHash,
+        email_confirmation_expires_at: confirmationTokenPayload.expiresAt,
+        status: Number(registration?.email_confirmed) > 0 ? 'email_confirmed' : 'pending_email_confirmation'
+    });
+
+    try {
+        await sendCheckoutRegistrationConfirmationEmail(req, registration, confirmationTokenPayload);
+        const updatedRegistration = await CheckoutRegistration.update(registration.id, {
+            last_email_sent_at: new Date().toISOString(),
+            status: Number(registration?.email_confirmed) > 0 ? 'email_confirmed' : 'pending_email_confirmation'
+        });
+        return {
+            registration: updatedRegistration,
+            expiresInText: confirmationTokenPayload.expiresInText
+        };
+    } catch (error) {
+        await CheckoutRegistration.update(registration.id, {
+            status: 'email_delivery_failed'
+        });
+        throw error;
+    }
+}
+
+async function upsertCheckoutRegistrationFromStripePayload(req, payload, options = {}) {
+    const email = String(payload?.customerEmail || '').trim().toLowerCase();
+    if (!email) {
+        throw new Error('Checkout concluido sem email do cliente');
+    }
+
+    const existing = await CheckoutRegistration.findBySessionId(payload.sessionId);
+    const existingUser = await User.findActiveByEmail(email);
+    const metadata = {
+        ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
+        ...(payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+        renewalDate: payload?.renewalDate || null
+    };
+
+    if (existingUser && isEmailConfirmed(existingUser)) {
+        const ownerUserId = normalizeOwnerUserId(existingUser.owner_user_id) || Number(existingUser.id || 0) || null;
+        if (ownerUserId) {
+            await applyStripePlanSettingsToOwner(ownerUserId, buildStripePlanSnapshot(payload));
+        }
+
+        return CheckoutRegistration.upsertBySession({
+            email,
+            stripe_checkout_session_id: payload.sessionId,
+            stripe_customer_id: payload.customerId,
+            stripe_subscription_id: payload.subscriptionId,
+            stripe_price_id: payload.priceId,
+            stripe_plan_key: payload.planKey,
+            stripe_plan_code: payload.planCode,
+            stripe_plan_name: payload.planName,
+            status: 'linked_existing_account',
+            email_confirmed: 1,
+            email_confirmed_at: existingUser.email_confirmed_at || new Date().toISOString(),
+            email_confirmation_token_hash: null,
+            email_confirmation_expires_at: null,
+            linked_user_id: existingUser.id,
+            owner_user_id: ownerUserId,
+            metadata,
+            completed_at: existing?.completed_at || new Date().toISOString(),
+            last_email_sent_at: existing?.last_email_sent_at || null
+        });
+    }
+
+    const shouldGenerateNewToken =
+        !existing?.email_confirmation_token_hash
+        || (!Number(existing?.email_confirmed) && isCheckoutRegistrationExpired(existing))
+        || normalizeCheckoutRegistrationStatusValue(existing?.status) === 'email_delivery_failed';
+    const confirmationTokenPayload = shouldGenerateNewToken ? createEmailConfirmationTokenPayload() : null;
+    const registration = await CheckoutRegistration.upsertBySession({
+        email,
+        stripe_checkout_session_id: payload.sessionId,
+        stripe_customer_id: payload.customerId,
+        stripe_subscription_id: payload.subscriptionId,
+        stripe_price_id: payload.priceId,
+        stripe_plan_key: payload.planKey,
+        stripe_plan_code: payload.planCode,
+        stripe_plan_name: payload.planName,
+        status: Number(existing?.email_confirmed) > 0 ? 'email_confirmed' : 'pending_email_confirmation',
+        email_confirmed: Number(existing?.email_confirmed) > 0 ? 1 : 0,
+        email_confirmed_at: existing?.email_confirmed_at || null,
+        email_confirmation_token_hash: confirmationTokenPayload?.tokenHash || existing?.email_confirmation_token_hash || null,
+        email_confirmation_expires_at: confirmationTokenPayload?.expiresAt || existing?.email_confirmation_expires_at || null,
+        linked_user_id: existing?.linked_user_id || null,
+        owner_user_id: existing?.owner_user_id || null,
+        metadata,
+        completed_at: existing?.completed_at || null,
+        last_email_sent_at: existing?.last_email_sent_at || null
+    });
+
+    if (options?.sendEmail === false || !confirmationTokenPayload?.token) {
+        return registration;
+    }
+
+    try {
+        await sendCheckoutRegistrationConfirmationEmail(req, registration, confirmationTokenPayload);
+        return await CheckoutRegistration.update(registration.id, {
+            last_email_sent_at: new Date().toISOString(),
+            status: Number(registration?.email_confirmed) > 0 ? 'email_confirmed' : 'pending_email_confirmation'
+        });
+    } catch (error) {
+        await CheckoutRegistration.update(registration.id, {
+            status: 'email_delivery_failed'
+        });
+        throw error;
+    }
+}
+
 function getSocketRequesterUserId(socket) {
     const userId = Number(socket?.user?.id || 0);
     return Number.isInteger(userId) && userId > 0 ? userId : 0;
@@ -986,6 +1224,18 @@ if (process.env.NODE_ENV !== 'production') {
 
 }
 
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+        const signature = String(req.headers['stripe-signature'] || '').trim();
+        const event = await stripeCheckoutService.constructWebhookEvent(req.body, signature);
+        await handleStripeWebhookEvent(req, event);
+        return res.json({ received: true });
+    } catch (error) {
+        console.error('[stripe/webhook] Falha ao processar evento:', error.message);
+        return res.status(400).send(`Webhook Error: ${String(error?.message || 'invalid_event')}`);
+    }
+});
+
 
 
 // Body parser
@@ -1006,6 +1256,7 @@ app.use('/api', (req, res, next) => {
         path.startsWith('/auth/login') ||
         path.startsWith('/auth/refresh') ||
         path.startsWith('/auth/register') ||
+        path.startsWith('/auth/complete-registration') ||
         path.startsWith('/auth/confirm-email') ||
         path.startsWith('/auth/resend-confirmation')
     ) {
@@ -10098,10 +10349,215 @@ io.on('connection', (socket) => {
 
 // ============================================
 
+async function syncStripePlanFromRegistration(registration, overrides = {}) {
+    const normalizedRegistration = registration && typeof registration === 'object' ? registration : null;
+    if (!normalizedRegistration) return null;
+
+    const ownerUserId = normalizeOwnerUserId(
+        overrides.ownerUserId
+        || normalizedRegistration.owner_user_id
+    );
+    if (!ownerUserId) return null;
+
+    const metadata = normalizedRegistration.metadata && typeof normalizedRegistration.metadata === 'object'
+        ? normalizedRegistration.metadata
+        : {};
+    const planName = String(
+        overrides.planName
+        || normalizedRegistration.stripe_plan_name
+        || metadata.planName
+        || 'Plano'
+    ).trim() || 'Plano';
+    const planCode = String(
+        overrides.planCode
+        || normalizedRegistration.stripe_plan_code
+        || normalizedRegistration.stripe_plan_key
+        || metadata.planCode
+        || ''
+    ).trim();
+    const planStatus = stripeCheckoutService.normalizePlanStatus(
+        overrides.subscriptionStatus
+        || overrides.status
+        || resolveStripePlanStatusFromRegistration(normalizedRegistration, 'active')
+    );
+    const renewalDate = overrides.renewalDate || metadata.renewalDate || null;
+    const externalReference = String(
+        overrides.subscriptionId
+        || normalizedRegistration.stripe_subscription_id
+        || overrides.sessionId
+        || normalizedRegistration.stripe_checkout_session_id
+        || ''
+    ).trim();
+
+    await applyStripePlanSettingsToOwner(ownerUserId, {
+        name: planName,
+        code: planCode,
+        status: planStatus,
+        renewalDate,
+        externalReference,
+        subscriptionId: String(overrides.subscriptionId || normalizedRegistration.stripe_subscription_id || '').trim(),
+        checkoutSessionId: String(overrides.sessionId || normalizedRegistration.stripe_checkout_session_id || '').trim()
+    });
+
+    return {
+        ownerUserId,
+        planName,
+        planCode,
+        planStatus,
+        renewalDate,
+        externalReference
+    };
+}
+
+async function syncStripePlanStatusByIdentifiers(payload = {}) {
+    const subscriptionId = String(payload?.subscriptionId || '').trim();
+    const customerId = String(payload?.customerId || '').trim();
+    let registration = subscriptionId
+        ? await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
+        : null;
+
+    if (!registration && customerId) {
+        registration = await CheckoutRegistration.findByStripeCustomerId(customerId);
+    }
+    if (!registration) return null;
+
+    const metadata = {
+        ...(registration?.metadata && typeof registration.metadata === 'object' ? registration.metadata : {}),
+        ...(payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+        renewalDate: payload?.renewalDate || registration?.metadata?.renewalDate || null,
+        subscriptionStatus: stripeCheckoutService.normalizePlanStatus(
+            payload?.subscriptionStatus
+            || payload?.status
+            || registration?.metadata?.subscriptionStatus
+            || 'active'
+        )
+    };
+    const updatedRegistration = await CheckoutRegistration.update(registration.id, {
+        stripe_customer_id: customerId || registration.stripe_customer_id,
+        stripe_subscription_id: subscriptionId || registration.stripe_subscription_id,
+        stripe_price_id: String(payload?.priceId || registration.stripe_price_id || '').trim() || null,
+        stripe_plan_key: String(payload?.planKey || registration.stripe_plan_key || '').trim() || null,
+        stripe_plan_code: String(payload?.planCode || registration.stripe_plan_code || '').trim() || null,
+        stripe_plan_name: String(payload?.planName || registration.stripe_plan_name || '').trim() || null,
+        metadata
+    });
+
+    if (normalizeOwnerUserId(updatedRegistration?.owner_user_id)) {
+        await syncStripePlanFromRegistration(updatedRegistration, {
+            subscriptionId: subscriptionId || updatedRegistration?.stripe_subscription_id || '',
+            sessionId: payload?.sessionId || updatedRegistration?.stripe_checkout_session_id || '',
+            subscriptionStatus: metadata.subscriptionStatus,
+            renewalDate: metadata.renewalDate || null,
+            planName: payload?.planName || updatedRegistration?.stripe_plan_name || '',
+            planCode: payload?.planCode || updatedRegistration?.stripe_plan_code || ''
+        });
+    }
+
+    return updatedRegistration;
+}
+
+async function handleStripeWebhookEvent(req, event) {
+    const eventType = String(event?.type || '').trim();
+    if (!eventType) return;
+
+    if (eventType === 'checkout.session.completed') {
+        const payload = await stripeCheckoutService.resolveCheckoutSessionPayload(event?.data?.object || null);
+        await upsertCheckoutRegistrationFromStripePayload(req, payload);
+        console.log('[stripe/webhook] checkout.session.completed sincronizado', JSON.stringify({
+            sessionId: payload.sessionId,
+            email: payload.customerEmail,
+            planCode: payload.planCode,
+            subscriptionId: payload.subscriptionId || null
+        }));
+        return;
+    }
+
+    if (
+        eventType === 'customer.subscription.created'
+        || eventType === 'customer.subscription.updated'
+        || eventType === 'customer.subscription.deleted'
+    ) {
+        const subscription = event?.data?.object || {};
+        const priceId = String(subscription?.items?.data?.[0]?.price?.id || '').trim();
+        const existingRegistration = await CheckoutRegistration.findByStripeSubscriptionId(subscription?.id)
+            || await CheckoutRegistration.findByStripeCustomerId(subscription?.customer);
+        const inferredPlan = stripeCheckoutService.inferPlanByPriceId(priceId);
+
+        await syncStripePlanStatusByIdentifiers({
+            subscriptionId: String(subscription?.id || '').trim(),
+            customerId: String(subscription?.customer || '').trim(),
+            priceId,
+            planKey: existingRegistration?.stripe_plan_key || inferredPlan?.key || '',
+            planCode: existingRegistration?.stripe_plan_code || inferredPlan?.code || '',
+            planName: existingRegistration?.stripe_plan_name || inferredPlan?.name || '',
+            subscriptionStatus: stripeCheckoutService.normalizePlanStatus(subscription?.status),
+            renewalDate: Number(subscription?.current_period_end || 0) > 0
+                ? new Date(Number(subscription.current_period_end) * 1000).toISOString()
+                : null
+        });
+        return;
+    }
+
+    if (eventType === 'invoice.paid' || eventType === 'invoice.payment_failed') {
+        const invoice = event?.data?.object || {};
+        const priceId = String(invoice?.lines?.data?.[0]?.price?.id || '').trim();
+        const existingRegistration = await CheckoutRegistration.findByStripeSubscriptionId(invoice?.subscription)
+            || await CheckoutRegistration.findByStripeCustomerId(invoice?.customer);
+        const inferredPlan = stripeCheckoutService.inferPlanByPriceId(priceId);
+        const periodEnd = Number(invoice?.lines?.data?.[0]?.period?.end || 0);
+
+        await syncStripePlanStatusByIdentifiers({
+            subscriptionId: String(invoice?.subscription || '').trim(),
+            customerId: String(invoice?.customer || '').trim(),
+            priceId,
+            planKey: existingRegistration?.stripe_plan_key || inferredPlan?.key || '',
+            planCode: existingRegistration?.stripe_plan_code || inferredPlan?.code || '',
+            planName: existingRegistration?.stripe_plan_name || inferredPlan?.name || '',
+            subscriptionStatus: eventType === 'invoice.payment_failed'
+                ? 'past_due'
+                : 'active',
+            renewalDate: periodEnd > 0 ? new Date(periodEnd * 1000).toISOString() : null
+        });
+    }
+}
+
+// ============================================
+
 // ROTAS API REST
 
 // ============================================
 
+
+app.get('/billing/checkout/:planKey', async (req, res) => {
+    try {
+        const plan = stripeCheckoutService.getPlanConfig(req.params.planKey);
+        if (!plan) {
+            return res.status(404).send('Plano de checkout nao encontrado');
+        }
+
+        const appBaseUrl = buildPublicAppBaseUrl(req);
+        if (!appBaseUrl) {
+            return res.status(500).send('Nao foi possivel resolver a URL publica da aplicacao');
+        }
+
+        const successUrl = `${appBaseUrl}/#/checkout/sucesso?session_id={CHECKOUT_SESSION_ID}&plan=${encodeURIComponent(plan.code)}`;
+        const cancelUrl = `${appBaseUrl}/#/planos?checkout=cancelado&plan=${encodeURIComponent(plan.code)}`;
+        const checkoutSession = await stripeCheckoutService.createCheckoutSession({
+            plan,
+            successUrl,
+            cancelUrl
+        });
+
+        if (!checkoutSession?.url) {
+            throw new Error('Checkout da Stripe nao retornou URL');
+        }
+
+        return res.redirect(303, checkoutSession.url);
+    } catch (error) {
+        console.error('[billing/checkout] Falha ao iniciar checkout:', error.message);
+        return res.status(500).send('Nao foi possivel iniciar o checkout agora');
+    }
+});
 
 
 // Status do WhatsApp (para ConfiguraÃ§Ãµes > ConexÃ£o)
@@ -10696,15 +11152,88 @@ app.post('/api/auth/resend-confirmation', async (req, res) => {
     try {
 
         const email = String(req.body?.email || '').trim().toLowerCase();
+        const sessionId = String(req.body?.sessionId || req.body?.session_id || '').trim();
 
-        if (!email) {
+        if (!email && !sessionId) {
             return res.status(400).json({
-                error: 'Email e obrigatorio',
+                error: 'Email ou sessionId e obrigatorio',
                 code: 'EMAIL_REQUIRED'
             });
         }
 
-        const user = await User.findActiveByEmail(email);
+        const user = email ? await User.findActiveByEmail(email) : null;
+        let checkoutRegistration = sessionId
+            ? await CheckoutRegistration.findBySessionId(sessionId)
+            : null;
+
+        if (!checkoutRegistration && sessionId) {
+            try {
+                const checkoutPayload = await stripeCheckoutService.resolveCheckoutSessionPayload(sessionId);
+                checkoutRegistration = await upsertCheckoutRegistrationFromStripePayload(req, checkoutPayload, {
+                    sendEmail: false
+                });
+            } catch (error) {
+                console.warn('[auth/resend-confirmation] Nao foi possivel hidratar checkout por sessionId', JSON.stringify({
+                    sessionId,
+                    message: String(error?.message || 'erro_desconhecido')
+                }));
+            }
+        }
+
+        if (!checkoutRegistration && email) {
+            checkoutRegistration = await CheckoutRegistration.findLatestByEmail(email, { onlyIncomplete: true });
+        }
+
+        if (checkoutRegistration) {
+            const registrationStatus = normalizeCheckoutRegistrationStatusValue(checkoutRegistration.status);
+            if (
+                Number(checkoutRegistration?.linked_user_id) > 0
+                || checkoutRegistration?.completed_at
+                || registrationStatus === 'linked_existing_account'
+            ) {
+                return res.json({
+                    success: true,
+                    requiresEmailConfirmation: false,
+                    sent: false,
+                    alreadyConfirmed: true,
+                    message: 'Este checkout ja foi vinculado a uma conta. Entre normalmente no ZapVender.'
+                });
+            }
+
+            if (Number(checkoutRegistration?.email_confirmed) > 0) {
+                return res.json({
+                    success: true,
+                    requiresEmailConfirmation: false,
+                    sent: false,
+                    alreadyConfirmed: true,
+                    message: 'Este email ja foi confirmado. Use o link recebido para concluir o cadastro.'
+                });
+            }
+
+            try {
+                const resendResult = await resendCheckoutRegistrationConfirmation(req, checkoutRegistration);
+                const updatedRegistration = resendResult?.registration || checkoutRegistration;
+                return res.json({
+                    success: true,
+                    requiresEmailConfirmation: true,
+                    sent: true,
+                    message: 'Enviamos um novo link de confirmacao para o email informado no checkout.',
+                    email: updatedRegistration.email,
+                    expiresInText: resendResult?.expiresInText || (process.env.EMAIL_CONFIRMATION_EXPIRES_TEXT || '24 horas')
+                });
+            } catch (error) {
+                if (error instanceof MailMktIntegrationError) {
+                    return res.status(error.statusCode || 502).json({
+                        error: 'Nao foi possivel reenviar o email de confirmacao agora',
+                        code: 'EMAIL_CONFIRMATION_SEND_FAILED',
+                        retryable: error.retryable !== false,
+                        requiresEmailConfirmation: true,
+                        sent: false
+                    });
+                }
+                throw error;
+            }
+        }
 
         if (!user) {
             return res.json({
@@ -10788,6 +11317,73 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
         const confirmationTokenHash = hashEmailConfirmationToken(rawToken);
         const confirmationTokenFingerprint = tokenFingerprint(rawToken);
+        const checkoutRegistration = await CheckoutRegistration.findByEmailConfirmationTokenHash(confirmationTokenHash);
+
+        if (checkoutRegistration) {
+            const registrationStatus = normalizeCheckoutRegistrationStatusValue(checkoutRegistration.status);
+            const registrationPlanStatus = resolveStripePlanStatusFromRegistration(checkoutRegistration, 'active');
+
+            if (
+                Number(checkoutRegistration?.linked_user_id) > 0
+                || checkoutRegistration?.completed_at
+                || registrationStatus === 'linked_existing_account'
+            ) {
+                return res.json({
+                    success: true,
+                    flow: 'login',
+                    message: 'Email confirmado e cadastro ja concluido. Voce pode entrar no ZapVender.',
+                    registration: {
+                        email: checkoutRegistration.email,
+                        plan: {
+                            code: checkoutRegistration.stripe_plan_code || checkoutRegistration.stripe_plan_key || '',
+                            name: checkoutRegistration.stripe_plan_name || 'Plano',
+                            status: registrationPlanStatus
+                        }
+                    }
+                });
+            }
+
+            if (!Number(checkoutRegistration?.email_confirmed) && isCheckoutRegistrationExpired(checkoutRegistration)) {
+                await CheckoutRegistration.update(checkoutRegistration.id, {
+                    status: 'expired',
+                    email_confirmation_token_hash: null,
+                    email_confirmation_expires_at: null
+                });
+                console.warn('[auth/confirm-email] Token expirado para checkout', JSON.stringify({
+                    checkoutRegistrationId: Number(checkoutRegistration?.id || 0) || null,
+                    tokenFingerprint: confirmationTokenFingerprint
+                }));
+                return res.status(400).json({
+                    error: 'Link de confirmacao expirado. Solicite o reenvio para concluir seu cadastro.',
+                    code: 'EMAIL_CONFIRMATION_EXPIRED'
+                });
+            }
+
+            const confirmedRegistration = Number(checkoutRegistration?.email_confirmed) > 0
+                ? checkoutRegistration
+                : await CheckoutRegistration.markEmailConfirmed(checkoutRegistration.id);
+
+            console.log('[auth/confirm-email] Email confirmado para checkout', JSON.stringify({
+                checkoutRegistrationId: Number(confirmedRegistration?.id || 0) || null,
+                email: confirmedRegistration?.email || null,
+                sessionId: confirmedRegistration?.stripe_checkout_session_id || null
+            }));
+
+            return res.json({
+                success: true,
+                flow: 'complete_registration',
+                message: 'Email confirmado com sucesso. Agora finalize seu cadastro.',
+                registration: {
+                    email: confirmedRegistration.email,
+                    plan: {
+                        code: confirmedRegistration.stripe_plan_code || confirmedRegistration.stripe_plan_key || '',
+                        name: confirmedRegistration.stripe_plan_name || 'Plano',
+                        status: resolveStripePlanStatusFromRegistration(confirmedRegistration, 'active')
+                    }
+                }
+            });
+        }
+
         const user = await User.findByEmailConfirmationTokenHash(confirmationTokenHash);
 
         if (!user) {
@@ -10850,6 +11446,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
         return res.json({
             success: true,
+            flow: 'login',
             message: 'Email confirmado com sucesso. Voce ja pode entrar no ZapVender.',
             user: {
                 id: confirmedUser.id,
@@ -10861,6 +11458,187 @@ app.get('/api/auth/confirm-email', async (req, res) => {
     } catch (error) {
 
         res.status(500).json({ error: error.message });
+
+    }
+
+});
+
+
+
+app.post('/api/auth/complete-registration', async (req, res) => {
+
+    try {
+
+        const rawToken = String(req.body?.token || '').trim();
+        const name = String(req.body?.name || '').trim();
+        const companyName = String(req.body?.companyName || req.body?.company_name || '').trim();
+        const password = String(req.body?.password || '');
+
+        if (!rawToken) {
+            return res.status(400).json({
+                error: 'Token de confirmacao e obrigatorio',
+                code: 'EMAIL_CONFIRMATION_TOKEN_REQUIRED'
+            });
+        }
+
+        if (!name || !companyName || !password) {
+            return res.status(400).json({
+                error: 'Nome, nome da empresa e senha sao obrigatorios',
+                code: 'COMPLETE_REGISTRATION_REQUIRED_FIELDS'
+            });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({
+                error: 'Senha deve ter pelo menos 6 caracteres',
+                code: 'PASSWORD_TOO_SHORT'
+            });
+        }
+
+        const confirmationTokenHash = hashEmailConfirmationToken(rawToken);
+        let checkoutRegistration = await CheckoutRegistration.findByEmailConfirmationTokenHash(confirmationTokenHash);
+        if (!checkoutRegistration) {
+            return res.status(400).json({
+                error: 'Link de confirmacao invalido ou ja utilizado',
+                code: 'EMAIL_CONFIRMATION_INVALID'
+            });
+        }
+
+        const registrationStatus = normalizeCheckoutRegistrationStatusValue(checkoutRegistration.status);
+        if (
+            Number(checkoutRegistration?.linked_user_id) > 0
+            || checkoutRegistration?.completed_at
+            || registrationStatus === 'linked_existing_account'
+        ) {
+            return res.status(409).json({
+                error: 'Este cadastro ja foi concluido. Entre normalmente no ZapVender.',
+                code: 'REGISTRATION_ALREADY_COMPLETED'
+            });
+        }
+
+        if (!Number(checkoutRegistration?.email_confirmed) && isCheckoutRegistrationExpired(checkoutRegistration)) {
+            await CheckoutRegistration.update(checkoutRegistration.id, {
+                status: 'expired',
+                email_confirmation_token_hash: null,
+                email_confirmation_expires_at: null
+            });
+            return res.status(400).json({
+                error: 'Link de confirmacao expirado. Solicite o reenvio para concluir seu cadastro.',
+                code: 'EMAIL_CONFIRMATION_EXPIRED'
+            });
+        }
+
+        if (!Number(checkoutRegistration?.email_confirmed)) {
+            checkoutRegistration = await CheckoutRegistration.markEmailConfirmed(checkoutRegistration.id);
+        }
+
+        const { hashPassword } = require('./middleware/auth');
+        const passwordHash = hashPassword(password);
+        const normalizedEmail = String(checkoutRegistration.email || '').trim().toLowerCase();
+        const normalizedName = String(name || '').trim();
+        const normalizedCompanyName = String(companyName || '').trim();
+        const existingUser = await User.findActiveByEmail(normalizedEmail);
+        const nowIso = new Date().toISOString();
+
+        let user = null;
+        if (existingUser && isEmailConfirmed(existingUser)) {
+            return res.status(409).json({
+                error: 'Email ja cadastrado',
+                code: 'EMAIL_ALREADY_REGISTERED'
+            });
+        }
+
+        if (existingUser && !isEmailConfirmed(existingUser)) {
+            await User.update(existingUser.id, {
+                name: normalizedName,
+                email: normalizedEmail,
+                role: 'admin',
+                is_active: 1,
+                email_confirmed: 1,
+                email_confirmed_at: nowIso,
+                email_confirmation_token_hash: null,
+                email_confirmation_expires_at: null
+            });
+            await User.updatePassword(existingUser.id, passwordHash);
+
+            const existingOwnerUserId = normalizeOwnerUserId(existingUser?.owner_user_id) || Number(existingUser.id || 0);
+            if (existingOwnerUserId > 0 && Number(existingUser?.owner_user_id || 0) !== existingOwnerUserId) {
+                await User.update(existingUser.id, { owner_user_id: existingOwnerUserId });
+            }
+
+            user = await User.findByIdWithPassword(existingUser.id);
+        } else {
+            const created = await User.create({
+                name: normalizedName,
+                email: normalizedEmail,
+                password_hash: passwordHash,
+                email_confirmed: 1,
+                email_confirmed_at: nowIso,
+                email_confirmation_token_hash: null,
+                email_confirmation_expires_at: null,
+                role: 'admin'
+            });
+
+            if (Number(created?.id || 0) > 0) {
+                await User.update(Number(created.id), { owner_user_id: Number(created.id) });
+            }
+            user = await User.findByIdWithPassword(Number(created?.id || 0));
+        }
+
+        if (!user) {
+            return res.status(500).json({
+                error: 'Falha ao concluir cadastro do usuario'
+            });
+        }
+
+        const ownerUserId = normalizeOwnerUserId(user?.owner_user_id) || Number(user?.id || 0) || null;
+        if (ownerUserId) {
+            await Settings.set(
+                buildScopedSettingsKey('company_name', ownerUserId),
+                normalizedCompanyName || normalizedName || 'ZapVender',
+                'string'
+            );
+
+            await applyStripePlanSettingsToOwner(ownerUserId, {
+                name: checkoutRegistration.stripe_plan_name || 'Plano',
+                code: checkoutRegistration.stripe_plan_code || checkoutRegistration.stripe_plan_key || '',
+                status: resolveStripePlanStatusFromRegistration(checkoutRegistration, 'active'),
+                renewalDate: checkoutRegistration?.metadata?.renewalDate || null,
+                externalReference: checkoutRegistration.stripe_subscription_id || checkoutRegistration.stripe_checkout_session_id || '',
+                subscriptionId: checkoutRegistration.stripe_subscription_id || '',
+                checkoutSessionId: checkoutRegistration.stripe_checkout_session_id || ''
+            });
+        }
+
+        await CheckoutRegistration.update(checkoutRegistration.id, {
+            status: 'completed',
+            email_confirmed: 1,
+            email_confirmed_at: checkoutRegistration.email_confirmed_at || nowIso,
+            email_confirmation_token_hash: null,
+            email_confirmation_expires_at: null,
+            linked_user_id: user.id,
+            owner_user_id: ownerUserId,
+            completed_at: nowIso,
+            metadata: {
+                ...(checkoutRegistration?.metadata && typeof checkoutRegistration.metadata === 'object' ? checkoutRegistration.metadata : {}),
+                companyName: normalizedCompanyName,
+                completedAt: nowIso
+            }
+        });
+
+        return res.json({
+            success: true,
+            message: 'Cadastro concluido com sucesso. Agora voce ja pode entrar no ZapVender.',
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name
+            }
+        });
+
+    } catch (error) {
+
+        return res.status(500).json({ error: error.message });
 
     }
 
@@ -17969,17 +18747,47 @@ app.post('/api/plan/status/refresh', authenticate, async (req, res) => {
     try {
         const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
         const nowIso = new Date().toISOString();
-
-        await Settings.set(
-            buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
-            nowIso,
-            'string'
-        );
-
-        // Placeholder para integraÃ§Ã£o externa de validaÃ§Ã£o do plano.
-        // Aqui entra a chamada da API de assinatura no prÃ³ximo passo.
         const ownerAdmin = await User.findById(ownerScopeUserId || req.user?.id);
-        const plan = await buildOwnerPlanStatus(ownerScopeUserId);
+        let plan = await buildOwnerPlanStatus(ownerScopeUserId);
+
+        if (String(plan?.provider || '').trim().toLowerCase() === 'stripe') {
+            const subscriptionId = String(plan?.external_reference || '').trim();
+            if (subscriptionId) {
+                const subscription = await stripeCheckoutService.retrieveSubscription(subscriptionId);
+                const registration = await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
+                    || await CheckoutRegistration.findByStripeCustomerId(subscription?.customer);
+                const priceId = String(subscription?.items?.data?.[0]?.price?.id || '').trim();
+                const inferredPlan = stripeCheckoutService.inferPlanByPriceId(priceId);
+
+                await syncStripePlanStatusByIdentifiers({
+                    subscriptionId,
+                    customerId: String(subscription?.customer || '').trim(),
+                    priceId,
+                    planKey: registration?.stripe_plan_key || inferredPlan?.key || '',
+                    planCode: registration?.stripe_plan_code || inferredPlan?.code || '',
+                    planName: registration?.stripe_plan_name || inferredPlan?.name || '',
+                    subscriptionStatus: stripeCheckoutService.normalizePlanStatus(subscription?.status),
+                    renewalDate: Number(subscription?.current_period_end || 0) > 0
+                        ? new Date(Number(subscription.current_period_end) * 1000).toISOString()
+                        : null
+                });
+                plan = await buildOwnerPlanStatus(ownerScopeUserId);
+            } else {
+                await Settings.set(
+                    buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
+                    nowIso,
+                    'string'
+                );
+                plan = await buildOwnerPlanStatus(ownerScopeUserId);
+            }
+        } else {
+            await Settings.set(
+                buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
+                nowIso,
+                'string'
+            );
+            plan = await buildOwnerPlanStatus(ownerScopeUserId);
+        }
 
         res.json({
             success: true,
@@ -18124,10 +18932,10 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
 app.get('/confirm-email', (req, res) => {
     const rawToken = String(req.query?.token || '').trim();
     if (!rawToken) {
-        return res.redirect('/#/login?emailConfirmError=token_required');
+        return res.redirect('/#/finalizar-cadastro?emailConfirmError=token_required');
     }
 
-    return res.redirect(`/#/login?confirmEmailToken=${encodeURIComponent(rawToken)}`);
+    return res.redirect(`/#/finalizar-cadastro?confirmEmailToken=${encodeURIComponent(rawToken)}`);
 });
 
 

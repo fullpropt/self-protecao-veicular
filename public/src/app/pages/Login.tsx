@@ -4,10 +4,7 @@ import { brandFullLogoUrl, brandName } from '../lib/brand';
 type LoginGlobals = {
   initLogin?: () => void;
   handleLogin?: (event: Event) => boolean | Promise<boolean>;
-  handleRegister?: (event: Event) => boolean | Promise<boolean>;
   resendEmailConfirmation?: () => Promise<void>;
-  showLogin?: () => void;
-  showRegister?: () => void;
 };
 
 export default function Login() {
@@ -348,72 +345,10 @@ export default function Login() {
             </button>
           </div>
 
-          <div className="auth-switch">
-            {'Ainda n\u00E3o tem conta?'}
-            <button type="button" className="auth-switch-link" onClick={() => globals.showRegister?.()}>
-              Criar conta
-            </button>
-          </div>
-        </form>
-
-        <div className="error-message" id="registerErrorMsg">
-          Falha ao criar conta
-        </div>
-
-        <form id="registerForm" className="hidden" onSubmit={(event) => globals.handleRegister?.(event as unknown as Event)}>
-          <h2 className="form-section-title">Criar conta</h2>
-          <div className="form-group">
-            <label className="form-label">Nome</label>
-            <input
-              type="text"
-              className="form-input"
-              id="registerName"
-              placeholder="Digite seu nome"
-              required
-              autoComplete="name"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Nome da empresa</label>
-            <input
-              type="text"
-              className="form-input"
-              id="registerCompanyName"
-              placeholder="Digite o nome da empresa"
-              required
-              autoComplete="organization"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">E-mail</label>
-            <input
-              type="email"
-              className="form-input"
-              id="registerEmail"
-              placeholder="Digite seu e-mail"
-              required
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Senha</label>
-            <input type="password" className="form-input" id="registerPassword" placeholder="Crie uma senha" required />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Confirmar senha</label>
-            <input type="password" className="form-input" id="registerConfirm" placeholder="Repita a senha" required />
-          </div>
-
-          <button type="submit" className="btn-login">Criar conta</button>
-
-          <div className="auth-switch">
-            {'J\u00E1 tem conta?'}
-            <button type="button" className="auth-switch-link" onClick={() => globals.showLogin?.()}>
-              Entrar
+        <div className="auth-switch">
+          {'Ainda n\u00E3o tem conta?'}
+            <button type="button" className="auth-switch-link" onClick={() => { window.location.hash = '#/planos'; }}>
+              Cadastrar
             </button>
           </div>
         </form>

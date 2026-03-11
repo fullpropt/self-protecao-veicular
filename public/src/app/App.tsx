@@ -4,6 +4,8 @@ import './shared.css';
 import Automacao from './pages/Automacao';
 import AdminDashboard from './pages/AdminDashboard';
 import Campanhas from './pages/Campanhas';
+import CheckoutSuccess from './pages/CheckoutSuccess';
+import CompleteRegistration from './pages/CompleteRegistration';
 import Configuracoes from './pages/Configuracoes';
 import Contatos from './pages/Contatos';
 import Conversas from './pages/Conversas';
@@ -209,6 +211,8 @@ export default function App() {
       <Route path="/planos" element={<Planos />} />
       <Route path="/venda" element={<Planos />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/checkout/sucesso" element={<CheckoutSuccess />} />
+      <Route path="/finalizar-cadastro" element={<CompleteRegistration />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/admin-dashboard" element={<AdminDashboard />} />
       <Route path="/contatos" element={<Contatos />} />

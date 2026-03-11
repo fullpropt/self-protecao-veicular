@@ -563,7 +563,9 @@ async function initLogin() {
     windowAny.resendEmailConfirmation = resendEmailConfirmation;
     windowAny.initLogin = initLogin;
     windowAny.showLogin = () => setAuthMode('login');
-    windowAny.showRegister = () => setAuthMode('register');
+    windowAny.showRegister = () => {
+        window.location.hash = '#/planos';
+    };
 
     setAuthMode('login');
     const rememberInput = document.getElementById('rememberSession') as HTMLInputElement | null;
