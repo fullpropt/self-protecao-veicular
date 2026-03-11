@@ -1381,6 +1381,63 @@ const io = new Server(server, {
 
 });
 
+const SOCKET_ERROR_LOG_MAX_LENGTH = 1800;
+const SOCKET_ERROR_LOG_SENSITIVE_KEYS = new Set([
+    'authorization',
+    'cookie',
+    'set-cookie',
+    'token',
+    'access_token',
+    'refresh_token'
+]);
+
+function truncateSocketErrorLogValue(value, maxLength = SOCKET_ERROR_LOG_MAX_LENGTH) {
+    const normalized = String(value || '');
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength)}...<truncated>`;
+}
+
+function safeSerializeSocketErrorContext(value) {
+    if (value === null || typeof value === 'undefined') return 'n/a';
+
+    try {
+        const seen = new WeakSet();
+        const serialized = JSON.stringify(value, (key, currentValue) => {
+            const normalizedKey = String(key || '').trim().toLowerCase();
+            if (SOCKET_ERROR_LOG_SENSITIVE_KEYS.has(normalizedKey)) {
+                return '<redacted>';
+            }
+
+            if (typeof currentValue === 'string') {
+                return currentValue.length > 250
+                    ? `${currentValue.slice(0, 250)}...<truncated>`
+                    : currentValue;
+            }
+
+            if (typeof currentValue === 'function') {
+                return '<function>';
+            }
+
+            if (Buffer.isBuffer(currentValue)) {
+                return `<buffer length=${currentValue.length}>`;
+            }
+
+            if (currentValue && typeof currentValue === 'object') {
+                if (seen.has(currentValue)) {
+                    return '<circular>';
+                }
+                seen.add(currentValue);
+            }
+
+            return currentValue;
+        });
+
+        return truncateSocketErrorLogValue(serialized || 'n/a');
+    } catch (error) {
+        return truncateSocketErrorLogValue(String(error?.message || 'serialize_failed'));
+    }
+}
+
 io.engine.on('connection_error', (error) => {
     const request = error?.req || {};
     const clientIp = String(
@@ -1390,11 +1447,15 @@ io.engine.on('connection_error', (error) => {
     ).split(',')[0].trim();
     const origin = String(request?.headers?.origin || '').trim();
     const code = String(error?.code || '').trim();
-    const context = String(error?.context || '').trim();
     const message = String(error?.message || '').trim();
+    const requestUrl = String(request?.url || '').trim();
+    const requestMethod = String(request?.method || '').trim();
+    const userAgent = truncateSocketErrorLogValue(String(request?.headers?.['user-agent'] || '').trim(), 220);
+    const context = safeSerializeSocketErrorContext(error?.context);
     console.warn(
         `[socket.io] connection_error code=${code || 'n/a'} message=${message || 'n/a'} ` +
-        `origin=${origin || 'n/a'} ip=${clientIp || 'n/a'} context=${context || 'n/a'}`
+        `origin=${origin || 'n/a'} ip=${clientIp || 'n/a'} method=${requestMethod || 'n/a'} ` +
+        `url=${requestUrl || 'n/a'} ua=${userAgent || 'n/a'} context=${context}`
     );
 });
 
