@@ -219,25 +219,99 @@ export default function Whatsapp() {
             gap: 10px;
             align-items: center;
             margin-left: auto;
-            min-width: min(100%, 420px);
+            min-width: 0;
         }
         .whatsapp-react .session-controls .form-select {
-            flex: 1;
-            min-width: 200px;
-            border: 1px solid var(--border);
-            background: rgba(22, 40, 63, 0.92);
-            color: var(--dark);
-            font-weight: 600;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-        }
-        .whatsapp-react .session-controls .form-select option {
-            color: var(--dark);
-            background: #101f33;
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
         }
         .whatsapp-react .session-controls .btn {
             width: auto;
             padding: 10px 14px;
             font-size: 13px;
+        }
+        .whatsapp-react .session-list-wrap {
+            flex-basis: 100%;
+            margin-top: 14px;
+        }
+        .whatsapp-react .session-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+        .whatsapp-react .whatsapp-session-list-empty {
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            color: var(--gray);
+            font-size: 13px;
+            text-align: center;
+            background: rgba(16, 33, 54, 0.4);
+        }
+        .whatsapp-react .whatsapp-session-list-item {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(16, 33, 54, 0.82);
+            color: var(--dark);
+            padding: 10px 12px;
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        }
+        .whatsapp-react .whatsapp-session-list-item:hover {
+            border-color: rgba(var(--primary-rgb), 0.65);
+            background: rgba(20, 42, 66, 0.95);
+        }
+        .whatsapp-react .whatsapp-session-list-item.is-active {
+            border-color: rgba(var(--primary-rgb), 0.92);
+            background: rgba(20, 50, 74, 0.96);
+            box-shadow: 0 0 0 1px rgba(var(--primary-rgb), 0.28);
+        }
+        .whatsapp-react .whatsapp-session-list-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .whatsapp-react .whatsapp-session-list-name {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--dark);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+        }
+        .whatsapp-react .whatsapp-session-list-status {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+        .whatsapp-react .whatsapp-session-list-status.connected {
+            color: #7ef6c3;
+            background: rgba(16, 185, 129, 0.14);
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+        .whatsapp-react .whatsapp-session-list-status.disconnected {
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.14);
+            border-color: rgba(239, 68, 68, 0.38);
+        }
+        .whatsapp-react .whatsapp-session-list-detail {
+            display: block;
+            color: var(--gray);
+            font-size: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .whatsapp-react .card-body {
             padding: 28px;
@@ -634,13 +708,16 @@ export default function Whatsapp() {
             }
 
             .whatsapp-react .session-controls {
-                width: 100%;
+                width: auto;
                 margin-left: 0;
-                min-width: 0;
             }
 
             .whatsapp-react .session-controls .btn {
                 flex-shrink: 0;
+            }
+
+            .whatsapp-react .session-list {
+                grid-template-columns: 1fr;
             }
 
             .whatsapp-react .qr-wrapper {
@@ -802,6 +879,11 @@ export default function Whatsapp() {
                               <button type="button" className="btn btn-outline" onClick={() => globals.createSessionPrompt?.()}>
                                   + Nova Conta
                               </button>
+                          </div>
+                          <div className="session-list-wrap">
+                              <div id="whatsapp-session-list" className="session-list">
+                                  <div className="whatsapp-session-list-empty">Carregando contas...</div>
+                              </div>
                           </div>
                       </div>
                       

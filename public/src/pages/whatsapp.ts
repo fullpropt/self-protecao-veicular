@@ -205,6 +205,10 @@ function getSessionSelectElement() {
     return document.getElementById('whatsapp-session-select') as HTMLSelectElement | null;
 }
 
+function getSessionListElement() {
+    return document.getElementById('whatsapp-session-list') as HTMLElement | null;
+}
+
 function syncCurrentSessionFromSelect() {
     const select = getSessionSelectElement();
     if (!select) return getCurrentSessionId();
@@ -269,9 +273,51 @@ function getSuggestedNewSessionId() {
     return `${base}_${Date.now()}`;
 }
 
+function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
+    const list = getSessionListElement();
+    if (!list) return;
+
+    if (!Array.isArray(sessions) || sessions.length === 0) {
+        list.innerHTML = '<div class="whatsapp-session-list-empty">Nenhuma conta disponivel.</div>';
+        return;
+    }
+
+    list.innerHTML = sessions.map((session) => {
+        const sessionId = sanitizeSessionId(session.session_id);
+        const displayName = getSessionDisplayName(session);
+        const statusLabel = getSessionStatusLabel(session);
+        const statusClass = isConnectedSession(session) ? 'connected' : 'disconnected';
+        const isActive = sessionId === currentId;
+        const detail = displayName === sessionId ? statusLabel : sessionId;
+
+        return `
+            <button
+                type="button"
+                class="whatsapp-session-list-item${isActive ? ' is-active' : ''}"
+                data-session-id="${escapeHtml(sessionId)}"
+                title="Selecionar conta ${escapeHtml(displayName)}"
+            >
+                <span class="whatsapp-session-list-main">
+                    <span class="whatsapp-session-list-name">${escapeHtml(displayName)}</span>
+                    <span class="whatsapp-session-list-status ${statusClass}">${escapeHtml(statusLabel)}</span>
+                </span>
+                <span class="whatsapp-session-list-detail">${escapeHtml(detail)}</span>
+            </button>
+        `;
+    }).join('');
+
+    const buttons = list.querySelectorAll<HTMLButtonElement>('.whatsapp-session-list-item[data-session-id]');
+    buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const nextSessionId = sanitizeSessionId(button.dataset.sessionId);
+            if (!nextSessionId || nextSessionId === getCurrentSessionId()) return;
+            changeSession(nextSessionId);
+        });
+    });
+}
+
 function renderSessionOptions() {
     const select = getSessionSelectElement();
-    if (!select) return;
 
     const sessions = Array.isArray(availableSessions) ? [...availableSessions] : [];
     const uniqueSessions: WhatsappSessionItem[] = [];
@@ -306,15 +352,17 @@ function renderSessionOptions() {
     });
     availableSessions = uniqueSessions;
 
-    select.innerHTML = uniqueSessions.map((session) => {
-        const status = getSessionStatusLabel(session);
-        const labelBase = getSessionDisplayName(session);
-        const sessionId = sanitizeSessionId(session.session_id);
-        const label = labelBase === sessionId
-            ? `${labelBase} - ${status}`
-            : `${labelBase} - ${sessionId} - ${status}`;
-        return `<option value="${escapeHtml(sessionId)}">${escapeHtml(label)}</option>`;
-    }).join('');
+    if (select) {
+        select.innerHTML = uniqueSessions.map((session) => {
+            const status = getSessionStatusLabel(session);
+            const labelBase = getSessionDisplayName(session);
+            const sessionId = sanitizeSessionId(session.session_id);
+            const label = labelBase === sessionId
+                ? `${labelBase} - ${status}`
+                : `${labelBase} - ${sessionId} - ${status}`;
+            return `<option value="${escapeHtml(sessionId)}">${escapeHtml(label)}</option>`;
+        }).join('');
+    }
 
     let currentId = getCurrentSessionId();
     const hasCurrent = uniqueSessions.some((session) => sanitizeSessionId(session.session_id) === currentId);
@@ -325,7 +373,10 @@ function renderSessionOptions() {
         syncGlobalAppSessionId(currentId);
     }
 
-    select.value = currentId;
+    if (select) {
+        select.value = currentId;
+    }
+    renderSessionList(uniqueSessions, currentId);
 }
 
 async function loadSessionOptions(preferredSessionId?: string) {
