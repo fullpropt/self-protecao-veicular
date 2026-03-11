@@ -529,11 +529,22 @@ function initSocket() {
     socket.on('session-status', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
         console.log('📱 Status da sessão:', data);
-        if (data.status === 'connected') {
+        const normalizedStatus = String(data?.status || '').trim().toLowerCase();
+        if (normalizedStatus === 'connected') {
             handleConnected(data.user);
-        } else {
-            handleDisconnected();
+            return;
         }
+        if (normalizedStatus === 'connecting' || normalizedStatus === 'reconnecting' || normalizedStatus === 'qr' || normalizedStatus === 'qr_pending') {
+            isConnected = false;
+            isConnecting = true;
+            updateStatus('connecting', normalizedStatus === 'reconnecting' ? 'Reconectando...' : 'Conectando...');
+            updateConnectButton(true);
+            if (!pairingCodeVisible) {
+                showQRLoading(normalizedStatus === 'reconnecting' ? 'Reconectando sessao...' : 'Gerando QR Code...');
+            }
+            return;
+        }
+        handleDisconnected();
     });
     
     socket.on('qr', function(data) {
@@ -631,7 +642,7 @@ function startConnection() {
     showQRLoading('Gerando QR Code...');
     
     console.log('🚀 Iniciando conexão...');
-    socket?.emit('start-session', { sessionId });
+    socket?.emit('start-session', { sessionId, forceNewQr: true });
     clearQrGenerationWatchdog();
     qrGenerationWatchdog = window.setTimeout(() => {
         if (!isConnected && isConnecting) {
