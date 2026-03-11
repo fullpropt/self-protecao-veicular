@@ -19,7 +19,7 @@ type Contact = {
     custom_fields?: string | Record<string, any> | null;
 };
 
-type Tag = { id: number; name: string };
+type Tag = { id: number; name: string; color?: string };
 type Template = { id: number; name: string; content: string };
 type ContactField = {
     key: string;
@@ -89,6 +89,10 @@ let allContacts: Contact[] = [];
 let filteredContacts: Contact[] = [];
 let selectedContacts: number[] = [];
 let bulkRemoveSelectedTags: string[] = [];
+let createContactSelectedTags: string[] = [];
+let createContactTagFilterGlobalEventsBound = false;
+let editContactTagSuggestionsOpen = false;
+let editContactTagSuggestionsGlobalEventsBound = false;
 let currentPage = 1;
 const perPage = 20;
 let tags: Tag[] = [];
@@ -1018,54 +1022,129 @@ function bindBulkRemoveTagPicker() {
     renderBulkRemoveTagSelectedChips();
 }
 
-function renderCreateContactTagSuggestions() {
-    const tagNames = getUniqueTagNames();
-    const datalist = document.getElementById('contactTagsOptions') as HTMLDataListElement | null;
-    const suggestions = document.getElementById('contactTagsSuggestions') as HTMLElement | null;
+function syncCreateContactTagsInputValue() {
     const contactTagsInput = document.getElementById('contactTags') as HTMLInputElement | null;
+    if (!contactTagsInput) return;
+    contactTagsInput.value = createContactSelectedTags.join(', ');
+}
 
-    if (datalist) {
-        datalist.innerHTML = tagNames
-            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
-            .join('');
+function normalizeTagColor(value: unknown) {
+    const color = String(value || '').trim();
+    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)) {
+        return color;
     }
+    return '#178c49';
+}
 
-    if (!suggestions) return;
+function getCreateContactTagColor(tagName: string) {
+    const normalizedKey = String(tagName || '').trim().toLowerCase();
+    if (!normalizedKey) return '#178c49';
 
-    if (!tagNames.length) {
-        suggestions.innerHTML = '';
+    const foundTag = tags.find((tag) => String(tag?.name || '').trim().toLowerCase() === normalizedKey);
+    return normalizeTagColor(foundTag?.color);
+}
+
+function getCreateContactTagFilterElements() {
+    const toggleButton = document.getElementById('contactTagsToggle') as HTMLButtonElement | null;
+    const menu = document.getElementById('contactTagsMenu') as HTMLElement | null;
+    const list = document.getElementById('contactTagsOptions') as HTMLElement | null;
+    return { toggleButton, menu, list };
+}
+
+function setCreateContactTagFilterMenuOpen(isOpen: boolean) {
+    const { toggleButton, menu } = getCreateContactTagFilterElements();
+    if (!menu) return;
+
+    menu.hidden = !isOpen;
+    if (toggleButton) {
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+}
+
+function closeCreateContactTagFilterMenu() {
+    setCreateContactTagFilterMenuOpen(false);
+}
+
+function toggleCreateContactTagFilterMenu() {
+    const { menu } = getCreateContactTagFilterElements();
+    if (!menu) return;
+    setCreateContactTagFilterMenuOpen(menu.hidden);
+}
+
+function updateCreateContactTagFilterToggleLabel() {
+    const { toggleButton } = getCreateContactTagFilterElements();
+    if (!toggleButton) return;
+
+    if (!createContactSelectedTags.length) {
+        toggleButton.textContent = 'Selecione as tags';
+        toggleButton.title = 'Selecione as tags';
         return;
     }
 
-    const selectedTagKeys = new Set(
-        getNormalizedUniqueLeadTags(contactTagsInput?.value || '').map((tag) => tag.toLowerCase())
-    );
+    const label = createContactSelectedTags.length <= 2
+        ? createContactSelectedTags.join(', ')
+        : `${createContactSelectedTags.length} tags selecionadas`;
 
-    suggestions.innerHTML = tagNames
-        .map((name) => {
-            const selected = selectedTagKeys.has(name.toLowerCase());
-            const buttonClassName = selected ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
-            return `<button type="button" class="${buttonClassName}" data-contact-tag-option="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
-        })
-        .join('');
+    toggleButton.textContent = label;
+    toggleButton.title = label;
+}
+
+function renderCreateContactTagSuggestions() {
+    const tagNames = getUniqueTagNames();
+    const { list } = getCreateContactTagFilterElements();
+    const contactTagsInput = document.getElementById('contactTags') as HTMLInputElement | null;
+
+    if (!createContactSelectedTags.length && contactTagsInput?.value) {
+        createContactSelectedTags = getNormalizedUniqueLeadTags(contactTagsInput.value);
+    } else {
+        createContactSelectedTags = normalizeUniqueTagArray(createContactSelectedTags);
+    }
+
+    const selectedTagKeys = new Set(createContactSelectedTags.map((tag) => tag.toLowerCase()));
+
+    if (list) {
+        if (!tagNames.length) {
+            list.innerHTML = '<p style="color: var(--gray-500); font-size: 12px; margin: 0;">Nenhuma tag cadastrada.</p>';
+        } else {
+            list.innerHTML = tagNames
+                .map((name) => {
+                    const checked = selectedTagKeys.has(name.toLowerCase());
+                    const safeName = escapeHtml(name);
+                    const safeColor = escapeHtml(getCreateContactTagColor(name));
+
+                    return `
+                        <label class="checkbox-wrapper contact-tag-filter-option">
+                            <input
+                                type="checkbox"
+                                class="contact-tag-filter-checkbox"
+                                value="${safeName}"
+                                ${checked ? 'checked' : ''}
+                            >
+                            <span class="checkbox-custom"></span>
+                            <span class="contact-tag-filter-option-label">
+                                <span class="contact-tag-filter-dot" style="background: ${safeColor};"></span>
+                                <strong>${safeName}</strong>
+                            </span>
+                        </label>
+                    `;
+                })
+                .join('');
+        }
+    }
+
+    updateCreateContactTagFilterToggleLabel();
+    syncCreateContactTagsInputValue();
 }
 
 function renderEditContactTagSuggestions() {
     const tagNames = getUniqueTagNames();
-    const datalist = document.getElementById('editContactTagsOptions') as HTMLDataListElement | null;
     const suggestions = document.getElementById('editContactTagsSuggestions') as HTMLElement | null;
     const editTagsInput = document.getElementById('editContactTags') as HTMLInputElement | null;
-
-    if (datalist) {
-        datalist.innerHTML = tagNames
-            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
-            .join('');
-    }
 
     if (!suggestions) return;
 
     if (!tagNames.length) {
-        suggestions.innerHTML = '';
+        suggestions.innerHTML = '<div class="edit-contact-tags-empty">Nenhuma tag cadastrada</div>';
         return;
     }
 
@@ -1076,25 +1155,83 @@ function renderEditContactTagSuggestions() {
     suggestions.innerHTML = tagNames
         .map((name) => {
             const selected = selectedTagKeys.has(name.toLowerCase());
-            const buttonClassName = selected ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
-            return `<button type="button" class="${buttonClassName}" data-edit-contact-tag-option="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
+            const optionClassName = selected
+                ? 'edit-contact-tags-option is-selected'
+                : 'edit-contact-tags-option';
+            return `<button type="button" class="${optionClassName}" data-edit-contact-tag-option="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
         })
         .join('');
+}
+
+function setEditContactTagSuggestionsOpen(nextOpen: boolean) {
+    editContactTagSuggestionsOpen = nextOpen;
+    const suggestions = document.getElementById('editContactTagsSuggestions') as HTMLElement | null;
+    const toggleButton = document.getElementById('editContactTagsToggle') as HTMLButtonElement | null;
+
+    if (suggestions) {
+        suggestions.hidden = !nextOpen;
+    }
+    if (toggleButton) {
+        toggleButton.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+        toggleButton.classList.toggle('is-open', nextOpen);
+    }
+}
+
+function closeEditContactTagSuggestions() {
+    setEditContactTagSuggestionsOpen(false);
+}
+
+function toggleEditContactTagSuggestions() {
+    setEditContactTagSuggestionsOpen(!editContactTagSuggestionsOpen);
 }
 
 function bindEditContactTagsSuggestions() {
     const editTagsInput = document.getElementById('editContactTags') as HTMLInputElement | null;
     const suggestions = document.getElementById('editContactTagsSuggestions') as HTMLElement | null;
+    const toggleButton = document.getElementById('editContactTagsToggle') as HTMLButtonElement | null;
+    const triggerArea = document.getElementById('editContactTagsTrigger') as HTMLElement | null;
+
+    if (triggerArea && triggerArea.dataset.tagSuggestionsBound !== '1') {
+        triggerArea.dataset.tagSuggestionsBound = '1';
+        triggerArea.addEventListener('click', (event) => {
+            const target = event.target as HTMLElement | null;
+            if (target?.closest('#editContactTagsToggle')) {
+                return;
+            }
+            event.stopPropagation();
+            setEditContactTagSuggestionsOpen(true);
+        });
+    }
+
+    if (toggleButton && toggleButton.dataset.tagSuggestionsBound !== '1') {
+        toggleButton.dataset.tagSuggestionsBound = '1';
+        toggleButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleEditContactTagSuggestions();
+        });
+    }
 
     if (editTagsInput && editTagsInput.dataset.tagSuggestionsBound !== '1') {
         editTagsInput.dataset.tagSuggestionsBound = '1';
+        editTagsInput.addEventListener('focus', () => {
+            setEditContactTagSuggestionsOpen(true);
+        });
+        editTagsInput.addEventListener('click', (event) => {
+            event.stopPropagation();
+            setEditContactTagSuggestionsOpen(true);
+        });
         editTagsInput.addEventListener('input', () => {
             renderEditContactTagSuggestions();
+            setEditContactTagSuggestionsOpen(true);
         });
     }
 
     if (suggestions && suggestions.dataset.tagSuggestionsBound !== '1') {
         suggestions.dataset.tagSuggestionsBound = '1';
+        suggestions.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
         suggestions.addEventListener('click', (event) => {
             const target = event.target as HTMLElement | null;
             const button = target?.closest('[data-edit-contact-tag-option]') as HTMLElement | null;
@@ -1115,41 +1252,92 @@ function bindEditContactTagsSuggestions() {
             renderEditContactTagSuggestions();
         });
     }
+
+    if (!editContactTagSuggestionsGlobalEventsBound) {
+        editContactTagSuggestionsGlobalEventsBound = true;
+        document.addEventListener('click', (event) => {
+            const target = event.target;
+            if (target instanceof Element) {
+                if (
+                    target.closest('#editContactTagsToggle')
+                    || target.closest('#editContactTagsSuggestions')
+                    || target.closest('#editContactTags')
+                    || target.closest('#editContactTagsTrigger')
+                ) {
+                    return;
+                }
+            }
+            closeEditContactTagSuggestions();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeEditContactTagSuggestions();
+            }
+        });
+    }
+
+    setEditContactTagSuggestionsOpen(false);
 }
 
 function bindCreateContactTagsSuggestions() {
-    const contactTagsInput = document.getElementById('contactTags') as HTMLInputElement | null;
-    const suggestions = document.getElementById('contactTagsSuggestions') as HTMLElement | null;
+    const { toggleButton, menu } = getCreateContactTagFilterElements();
 
-    if (contactTagsInput && contactTagsInput.dataset.tagSuggestionsBound !== '1') {
-        contactTagsInput.dataset.tagSuggestionsBound = '1';
-        contactTagsInput.addEventListener('input', () => {
-            renderCreateContactTagSuggestions();
-        });
-    }
-
-    if (suggestions && suggestions.dataset.tagSuggestionsBound !== '1') {
-        suggestions.dataset.tagSuggestionsBound = '1';
-        suggestions.addEventListener('click', (event) => {
-            const target = event.target as HTMLElement | null;
-            const button = target?.closest('[data-contact-tag-option]') as HTMLElement | null;
-            if (!button || !contactTagsInput) return;
-
+    if (toggleButton && toggleButton.dataset.tagSuggestionsBound !== '1') {
+        toggleButton.dataset.tagSuggestionsBound = '1';
+        toggleButton.addEventListener('click', (event) => {
             event.preventDefault();
+            event.stopPropagation();
+            toggleCreateContactTagFilterMenu();
+        });
+    }
 
-            const clickedTag = String(button.getAttribute('data-contact-tag-option') || '').trim();
-            if (!clickedTag) return;
+    if (menu && menu.dataset.tagSuggestionsBound !== '1') {
+        menu.dataset.tagSuggestionsBound = '1';
+        menu.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+        menu.addEventListener('change', (event) => {
+            const target = event.target as HTMLInputElement | null;
+            if (!target || !target.classList.contains('contact-tag-filter-checkbox')) return;
 
-            const currentTags = getNormalizedUniqueLeadTags(contactTagsInput.value || '');
-            const hasTag = currentTags.some((tag) => tag.toLowerCase() === clickedTag.toLowerCase());
-            const nextTags = hasTag
-                ? currentTags.filter((tag) => tag.toLowerCase() !== clickedTag.toLowerCase())
-                : [...currentTags, clickedTag];
+            const tagName = String(target.value || '').trim();
+            if (!tagName) return;
 
-            contactTagsInput.value = nextTags.join(', ');
+            const hasTag = createContactSelectedTags.some((tag) => tag.toLowerCase() === tagName.toLowerCase());
+            if (target.checked && !hasTag) {
+                createContactSelectedTags = normalizeUniqueTagArray([...createContactSelectedTags, tagName]);
+            } else if (!target.checked && hasTag) {
+                createContactSelectedTags = createContactSelectedTags.filter(
+                    (tag) => tag.toLowerCase() !== tagName.toLowerCase()
+                );
+            }
+
             renderCreateContactTagSuggestions();
         });
     }
+
+    if (!createContactTagFilterGlobalEventsBound) {
+        createContactTagFilterGlobalEventsBound = true;
+
+        document.addEventListener('click', (event) => {
+            const target = event.target;
+            if (target instanceof Element) {
+                if (target.closest('#contactTagsToggle') || target.closest('#contactTagsMenu')) {
+                    return;
+                }
+            }
+            closeCreateContactTagFilterMenu();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeCreateContactTagFilterMenu();
+            }
+        });
+    }
+
+    renderCreateContactTagSuggestions();
 }
 
 async function loadTags() {
@@ -1528,12 +1716,7 @@ function clearSelection() {
 }
 
 async function saveContact() {
-    const contactTagsInput = document.getElementById('contactTags') as HTMLInputElement | null;
-    const contactTags = Array.from(new Set(
-        parseLeadTags(contactTagsInput?.value || '')
-            .map((tag) => String(tag || '').trim())
-            .filter(Boolean)
-    ));
+    const contactTags = normalizeUniqueTagArray(createContactSelectedTags);
     const data = {
         name: (document.getElementById('contactName') as HTMLInputElement | null)?.value.trim() || '',
         phone: (document.getElementById('contactPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '',
@@ -1559,7 +1742,9 @@ async function saveContact() {
         await api.post('/api/leads', data);
         closeModal('addContactModal');
         (document.getElementById('addContactForm') as HTMLFormElement | null)?.reset();
+        createContactSelectedTags = [];
         renderCreateContactTagSuggestions();
+        closeCreateContactTagFilterMenu();
         applyCustomFieldsValues('contact-custom-field', {});
         clearLeadViewCaches();
         await loadContacts({ forceRefresh: true, silent: true });
@@ -1568,6 +1753,15 @@ async function saveContact() {
         hideLoading();
         showToast('error', 'Erro', error instanceof Error ? error.message : 'Erro ao salvar');
     }
+}
+
+function openAddContactModal() {
+    (document.getElementById('addContactForm') as HTMLFormElement | null)?.reset();
+    createContactSelectedTags = [];
+    renderCreateContactTagSuggestions();
+    closeCreateContactTagFilterMenu();
+    applyCustomFieldsValues('contact-custom-field', {});
+    openModal('addContactModal');
 }
 
 function editContact(id: number) {
@@ -1588,6 +1782,7 @@ function editContact(id: number) {
     if (editContactEmail) editContactEmail.value = contact.email || '';
     if (editContactStatus) editContactStatus.value = String(contact.status || 1);
     if (editContactTags) editContactTags.value = parseLeadTags(contact.tags).join(', ');
+    closeEditContactTagSuggestions();
     renderEditContactTagSuggestions();
     void loadTags();
     const currentCustomFields = parseLeadCustomFields(contact.custom_fields);
@@ -2276,6 +2471,7 @@ const windowAny = window as Window & {
     toggleSelectAll?: () => void;
     updateSelection?: () => void;
     clearSelection?: () => void;
+    openAddContactModal?: () => void;
     saveContact?: () => Promise<void>;
     editContact?: (id: number) => void;
     viewContactInfo?: (id: number) => void;
@@ -2305,6 +2501,7 @@ windowAny.filterContacts = filterContacts;
 windowAny.toggleSelectAll = toggleSelectAll;
 windowAny.updateSelection = updateSelection;
 windowAny.clearSelection = clearSelection;
+windowAny.openAddContactModal = openAddContactModal;
 windowAny.saveContact = saveContact;
 windowAny.editContact = editContact;
 windowAny.viewContactInfo = viewContactInfo;

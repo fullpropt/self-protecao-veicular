@@ -84,23 +84,24 @@ export default function Whatsapp() {
     <div className="whatsapp-react">
             <style>{`
         .whatsapp-react {
-            --primary: #178C49;
-            --primary-light: #1FAE5E;
-            --primary-dark: #0F6D35;
-            --success: #10b981;
-            --success-light: #34d399;
+            --primary: #1ef2a3;
+            --primary-light: #59f7be;
+            --primary-dark: #0fbf7d;
+            --primary-rgb: 30, 242, 163;
+            --success: #22d38b;
+            --success-light: #5be5ad;
             --warning: #f59e0b;
-            --danger: #ef4444;
-            --info: #3b82f6;
-            --dark: #0f172a;
-            --gray: #64748b;
-            --light: #f5f6fb;
-            --lighter: #f8fafc;
-            --white: #ffffff;
-            --border: #e5e7eb;
+            --danger: #f87171;
+            --info: #5aa8ff;
+            --dark: #edf4ff;
+            --gray: #8b9bb2;
+            --light: #17283f;
+            --lighter: #1a2c42;
+            --white: #101f33;
+            --border: #2c425d;
             --whatsapp: #25D366;
-            --shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
-            --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.2);
+            --shadow: 0 10px 24px rgba(2, 8, 22, 0.24);
+            --shadow-lg: 0 20px 50px rgba(2, 8, 22, 0.46);
         }
 
         .whatsapp-react .header {
@@ -113,7 +114,7 @@ export default function Whatsapp() {
         }
 
         .whatsapp-react .header-title h1 {
-            color: #f8fafc;
+            color: var(--dark);
             font-size: 32px;
             font-weight: 800;
             margin-bottom: 5px;
@@ -143,13 +144,13 @@ export default function Whatsapp() {
         }
 
         .whatsapp-react .whatsapp-tab:hover {
-            background: rgba(109, 40, 217, 0.12);
+            background: rgba(var(--primary-rgb), 0.18);
             color: var(--primary);
         }
 
         .whatsapp-react .whatsapp-tab.active {
             background: var(--primary);
-            color: white;
+            color: #052216;
         }
 
         .whatsapp-react .whatsapp-grid {
@@ -161,7 +162,7 @@ export default function Whatsapp() {
         }
 
         .whatsapp-react .card {
-            background: white;
+            background: linear-gradient(180deg, rgba(16, 31, 51, 0.96) 0%, rgba(10, 22, 38, 0.98) 100%);
             border-radius: 24px;
             border: 1px solid var(--border);
             box-shadow: var(--shadow);
@@ -223,15 +224,15 @@ export default function Whatsapp() {
         .whatsapp-react .session-controls .form-select {
             flex: 1;
             min-width: 200px;
-            border: 1px solid #cbd5e1;
-            background: #f8fafc;
-            color: #0f172a;
+            border: 1px solid var(--border);
+            background: rgba(22, 40, 63, 0.92);
+            color: var(--dark);
             font-weight: 600;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
         }
         .whatsapp-react .session-controls .form-select option {
-            color: #0f172a;
-            background: #ffffff;
+            color: var(--dark);
+            background: #101f33;
         }
         .whatsapp-react .session-controls .btn {
             width: auto;
@@ -431,25 +432,26 @@ export default function Whatsapp() {
         }
 
         .whatsapp-react .btn-outline {
-            background: white;
+            background: rgba(16, 33, 54, 0.86);
             border: 1px solid var(--border);
             color: var(--dark);
         }
 
         .whatsapp-react .btn-outline:hover {
             border-color: var(--primary);
-            color: var(--primary);
+            color: #ecfff6;
+            background: rgba(var(--primary-rgb), 0.16);
         }
 
         .whatsapp-react .btn-primary {
             background: var(--primary);
-            color: white;
-            box-shadow: 0 6px 14px rgba(109, 40, 217, 0.2);
+            color: #052216;
+            box-shadow: 0 6px 14px rgba(var(--primary-rgb), 0.24);
         }
 
         .whatsapp-react .btn-primary:hover {
             transform: translateY(-1px);
-            box-shadow: 0 8px 18px rgba(109, 40, 217, 0.25);
+            box-shadow: 0 8px 18px rgba(var(--primary-rgb), 0.3);
         }
 
         .whatsapp-react .pairing-actions {
@@ -477,7 +479,7 @@ export default function Whatsapp() {
             width: 100%;
             border: 1px solid var(--border);
             border-radius: 10px;
-            background: white;
+            background: rgba(16, 33, 54, 0.9);
             color: var(--dark);
             font-size: 14px;
             padding: 11px 12px;
@@ -502,7 +504,7 @@ export default function Whatsapp() {
             display: none;
             margin-top: 12px;
             border: 1px solid var(--border);
-            background: #f8fafc;
+            background: rgba(22, 40, 63, 0.9);
             border-radius: 12px;
             padding: 12px;
             text-align: center;
@@ -590,7 +592,8 @@ export default function Whatsapp() {
         }
 
         .whatsapp-react .toast {
-            background: white;
+            background: linear-gradient(180deg, rgba(16, 31, 51, 0.97) 0%, rgba(10, 22, 38, 0.98) 100%);
+            border: 1px solid var(--border);
             padding: 16px 24px;
             border-radius: 14px;
             box-shadow: var(--shadow-lg);

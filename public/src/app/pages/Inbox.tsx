@@ -350,7 +350,7 @@ export default function Inbox() {
         .inbox-session-start-btn {
             border-radius: 999px;
             border: 1px solid rgba(var(--primary-rgb), 0.58);
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.94), rgba(16, 148, 98, 0.94));
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.95), rgba(var(--primary-rgb), 0.82));
             color: #ffffff;
             padding: 0 14px;
             min-height: 36px;
@@ -496,7 +496,7 @@ export default function Inbox() {
         }
         .conversations-tabs button.active {
             border-color: rgba(var(--primary-rgb), 0.75);
-            background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.95) 0%, rgba(16, 148, 98, 0.95) 100%);
+            background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.95) 0%, rgba(var(--primary-rgb), 0.82) 100%);
             color: white;
             box-shadow: 0 8px 18px rgba(var(--primary-rgb), 0.26);
         }

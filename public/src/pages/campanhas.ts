@@ -131,6 +131,8 @@ let campaignRecipientsRequestToken = 0;
 let campaignMessageVariationsDrafts: string[] = [];
 let campaignMessageVariationEditingIndex: number | null = null;
 let campaignMessageVariationsUiBound = false;
+let campaignDripStepsDrafts: string[] = [];
+let campaignDripStepsUiBound = false;
 let expandedCampaignId: number | null = null;
 
 function appConfirm(message: string, title = 'Confirmacao') {
@@ -194,6 +196,12 @@ function getCampaignStatusLabel(status: CampaignStatus) {
     return 'Rascunho';
 }
 
+function getCampaignStatusBadgeVariant(status: CampaignStatus) {
+    if (status === 'active') return 'success';
+    if (status === 'paused') return 'warning';
+    if (status === 'completed') return 'info';
+    return 'secondary';
+}
 function isCampaignFinalized(campaign: Partial<Campaign> | undefined) {
     if (!campaign) return false;
     if (campaign.status === 'completed') return true;
@@ -209,6 +217,16 @@ function isCampaignFinalized(campaign: Partial<Campaign> | undefined) {
     return queueTotal > 0 && queuePending === 0 && queueProcessing === 0;
 }
 
+function getCampaignDisplayStatus(campaign: Partial<Campaign> | undefined): CampaignStatus {
+    if (!campaign) return 'draft';
+    if (isCampaignFinalized(campaign)) return 'completed';
+
+    const status = String(campaign.status || '').trim().toLowerCase();
+    if (status === 'active' || status === 'paused' || status === 'completed' || status === 'draft') {
+        return status as CampaignStatus;
+    }
+    return 'draft';
+}
 function getCampaignTypeLabel(type: CampaignType | string) {
     if (type === 'broadcast') return 'Transmissão';
     if (type === 'drip') return 'Sequência';
@@ -634,9 +652,16 @@ function insertCampaignMessageVariable(variableKey: string) {
     const activeTextarea = activeElement instanceof HTMLTextAreaElement
         ? activeElement
         : null;
+    const isSupportedCampaignTextarea = (textarea: HTMLTextAreaElement | null) => {
+        if (!textarea) return false;
+        if (textarea.id === 'campaignMessage' || textarea.id === 'campaignMessageVariationDraft') {
+            return true;
+        }
+        return textarea.classList.contains('campaign-drip-step-input');
+    };
     const textarea = (
         activeTextarea &&
-        (activeTextarea.id === 'campaignMessage' || activeTextarea.id === 'campaignMessageVariationDraft')
+        isSupportedCampaignTextarea(activeTextarea)
             ? activeTextarea
             : (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)
     );
@@ -1018,6 +1043,173 @@ function bindCampaignMessageVariationsUi() {
     renderCampaignMessageVariations();
 }
 
+function getCampaignTypeValue(): CampaignType {
+    const typeSelect = document.getElementById('campaignType') as HTMLSelectElement | null;
+    return String(typeSelect?.value || 'broadcast').trim().toLowerCase() === 'drip'
+        ? 'drip'
+        : 'broadcast';
+}
+
+function parseDripMessageSteps(rawMessage: unknown): string[] {
+    const raw = String(rawMessage || '').replace(/\r\n/g, '\n').trim();
+    if (!raw) return [];
+    return raw
+        .split(/\n\s*---+\s*\n/g)
+        .map((step) => step.trim())
+        .filter(Boolean);
+}
+
+function normalizeCampaignDripStepsList(raw: unknown): string[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((item) => String(item || '').replace(/\r\n/g, '\n').trim())
+        .filter(Boolean);
+}
+
+function getCampaignDripStepsUiElements() {
+    return {
+        section: document.getElementById('campaignDripSequenceSection') as HTMLElement | null,
+        list: document.getElementById('campaignDripStepsList') as HTMLElement | null,
+        addButton: document.getElementById('campaignAddDripStepBtn') as HTMLButtonElement | null,
+        messageLabel: document.getElementById('campaignMessageLabel') as HTMLElement | null,
+        messageInput: document.getElementById('campaignMessage') as HTMLTextAreaElement | null,
+        broadcastVariationsSection: document.getElementById('campaignBroadcastVariationsSection') as HTMLElement | null
+    };
+}
+
+function renderCampaignDripSteps() {
+    const { list } = getCampaignDripStepsUiElements();
+    if (!list) return;
+
+    if (!campaignDripStepsDrafts.length) {
+        list.innerHTML = '<p class="campaign-variations-empty">Nenhuma etapa adicional. Use "Adicionar etapa".</p>';
+        return;
+    }
+
+    list.innerHTML = campaignDripStepsDrafts.map((step, index) => `
+        <div class="campaign-drip-step-item">
+            <div class="campaign-drip-step-top">
+                <p class="campaign-drip-step-label">Etapa ${index + 2}</p>
+                <button type="button" class="campaign-drip-step-remove" data-drip-remove-index="${index}">Remover</button>
+            </div>
+            <textarea
+                class="form-textarea campaign-drip-step-input"
+                data-drip-step-index="${index}"
+                rows="4"
+                placeholder="Digite a mensagem da etapa ${index + 2}..."
+            >${escapeCampaignText(step)}</textarea>
+        </div>
+    `).join('');
+}
+
+function resetCampaignDripStepsState(values: string[] = []) {
+    campaignDripStepsDrafts = normalizeCampaignDripStepsList(values);
+    renderCampaignDripSteps();
+}
+
+function collectCampaignDripStepsFromForm() {
+    const { messageInput } = getCampaignDripStepsUiElements();
+    const firstStep = String(messageInput?.value || '').replace(/\r\n/g, '\n').trim();
+    const extraSteps = normalizeCampaignDripStepsList(campaignDripStepsDrafts);
+    const allSteps = [firstStep, ...extraSteps].filter(Boolean);
+    return allSteps;
+}
+
+function bindCampaignDripStepsUi() {
+    if (campaignDripStepsUiBound) return;
+
+    const { list, addButton } = getCampaignDripStepsUiElements();
+    if (!list || !addButton) return;
+
+    campaignDripStepsUiBound = true;
+
+    addButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        campaignDripStepsDrafts.push('');
+        renderCampaignDripSteps();
+        const { list: refreshedList } = getCampaignDripStepsUiElements();
+        const lastIndex = Math.max(0, campaignDripStepsDrafts.length - 1);
+        const input = refreshedList?.querySelector<HTMLTextAreaElement>(`textarea[data-drip-step-index="${lastIndex}"]`);
+        input?.focus();
+    });
+
+    list.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        const removeButton = target.closest<HTMLButtonElement>('[data-drip-remove-index]');
+        if (!removeButton) return;
+
+        event.preventDefault();
+        const index = Number(removeButton.dataset.dripRemoveIndex);
+        if (!Number.isInteger(index) || index < 0 || index >= campaignDripStepsDrafts.length) return;
+
+        campaignDripStepsDrafts.splice(index, 1);
+        renderCampaignDripSteps();
+    });
+
+    list.addEventListener('input', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLTextAreaElement)) return;
+
+        const index = Number(target.dataset.dripStepIndex);
+        if (!Number.isInteger(index) || index < 0 || index >= campaignDripStepsDrafts.length) return;
+
+        campaignDripStepsDrafts[index] = target.value;
+    });
+
+    renderCampaignDripSteps();
+}
+
+function applyCampaignTypeMode(typeValue: CampaignType | string = getCampaignTypeValue()) {
+    const selectedType: CampaignType = String(typeValue || '').trim().toLowerCase() === 'drip'
+        ? 'drip'
+        : 'broadcast';
+    const {
+        section,
+        messageLabel,
+        messageInput,
+        broadcastVariationsSection
+    } = getCampaignDripStepsUiElements();
+
+    if (broadcastVariationsSection) {
+        broadcastVariationsSection.hidden = selectedType !== 'broadcast';
+        broadcastVariationsSection.style.display = selectedType === 'broadcast' ? '' : 'none';
+    }
+    if (section) {
+        section.hidden = selectedType !== 'drip';
+        section.style.display = selectedType === 'drip' ? '' : 'none';
+    }
+    if (messageLabel) {
+        messageLabel.textContent = selectedType === 'drip' ? 'Mensagem da Etapa 1' : 'Mensagem';
+    }
+    if (messageInput) {
+        messageInput.placeholder = selectedType === 'drip'
+            ? 'Digite a mensagem da etapa 1...'
+            : 'Digite a mensagem da campanha...';
+    }
+
+    if (selectedType === 'drip') {
+        closeCampaignMessageVariationEditor();
+    }
+
+    renderCampaignDripSteps();
+}
+
+function bindCampaignTypeSelector() {
+    const typeSelect = document.getElementById('campaignType') as HTMLSelectElement | null;
+    if (!typeSelect) return;
+
+    if (typeSelect.dataset.bound !== '1') {
+        typeSelect.dataset.bound = '1';
+        typeSelect.addEventListener('change', () => {
+            applyCampaignTypeMode(typeSelect.value);
+        });
+    }
+
+    applyCampaignTypeMode(typeSelect.value);
+}
+
 function getSessionDispatchWeight(session: WhatsappSenderSession) {
     const parsed = Number(session?.dispatch_weight);
     return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
@@ -1032,10 +1224,7 @@ function splitCampaignMessageSteps(campaign: Campaign) {
     const rawMessage = String(campaign.message || '').trim();
     if (!rawMessage) return [];
     if (campaign.type !== 'drip') return [rawMessage];
-    return rawMessage
-        .split(/\n\s*---+\s*\n/g)
-        .map(step => step.trim())
-        .filter(Boolean);
+    return parseDripMessageSteps(rawMessage);
 }
 
 function escapeCampaignText(value: unknown) {
@@ -1054,11 +1243,11 @@ function escapeAttributeSelector(value: string) {
 }
 
 function getDistributionStrategyLabel(strategy?: string) {
-    const normalized = String(strategy || 'single').toLowerCase();
+    const normalized = String(strategy || 'round_robin').toLowerCase();
     if (normalized === 'round_robin') return 'Rotativo';
     if (normalized === 'weighted_round_robin') return 'Rotativo por peso';
     if (normalized === 'random') return 'Aleatório';
-    return 'Conta única';
+    return 'Conta fixa';
 }
 
 function normalizeCampaignSenderAccounts(raw: unknown): CampaignSenderAccount[] {
@@ -1250,6 +1439,7 @@ function isCampaignDetailsModalOpen() {
 function renderCampaignOverviewContent(campaign: Campaign) {
     const campaignOverview = document.getElementById('campaignOverview') as HTMLElement | null;
     if (!campaignOverview) return;
+    const displayStatus = getCampaignDisplayStatus(campaign);
 
     campaignOverview.innerHTML = `
         <div class="stats-grid" style="margin-bottom: 20px;">
@@ -1278,10 +1468,10 @@ function renderCampaignOverviewContent(campaign: Campaign) {
                 </div>
             </div>
         </div>
-        <p><strong>Descrição:</strong> ${campaign.description || 'Sem descrição'}</p>
+        <p><strong>Descrição:</strong> ${escapeCampaignText(campaign.description || 'Sem descrição')}</p>
         <p><strong>Tipo:</strong> ${getCampaignTypeLabel(campaign.type)}</p>
-        <p><strong>Status:</strong> ${getCampaignStatusLabel(campaign.status)}</p>
-        <p><strong>Distribuição:</strong> ${escapeCampaignText(getDistributionStrategyLabel(campaign.distribution_strategy || 'single'))}</p>
+        <p><strong>Status:</strong> ${getCampaignStatusLabel(displayStatus)}</p>
+        <p><strong>Distribuição:</strong> ${escapeCampaignText(getDistributionStrategyLabel(campaign.distribution_strategy || 'round_robin'))}</p>
         <p><strong>Contas de envio:</strong> ${escapeCampaignText(renderCampaignSenderAccountsSummary(campaign))}</p>
         <p><strong>Horário de envio:</strong> ${escapeCampaignText(formatCampaignSendWindowLabel(campaign))}</p>
         <p><strong>Tags:</strong> ${escapeCampaignText(getCampaignTagFilterSummary(campaign))}</p>
@@ -1528,10 +1718,11 @@ function resetCampaignForm() {
     form?.reset();
     const idInput = document.getElementById('campaignId') as HTMLInputElement | null;
     if (idInput) idInput.value = '';
+    setSelectValue(document.getElementById('campaignType') as HTMLSelectElement | null, 'broadcast');
     syncCampaignSegmentOptions();
     setCampaignTagFilterSelection([]);
     closeCampaignTagFilterMenu();
-    setSelectValue(document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null, 'single');
+    setSelectValue(document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null, 'round_robin');
     renderCampaignSenderAccountsSelector([]);
     setDelayRangeInputs(DEFAULT_DELAY_MIN_SECONDS, DEFAULT_DELAY_MAX_SECONDS);
     setCampaignSendWindowInputs(false, DEFAULT_SEND_WINDOW_START, DEFAULT_SEND_WINDOW_END);
@@ -1539,6 +1730,10 @@ function resetCampaignForm() {
     closeCampaignMessageVariableMenu();
     bindCampaignMessageVariablePicker();
     resetCampaignMessageVariationsState([]);
+    resetCampaignDripStepsState([]);
+    bindCampaignDripStepsUi();
+    bindCampaignTypeSelector();
+    applyCampaignTypeMode('broadcast');
     setCampaignModalTitle('new');
 }
 
@@ -1549,6 +1744,8 @@ function openCampaignModal() {
     void loadSenderSessions();
     bindCampaignMessageVariablePicker();
     bindCampaignMessageVariationsUi();
+    bindCampaignDripStepsUi();
+    bindCampaignTypeSelector();
     bindCampaignSendWindowToggle();
     const win = window as Window & { openModal?: (id: string) => void };
     win.openModal?.('newCampaignModal');
@@ -1733,6 +1930,7 @@ function openBroadcastModal() {
     setSelectValue(document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null, 'round_robin');
     setSelectValue(document.getElementById('campaignSegment') as HTMLSelectElement | null, 'all');
     setDelayRangeInputs(DEFAULT_DELAY_MIN_SECONDS, DEFAULT_DELAY_MAX_SECONDS);
+    applyCampaignTypeMode('broadcast');
 }
 
 async function initCampanhas() {
@@ -1743,6 +1941,8 @@ async function initCampanhas() {
     bindCampaignTagFilterDropdown();
     bindCampaignMessageVariablePicker();
     bindCampaignMessageVariationsUi();
+    bindCampaignDripStepsUi();
+    bindCampaignTypeSelector();
     bindCampaignsRealtimeUpdates();
     await Promise.all([
         loadCampaigns(),
@@ -1885,6 +2085,12 @@ function renderCampaigns() {
     }
 
     container.innerHTML = campaigns.map(c => {
+        const displayStatus = getCampaignDisplayStatus(c);
+        const queueTotal = Math.max(Number(c.queue_total || 0), Number(c.sent || 0));
+        const sentRate = queueTotal > 0 ? (Number(c.sent || 0) / queueTotal * 100) : 0;
+        const sentRateClamped = Math.max(0, Math.min(100, sentRate));
+        const sentRateLabel = `${formatPercent(sentRate)} enviadas`;
+        const sentRateLabelClass = sentRateClamped >= 35 ? 'on-fill' : 'on-track';
         const deliveryRate = c.sent > 0 ? (c.delivered / c.sent * 100) : 0;
         const readRate = c.delivered > 0 ? (c.read / c.delivered * 100) : 0;
         const replyRate = c.read > 0 ? (c.replied / c.read * 100) : 0;
@@ -1912,8 +2118,8 @@ function renderCampaigns() {
                             <div class="campaign-date">Criada em ${formatDate(c.created_at, 'short')}</div>
                         </div>
                         <div class="campaign-header-meta">
-                            <span class="badge badge-${c.status === 'active' ? 'success' : c.status === 'paused' ? 'warning' : c.status === 'completed' ? 'info' : 'secondary'}">
-                                ${getCampaignStatusLabel(c.status)}
+                            <span class="badge badge-${getCampaignStatusBadgeVariant(displayStatus)}">
+                                ${getCampaignStatusLabel(displayStatus)}
                             </span>
                             <span class="campaign-expand-icon" aria-hidden="true">&#9662;</span>
                         </div>
@@ -1921,7 +2127,7 @@ function renderCampaigns() {
                 </div>
                 <div class="campaign-details" id="campaign-details-${c.id}">
                     <div class="campaign-body">
-                        <p style="color: var(--gray-600); margin-bottom: 15px;">${c.description || 'Sem descrição'}</p>
+                        <p class="campaign-description">${escapeCampaignText(c.description || 'Sem descrição')}</p>
                         <div class="campaign-stats">
                             <div class="campaign-stat">
                                 <div class="campaign-stat-value">${formatNumber(c.sent || 0)}</div>
@@ -1941,8 +2147,16 @@ function renderCampaigns() {
                             </div>
                         </div>
                         <div class="campaign-progress">
-                            <div class="progress" style="height: 8px;">
-                                <div class="progress-bar" style="width: ${deliveryRate}%; background: var(--success);"></div>
+                            <div
+                                class="campaign-progress-track"
+                                role="progressbar"
+                                aria-label="Percentual de mensagens enviadas"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                aria-valuenow="${Math.round(sentRateClamped)}"
+                            >
+                                <div class="campaign-progress-fill" style="width: ${sentRateClamped}%;"></div>
+                                <span class="campaign-progress-label ${sentRateLabelClass}">${sentRateLabel}</span>
                             </div>
                         </div>
                     </div>
@@ -1983,17 +2197,25 @@ async function saveCampaign(statusOverride?: CampaignStatus) {
         (document.getElementById('campaignSendWindowEnd') as HTMLInputElement | null)?.value,
         DEFAULT_SEND_WINDOW_END
     );
+    const selectedType = getCampaignTypeValue();
+    const broadcastMessage = (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const dripSteps = selectedType === 'drip'
+        ? collectCampaignDripStepsFromForm()
+        : [];
+    const normalizedMessage = selectedType === 'drip'
+        ? dripSteps.join('\n---\n')
+        : broadcastMessage;
 
     const data = {
         name: (document.getElementById('campaignName') as HTMLInputElement | null)?.value.trim() || '',
         description: (document.getElementById('campaignDescription') as HTMLInputElement | null)?.value.trim() || '',
-        type: ((document.getElementById('campaignType') as HTMLSelectElement | null)?.value || 'broadcast') as CampaignType,
-        distribution_strategy: ((document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null)?.value || 'single') as Campaign['distribution_strategy'],
+        type: selectedType,
+        distribution_strategy: ((document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null)?.value || 'round_robin') as Campaign['distribution_strategy'],
         status,
         segment: (document.getElementById('campaignSegment') as HTMLSelectElement | null)?.value || '',
         tag_filters: getSelectedCampaignTagFilters(),
-        message: (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)?.value.trim() || '',
-        message_variations: [...campaignMessageVariationsDrafts],
+        message: normalizedMessage,
+        message_variations: selectedType === 'broadcast' ? [...campaignMessageVariationsDrafts] : [],
         delay: delayMinMs,
         delay_min: delayMinMs,
         delay_max: delayMaxMs,
@@ -2021,37 +2243,8 @@ async function saveCampaign(statusOverride?: CampaignStatus) {
         await loadCampaigns();
         showToast('success', 'Sucesso', campaignId ? 'Campanha atualizada com sucesso!' : 'Campanha criada com sucesso!');
     } catch (error) {
-        if (!shouldUseLocalCampaignFallback(error)) {
-            showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível salvar a campanha');
-            return;
-        }
-        if (campaignId) {
-            const index = campaigns.findIndex(c => c.id === campaignId);
-            if (index >= 0) {
-                campaigns[index] = {
-                    ...campaigns[index],
-                    ...data,
-                    status
-                };
-            }
-            showToast('success', 'Sucesso', 'Campanha atualizada com sucesso!');
-        } else {
-            // Simular sucesso para demonstra??o
-            campaigns.push({
-                id: campaigns.length + 1,
-                ...data,
-                sent: 0,
-                delivered: 0,
-                read: 0,
-                replied: 0,
-                created_at: new Date().toISOString()
-            });
-            showToast('success', 'Sucesso', 'Campanha criada com sucesso!');
-        }
-        closeModal('newCampaignModal');
-        resetCampaignForm();
-        renderCampaigns();
-        updateStats();
+        showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível salvar a campanha');
+        return;
     } finally {
         hideLoading();
     }
@@ -2094,16 +2287,30 @@ function editCampaign(id: number) {
     setSelectValue(document.getElementById('campaignType') as HTMLSelectElement | null, campaign.type || 'broadcast');
     setSelectValue(
         document.getElementById('campaignDistributionStrategy') as HTMLSelectElement | null,
-        String(campaign.distribution_strategy || 'single')
+        String(campaign.distribution_strategy || 'round_robin')
     );
     setSelectValue(document.getElementById('campaignSegment') as HTMLSelectElement | null, campaign.segment || 'all');
 
+    const selectedType: CampaignType = String(campaign.type || '').trim().toLowerCase() === 'drip'
+        ? 'drip'
+        : 'broadcast';
     const messageInput = document.getElementById('campaignMessage') as HTMLTextAreaElement | null;
-    if (messageInput) messageInput.value = campaign.message || '';
-    resetCampaignMessageVariationsState(getCampaignMessageVariationsFromCampaign(campaign));
+    if (selectedType === 'drip') {
+        const dripSteps = parseDripMessageSteps(campaign.message || '');
+        if (messageInput) messageInput.value = dripSteps[0] || '';
+        resetCampaignDripStepsState(dripSteps.slice(1));
+        resetCampaignMessageVariationsState([]);
+    } else {
+        if (messageInput) messageInput.value = campaign.message || '';
+        resetCampaignDripStepsState([]);
+        resetCampaignMessageVariationsState(getCampaignMessageVariationsFromCampaign(campaign));
+    }
+    applyCampaignTypeMode(selectedType);
     closeCampaignMessageVariableMenu();
     bindCampaignMessageVariablePicker();
     bindCampaignMessageVariationsUi();
+    bindCampaignDripStepsUi();
+    bindCampaignTypeSelector();
 
     const { minMs, maxMs } = resolveCampaignDelayRangeMs(campaign);
     setDelayRangeInputs(Math.round(minMs / 1000), Math.round(maxMs / 1000));
@@ -2143,22 +2350,14 @@ async function startCampaign(id: number, options: StartCampaignOptions = {}) {
             : { status: 'active' }
         );
     } catch (error) {
-        if (!shouldUseLocalCampaignFallback(error)) {
-            showToast(
-                'error',
-                'Erro',
-                (error as Error)?.message || (restart
-                    ? 'Não foi possível reiniciar a campanha'
-                    : 'Não foi possível iniciar a campanha')
-            );
-            return;
-        }
-
-        if (restart) {
-            showToast('warning', 'Aviso', 'Falha de rede ao reiniciar. Valide o status da campanha após atualizar a tela.');
-            scheduleCampaignsRealtimeRefresh(300);
-            return;
-        }
+        showToast(
+            'error',
+            'Erro',
+            (error as Error)?.message || (restart
+                ? 'Não foi possível reiniciar a campanha'
+                : 'Não foi possível iniciar a campanha')
+        );
+        return;
     }
 
     const campaign = campaigns.find(c => c.id === id);
@@ -2198,10 +2397,8 @@ async function pauseCampaign(id: number) {
     try {
         await api.put(`/api/campaigns/${id}`, { status: 'paused' });
     } catch (error) {
-        if (!shouldUseLocalCampaignFallback(error)) {
-            showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível pausar a campanha');
-            return;
-        }
+        showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível pausar a campanha');
+        return;
     }
     const campaign = campaigns.find(c => c.id === id);
     if (campaign) campaign.status = 'paused';
@@ -2220,10 +2417,8 @@ async function deleteCampaign(id: number) {
     try {
         await api.delete(`/api/campaigns/${id}`);
     } catch (error) {
-        if (!shouldUseLocalCampaignFallback(error)) {
-            showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível excluir a campanha');
-            return;
-        }
+        showToast('error', 'Erro', (error as Error)?.message || 'Não foi possível excluir a campanha');
+        return;
     }
     campaigns = campaigns.filter(c => c.id !== id);
     if (activeCampaignDetailsId === id) {

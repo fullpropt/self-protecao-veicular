@@ -8,6 +8,7 @@ type ContatosGlobals = {
   changeContactsSessionFilter?: (sessionId: string) => void;
   exportContacts?: () => void;
   openModal?: (id: string) => void;
+  openAddContactModal?: () => void;
   closeModal?: (id: string) => void;
   saveContact?: () => void;
   updateContact?: () => void;
@@ -114,6 +115,153 @@ export default function Contatos() {
           min-height: 36px;
           align-items: center;
         }
+
+        .contatos-react .contact-tag-filter {
+          position: relative;
+        }
+        .contatos-react .contact-tag-filter-toggle {
+          width: 100%;
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius);
+          background: var(--surface);
+          color: var(--dark);
+          min-height: 42px;
+          padding: 10px 38px 10px 12px;
+          text-align: left;
+          font-size: 14px;
+          cursor: pointer;
+          position: relative;
+          overflow: hidden;
+          white-space: nowrap;
+          text-overflow: ellipsis;
+        }
+        .contatos-react .contact-tag-filter-toggle::after {
+          content: '▾';
+          position: absolute;
+          right: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--gray-500);
+          font-size: 12px;
+        }
+        .contatos-react .contact-tag-filter-menu[hidden] {
+          display: none;
+        }
+        .contatos-react .contact-tag-filter-menu {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          z-index: 60;
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          background: var(--surface);
+          box-shadow: var(--shadow-lg);
+          padding: 10px;
+        }
+        .contatos-react .contact-tag-filter-list {
+          display: grid;
+          gap: 8px;
+          max-height: 220px;
+          overflow-y: auto;
+          padding-right: 2px;
+        }
+        .contatos-react .contact-tag-filter-option {
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius);
+          padding: 10px;
+          margin: 0;
+          background: var(--surface-alt, rgba(var(--primary-rgb), 0.05));
+        }
+        .contatos-react .contact-tag-filter-option-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .contatos-react .contact-tag-filter-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 999px;
+          flex-shrink: 0;
+        }
+
+        .contatos-react .edit-contact-tags-input-wrap {
+          position: relative;
+        }
+        .contatos-react .edit-contact-tags-input-wrap .form-input {
+          padding-right: 40px;
+        }
+        .contatos-react .edit-contact-tags-toggle {
+          position: absolute;
+          right: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          border: 0;
+          background: transparent;
+          color: var(--gray-500);
+          width: 12px;
+          height: 12px;
+          padding: 0;
+          font-size: 12px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: transform 0.2s ease;
+        }
+        .contatos-react .edit-contact-tags-toggle:hover {
+          color: var(--gray-500);
+        }
+        .contatos-react .edit-contact-tags-toggle.is-open {
+          transform: translateY(-50%) rotate(180deg);
+        }
+        .contatos-react .edit-contact-tags-suggestions[hidden] {
+          display: none;
+        }
+        .contatos-react .edit-contact-tags-suggestions {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          z-index: 80;
+          border: 1px solid var(--border-color);
+          border-radius: 0 0 var(--border-radius) var(--border-radius);
+          background: var(--surface);
+          max-height: 220px;
+          overflow-y: auto;
+          box-shadow: var(--shadow-lg);
+        }
+        .contatos-react .edit-contact-tags-option {
+          width: 100%;
+          border: 0;
+          border-bottom: 1px solid rgba(var(--primary-rgb), 0.12);
+          background: transparent;
+          color: var(--dark);
+          padding: 10px 14px;
+          text-align: left;
+          cursor: pointer;
+          font-size: 14px;
+          line-height: 1.2;
+        }
+        .contatos-react .edit-contact-tags-option:last-child {
+          border-bottom: 0;
+        }
+        .contatos-react .edit-contact-tags-option:hover {
+          background: rgba(var(--primary-rgb), 0.12);
+        }
+        .contatos-react .edit-contact-tags-option.is-selected {
+          background: rgba(var(--primary-rgb), 0.32);
+          color: #ffffff;
+        }
+        .contatos-react .edit-contact-tags-empty {
+          padding: 10px 14px;
+          color: var(--gray-500);
+          font-size: 13px;
+        }
       `}</style>
       <button
         className="mobile-menu-toggle"
@@ -218,7 +366,7 @@ export default function Contatos() {
             <button className="btn btn-success btn-export-contacts" onClick={() => globals.exportContacts?.()}>
               <span className="icon icon-export icon-sm"></span> Exportar
             </button>
-            <button className="btn btn-primary" onClick={() => globals.openModal?.('addContactModal')}>
+            <button className="btn btn-primary" onClick={() => globals.openAddContactModal?.() || globals.openModal?.('addContactModal')}>
               <span className="icon icon-add icon-sm"></span> Novo Contato
             </button>
           </div>
@@ -371,19 +519,24 @@ export default function Contatos() {
               </div>
               <div className="form-group">
                 <label className="form-label">Tags</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  id="contactTags"
-                  list="contactTagsOptions"
-                  placeholder="Ex.: VIP, Renovacao"
-                />
-                <datalist id="contactTagsOptions"></datalist>
-                <div
-                  id="contactTagsSuggestions"
-                  style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}
-                ></div>
-                <p className="form-help">Use as etiquetas cadastradas abaixo ou separe multiplas tags por virgula.</p>
+                <div className="contact-tag-filter">
+                  <button
+                    type="button"
+                    className="contact-tag-filter-toggle"
+                    id="contactTagsToggle"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                  >
+                    Selecione as tags
+                  </button>
+                  <div className="contact-tag-filter-menu" id="contactTagsMenu" hidden>
+                    <div className="contact-tag-filter-list" id="contactTagsOptions">
+                      <p style={{ color: 'var(--gray-500)', fontSize: '12px', margin: 0 }}>Carregando tags...</p>
+                    </div>
+                  </div>
+                </div>
+                <input type="hidden" id="contactTags" />
+                <p className="form-help">Selecione uma ou mais tags na lista.</p>
               </div>
               <div className="form-row" id="contactCustomFields"></div>
               <div className="form-row">
@@ -469,18 +622,28 @@ export default function Contatos() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Tags</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    id="editContactTags"
-                    list="editContactTagsOptions"
-                    placeholder="Ex.: VIP, Renovacao"
-                  />
-                  <datalist id="editContactTagsOptions"></datalist>
-                  <div
-                    id="editContactTagsSuggestions"
-                    style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}
-                  ></div>
+                  <div className="edit-contact-tags-input-wrap" id="editContactTagsTrigger">
+                    <input
+                      type="text"
+                      className="form-input"
+                      id="editContactTags"
+                      placeholder="Ex.: VIP, Renovacao"
+                    />
+                    <button
+                      type="button"
+                      className="edit-contact-tags-toggle"
+                      id="editContactTagsToggle"
+                      aria-label="Mostrar tags"
+                      aria-expanded="false"
+                    >
+                      ▾
+                    </button>
+                    <div
+                      id="editContactTagsSuggestions"
+                      className="edit-contact-tags-suggestions"
+                      hidden
+                    ></div>
+                  </div>
                   <p className="form-help">Use as etiquetas cadastradas abaixo ou separe multiplas tags por virgula.</p>
                 </div>
                 <div className="form-row" id="editContactCustomFields"></div>

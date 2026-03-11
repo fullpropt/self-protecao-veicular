@@ -165,6 +165,7 @@ const STATIC_DIR = process.env.NODE_ENV === 'production'
     ? path.join(__dirname, '..', 'dist')
 
     : path.join(__dirname, '..', 'public');
+const LANDING_BRUNO_DIR = path.join(__dirname, '..', 'landing-bruno');
 
 const MAX_RECONNECT_ATTEMPTS = parseInt(process.env.MAX_RECONNECT_ATTEMPTS) || 5;
 
@@ -200,10 +201,90 @@ const WHATSAPP_SESSION_RATE_LIMIT_MAX_PER_MINUTE = parsePositiveIntInRange(
 );
 const METRICS_ENABLED = parseBooleanEnv(process.env.METRICS_ENABLED, false);
 const METRICS_BEARER_TOKEN = String(process.env.METRICS_BEARER_TOKEN || '').trim();
+const DANGEROUS_UPLOAD_EXTENSIONS = new Set([
+    '.html', '.htm', '.svg', '.xml', '.xhtml', '.js', '.mjs', '.css'
+]);
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+    '.jpg', '.jpeg', '.png', '.webp', '.gif',
+    '.mp4', '.webm', '.mov', '.ogg',
+    '.mp3', '.wav', '.aac', '.m4a', '.amr', '.opus', '.oga',
+    '.pdf', '.txt', '.zip', '.csv',
+    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'
+]);
+const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+    'video/mp4', 'video/webm', 'video/quicktime', 'video/ogg',
+    'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/mp4',
+    'audio/ogg', 'audio/amr', 'audio/3gpp', 'audio/webm',
+    'application/pdf', 'text/plain', 'application/zip', 'text/csv',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+]);
+const UPLOAD_MIME_EXTENSION_MAP = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+    'video/ogg': '.ogg',
+    'audio/mpeg': '.mp3',
+    'audio/wav': '.wav',
+    'audio/x-wav': '.wav',
+    'audio/aac': '.aac',
+    'audio/mp4': '.m4a',
+    'audio/ogg': '.ogg',
+    'audio/amr': '.amr',
+    'audio/3gpp': '.amr',
+    'audio/webm': '.webm',
+    'application/pdf': '.pdf',
+    'text/plain': '.txt',
+    'application/zip': '.zip',
+    'text/csv': '.csv'
+};
 const WHATSAPP_AUTH_STATE_DRIVER = String(process.env.WHATSAPP_AUTH_STATE_DRIVER || 'multi_file').trim().toLowerCase();
 const WHATSAPP_AUTH_STATE_DB_FALLBACK_MULTI_FILE = parseBooleanEnv(process.env.WHATSAPP_AUTH_STATE_DB_FALLBACK_MULTI_FILE, true);
 let cachedBaileysSocketVersion = null;
 let cachedBaileysSocketVersionSource = null;
+
+function normalizeUploadExtension(fileName = '') {
+    const ext = path.extname(String(fileName || '').trim()).toLowerCase();
+    return ext.replace(/[^a-z0-9.]/g, '');
+}
+
+function sanitizeUploadBaseName(fileName = '') {
+    const rawBaseName = path.basename(String(fileName || '').trim(), path.extname(String(fileName || '').trim()));
+    const normalized = rawBaseName
+        .replace(/[^a-zA-Z0-9._-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^\.+/, '')
+        .slice(0, 80);
+    return normalized || 'file';
+}
+
+function resolveUploadExtension(file = {}) {
+    const extFromName = normalizeUploadExtension(file.originalname || '');
+    if (ALLOWED_UPLOAD_EXTENSIONS.has(extFromName)) {
+        return extFromName;
+    }
+
+    const mime = String(file.mimetype || '').trim().toLowerCase();
+    return UPLOAD_MIME_EXTENSION_MAP[mime] || '';
+}
+
+function isAllowedUploadFile(file = {}) {
+    const ext = normalizeUploadExtension(file.originalname || '');
+    const mime = String(file.mimetype || '').trim().toLowerCase();
+    const hasAllowedExt = ALLOWED_UPLOAD_EXTENSIONS.has(ext);
+    const hasAllowedMime = ALLOWED_UPLOAD_MIME_TYPES.has(mime);
+    const isDangerousExt = DANGEROUS_UPLOAD_EXTENSIONS.has(ext);
+    return (hasAllowedExt || hasAllowedMime) && !isDangerousExt;
+}
 
 function parseBooleanEnv(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
@@ -778,26 +859,30 @@ const getRequestHost = (req) => {
     return host.split(':')[0].toLowerCase();
 };
 
-const corsOptionsDelegate = (req, callback) => {
-    const origin = req.header('Origin');
+const isOriginAllowed = (origin, requestHost = '') => {
     const normalizedOrigin = sanitizeOriginEntry(origin);
     const originHost = parseOriginHost(normalizedOrigin);
-    const requestHost = getRequestHost(req);
-
     const isSameOrigin = Boolean(
-        origin &&
+        normalizedOrigin &&
         originHost &&
         requestHost &&
         originHost === requestHost
     );
 
-    const isAllowed =
-        !origin ||
+    return (
+        !normalizedOrigin ||
         allowedOriginSet.has('*') ||
         allowedOriginEntries.length === 0 ||
         isSameOrigin ||
         allowedOriginSet.has(normalizedOrigin) ||
-        allowedHostSet.has(originHost);
+        allowedHostSet.has(originHost)
+    );
+};
+
+const corsOptionsDelegate = (req, callback) => {
+    const origin = req.header('Origin');
+    const requestHost = getRequestHost(req);
+    const isAllowed = isOriginAllowed(origin, requestHost);
 
     if (!isAllowed) {
         return callback(new Error('NÃ£o permitido por CORS'));
@@ -818,6 +903,10 @@ app.use(cors(corsOptionsDelegate));
 app.get('/metrics', async (req, res) => {
     if (!METRICS_ENABLED) {
         return res.status(404).send('Not found');
+    }
+
+    if (process.env.NODE_ENV === 'production' && !METRICS_BEARER_TOKEN) {
+        return res.status(503).send('Metrics token not configured');
     }
 
     if (METRICS_BEARER_TOKEN) {
@@ -953,7 +1042,21 @@ app.use(express.static(STATIC_DIR, {
 
 }));
 
-app.use('/uploads', express.static(UPLOADS_DIR));
+if (fs.existsSync(LANDING_BRUNO_DIR)) {
+    app.use('/landing-bruno', express.static(LANDING_BRUNO_DIR));
+}
+
+app.use('/uploads', express.static(UPLOADS_DIR, {
+    setHeaders: (res, filePath) => {
+        const ext = normalizeUploadExtension(filePath);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+
+        if (DANGEROUS_UPLOAD_EXTENSIONS.has(ext)) {
+            res.setHeader('Content-Disposition', 'attachment');
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        }
+    }
+}));
 
 
 
@@ -966,8 +1069,9 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => {
 
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-
-        cb(null, uniqueSuffix + '-' + file.originalname);
+        const safeBaseName = sanitizeUploadBaseName(file.originalname || '');
+        const safeExtension = resolveUploadExtension(file);
+        cb(null, `${uniqueSuffix}-${safeBaseName}${safeExtension}`);
 
     }
 
@@ -976,6 +1080,16 @@ const storage = multer.diskStorage({
 const upload = multer({ 
 
     storage,
+    fileFilter: (req, file, cb) => {
+        if (!isAllowedUploadFile(file)) {
+            const uploadTypeError = new Error('Tipo de arquivo nao permitido');
+            uploadTypeError.status = 400;
+            uploadTypeError.statusCode = 400;
+            return cb(uploadTypeError);
+        }
+
+        return cb(null, true);
+    },
 
     limits: { fileSize: 50 * 1024 * 1024 } // 50MB
 
@@ -997,7 +1111,12 @@ const io = new Server(server, {
 
     cors: {
 
-        origin: '*',
+        origin: (origin, callback) => {
+            if (isOriginAllowed(origin)) {
+                return callback(null, true);
+            }
+            return callback(new Error('NÃ£o permitido por CORS'));
+        },
 
         methods: ['GET', 'POST']
 
@@ -2194,14 +2313,80 @@ function unwrapMessageContent(message) {
 
 function extractTextFromMessageContent(content) {
     if (!content) return '';
+    const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
     return (
         content.conversation ||
         content.extendedTextMessage?.text ||
         content.imageMessage?.caption ||
         content.videoMessage?.caption ||
         content.documentMessage?.caption ||
+        interactiveSelection?.text ||
+        interactiveSelection?.id ||
         ''
     );
+}
+
+function extractInteractiveSelectionFromMessageContent(content) {
+    if (!content) return null;
+
+    const listReply = content?.listResponseMessage?.singleSelectReply;
+    if (listReply) {
+        const id = normalizeText(listReply.selectedRowId || listReply.selectedId || '');
+        const text = normalizeText(listReply.title || listReply.selectedDisplayText || listReply.description || '');
+        const description = normalizeText(listReply.description || '');
+        if (id || text || description) {
+            return { id, text, description, source: 'list' };
+        }
+    }
+
+    const buttonReply = content?.buttonsResponseMessage;
+    if (buttonReply) {
+        const id = normalizeText(buttonReply.selectedButtonId || buttonReply.selectedId || '');
+        const text = normalizeText(buttonReply.selectedDisplayText || buttonReply.text || '');
+        if (id || text) {
+            return { id, text, description: '', source: 'buttons' };
+        }
+    }
+
+    const templateButtonReply = content?.templateButtonReplyMessage;
+    if (templateButtonReply) {
+        const id = normalizeText(templateButtonReply.selectedId || templateButtonReply.id || '');
+        const text = normalizeText(templateButtonReply.selectedDisplayText || templateButtonReply.displayText || '');
+        if (id || text) {
+            return { id, text, description: '', source: 'template_button' };
+        }
+    }
+
+    const paramsJson = content?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson;
+    if (paramsJson) {
+        try {
+            const parsed = typeof paramsJson === 'string' ? JSON.parse(paramsJson) : paramsJson;
+            const id = normalizeText(
+                parsed?.id
+                || parsed?.selectedId
+                || parsed?.selected_id
+                || parsed?.selectedRowId
+                || parsed?.selected_row_id
+                || parsed?.optionId
+                || ''
+            );
+            const text = normalizeText(
+                parsed?.text
+                || parsed?.title
+                || parsed?.display_text
+                || parsed?.selectedDisplayText
+                || ''
+            );
+            const description = normalizeText(parsed?.description || '');
+            if (id || text || description) {
+                return { id, text, description, source: 'interactive' };
+            }
+        } catch (_) {
+            // payload invalido nao impede o processamento da mensagem
+        }
+    }
+
+    return null;
 }
 
 function detectMediaTypeFromMessageContent(content) {
@@ -4967,16 +5152,26 @@ function normalizeAutomationContext(context = {}) {
 async function resolveAutomationOwnerScopeUserId(context = {}) {
     const normalizedContext = normalizeAutomationContext(context);
 
+    const leadOwnerUserId = normalizeOwnerUserId(normalizedContext?.lead?.owner_user_id);
+    if (leadOwnerUserId) {
+        return leadOwnerUserId;
+    }
+
+    const assigneeOwnerUserId = await resolveOwnerScopeUserIdFromAssignees(
+        normalizedContext?.conversation?.assigned_to,
+        normalizedContext?.lead?.assigned_to
+    );
+    if (assigneeOwnerUserId) {
+        return assigneeOwnerUserId;
+    }
+
     const rawSessionId = String(context?.sessionId || context?.session_id || '').trim();
     if (rawSessionId) {
         const sessionOwnerUserId = await resolveSessionOwnerUserId(normalizedContext.sessionId);
         if (sessionOwnerUserId) return sessionOwnerUserId;
     }
 
-    return await resolveOwnerScopeUserIdFromAssignees(
-        normalizedContext?.conversation?.assigned_to,
-        normalizedContext?.lead?.assigned_to
-    );
+    return null;
 }
 
 function parseAutomationSessionScope(value) {
@@ -5071,6 +5266,90 @@ async function resolveAutomationConversation(lead, baseConversation = null, sess
     });
 
     return result?.conversation || null;
+}
+
+async function resolveAutomationDispatchSession(automation, context = {}) {
+    const normalizedContext = normalizeAutomationContext(context);
+    const leadId = Number(normalizedContext?.lead?.id || 0);
+    const ownerScopeUserId = await resolveAutomationOwnerScopeUserId(normalizedContext);
+    const scopedSessionIds = parseAutomationSessionScope(automation?.session_scope);
+    const scopedSessionIdSet = scopedSessionIds.length ? new Set(scopedSessionIds) : null;
+    const candidateSessionIds = [];
+
+    const pushCandidateSessionId = (value) => {
+        const normalizedSessionId = sanitizeSessionId(value);
+        if (!normalizedSessionId) return;
+        if (scopedSessionIdSet && !scopedSessionIdSet.has(normalizedSessionId)) return;
+        if (candidateSessionIds.includes(normalizedSessionId)) return;
+        candidateSessionIds.push(normalizedSessionId);
+    };
+
+    pushCandidateSessionId(normalizedContext.sessionId);
+    pushCandidateSessionId(normalizedContext?.conversation?.session_id);
+
+    if (leadId > 0) {
+        const latestConversation = await Conversation.findByLeadId(leadId, null);
+        pushCandidateSessionId(latestConversation?.session_id);
+    }
+
+    for (const scopedSessionId of scopedSessionIds) {
+        pushCandidateSessionId(scopedSessionId);
+    }
+
+    if (ownerScopeUserId) {
+        const ownerSessions = await WhatsAppSession.list({
+            owner_user_id: ownerScopeUserId,
+            includeDisabled: true
+        });
+        for (const ownerSession of ownerSessions || []) {
+            pushCandidateSessionId(ownerSession?.session_id);
+        }
+    }
+
+    if (!candidateSessionIds.length) {
+        pushCandidateSessionId(resolveFirstConnectedSessionId(normalizedContext.sessionId));
+        pushCandidateSessionId(resolveDefaultSessionId(normalizedContext.sessionId));
+    }
+
+    const ownerValidationCache = new Map();
+    let firstCandidateSessionId = '';
+
+    for (const candidateSessionId of candidateSessionIds) {
+        if (ownerScopeUserId) {
+            let sessionOwnerScopeUserId = ownerValidationCache.get(candidateSessionId);
+            if (sessionOwnerScopeUserId === undefined) {
+                sessionOwnerScopeUserId = await resolveSessionOwnerUserId(candidateSessionId);
+                ownerValidationCache.set(candidateSessionId, sessionOwnerScopeUserId ?? null);
+            }
+            if (sessionOwnerScopeUserId && Number(sessionOwnerScopeUserId) !== Number(ownerScopeUserId)) {
+                continue;
+            }
+        }
+
+        if (!firstCandidateSessionId) {
+            firstCandidateSessionId = candidateSessionId;
+        }
+
+        const dispatchState = getSessionDispatchState(candidateSessionId);
+        if (dispatchState.available) {
+            return {
+                sessionId: candidateSessionId,
+                dispatchState
+            };
+        }
+    }
+
+    if (firstCandidateSessionId) {
+        return {
+            sessionId: firstCandidateSessionId,
+            dispatchState: getSessionDispatchState(firstCandidateSessionId)
+        };
+    }
+
+    return {
+        sessionId: '',
+        dispatchState: getSessionDispatchState('')
+    };
 }
 
 function runAutomationWithDelay(automation, context) {
@@ -5498,7 +5777,28 @@ async function executeAutomationAction(automation, context) {
             }
 
             try {
-                await sendMessage(sessionId, lead.phone, content, 'text');
+                const dispatchTarget = await resolveAutomationDispatchSession(automation, normalizedContext);
+                const dispatchSessionId = sanitizeSessionId(dispatchTarget?.sessionId);
+                const dispatchState = dispatchTarget?.dispatchState || getSessionDispatchState(dispatchSessionId || '');
+                if (!dispatchSessionId || !dispatchState.available) {
+                    throw buildSessionUnavailableError(
+                        dispatchState,
+                        dispatchSessionId
+                            ? `Sessao ${dispatchSessionId} indisponivel para envio de automacao`
+                            : 'Nenhuma sessao disponivel para envio de automacao'
+                    );
+                }
+
+                const sendOptions = {};
+                const conversationId = Number(conversation?.id || 0);
+                if (
+                    conversationId > 0
+                    && sanitizeSessionId(conversation?.session_id) === dispatchSessionId
+                ) {
+                    sendOptions.conversationId = conversationId;
+                }
+
+                await sendMessage(dispatchSessionId, lead.phone, content, 'text', sendOptions);
             } catch (error) {
                 if (shouldTrackOnce && reservationCreated) {
                     await releaseAutomationLeadRun(automationId, leadId);
@@ -7839,6 +8139,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
     }
 
     const content = contentForRouting;
+    const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
     let text = extractTextFromMessageContent(content);
     let mediaType = detectMediaTypeFromMessageContent(content);
     let persistedMedia = null;
@@ -8148,7 +8449,12 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
                 conversation.created = convCreated;
 
                 await flowService.processIncomingMessage(
-                    { text, mediaType },
+                    {
+                        text,
+                        mediaType,
+                        selectionId: interactiveSelection?.id || '',
+                        selectionText: interactiveSelection?.text || ''
+                    },
                     lead,
                     conversation
                 );
@@ -8171,6 +8477,81 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 }
 
 
+
+/**
+
+ * Normalizar seções de menu/lista para envio WhatsApp
+ */
+function normalizeListSectionsForSend(rawSections, lead, messageText = '') {
+    const sourceSections = Array.isArray(rawSections) ? rawSections : [];
+    if (sourceSections.length === 0) return [];
+
+    const normalizedSections = [];
+    let totalRows = 0;
+
+    for (const section of sourceSections) {
+        if (totalRows >= 10) break;
+
+        const rawRows = Array.isArray(section?.rows) ? section.rows : [];
+        const rows = [];
+
+        for (const row of rawRows) {
+            if (totalRows >= 10) break;
+
+            const rowId = normalizeText(row?.rowId || row?.id || '');
+            const rawTitle = String(row?.title || row?.text || '').trim();
+            if (!rawTitle) continue;
+
+            const title = normalizeText(applyLeadTemplate(rawTitle, lead, { mensagem: messageText || rawTitle }));
+            if (!title) continue;
+
+            const rawDescription = String(row?.description || '').trim();
+            const description = rawDescription
+                ? normalizeText(applyLeadTemplate(rawDescription, lead, { mensagem: rawDescription }))
+                : '';
+
+            rows.push({
+                rowId: rowId || `option-${totalRows + 1}`,
+                title,
+                description: description || undefined
+            });
+            totalRows += 1;
+        }
+
+        if (rows.length === 0) continue;
+
+        const rawSectionTitle = String(section?.title || '').trim();
+        const sectionTitle = rawSectionTitle
+            ? normalizeText(applyLeadTemplate(rawSectionTitle, lead, { mensagem: messageText || rawSectionTitle }))
+            : '';
+
+        normalizedSections.push({
+            title: sectionTitle || `Opcoes ${normalizedSections.length + 1}`,
+            rows
+        });
+    }
+
+    return normalizedSections;
+}
+
+function normalizeButtonUrlForSend(value) {
+    const raw = normalizeText(String(value || '').trim());
+    if (!raw) return '';
+
+    const normalized = /^https?:\/\//i.test(raw)
+        ? raw
+        : `https://${raw}`;
+
+    try {
+        const parsed = new URL(normalized);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return '';
+        }
+        return parsed.toString();
+    } catch (_) {
+        return '';
+    }
+}
 
 /**
 
@@ -8266,10 +8647,18 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
         conversation = await Conversation.findById(conversation.id);
     }
 
-    const renderedTextMessage = type === 'text'
+    const normalizedType = String(type || 'text').trim().toLowerCase() || 'text';
+    const persistedMediaType = (normalizedType === 'list' || normalizedType === 'button_url') ? 'text' : normalizedType;
+    const isTextLikeMessage = normalizedType === 'text' || normalizedType === 'list' || normalizedType === 'button_url';
+    const isMediaWithUrl = normalizedType === 'image'
+        || normalizedType === 'video'
+        || normalizedType === 'document'
+        || normalizedType === 'audio';
+
+    const renderedTextMessage = isTextLikeMessage
         ? applyLeadTemplate(message, lead, { mensagem: message || '' })
         : message;
-    const renderedCaption = type !== 'text' && String(options.caption || '').trim()
+    const renderedCaption = !isTextLikeMessage && String(options.caption || '').trim()
         ? applyLeadTemplate(options.caption || '', lead, { mensagem: options.caption || '' })
         : (options.caption || '');
 
@@ -8278,11 +8667,97 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     let result;
 
     try {
-        if (type === 'text') {
+        if (normalizedType === 'text') {
 
             result = await session.socket.sendMessage(jid, { text: renderedTextMessage });
 
-        } else if (type === 'image') {
+        } else if (normalizedType === 'list') {
+            const sectionsInput = options.listSections || options.sections || [];
+            const sections = normalizeListSectionsForSend(sectionsInput, lead, renderedTextMessage);
+            if (sections.length === 0) {
+                throw new Error('Mensagem de menu sem opcoes validas');
+            }
+
+            const listButtonTextRaw = String(options.listButtonText || options.buttonText || '').trim();
+            const listButtonText = listButtonTextRaw
+                ? applyLeadTemplate(listButtonTextRaw, lead, { mensagem: listButtonTextRaw })
+                : 'Ver Menu';
+            const listTitleRaw = String(options.listTitle || options.title || '').trim();
+            const listFooterRaw = String(options.listFooter || options.footer || '').trim();
+            const listTitle = listTitleRaw
+                ? applyLeadTemplate(listTitleRaw, lead, { mensagem: renderedTextMessage || listTitleRaw })
+                : '';
+            const listFooter = listFooterRaw
+                ? applyLeadTemplate(listFooterRaw, lead, { mensagem: renderedTextMessage || listFooterRaw })
+                : '';
+
+            result = await session.socket.sendMessage(jid, {
+                text: renderedTextMessage || 'Selecione uma opcao:',
+                title: listTitle || undefined,
+                footer: listFooter || undefined,
+                buttonText: listButtonText,
+                sections
+            });
+
+        } else if (normalizedType === 'button_url') {
+            const buttonTextRaw = String(options.buttonText || options.listButtonText || '').trim();
+            const buttonText = buttonTextRaw
+                ? applyLeadTemplate(buttonTextRaw, lead, { mensagem: buttonTextRaw })
+                : 'Acessar site';
+            const buttonUrlRaw = String(options.buttonUrl || options.url || '').trim();
+            const buttonUrl = normalizeButtonUrlForSend(
+                buttonUrlRaw
+                    ? applyLeadTemplate(buttonUrlRaw, lead, { mensagem: renderedTextMessage || buttonUrlRaw })
+                    : ''
+            );
+            if (!buttonUrl) {
+                throw new Error('Mensagem com botao de link sem URL valida');
+            }
+
+            const buttonTitleRaw = String(options.buttonTitle || options.title || '').trim();
+            const buttonFooterRaw = String(options.buttonFooter || options.footer || '').trim();
+            const buttonTitle = buttonTitleRaw
+                ? applyLeadTemplate(buttonTitleRaw, lead, { mensagem: renderedTextMessage || buttonTitleRaw })
+                : '';
+            const buttonFooter = buttonFooterRaw
+                ? applyLeadTemplate(buttonFooterRaw, lead, { mensagem: renderedTextMessage || buttonFooterRaw })
+                : '';
+
+            const baileys = await baileysLoader.getBaileys();
+            const hydratedTemplate = {
+                hydratedContentText: renderedTextMessage || buttonText,
+                hydratedButtons: [
+                    {
+                        index: 1,
+                        urlButton: {
+                            displayText: buttonText,
+                            url: buttonUrl
+                        }
+                    }
+                ]
+            };
+
+            if (buttonTitle) {
+                hydratedTemplate.hydratedTitleText = buttonTitle;
+            }
+            if (buttonFooter) {
+                hydratedTemplate.hydratedFooterText = buttonFooter;
+            }
+
+            const outboundMessage = baileys.generateWAMessageFromContent(jid, {
+                templateMessage: {
+                    hydratedTemplate
+                }
+            }, {
+                userJid: session.socket?.user?.id || undefined
+            });
+
+            await session.socket.relayMessage(jid, outboundMessage.message, {
+                messageId: outboundMessage.key.id
+            });
+            result = outboundMessage;
+
+        } else if (normalizedType === 'image') {
 
             result = await session.socket.sendMessage(jid, {
 
@@ -8292,7 +8767,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             });
 
-        } else if (type === 'video') {
+        } else if (normalizedType === 'video') {
 
             result = await session.socket.sendMessage(jid, {
 
@@ -8302,7 +8777,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             });
 
-        } else if (type === 'document') {
+        } else if (normalizedType === 'document') {
 
             result = await session.socket.sendMessage(jid, {
 
@@ -8314,7 +8789,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             });
 
-        } else if (type === 'audio') {
+        } else if (normalizedType === 'audio') {
 
             result = await session.socket.sendMessage(jid, {
 
@@ -8326,6 +8801,8 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             });
 
+        } else {
+            throw new Error(`Tipo de mensagem nao suportado: ${normalizedType}`);
         }
     } catch (sendError) {
         if (isDisconnectedSessionRuntimeError(sendError)) {
@@ -8390,17 +8867,17 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             sender_type: 'agent',
 
-            content: type === 'text' ? renderedTextMessage : (renderedCaption || ''),
+            content: isTextLikeMessage ? renderedTextMessage : (renderedCaption || ''),
 
-            content_encrypted: encryptMessage(type === 'text' ? renderedTextMessage : (renderedCaption || '')),
+            content_encrypted: encryptMessage(isTextLikeMessage ? renderedTextMessage : (renderedCaption || '')),
 
-            media_type: type,
+            media_type: persistedMediaType,
 
-            media_url: type !== 'text' ? (options.url || message) : null,
+            media_url: isMediaWithUrl ? (options.url || message) : null,
 
-            media_mime_type: type !== 'text' ? (options.mimetype || null) : null,
+            media_mime_type: isMediaWithUrl ? (options.mimetype || null) : null,
 
-            media_filename: type !== 'text' ? (options.fileName || null) : null,
+            media_filename: isMediaWithUrl ? (options.fileName || null) : null,
 
             status: 'sent',
 
@@ -8440,9 +8917,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         to,
 
-        content: type === 'text' ? renderedTextMessage : (renderedCaption || ''),
+        content: isTextLikeMessage ? renderedTextMessage : (renderedCaption || ''),
 
-        type
+        type: normalizedType
 
     }, {
         ownerUserId: Number(sessionOwnerUserId || lead?.owner_user_id || 0) || undefined
@@ -8565,12 +9042,23 @@ function sessionExists(sessionId) {
         const mediaType = String(options?.mediaType || options?.media_type || 'text').trim().toLowerCase() || 'text';
         const content = String(options?.content || '');
         const mediaUrl = options?.mediaUrl || options?.url || null;
+        const listSections = Array.isArray(options?.listSections)
+            ? options.listSections
+            : (Array.isArray(options?.sections) ? options.sections : []);
+        const listButtonText = String(options?.listButtonText || options?.buttonText || '').trim();
+        const listTitle = String(options?.listTitle || options?.title || '').trim();
+        const listFooter = String(options?.listFooter || options?.footer || '').trim();
+        const buttonUrl = String(options?.buttonUrl || options?.url || '').trim();
+        const buttonTitle = String(options?.buttonTitle || options?.title || '').trim();
+        const buttonFooter = String(options?.buttonFooter || options?.footer || '').trim();
+        const isInteractiveDirectMessage = mediaType === 'list' || mediaType === 'button_url';
 
         if (
             FLOW_MESSAGE_QUEUE_ENABLED
             && QUEUE_WORKER_ENABLED
             && Number.isInteger(normalizedLeadId)
             && normalizedLeadId > 0
+            && !isInteractiveDirectMessage
         ) {
             let queuedSessionId = requestedSessionId || resolvedSessionId;
             if (queuedSessionId) {
@@ -8640,6 +9128,14 @@ function sessionExists(sessionId) {
                 fileName: options?.fileName,
                 ptt: options?.ptt,
                 duration: options?.duration,
+                listSections,
+                listButtonText,
+                listTitle,
+                listFooter,
+                buttonText: listButtonText,
+                buttonUrl,
+                buttonTitle,
+                buttonFooter,
                 conversationId: Number.isInteger(normalizedConversationId) && normalizedConversationId > 0
                     ? normalizedConversationId
                     : null
@@ -10452,6 +10948,37 @@ function normalizeLegacyEmailTemplateValue(value, currentDefault, legacyDefault)
     return normalized;
 }
 
+function normalizeLegacyEmailHtmlTemplateLayout(value, currentDefault) {
+    const normalized = String(value || '');
+    if (!normalized.trim()) return normalized;
+
+    const defaultTrimmed = String(currentDefault || '').trim();
+    if (defaultTrimmed && normalized.trim() === defaultTrimmed) {
+        return normalized;
+    }
+
+    const looksLikeDefaultTemplateFamily = (
+        normalized.includes('<tr><td style="padding:28px 24px;">')
+        && normalized.includes('{{confirmation_url}}')
+        && normalized.includes('{{expires_in_text}}')
+        && normalized.includes('Confirmar e-mail')
+        && normalized.includes('ZapVender')
+    );
+
+    if (!looksLikeDefaultTemplateFamily) {
+        return normalized;
+    }
+
+    return normalized
+        .split('<tr><td style="padding:28px 24px;">').join('<tr><td style="padding:28px 24px;text-align:center;" align="center">')
+        .split('font-size:16px;line-height:1.5;color:#142033;">').join('font-size:16px;line-height:1.5;color:#142033;text-align:center;">')
+        .split('font-size:15px;line-height:1.6;color:#344054;">').join('font-size:15px;line-height:1.6;color:#344054;text-align:center;">')
+        .split('margin:0 0 20px 0;"><a href="{{confirmation_url}}"').join('margin:0 0 20px 0;text-align:center;"><a href="{{confirmation_url}}"')
+        .split('font-size:13px;line-height:1.6;color:#667085;">').join('font-size:13px;line-height:1.6;color:#667085;text-align:center;">')
+        .split('<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;">').join('<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;text-align:center;" align="center">')
+        .split('font-size:12px;line-height:1.5;color:#667085;">').join('font-size:12px;line-height:1.5;color:#667085;text-align:center;">');
+}
+
 function normalizeEmailDeliverySettingsInput(payload = {}, currentSettings = {}) {
     const source = payload && typeof payload === 'object' ? payload : {};
     const current = currentSettings && typeof currentSettings === 'object' ? currentSettings : {};
@@ -10478,10 +11005,13 @@ function normalizeEmailDeliverySettingsInput(payload = {}, currentSettings = {})
         DEFAULT_EMAIL_SUBJECT_TEMPLATE
     );
     const htmlTemplate = sanitizeEmailTemplateValue(
-        normalizeLegacyEmailTemplateValue(
-            source.htmlTemplate ?? current.htmlTemplate,
-            DEFAULT_EMAIL_HTML_TEMPLATE,
-            [LEGACY_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE_V2]
+        normalizeLegacyEmailHtmlTemplateLayout(
+            normalizeLegacyEmailTemplateValue(
+                source.htmlTemplate ?? current.htmlTemplate,
+                DEFAULT_EMAIL_HTML_TEMPLATE,
+                [LEGACY_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE, PREVIOUS_EMAIL_HTML_TEMPLATE_V2]
+            ),
+            DEFAULT_EMAIL_HTML_TEMPLATE
         ),
         DEFAULT_EMAIL_HTML_TEMPLATE
     );
@@ -13980,6 +14510,66 @@ function parseCampaignStartAt(startAt) {
 
 }
 
+async function reschedulePendingCampaignQueueByStartAt(campaign, previousStartAt = null) {
+    const campaignId = Number(campaign?.id || 0);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+        return { updated: 0, reason: 'invalid_campaign' };
+    }
+
+    const pendingQueueRows = await query(`
+        SELECT id, scheduled_at
+        FROM message_queue
+        WHERE campaign_id = ?
+          AND status = 'pending'
+        ORDER BY id ASC
+    `, [campaignId]);
+
+    if (!pendingQueueRows.length) {
+        return { updated: 0, reason: 'no_pending_messages' };
+    }
+
+    const previousStartAtMs = parseCampaignStartAt(previousStartAt);
+    const nextStartAtMs = parseCampaignStartAt(campaign?.start_at) || Date.now();
+    const sendWindowConfig = normalizeCampaignSendWindowConfig(campaign);
+
+    let referenceStartAtMs = previousStartAtMs;
+    if (!Number.isFinite(referenceStartAtMs)) {
+        const firstScheduledAtMs = parseCampaignStartAt(pendingQueueRows[0]?.scheduled_at);
+        referenceStartAtMs = Number.isFinite(firstScheduledAtMs) ? firstScheduledAtMs : Date.now();
+    }
+
+    const deltaMs = Number(nextStartAtMs) - Number(referenceStartAtMs);
+    let updated = 0;
+
+    for (const queueRow of pendingQueueRows) {
+        const queueId = Number(queueRow?.id || 0);
+        if (!Number.isInteger(queueId) || queueId <= 0) continue;
+
+        const currentScheduledAtMs = parseCampaignStartAt(queueRow?.scheduled_at) || Number(referenceStartAtMs);
+        const shiftedScheduledAtMs = alignCampaignScheduleToSendWindow(
+            Number(currentScheduledAtMs) + deltaMs,
+            sendWindowConfig
+        );
+
+        const result = await run(`
+            UPDATE message_queue
+            SET scheduled_at = ?
+            WHERE id = ?
+              AND status = 'pending'
+        `, [new Date(shiftedScheduledAtMs).toISOString(), queueId]);
+
+        if (Number(result?.changes || 0) > 0) {
+            updated += 1;
+        }
+    }
+
+    return {
+        updated,
+        totalPending: pendingQueueRows.length,
+        delta_ms: deltaMs
+    };
+}
+
 
 function parseLeadTags(rawTags) {
     return uniqueUnifiedTagLabels(parseUnifiedTagList(rawTags));
@@ -14423,32 +15013,30 @@ async function queueCampaignMessages(campaign, options = {}) {
     let queuedCount = 0;
 
     if (campaignType === 'drip') {
+        const nextStepAtByLead = new Map();
+        for (const leadId of queueCandidateLeadIds) {
+            const leadKey = String(leadId);
+            const precomputedScheduledAt = String(scheduledAtByLead[leadKey] || '').trim();
+            const parsedScheduledAt = Date.parse(precomputedScheduledAt);
+            const initialStepAt = Number.isFinite(parsedScheduledAt)
+                ? parsedScheduledAt
+                : alignCampaignScheduleToSendWindow(baseStartMs, sendWindowConfig);
+            nextStepAtByLead.set(leadKey, initialStepAt);
+        }
 
         for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
-
             const content = steps[stepIndex];
-            const stepBaseMs = alignCampaignScheduleToSendWindow(
-                baseStartMs + (stepIndex * delayMaxMs),
-                sendWindowConfig
-            );
-            const nextLeadAtMsByDayOffset = new Map();
 
             for (let leadIndex = 0; leadIndex < queueCandidateLeadIds.length; leadIndex++) {
-
                 const leadId = queueCandidateLeadIds[leadIndex];
-                const assignmentMeta = assignmentMetaByLead[String(leadId)] || null;
-                const leadDayOffsetRaw = Number(assignmentMeta?.day_offset);
-                const leadDayOffset = Number.isFinite(leadDayOffsetRaw) && leadDayOffsetRaw > 0
-                    ? Math.floor(leadDayOffsetRaw)
-                    : 0;
-                const defaultNextLeadAtMs = alignCampaignScheduleToSendWindow(
-                    stepBaseMs + (leadDayOffset * 24 * 60 * 60 * 1000),
-                    sendWindowConfig
-                );
-                const nextLeadAtMs = nextLeadAtMsByDayOffset.has(leadDayOffset)
-                    ? Number(nextLeadAtMsByDayOffset.get(leadDayOffset))
-                    : defaultNextLeadAtMs;
-                const scheduledAt = new Date(nextLeadAtMs).toISOString();
+                const leadKey = String(leadId);
+                const assignmentMeta = assignmentMetaByLead[leadKey] || null;
+                const rawStepAt = Number(nextStepAtByLead.get(leadKey));
+                const safeStepAt = Number.isFinite(rawStepAt)
+                    ? rawStepAt
+                    : alignCampaignScheduleToSendWindow(baseStartMs, sendWindowConfig);
+                const currentStepAt = alignCampaignScheduleToSendWindow(safeStepAt, sendWindowConfig);
+                const scheduledAt = new Date(currentStepAt).toISOString();
 
                 await queueService.add({
 
@@ -14456,7 +15044,7 @@ async function queueCampaignMessages(campaign, options = {}) {
 
                     campaignId: campaign.id,
 
-                    sessionId: sessionAssignments[String(leadId)] || null,
+                    sessionId: sessionAssignments[leadKey] || null,
 
                     isFirstContact: stepIndex === 0,
 
@@ -14474,10 +15062,10 @@ async function queueCampaignMessages(campaign, options = {}) {
 
                 queuedCount += 1;
 
-                nextLeadAtMsByDayOffset.set(
-                    leadDayOffset,
+                nextStepAtByLead.set(
+                    leadKey,
                     addCampaignDelayRespectingSendWindow(
-                        nextLeadAtMs,
+                        currentStepAt,
                         randomIntBetween(delayMinMs, delayMaxMs),
                         sendWindowConfig
                     )
@@ -14564,6 +15152,25 @@ async function rollbackFailedCampaignCreation(campaignId) {
     }
 }
 
+function getSafeCampaignApiErrorMessage(error, fallbackMessage) {
+    const rawMessage = String(error?.message || '').trim();
+    if (!rawMessage) return fallbackMessage;
+
+    const unsafeMessagePatterns = [
+        /column\s+.*\s+does not exist/i,
+        /relation\s+.*\s+does not exist/i,
+        /syntax error at or near/i,
+        /SQLSTATE/i,
+        /password authentication failed/i,
+        /database/i
+    ];
+
+    if (unsafeMessagePatterns.some((pattern) => pattern.test(rawMessage))) {
+        return fallbackMessage;
+    }
+
+    return rawMessage;
+}
 
 app.get('/api/campaigns', authenticate, async (req, res) => {
 
@@ -14796,7 +15403,9 @@ app.post('/api/campaigns', authenticate, async (req, res) => {
             await rollbackFailedCampaignCreation(createdCampaignId);
         }
 
-        res.status(400).json({ error: error.message });
+        console.error('[campaign:create] Falha ao criar campanha:', error?.message || error);
+        const message = getSafeCampaignApiErrorMessage(error, 'Nao foi possivel criar a campanha');
+        res.status(400).json({ error: message });
 
     }
 
@@ -14837,6 +15446,14 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
             : null;
         const payload = sanitizeCampaignPayload(req.body, { applyDefaultType: false });
         const requestedStatus = String(payload?.status || '').trim().toLowerCase();
+        const currentCampaignStatus = String(campaign.status || '').trim().toLowerCase();
+        const nextCampaignStatus = requestedStatus || currentCampaignStatus;
+        const startAtProvided = Object.prototype.hasOwnProperty.call(payload, 'start_at');
+        const previousStartAtMs = parseCampaignStartAt(campaign?.start_at);
+        const nextStartAtMs = startAtProvided
+            ? parseCampaignStartAt(payload?.start_at)
+            : previousStartAtMs;
+        const startAtChanged = startAtProvided && previousStartAtMs !== nextStartAtMs;
         const shouldActivate = requestedStatus === 'active' && (campaign.status !== 'active' || restartRequested);
         let shouldQueue = false;
         if (shouldActivate) {
@@ -14849,6 +15466,10 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
             }
             shouldQueue = restartRequested ? true : !hasPendingOrProcessing;
         }
+        const shouldReschedulePendingStartAt = startAtChanged
+            && !shouldQueue
+            && !restartRequested
+            && nextCampaignStatus === 'active';
         const payloadBeforeQueue = { ...payload };
         if (shouldQueue) {
             // Evita deixar campanha "ativa" quando o enfileiramento falha.
@@ -14878,13 +15499,37 @@ app.put('/api/campaigns/:id', authenticate, async (req, res) => {
                 owner_user_id: ownerScopeUserId || undefined
             }));
             updatedCampaign = await attachCampaignQueueState(updatedCampaign);
+        } else if (
+            shouldReschedulePendingStartAt
+            && updatedCampaign
+            && String(updatedCampaign.status || '').trim().toLowerCase() === 'active'
+        ) {
+            const rescheduleResult = await reschedulePendingCampaignQueueByStartAt(
+                updatedCampaign,
+                campaign.start_at
+            );
+            queueResult = {
+                ...queueResult,
+                rescheduled: Number(rescheduleResult?.updated || 0) > 0,
+                rescheduled_pending: Number(rescheduleResult?.updated || 0),
+                reschedule_reason: rescheduleResult?.reason || null,
+                reschedule_delta_ms: Number(rescheduleResult?.delta_ms || 0) || 0
+            };
+
+            updatedCampaign = await attachCampaignSenderAccounts(await Campaign.findById(req.params.id, {
+                created_by: scopedUserId || undefined,
+                owner_user_id: ownerScopeUserId || undefined
+            }));
+            updatedCampaign = await attachCampaignQueueState(updatedCampaign);
         }
 
         res.json({ success: true, campaign: updatedCampaign, queue: queueResult });
 
     } catch (error) {
 
-        res.status(400).json({ error: error.message });
+        console.error('[campaign:update] Falha ao atualizar campanha:', error?.message || error);
+        const message = getSafeCampaignApiErrorMessage(error, 'Nao foi possivel atualizar a campanha');
+        res.status(400).json({ error: message });
 
     }
 
@@ -17232,7 +17877,7 @@ app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
 
             filename: req.file.filename,
 
-            originalname: req.file.originalname,
+            originalname: `${sanitizeUploadBaseName(req.file.originalname || '')}${normalizeUploadExtension(req.file.originalname || '')}`,
 
             mimetype: req.file.mimetype,
 

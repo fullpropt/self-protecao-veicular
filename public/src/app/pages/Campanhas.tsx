@@ -96,7 +96,7 @@ export default function Campanhas() {
             color: var(--gray-500);
             align-items: center;
             justify-content: center;
-            background: rgba(148, 163, 184, 0.12);
+            background: rgba(var(--primary-rgb), 0.14);
             transition: transform 0.2s ease;
         }
         .campaign-card.is-expanded .campaign-expand-icon {
@@ -109,6 +109,8 @@ export default function Campanhas() {
             font-size: 18px;
             font-weight: 700;
             margin: 0 0 5px;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
         }
         .campaign-date {
             font-size: 12px;
@@ -116,11 +118,18 @@ export default function Campanhas() {
         }
         .campaign-body {
             padding: 20px;
+            min-width: 0;
+        }
+        .campaign-description {
+            color: var(--gray-600);
+            margin-bottom: 15px;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
         }
         .campaign-stats {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
             margin-bottom: 20px;
             width: 100%;
         }
@@ -130,25 +139,66 @@ export default function Campanhas() {
             background: var(--gray-50);
             border-radius: var(--border-radius);
             min-width: 0;
+            min-height: 74px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         .campaign-stat-value {
             font-size: 20px;
             font-weight: 700;
+            line-height: 1.1;
+            overflow-wrap: anywhere;
         }
         .campaign-stat-label {
             font-size: 11px;
             color: var(--gray-500);
             text-transform: uppercase;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
         }
         .campaign-progress {
             margin-top: 15px;
+        }
+        .campaign-progress-track {
+            position: relative;
+            height: 20px;
+            border-radius: 999px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: color-mix(in srgb, var(--gray-100) 88%, transparent);
+        }
+        .campaign-progress-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            border-radius: inherit;
+            background: var(--success);
+            transition: width 220ms ease;
+        }
+        .campaign-progress-label {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            pointer-events: none;
+        }
+        .campaign-progress-label.on-fill {
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+        }
+        .campaign-progress-label.on-track {
+            color: var(--gray-700);
         }
         .campaign-footer {
             padding: 15px 20px;
             background: var(--gray-50);
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
             flex-wrap: wrap;
         }
@@ -161,9 +211,13 @@ export default function Campanhas() {
             flex-wrap: wrap;
             justify-content: flex-end;
             margin-left: auto;
+            flex: 1 1 220px;
+            min-width: 0;
         }
         .campaign-actions .btn {
-            flex: 0 0 auto;
+            flex: 0 1 auto;
+            min-width: 0;
+            white-space: nowrap;
         }
         @media (max-width: 900px) {
             .campaign-stats {
@@ -172,7 +226,7 @@ export default function Campanhas() {
             }
             .campaign-footer {
                 flex-direction: column;
-                align-items: center;
+                align-items: stretch;
             }
             .campaign-footer > .badge {
                 margin-bottom: 4px;
@@ -180,7 +234,7 @@ export default function Campanhas() {
             .campaign-actions {
                 width: 100%;
                 margin-left: 0;
-                justify-content: center;
+                justify-content: flex-start;
             }
         }
         @media (max-width: 768px) {
@@ -259,7 +313,7 @@ export default function Campanhas() {
         }
         @media (max-width: 420px) {
             .campaign-stats {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
                 gap: 8px;
             }
         }
@@ -486,6 +540,9 @@ export default function Campanhas() {
             flex-direction: column;
             gap: 10px;
         }
+        .campaign-variations-panel[hidden] {
+            display: none !important;
+        }
         .campaign-variations-header {
             display: flex;
             align-items: center;
@@ -559,6 +616,81 @@ export default function Campanhas() {
         .campaign-variation-action.danger:hover {
             border-color: rgba(var(--danger-rgb, 220, 38, 38), 0.35);
             color: var(--danger);
+        }
+        .campaign-drip-steps-panel {
+            margin-top: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--surface) 88%, var(--gray-50) 12%);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .campaign-drip-steps-panel[hidden] {
+            display: none !important;
+        }
+        .campaign-drip-steps-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .campaign-drip-steps-title {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        .campaign-drip-steps-help {
+            margin: 0;
+            color: var(--gray-500);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .campaign-drip-steps-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .campaign-drip-step-item {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 10px;
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .campaign-drip-step-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .campaign-drip-step-label {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        .campaign-drip-step-remove {
+            border: 1px solid var(--border-color);
+            background: var(--gray-50);
+            color: var(--gray-700);
+            border-radius: 7px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .campaign-drip-step-remove:hover {
+            border-color: rgba(var(--danger-rgb, 220, 38, 38), 0.35);
+            color: var(--danger);
+        }
+        .campaign-drip-step-input {
+            min-height: 96px;
+            resize: vertical;
         }
         .campaign-variation-card-preview {
             margin: 0;
@@ -716,6 +848,13 @@ export default function Campanhas() {
                       <form id="campaignForm">
                           <input type="hidden" id="campaignId" />
                           <div className="form-group">
+                              <label className="form-label required">Tipo</label>
+                              <select className="form-select" id="campaignType">
+                                  <option value="broadcast">Transmissão Única</option>
+                                  <option value="drip">Sequência (Drip)</option>
+                              </select>
+                          </div>
+                          <div className="form-group">
                               <label className="form-label required">Nome da Campanha</label>
                               <input type="text" className="form-input" id="campaignName" required placeholder="Ex: Promoção Janeiro" />
                           </div>
@@ -725,23 +864,13 @@ export default function Campanhas() {
                               <textarea className="form-textarea" id="campaignDescription" rows="2" placeholder="Descreva o objetivo da campanha"></textarea>
                           </div>
       
-                          <div className="form-row">
-                              <div className="form-group">
-                                  <label className="form-label">Tipo</label>
-                                  <select className="form-select" id="campaignType">
-                                      <option value="broadcast">Transmissão Única</option>
-                                      <option value="drip">Sequência (Drip)</option>
-                                  </select>
-                              </div>
-                              <div className="form-group">
-                                  <label className="form-label">Distribuição</label>
-                                  <select className="form-select" id="campaignDistributionStrategy">
-                                      <option value="single">Conta única</option>
-                                      <option value="round_robin">Rotativo</option>
-                                      <option value="weighted_round_robin">Rotativo por peso</option>
-                                      <option value="random">Aleatório</option>
-                                  </select>
-                              </div>
+                          <div className="form-group">
+                              <label className="form-label">Distribuição</label>
+                              <select className="form-select" id="campaignDistributionStrategy">
+                                  <option value="round_robin">Rotativo</option>
+                                  <option value="weighted_round_robin">Rotativo por peso</option>
+                                  <option value="random">Aleatório</option>
+                              </select>
                           </div>
       
                           <div className="form-group">
@@ -792,7 +921,7 @@ export default function Campanhas() {
       
 
                           <div className="form-group">
-                              <label className="form-label required">Mensagem</label>
+                              <label className="form-label required" id="campaignMessageLabel">Mensagem</label>
                               <div className="campaign-message-editor">
                                   <textarea className="form-textarea" id="campaignMessage" rows="5" placeholder="Digite a mensagem da campanha..."></textarea>
                                   <div className="campaign-message-tools">
@@ -819,7 +948,7 @@ export default function Campanhas() {
                                       </div>
                                   </div>
                               </div>
-                              <div className="campaign-variations-panel">
+                              <div className="campaign-variations-panel" id="campaignBroadcastVariationsSection">
                                   <div className="campaign-variations-header">
                                       <div>
                                           <p className="campaign-variations-title">Variações</p>
@@ -843,6 +972,16 @@ export default function Campanhas() {
                                   </div>
 
                                   <button type="button" className="btn btn-outline campaign-variation-create-btn" id="campaignCreateVariationBtn"><span className="icon icon-add icon-sm"></span> Criar variação</button>
+                              </div>
+                              <div className="campaign-drip-steps-panel" id="campaignDripSequenceSection" hidden>
+                                  <div className="campaign-drip-steps-header">
+                                      <p className="campaign-drip-steps-title">Etapas da sequência</p>
+                                      <button type="button" className="btn btn-outline" id="campaignAddDripStepBtn"><span className="icon icon-add icon-sm"></span> Adicionar etapa</button>
+                                  </div>
+                                  <p className="campaign-drip-steps-help">
+                                      A mensagem principal acima será a <strong>Etapa 1</strong>. Use o botão <strong>Adicionar etapa</strong> para criar as próximas mensagens da sequência.
+                                  </p>
+                                  <div className="campaign-drip-steps-list" id="campaignDripStepsList"></div>
                               </div>
                           </div>
       

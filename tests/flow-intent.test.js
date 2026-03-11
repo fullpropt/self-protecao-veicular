@@ -82,6 +82,383 @@ describe('FlowService intent routing', () => {
 });
 
 describe('FlowService intent routing compatibility', () => {
+    test('buildAwaitingInputMenuPayload monta menu com opcoes das saidas do no', () => {
+        const service = new FlowService();
+        const waitNode = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Escolha uma opcao:',
+                menuButtonText: 'Abrir menu',
+                menuSectionTitle: 'Menu principal',
+                outputEntryLabels: {
+                    default: 'Quero comprar',
+                    'path-2': 'Quero atendimento humano'
+                }
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [waitNode],
+                edges: [
+                    { source: 'wait-menu', target: 'buy-node', sourceHandle: 'default' },
+                    { source: 'wait-menu', target: 'human-node', sourceHandle: 'path-2' }
+                ]
+            },
+            variables: {}
+        };
+
+        const payload = service.buildAwaitingInputMenuPayload(execution, waitNode);
+        expect(payload).toBeTruthy();
+        expect(payload.mediaType).toBe('list');
+        expect(payload.content).toBe('Escolha uma opcao:');
+        expect(payload.listButtonText).toBe('Abrir menu');
+        expect(payload.listSections[0].title).toBe('Menu principal');
+        expect(payload.listSections[0].rows).toEqual([
+            expect.objectContaining({ rowId: 'flow-handle:default', title: 'Quero comprar' }),
+            expect.objectContaining({ rowId: 'flow-handle:path-2', title: 'Quero atendimento humano' })
+        ]);
+    });
+
+    test('evaluateConditionEdge usa selectionId do menu para escolher a saida correta', () => {
+        const service = new FlowService();
+        const flow = {
+            nodes: [],
+            edges: [
+                { source: 'wait-menu', target: 'buy-node', sourceHandle: 'default' },
+                { source: 'wait-menu', target: 'human-node', sourceHandle: 'path-2' }
+            ]
+        };
+        const node = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                outputEntryLabels: {
+                    default: 'Comprar',
+                    'path-2': 'Humano'
+                }
+            }
+        };
+
+        const edge = service.evaluateConditionEdge(
+            flow,
+            node,
+            'qualquer texto',
+            'default',
+            { selectionId: 'flow-handle:path-2' }
+        );
+
+        expect(edge).toBeTruthy();
+        expect(edge.target).toBe('human-node');
+    });
+
+    test('buildIntentNodeMenuPayload monta menu com rotas de intencao', () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-menu',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Escolha sua opcao:',
+                menuButtonText: 'Abrir Menu',
+                menuSectionTitle: 'Intencoes',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Fisica', phrases: '' },
+                    { id: 'route-models', label: 'Modelos', phrases: '' }
+                ],
+                outputEntryLabels: {
+                    'route-store': 'Quero loja física'
+                }
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-menu', target: 'store-node', sourceHandle: 'route-store' },
+                    { source: 'intent-menu', target: 'models-node', sourceHandle: 'route-models' },
+                    { source: 'intent-menu', target: 'fallback-node', sourceHandle: 'default' }
+                ]
+            },
+            variables: {}
+        };
+
+        const payload = service.buildIntentNodeMenuPayload(execution, intentNode);
+        expect(payload).toBeTruthy();
+        expect(payload.mediaType).toBe('list');
+        expect(payload.content).toBe('Escolha sua opcao:');
+        expect(payload.listButtonText).toBe('Abrir Menu');
+        expect(payload.listSections[0].rows).toEqual([
+            expect.objectContaining({ rowId: 'flow-handle:route-store', title: 'Quero loja física' }),
+            expect.objectContaining({ rowId: 'flow-handle:route-models', title: 'Modelos' }),
+            expect.objectContaining({ rowId: 'flow-handle:default', title: 'Outra resposta' })
+        ]);
+    });
+
+    test('buildIntentNodeLinkPayload monta botao de link e ignora menu interativo', () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-link',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Acesse nosso site:',
+                menuButtonText: 'Acessar site',
+                menuButtonUrl: 'zapvender.com'
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-link', target: 'next-node', sourceHandle: 'default' }
+                ]
+            },
+            variables: {}
+        };
+
+        const linkPayload = service.buildIntentNodeLinkPayload(execution, intentNode);
+        expect(linkPayload).toEqual(expect.objectContaining({
+            mediaType: 'button_url',
+            content: 'Acesse nosso site:',
+            buttonText: 'Acessar site',
+            buttonUrl: 'https://zapvender.com/'
+        }));
+        expect(service.buildIntentNodeMenuPayload(execution, intentNode)).toBeNull();
+    });
+
+    test('buildIntentNodeMenuPayload preserva emoji na mensagem do menu', () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-menu-emoji',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Escolha uma opção 👨‍👩‍👧‍👦✨',
+                menuButtonText: 'Ver Menu',
+                menuSectionTitle: 'Intenções',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Física', phrases: '' }
+                ]
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-menu-emoji', target: 'store-node', sourceHandle: 'route-store' }
+                ]
+            },
+            variables: {}
+        };
+
+        const payload = service.buildIntentNodeMenuPayload(execution, intentNode);
+        expect(payload).toBeTruthy();
+        expect(payload.content).toBe('Escolha uma opção 👨‍👩‍👧‍👦✨');
+    });
+
+    test('continueFlow em intencao modo menu prioriza selectionId para escolher a rota', async () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-menu',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Fisica', phrases: '' },
+                    { id: 'route-models', label: 'Modelos', phrases: '' }
+                ]
+            }
+        };
+
+        const execution = {
+            id: 321,
+            flow: {
+                id: 77,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-menu', target: 'store-node', sourceHandle: 'route-store' },
+                    { source: 'intent-menu', target: 'models-node', sourceHandle: 'route-models' },
+                    { source: 'intent-menu', target: 'fallback-node', sourceHandle: 'default' }
+                ]
+            },
+            conversation: { id: 99 },
+            currentNode: 'intent-menu',
+            variables: {}
+        };
+
+        const pickSpy = jest.spyOn(service, 'pickTriggerIntentHandle').mockResolvedValue(null);
+        const goToNextSpy = jest.spyOn(service, 'goToNextNode').mockResolvedValue();
+
+        await service.continueFlow(execution, {
+            text: 'Loja Fisica',
+            selectionId: 'flow-handle:route-store',
+            selectionText: 'Loja Fisica'
+        });
+
+        expect(goToNextSpy).toHaveBeenCalledWith(execution, intentNode, 'route-store');
+        expect(pickSpy).not.toHaveBeenCalled();
+
+        pickSpy.mockRestore();
+        goToNextSpy.mockRestore();
+    });
+
+    test('maybeSendIntentNodeMenu envia menu para no trigger em modo menu', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const triggerNode = {
+            id: 'trigger-intent-menu',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Qual categoria voce procura?',
+                menuButtonText: 'Ver Categorias',
+                menuSectionTitle: 'Categorias',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Fisica', phrases: '' },
+                    { id: 'route-models', label: 'Modelos', phrases: '' }
+                ]
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 88,
+                nodes: [triggerNode],
+                edges: [
+                    { source: 'trigger-intent-menu', target: 'store-node', sourceHandle: 'route-store' },
+                    { source: 'trigger-intent-menu', target: 'models-node', sourceHandle: 'route-models' },
+                    { source: 'trigger-intent-menu', target: 'fallback-node', sourceHandle: 'default' }
+                ]
+            },
+            conversation: { id: 100, session_id: 'session-1' },
+            lead: { id: 10, phone: '5511999999999', jid: '5511999999999@s.whatsapp.net' },
+            variables: {}
+        };
+
+        const sent = await service.maybeSendIntentNodeMenu(execution, triggerNode);
+
+        expect(sent).toBe(true);
+        expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+            mediaType: 'list',
+            content: 'Qual categoria voce procura?'
+        }));
+    });
+
+    test('maybeSendIntentNodeLinkButton envia botao de link para no de intencao', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const intentNode = {
+            id: 'intent-link',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Clique abaixo para acessar o site.',
+                menuButtonText: 'Acessar site',
+                menuButtonUrl: 'https://zapvender.com'
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 98,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-link', target: 'next-node', sourceHandle: 'default' }
+                ]
+            },
+            conversation: { id: 100, session_id: 'session-1' },
+            lead: { id: 10, phone: '5511999999999', jid: '5511999999999@s.whatsapp.net' },
+            variables: {}
+        };
+
+        const sent = await service.maybeSendIntentNodeLinkButton(execution, intentNode);
+
+        expect(sent).toBe(true);
+        expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+            mediaType: 'button_url',
+            content: 'Clique abaixo para acessar o site.',
+            buttonText: 'Acessar site',
+            buttonUrl: 'https://zapvender.com/'
+        }));
+    });
+
+    test('goToNextNode on intent em modo link nao envia resposta oculta da saida default', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const intentNode = {
+            id: 'intent-link',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                menuButtonUrl: 'https://zapvender.com',
+                intentDefaultResponse: 'Mensagem antiga'
+            }
+        };
+
+        const execution = {
+            flow: {
+                id: 39,
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-link', target: 'next-node', sourceHandle: 'default', targetHandle: 'default' }
+                ]
+            },
+            conversation: { id: 56, session_id: 'session-1' },
+            lead: { id: 27, phone: '5511966666666', jid: '5511966666666@s.whatsapp.net' },
+            variables: {}
+        };
+
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
+
+        await service.goToNextNode(execution, intentNode, 'default');
+
+        expect(sendMock).not.toHaveBeenCalled();
+        expect(executeSpy).toHaveBeenCalledWith(execution, 'next-node', 'default');
+
+        executeSpy.mockRestore();
+    });
+
+    test('maybeSendTriggerWelcomeMessage ignora boas-vindas ocultas em trigger modo menu', async () => {
+        const service = new FlowService();
+        const sendMock = jest.fn().mockResolvedValue();
+        service.init(sendMock);
+
+        const triggerNode = {
+            id: 'trigger-intent-menu',
+            type: 'trigger',
+            subtype: 'intent',
+            data: {
+                responseMode: 'menu',
+                triggerWelcomeEnabled: true,
+                triggerWelcomeContent: 'Boas-vindas antiga'
+            }
+        };
+
+        const sent = await service.maybeSendTriggerWelcomeMessage({
+            flow: { id: 88 },
+            conversation: { id: 100, session_id: 'session-1' },
+            lead: { id: 10, phone: '5511999999999', jid: '5511999999999@s.whatsapp.net' },
+            variables: {}
+        }, triggerNode);
+
+        expect(sent).toBe(false);
+        expect(sendMock).not.toHaveBeenCalled();
+    });
+
     test('continueFlow treats trigger keyword node as intent routing node', async () => {
         const service = new FlowService();
         const node = {
@@ -886,6 +1263,127 @@ describe('FlowService intent routing compatibility', () => {
             expect.objectContaining({ text: 'oi' })
         );
         expect(result).toEqual({ id: 456 });
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
+    });
+
+    test('processIncomingMessage starts session-scoped menu flow on first received message', async () => {
+        const service = new FlowService();
+        intentClassifier.classifyKeywordFlowIntent.mockReset();
+
+        const scopedMenuFlow = {
+            id: 301,
+            name: 'Menu MOMNT',
+            trigger_type: 'keyword',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [
+                {
+                    id: 'trigger-menu-session',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opção'
+                    }
+                }
+            ],
+            edges: []
+        };
+        const globalMenuFlow = {
+            id: 302,
+            name: 'Menu Global',
+            trigger_type: 'keyword',
+            session_id: null,
+            priority: 999,
+            nodes: [
+                {
+                    id: 'trigger-menu-global',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opção global'
+                    }
+                }
+            ],
+            edges: []
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([globalMenuFlow, scopedMenuFlow]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 901 });
+
+        const result = await service.processIncomingMessage(
+            { text: 'oi' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: true }
+        );
+
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            scopedMenuFlow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'oi' })
+        );
+        expect(keywordSpy).not.toHaveBeenCalled();
+        expect(intentClassifier.classifyKeywordFlowIntent).not.toHaveBeenCalled();
+        expect(newContactSpy).not.toHaveBeenCalled();
+        expect(result).toEqual({ id: 901 });
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
+    });
+
+    test('processIncomingMessage does not auto-start menu flow after first message', async () => {
+        const service = new FlowService();
+        intentClassifier.classifyKeywordFlowIntent.mockReset();
+        const menuFlow = {
+            id: 303,
+            name: 'Menu MOMNT',
+            trigger_type: 'keyword',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [
+                {
+                    id: 'trigger-menu-session',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opção'
+                    }
+                }
+            ],
+            edges: []
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([menuFlow]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 902 });
+        intentClassifier.classifyKeywordFlowIntent.mockResolvedValue({ status: 'no_match' });
+
+        const result = await service.processIncomingMessage(
+            { text: 'oi de novo' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
+        );
+
+        expect(startFlowSpy).not.toHaveBeenCalled();
+        expect(keywordSpy).toHaveBeenCalled();
+        expect(newContactSpy).not.toHaveBeenCalled();
+        expect(result).toBeNull();
 
         resolveExecutionSpy.mockRestore();
         keywordSpy.mockRestore();

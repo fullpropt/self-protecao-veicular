@@ -2,6 +2,7 @@
 
 // Estado do construtor
 type NodeType = 'trigger' | 'intent' | 'message' | 'message_once' | 'wait' | 'condition' | 'delay' | 'transfer' | 'tag' | 'status' | 'webhook' | 'event' | 'end';
+type FlowBuilderMode = 'humanized' | 'menu';
 type OutputActionType = 'event' | 'status' | 'tag' | 'webhook';
 type OutputActionItem = {
     id: string;
@@ -41,6 +42,14 @@ type NodeData = {
     onceRepeatMode?: string;
     onceRepeatValue?: number;
     timeout?: number;
+    flowBuilderMode?: FlowBuilderMode;
+    responseMode?: 'text' | 'menu';
+    menuPrompt?: string;
+    menuButtonText?: string;
+    menuButtonUrl?: string;
+    menuTitle?: string;
+    menuFooter?: string;
+    menuSectionTitle?: string;
     conditions?: Array<{ value: string; next?: string }>;
     seconds?: number;
     message?: string;
@@ -142,11 +151,14 @@ let currentFlowId: number | null = null;
 let currentFlowName = '';
 let currentFlowIsActive = true;
 let currentFlowSessionId = '';
+let currentFlowBuilderMode: FlowBuilderMode = 'humanized';
 let flowHasUnsavedChanges = false;
+let flowPreviewOpen = false;
 let pendingNodeDraft: Partial<NodeData> | null = null;
 let pendingNodeDraftId: string | null = null;
 let intentPropertySectionExpandedState: Record<string, boolean> = {};
 let flowsCache: FlowSummary[] = [];
+let pendingFlowListSessionScopes: Record<number, string> = {};
 let renamingFlowId: number | null = null;
 let renamingFlowDraft = '';
 let zoom = 1;
@@ -764,6 +776,86 @@ function isIntentTrigger(node?: FlowNode | null) {
     return node.type === 'trigger' && (node.subtype === 'keyword' || node.subtype === 'intent');
 }
 
+function normalizeFlowBuilderMode(value: unknown): FlowBuilderMode {
+    return String(value || '').trim().toLowerCase() === 'menu' ? 'menu' : 'humanized';
+}
+
+function inferFlowBuilderModeFromNodes(nodeList: FlowNode[] = nodes) {
+    const triggerNode = nodeList.find((node) => node.type === 'trigger');
+    const storedMode = triggerNode?.data?.flowBuilderMode;
+    if (storedMode) {
+        return normalizeFlowBuilderMode(storedMode);
+    }
+
+    const hasMenuIntentNode = nodeList.some((node) => (
+        isIntentTrigger(node)
+        && String(node?.data?.responseMode || '').trim().toLowerCase() === 'menu'
+    ));
+    return hasMenuIntentNode ? 'menu' : 'humanized';
+}
+
+function getCurrentFlowBuilderMode() {
+    return normalizeFlowBuilderMode(currentFlowBuilderMode);
+}
+
+function isMenuInteractiveFlowMode(value: unknown = currentFlowBuilderMode) {
+    return normalizeFlowBuilderMode(value) === 'menu';
+}
+
+function isMenuInteractiveIntentNode(node?: FlowNode | null) {
+    return isIntentTrigger(node) && isMenuInteractiveFlowMode(node?.data?.flowBuilderMode || currentFlowBuilderMode);
+}
+
+function getIntentMenuButtonUrl(node?: FlowNode | null) {
+    return String(node?.data?.menuButtonUrl || '').trim();
+}
+
+function isProtectedFlowBoundaryNode(node?: FlowNode | null) {
+    if (!node) return false;
+    return node.type === 'trigger' || node.type === 'end';
+}
+
+function clearOutputEntryLabelsForNode(node?: FlowNode | null) {
+    if (!node) return;
+    node.data.outputEntryLabels = {};
+    edges.forEach((edge) => {
+        if (edge.source === node.id) {
+            delete edge.inputLabel;
+        }
+    });
+}
+
+function applyFlowBuilderModeToIntentNode(node: FlowNode | null | undefined, mode: FlowBuilderMode = currentFlowBuilderMode) {
+    if (!node || !isIntentTrigger(node)) return;
+
+    const normalizedMode = normalizeFlowBuilderMode(mode);
+    node.data.flowBuilderMode = normalizedMode;
+    node.data.responseMode = normalizedMode === 'menu' ? 'menu' : 'text';
+    node.data.menuPrompt = String(node.data.menuPrompt || '').trim() || 'Escolha uma opção no menu abaixo:';
+    node.data.menuButtonText = String(node.data.menuButtonText || '').trim() || 'Ver Menu';
+    node.data.menuButtonUrl = String(node.data.menuButtonUrl || '').trim();
+    node.data.menuSectionTitle = String(node.data.menuSectionTitle || '').trim() || 'Opções';
+    node.data.menuTitle = String(node.data.menuTitle || '').trim();
+    node.data.menuFooter = String(node.data.menuFooter || '').trim();
+
+    if (normalizedMode === 'menu' && node.type === 'trigger') {
+        node.data.triggerWelcomeEnabled = false;
+        node.data.triggerWelcomeContent = '';
+        node.data.triggerWelcomeDelaySeconds = 0;
+        node.data.triggerWelcomeRepeatMode = 'always';
+        node.data.triggerWelcomeRepeatValue = 1;
+    }
+
+    if (normalizedMode === 'menu') {
+        clearOutputEntryLabelsForNode(node);
+    }
+}
+
+function syncFlowBuilderModeAcrossIntentNodes(mode: FlowBuilderMode = currentFlowBuilderMode) {
+    currentFlowBuilderMode = normalizeFlowBuilderMode(mode);
+    nodes.forEach((node) => applyFlowBuilderModeToIntentNode(node, currentFlowBuilderMode));
+}
+
 function normalizeRouteId(value: string) {
     return String(value || '')
         .trim()
@@ -977,8 +1069,15 @@ function getOutputHandles(node: FlowNode) {
     const routes = getIntentRoutes(node);
     const routeHandles = routes.map((route) => ({
         handle: route.id || normalizeRouteId(route.label || route.phrases || ''),
-        label: route.label || route.phrases || 'Intenção'
+        label: route.label || route.phrases || (isMenuInteractiveIntentNode(node) ? 'Opção' : 'Intenção')
     }));
+
+    if (isMenuInteractiveIntentNode(node)) {
+        if (getIntentMenuButtonUrl(node)) {
+            return [{ handle: DEFAULT_HANDLE, label: '' }];
+        }
+        return routeHandles;
+    }
 
     return [...routeHandles, { handle: DEFAULT_HANDLE, label: 'Outra resposta' }];
 }
@@ -1216,6 +1315,14 @@ function getNodeTypeLabel(node: FlowNode) {
     return labels[node.type] || 'Bloco';
 }
 
+function getNodePropertiesSummaryLabel(node: FlowNode) {
+    if (isIntentTrigger(node)) {
+        return node.type === 'trigger' ? 'Início' : 'Bloco';
+    }
+
+    return getNodeTypeLabel(node);
+}
+
 function clientToFlowCoords(clientX: number, clientY: number) {
     const flowCanvas = document.getElementById('flowCanvas') as HTMLElement | null;
     if (!flowCanvas) return { x: 0, y: 0 };
@@ -1416,17 +1523,18 @@ function buildFlowSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
         .sort((a, b) => getFlowWhatsappSessionDisplayName(a).localeCompare(getFlowWhatsappSessionDisplayName(b), 'pt-BR'));
     const knownIds = new Set(options.map((item) => normalizeFlowSessionId(item.session_id)));
     const normalizedSelectedSessionId = normalizeFlowSessionId(selectedSessionId);
+    const isAllSessionsSelected = !normalizedSelectedSessionId;
 
     const entries = [
-        `<option value="${FLOW_ALL_SESSIONS_VALUE}">Todas as contas WhatsApp</option>`,
+        `<option value="${FLOW_ALL_SESSIONS_VALUE}"${isAllSessionsSelected ? ' selected' : ''}>Todas as contas WhatsApp</option>`,
         ...options.map((item) => {
             const sessionId = normalizeFlowSessionId(item.session_id);
-            return `<option value="${escapeHtml(sessionId)}">${escapeHtml(getFlowSessionScopeOptionLabel(item))}</option>`;
+            return `<option value="${escapeHtml(sessionId)}"${sessionId === normalizedSelectedSessionId ? ' selected' : ''}>${escapeHtml(getFlowSessionScopeOptionLabel(item))}</option>`;
         })
     ];
 
     if (normalizedSelectedSessionId && !knownIds.has(normalizedSelectedSessionId)) {
-        entries.push(`<option value="${escapeHtml(normalizedSelectedSessionId)}">Conta indisponível (${escapeHtml(normalizedSelectedSessionId)})</option>`);
+        entries.push(`<option value="${escapeHtml(normalizedSelectedSessionId)}" selected>Conta indisponível (${escapeHtml(normalizedSelectedSessionId)})</option>`);
     }
 
     return entries.join('');
@@ -1593,6 +1701,7 @@ function initFlowBuilder() {
     renderCurrentFlowName();
     setFlowDirtyState(false);
     bindFlowAiAssistant();
+    setFlowPreviewOpen(false);
     renderFlowVariableTags();
     loadFlowVariableFields();
     loadFlowWhatsappSessions({ silent: true });
@@ -1711,6 +1820,10 @@ function addNode(type: NodeType, subtype: string, x: number, y: number) {
         position: { x, y },
         data: getDefaultNodeData(type, subtype)
     };
+
+    if (isIntentTrigger(node)) {
+        applyFlowBuilderModeToIntentNode(node, getCurrentFlowBuilderMode());
+    }
     
     nodes.push(node);
     renderNode(node);
@@ -1722,19 +1835,47 @@ function buildFlowNodeId(prefix = 'node') {
     return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 }
 
-function getIntentNodeInsertPosition() {
-    if (nodes.length > 0) {
-        const reference = nodes.reduce((acc, node) => (node.position.x > acc.position.x ? node : acc), nodes[0]);
-        const preferred = selectedNode && selectedNode.position.x >= reference.position.x
-            ? selectedNode
-            : reference;
-        return {
-            x: Math.max(20, preferred.position.x + 280),
-            y: Math.max(20, preferred.position.y)
-        };
+function getIntentNodeVisualSize() {
+    const flowCanvas = document.getElementById('flowCanvas') as HTMLElement | null;
+    if (!flowCanvas) {
+        return { width: 220, height: 160 };
     }
 
-    return { x: 180, y: 180 };
+    const referenceNode = (
+        flowCanvas.querySelector('.flow-node.intent') as HTMLElement | null
+    ) || (
+        flowCanvas.querySelector('.flow-node') as HTMLElement | null
+    );
+
+    if (!referenceNode) {
+        return { width: 220, height: 160 };
+    }
+
+    const rect = referenceNode.getBoundingClientRect();
+    const width = Number.isFinite(rect.width) && rect.width > 0
+        ? rect.width / Math.max(0.01, zoom)
+        : 220;
+    const height = Number.isFinite(rect.height) && rect.height > 0
+        ? rect.height / Math.max(0.01, zoom)
+        : 160;
+
+    return { width, height };
+}
+
+function getIntentNodeInsertPosition() {
+    const flowCanvas = document.getElementById('flowCanvas') as HTMLElement | null;
+    if (!flowCanvas) return { x: 180, y: 180 };
+
+    const rect = flowCanvas.getBoundingClientRect();
+    const centerClientX = rect.left + (rect.width / 2);
+    const centerClientY = rect.top + (rect.height / 2);
+    const centerFlow = clientToFlowCoords(centerClientX, centerClientY);
+    const nodeSize = getIntentNodeVisualSize();
+
+    return {
+        x: Math.max(20, Math.round(centerFlow.x - (nodeSize.width / 2))),
+        y: Math.max(20, Math.round(centerFlow.y - (nodeSize.height / 2)))
+    };
 }
 
 function addIntentBlock() {
@@ -1743,9 +1884,10 @@ function addIntentBlock() {
     addNode('intent', '', nextPosition.x, nextPosition.y);
 }
 
-function initializeDefaultIntentFlowSkeleton(options: { selectTrigger?: boolean; markDirty?: boolean } = {}) {
+function initializeDefaultIntentFlowSkeleton(options: { selectTrigger?: boolean; markDirty?: boolean; flowBuilderMode?: FlowBuilderMode } = {}) {
     const selectTrigger = options.selectTrigger !== false;
     const markDirty = options.markDirty !== false;
+    currentFlowBuilderMode = normalizeFlowBuilderMode(options.flowBuilderMode || currentFlowBuilderMode);
     const triggerNodeId = buildFlowNodeId('trigger');
     const endNodeId = buildFlowNodeId('end');
 
@@ -1756,6 +1898,7 @@ function initializeDefaultIntentFlowSkeleton(options: { selectTrigger?: boolean;
         position: { x: 170, y: 180 },
         data: getDefaultNodeData('trigger', 'keyword')
     };
+    applyFlowBuilderModeToIntentNode(triggerNode, currentFlowBuilderMode);
 
     const endNode: FlowNode = {
         id: endNodeId,
@@ -1766,12 +1909,14 @@ function initializeDefaultIntentFlowSkeleton(options: { selectTrigger?: boolean;
     };
 
     nodes = [triggerNode, endNode];
-    edges = [{
-        source: triggerNodeId,
-        target: endNodeId,
-        sourceHandle: DEFAULT_HANDLE,
-        targetHandle: DEFAULT_HANDLE
-    }];
+    edges = isMenuInteractiveFlowMode(currentFlowBuilderMode)
+        ? []
+        : [{
+            source: triggerNodeId,
+            target: endNodeId,
+            sourceHandle: DEFAULT_HANDLE,
+            targetHandle: DEFAULT_HANDLE
+        }];
 
     const canvasContainer = document.getElementById('canvasContainer') as HTMLElement | null;
     const connectionsSvg = document.getElementById('connectionsSvg') as HTMLElement | null;
@@ -1793,11 +1938,19 @@ function initializeDefaultIntentFlowSkeleton(options: { selectTrigger?: boolean;
 function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
     const defaults = {
         trigger: {
-            label: subtype === 'keyword' || subtype === 'intent' ? 'Intenção' : 'Novo Contato',
+            label: subtype === 'keyword' || subtype === 'intent' ? 'Início' : 'Novo Contato',
             collapsed: false,
             keyword: '',
             intentRoutes: [],
             intentResponseDelaySeconds: 0,
+            flowBuilderMode: getCurrentFlowBuilderMode(),
+            responseMode: isMenuInteractiveFlowMode() ? 'menu' : 'text',
+            menuPrompt: 'Escolha uma opção no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuButtonUrl: '',
+            menuSectionTitle: 'Opções',
+            menuTitle: '',
+            menuFooter: '',
             intentDefaultResponse: '',
             intentDefaultFollowupResponse: '',
             intentDefaultFollowupResponses: [],
@@ -1815,6 +1968,14 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             keyword: '',
             intentRoutes: [],
             intentResponseDelaySeconds: 0,
+            flowBuilderMode: getCurrentFlowBuilderMode(),
+            responseMode: isMenuInteractiveFlowMode() ? 'menu' : 'text',
+            menuPrompt: 'Escolha uma opção no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuButtonUrl: '',
+            menuSectionTitle: 'Opções',
+            menuTitle: '',
+            menuFooter: '',
             intentDefaultResponse: '',
             intentDefaultFollowupResponse: '',
             intentDefaultFollowupResponses: [],
@@ -1843,8 +2004,32 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             outputActions: {},
             outputEntryLabels: {}
         },
-        wait: { label: 'Aguardar Resposta', collapsed: false, timeout: 300, outputActions: {}, outputEntryLabels: {} },
-        condition: { label: 'Condição', collapsed: false, conditions: [], outputActions: {}, outputEntryLabels: {} },
+        wait: {
+            label: 'Aguardar Resposta',
+            collapsed: false,
+            timeout: 300,
+            responseMode: 'text',
+            menuPrompt: 'Selecione uma opção no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuSectionTitle: 'Opções',
+            menuTitle: '',
+            menuFooter: '',
+            outputActions: {},
+            outputEntryLabels: {}
+        },
+        condition: {
+            label: 'Condição',
+            collapsed: false,
+            conditions: [],
+            responseMode: 'text',
+            menuPrompt: 'Selecione uma opção no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuSectionTitle: 'Opções',
+            menuTitle: '',
+            menuFooter: '',
+            outputActions: {},
+            outputEntryLabels: {}
+        },
         delay: { label: 'Delay', collapsed: false, seconds: 5, outputActions: {}, outputEntryLabels: {} },
         transfer: { label: 'Transferir', collapsed: false, message: 'Transferindo para um atendente...', outputActions: {}, outputEntryLabels: {} },
         tag: { label: 'Adicionar Tag', collapsed: false, tag: '' },
@@ -1930,6 +2115,8 @@ function renderNode(node: FlowNode) {
     const isEventCircle = node.type === 'event';
     const previewText = String(getNodePreview(node) || '').trim();
     const hasPreview = previewText.length > 0;
+    const canDuplicateOrDelete = !isProtectedFlowBoundaryNode(node);
+    const showNodeKind = !isIntentTrigger(node);
     const eventDisplayName = node.type === 'event'
         ? String(node.data.eventName || node.data.eventKey || '').trim()
         : '';
@@ -1959,17 +2146,19 @@ function renderNode(node: FlowNode) {
         <div class="flow-node-header ${node.type}">
             <span class="icon ${icons[node.type] || 'icon-empty'}"></span>
             <div class="title-group">
-                <span class="node-kind">${escapeHtml(getNodeTypeLabel(node))}</span>
+                ${showNodeKind ? `<span class="node-kind">${escapeHtml(getNodeTypeLabel(node))}</span>` : ''}
                 <span class="title">${escapeHtml(String(node.data.label || '').trim() || getNodeTypeLabel(node))}</span>
                 ${eventDisplayName ? `<span class="node-subtitle" title="${escapeHtml(eventDisplayName)}">${escapeHtml(truncateLabel(eventDisplayName, 22))}</span>` : ''}
             </div>
             <div class="node-header-actions">
-                <button class="node-header-btn duplicate-btn" title="Duplicar bloco" aria-label="Duplicar bloco" onclick="duplicateNode('${node.id}', event)">
-                    <span class="icon icon-templates icon-sm"></span>
-                </button>
-                <button class="node-header-btn delete-btn" title="Excluir bloco" aria-label="Excluir bloco" onclick="deleteNode('${node.id}')">
-                    <span class="icon icon-delete icon-sm"></span>
-                </button>
+                ${canDuplicateOrDelete ? `
+                    <button class="node-header-btn duplicate-btn" title="Duplicar bloco" aria-label="Duplicar bloco" onclick="duplicateNode('${node.id}', event)">
+                        <span class="icon icon-templates icon-sm"></span>
+                    </button>
+                    <button class="node-header-btn delete-btn" title="Excluir bloco" aria-label="Excluir bloco" onclick="deleteNode('${node.id}')">
+                        <span class="icon icon-delete icon-sm"></span>
+                    </button>
+                ` : ''}
             </div>
         </div>
         ${hasPreview ? `
@@ -2419,6 +2608,271 @@ function getNodePreview(node: FlowNode) {
     }
 }
 
+function getWhatsappPreviewMessageText(text: unknown, fallback = '') {
+    const normalized = String(text ?? '').trim();
+    return normalized || fallback;
+}
+
+function getWhatsappPreviewNodeLabel(node: FlowNode) {
+    return getWhatsappPreviewMessageText(
+        selectedNode?.id === node.id
+            ? getNodePropValue('label', node.data.label || getNodeTypeLabel(node))
+            : (node.data.label || getNodeTypeLabel(node)),
+        getNodeTypeLabel(node)
+    );
+}
+
+function buildWhatsappPreviewTextHtml(text: string) {
+    return escapeHtml(String(text || '')).replace(/\n/g, '<br>');
+}
+
+function getIntentMenuPreviewOptions(node: FlowNode) {
+    if (!isIntentTrigger(node)) return [];
+
+    const draftRoutes = selectedNode?.id === node.id
+        ? getNodePropValue('intentRoutes', null as any)
+        : null;
+    const routes = Array.isArray(draftRoutes) && draftRoutes.length > 0
+        ? draftRoutes
+        : getIntentRoutes(node);
+
+    return routes
+        .map((route: any, index: number) => getWhatsappPreviewMessageText(route?.label, `Opção ${index + 1}`))
+        .filter(Boolean)
+        .slice(0, 10);
+}
+
+function getAwaitingInputPreviewOptions(node: FlowNode) {
+    const outputEntryLabels = sanitizeOutputEntryLabelsMap(
+        selectedNode?.id === node.id
+            ? getNodePropValue('outputEntryLabels', node.data.outputEntryLabels || {})
+            : (node.data.outputEntryLabels || {})
+    );
+
+    return getOutputHandles(node)
+        .map((item, index) => {
+            const handle = edgeHandle(item.handle);
+            const title = getWhatsappPreviewMessageText(
+                outputEntryLabels[handle] || item.label,
+                handle === DEFAULT_HANDLE ? 'Outra resposta' : `Opção ${index + 1}`
+            );
+            return title;
+        })
+        .filter(Boolean)
+        .slice(0, 10);
+}
+
+function buildWhatsappPreviewBubbleHtml(options: {
+    text: string;
+    title?: string;
+    footer?: string;
+    buttonText?: string;
+    buttonIcon?: string;
+}) {
+    const bubbleText = getWhatsappPreviewMessageText(options.text, 'Mensagem vazia');
+    const bubbleTitle = getWhatsappPreviewMessageText(options.title, '');
+    const bubbleFooter = getWhatsappPreviewMessageText(options.footer, '');
+    const actionText = getWhatsappPreviewMessageText(options.buttonText, '');
+    const actionIcon = getWhatsappPreviewMessageText(options.buttonIcon, '≡');
+
+    return `
+        <div class="flow-whatsapp-preview-row">
+            <div class="flow-whatsapp-preview-bubble">
+                ${bubbleTitle ? `<div class="flow-whatsapp-preview-bubble-title">${buildWhatsappPreviewTextHtml(bubbleTitle)}</div>` : ''}
+                <div class="flow-whatsapp-preview-bubble-text">${buildWhatsappPreviewTextHtml(bubbleText)}</div>
+                ${actionText ? `
+                    <div class="flow-whatsapp-preview-action">
+                        <span class="flow-whatsapp-preview-action-icon">${escapeHtml(actionIcon)}</span>
+                        <span>${buildWhatsappPreviewTextHtml(actionText)}</span>
+                    </div>
+                ` : ''}
+                ${bubbleFooter ? `<div class="flow-whatsapp-preview-bubble-footer">${buildWhatsappPreviewTextHtml(bubbleFooter)}</div>` : ''}
+                <div class="flow-whatsapp-preview-bubble-time">15:02</div>
+            </div>
+        </div>
+    `;
+}
+
+function buildWhatsappPreviewMenuSheetHtml(sectionTitle: string, items: string[]) {
+    const safeItems = Array.isArray(items) ? items.filter(Boolean).slice(0, 10) : [];
+    return `
+        <div class="flow-whatsapp-preview-sheet">
+            <div class="flow-whatsapp-preview-sheet-header">
+                <span>Menu</span>
+                <span class="flow-whatsapp-preview-sheet-meta">${safeItems.length} opção${safeItems.length === 1 ? '' : 'ões'}</span>
+            </div>
+            <div class="flow-whatsapp-preview-sheet-section">${buildWhatsappPreviewTextHtml(sectionTitle || 'Opções')}</div>
+            <div class="flow-whatsapp-preview-sheet-list">
+                ${safeItems.length > 0 ? safeItems.map((item) => `
+                    <div class="flow-whatsapp-preview-sheet-item">
+                        <span class="flow-whatsapp-preview-sheet-item-title">${buildWhatsappPreviewTextHtml(item)}</span>
+                    </div>
+                `).join('') : `
+                    <div class="flow-whatsapp-preview-sheet-empty">Adicione opções para visualizar o menu.</div>
+                `}
+            </div>
+        </div>
+    `;
+}
+
+function renderWhatsappPreview() {
+    const container = document.getElementById('flowPreviewContent') as HTMLElement | null;
+    if (!container) return;
+
+    if (!selectedNode) {
+        container.innerHTML = `
+            <div class="flow-preview-empty-state">
+                <strong>Nenhum bloco selecionado</strong>
+                <span>Selecione um bloco para ver como a mensagem ou o menu aparecem no WhatsApp.</span>
+            </div>
+        `;
+        return;
+    }
+
+    const node = selectedNode;
+    const nodeTypeLabel = getNodeTypeLabel(node);
+    const nodeLabel = getWhatsappPreviewNodeLabel(node);
+    let bodyHtml = '';
+    let helperHtml = '';
+
+    if (node.type === 'message' || node.type === 'message_once') {
+        const content = getWhatsappPreviewMessageText(
+            getNodePropValue('content', node.data.content || ''),
+            'Digite a mensagem para visualizar a prévia.'
+        );
+        bodyHtml = buildWhatsappPreviewBubbleHtml({ text: content });
+    } else if (node.type === 'transfer') {
+        const content = getWhatsappPreviewMessageText(
+            getNodePropValue('message', node.data.message || ''),
+            'Transferindo para um atendente...'
+        );
+        bodyHtml = buildWhatsappPreviewBubbleHtml({ text: content });
+    } else {
+        const isIntentMenuNode = isIntentTrigger(node) && isMenuInteractiveIntentNode(node);
+        const isAwaitingMenuNode = (node.type === 'wait' || node.type === 'condition')
+            && String(getNodePropValue('responseMode', node.data.responseMode || 'text')).trim().toLowerCase() === 'menu';
+
+        if (isIntentMenuNode || isAwaitingMenuNode) {
+            const promptFallback = isIntentMenuNode
+                ? 'Escolha uma opção no menu abaixo:'
+                : 'Selecione uma opção no menu abaixo:';
+            const prompt = getWhatsappPreviewMessageText(
+                getNodePropValue('menuPrompt', node.data.menuPrompt || promptFallback),
+                promptFallback
+            );
+            const buttonText = getWhatsappPreviewMessageText(
+                getNodePropValue('menuButtonText', node.data.menuButtonText || 'Ver Menu'),
+                'Ver Menu'
+            );
+            const menuTitle = getWhatsappPreviewMessageText(
+                getNodePropValue('menuTitle', node.data.menuTitle || ''),
+                ''
+            );
+            const menuFooter = getWhatsappPreviewMessageText(
+                getNodePropValue('menuFooter', node.data.menuFooter || ''),
+                ''
+            );
+            const buttonUrl = getWhatsappPreviewMessageText(
+                getNodePropValue('menuButtonUrl', node.data.menuButtonUrl || ''),
+                ''
+            );
+
+            bodyHtml = buildWhatsappPreviewBubbleHtml({
+                text: prompt,
+                title: menuTitle,
+                footer: menuFooter,
+                buttonText,
+                buttonIcon: buttonUrl ? '↗' : '≡'
+            });
+
+            if (buttonUrl) {
+                helperHtml = `
+                    <div class="flow-preview-helper-card">
+                        <div class="flow-preview-helper-title">Ação do botão</div>
+                        <div class="flow-preview-helper-text">Ao tocar no botão, o WhatsApp abre este link:</div>
+                        <div class="flow-preview-helper-link">${buildWhatsappPreviewTextHtml(buttonUrl)}</div>
+                    </div>
+                `;
+            } else {
+                const sectionTitle = getWhatsappPreviewMessageText(
+                    getNodePropValue('menuSectionTitle', node.data.menuSectionTitle || 'Opções'),
+                    'Opções'
+                );
+                const menuItems = isIntentMenuNode
+                    ? getIntentMenuPreviewOptions(node)
+                    : getAwaitingInputPreviewOptions(node);
+                bodyHtml += buildWhatsappPreviewMenuSheetHtml(sectionTitle, menuItems);
+            }
+        } else {
+            let message = 'Este bloco não envia uma mensagem visual no WhatsApp.';
+            if (isIntentTrigger(node)) {
+                message = 'Este bloco classifica a mensagem do lead e segue o fluxo sem exibir um menu.';
+            } else if (node.type === 'wait' || node.type === 'condition') {
+                message = 'Este bloco aguarda uma resposta do lead sem exibir um menu interativo.';
+            }
+
+            bodyHtml = `
+                <div class="flow-whatsapp-preview-info-card">
+                    <strong>Sem prévia visual</strong>
+                    <span>${buildWhatsappPreviewTextHtml(message)}</span>
+                </div>
+            `;
+        }
+    }
+
+    container.innerHTML = `
+        <div class="flow-preview-context">
+            <span class="flow-preview-node-kind">${escapeHtml(nodeTypeLabel)}</span>
+            <h4 class="flow-preview-node-title">${escapeHtml(nodeLabel)}</h4>
+        </div>
+        <div class="flow-whatsapp-preview-device">
+            <div class="flow-whatsapp-preview-screen">
+                <div class="flow-whatsapp-preview-topbar">
+                    <div class="flow-whatsapp-preview-avatar">R</div>
+                    <div class="flow-whatsapp-preview-contact">
+                        <strong>ROBO</strong>
+                        <span>Agente virtual</span>
+                    </div>
+                </div>
+                <div class="flow-whatsapp-preview-chat">
+                    ${bodyHtml}
+                </div>
+            </div>
+        </div>
+        ${helperHtml}
+    `;
+}
+
+function setFlowPreviewOpen(forceOpen?: boolean) {
+    const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !flowPreviewOpen;
+    flowPreviewOpen = nextOpen;
+
+    const container = document.getElementById('flowBuilderContainer') as HTMLElement | null;
+    const previewPanel = document.getElementById('flowPreviewPanel') as HTMLElement | null;
+    const toggleBtn = document.getElementById('flowPreviewToggleBtn') as HTMLButtonElement | null;
+    const toggleLabel = document.getElementById('flowPreviewToggleLabel') as HTMLElement | null;
+
+    container?.classList.toggle('is-preview-open', nextOpen);
+    previewPanel?.setAttribute('aria-hidden', nextOpen ? 'false' : 'true');
+    toggleBtn?.classList.toggle('is-open', nextOpen);
+
+    const label = nextOpen ? '<' : '>';
+    const title = nextOpen ? 'Ocultar prévia do WhatsApp' : 'Mostrar prévia do WhatsApp';
+    if (toggleLabel) {
+        toggleLabel.textContent = label;
+    }
+    if (toggleBtn) {
+        toggleBtn.title = title;
+        toggleBtn.setAttribute('aria-label', title);
+    }
+
+    renderWhatsappPreview();
+}
+
+function toggleFlowPreview(forceOpen?: boolean) {
+    setFlowPreviewOpen(forceOpen);
+}
+
 // Selecionar no
 function selectNode(id: string) {
     deselectNode();
@@ -2430,6 +2884,7 @@ function selectNode(id: string) {
     if (nodeEl) nodeEl.classList.add('selected');
     
     renderProperties();
+    renderWhatsappPreview();
 }
 
 // Deselecionar no
@@ -2446,11 +2901,14 @@ function deselectNode() {
     if (propertiesContent) {
         propertiesContent.innerHTML = '<p style="color: var(--gray); font-size: 14px;">Selecione um bloco para editar suas propriedades.</p>';
     }
+    renderWhatsappPreview();
 }
 
 // Deletar no
 function deleteNode(id: string) {
     if (isFlowReadOnlyMode()) return;
+    const node = nodes.find((item) => item.id === id);
+    if (isProtectedFlowBoundaryNode(node)) return;
     if (connectionStart?.nodeId === id) {
         cancelConnection();
     }
@@ -2482,6 +2940,7 @@ function duplicateNode(id: string, event?: Event) {
 
     const sourceNode = nodes.find((node) => node.id === id);
     if (!sourceNode) return;
+    if (isProtectedFlowBoundaryNode(sourceNode)) return;
 
     const duplicate: FlowNode = {
         id: `node_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
@@ -2541,7 +3000,7 @@ function renderProperties() {
     const container = document.getElementById('propertiesContent') as HTMLElement | null;
     if (!container) return;
     let html = '';
-    const selectedTypeLabel = getNodeTypeLabel(selectedNode);
+    const selectedTypeLabel = getNodePropertiesSummaryLabel(selectedNode);
     const nodeLabelValue = String(getNodePropValue('label', selectedNode.data.label || ''));
     const isIntentPropertiesMode = isIntentTrigger(selectedNode);
     const isOutputActionMode = Boolean(
@@ -2556,15 +3015,18 @@ function renderProperties() {
         const outputLabel = String(selectedOutputActionContext.label || '').trim();
         const outputActions = getSelectedOutputActions();
         const outputEntryLabel = getSelectedOutputEntryLabel();
+        const showNextBlockTitleField = !isMenuInteractiveIntentNode(selectedNode);
 
         html += `
             <div class="property-type-summary">
                 <h4 class="property-type-summary-value">Saída ${escapeHtml(outputLabel || selectedHandle)}</h4>
             </div>
-            <div class="property-group">
-                <label>Título no bloco seguinte</label>
-                <input type="text" value="${escapeHtml(outputEntryLabel)}" placeholder="Opcional" onchange="updateSelectedOutputEntryLabel(this.value)">
-            </div>
+            ${showNextBlockTitleField ? `
+                <div class="property-group">
+                    <label>Título no bloco seguinte</label>
+                    <input type="text" value="${escapeHtml(outputEntryLabel)}" placeholder="Opcional" onchange="updateSelectedOutputEntryLabel(this.value)">
+                </div>
+            ` : ''}
             <div class="property-group">
                 <div class="output-action-toolbar">
                     <button class="add-condition-btn output-action-add-btn" onclick="toggleOutputActionTypeMenu(event)">+ Adicionar ação</button>
@@ -2672,6 +3134,16 @@ function renderProperties() {
         </div>
     `;
 
+    if (selectedNode.type === 'end') {
+        html += `
+            <div class="output-actions-empty">
+                Este bloco apenas finaliza o fluxo. Nenhuma configuração é necessária.
+            </div>
+        `;
+        container.innerHTML = html;
+        return;
+    }
+
     if (!isIntentPropertiesMode) {
         html += `
             <div class="property-group">
@@ -2689,9 +3161,14 @@ function renderProperties() {
                 const routes = Array.isArray(draftRoutes) && draftRoutes.length > 0
                     ? draftRoutes
                     : getIntentRoutes(selectedNode);
+                const isMenuIntentNode = isMenuInteractiveIntentNode(selectedNode);
                 const intentResponseDelaySeconds = Number.isFinite(Number(getNodePropValue('intentResponseDelaySeconds', selectedNode.data.intentResponseDelaySeconds)))
                     ? Math.max(0, Number(getNodePropValue('intentResponseDelaySeconds', selectedNode.data.intentResponseDelaySeconds)))
                     : 0;
+                const intentMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Escolha uma opção no menu abaixo:'));
+                const intentMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+                const intentMenuButtonUrl = String(getNodePropValue('menuButtonUrl', selectedNode.data.menuButtonUrl || ''));
+                const hasIntentMenuButtonUrl = intentMenuButtonUrl.trim().length > 0;
                 const intentDefaultResponse = String(getNodePropValue('intentDefaultResponse', selectedNode.data.intentDefaultResponse || ''));
                 const intentDefaultFollowupResponse = String(getNodePropValue('intentDefaultFollowupResponse', selectedNode.data.intentDefaultFollowupResponse || ''));
                 const intentDefaultFollowupResponses = coerceIntentMessageListForEditor(
@@ -2722,20 +3199,62 @@ function renderProperties() {
                     ? isIntentPropertySectionExpanded('welcome', false)
                     : false;
 
-                html += `
-                    <div class="property-inline-row">
-                        <div class="property-group property-group-compact">
+                if (isMenuIntentNode) {
+                    html += `
+                        <div class="property-group">
                             <label>Nome do Bloco</label>
                             <input type="text" value="${escapeHtml(nodeLabelValue)}" onchange="updateNodeProperty('label', this.value)">
                         </div>
-                        <div class="property-group property-group-compact">
-                            <label>Delay</label>
-                            <div class="property-input-with-unit">
-                                <input type="number" min="0" step="1" value="${intentResponseDelaySeconds}" onchange="updateNodeProperty('intentResponseDelaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
-                                <span class="property-unit">s</span>
+                        <div class="property-group">
+                            <label>${hasIntentMenuButtonUrl ? 'Mensagem' : 'Mensagem do Menu'}</label>
+                            <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(intentMenuPrompt)}</textarea>
+                        </div>
+                        <div class="property-group">
+                            <label>Texto do Botão</label>
+                            <input type="text" value="${escapeHtml(intentMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
+                        </div>
+                        <div class="property-group">
+                            <label>Link do Botão</label>
+                            <input type="url" value="${escapeHtml(intentMenuButtonUrl)}" onchange="updateNodeProperty('menuButtonUrl', this.value)" placeholder="https://...">
+                            <span class="property-helper-text">Se preencher, o botão abre esse link e o fluxo segue pela saída padrão.</span>
+                        </div>
+                        ${hasIntentMenuButtonUrl ? '' : `
+                            <div class="property-group">
+                                <label>Opções</label>
+                                <div class="intent-routes-editor">
+                                    ${routes.map((route, index) => `
+                                        <div class="intent-menu-option-row">
+                                            <input
+                                                class="intent-route-name-input"
+                                                type="text"
+                                                value="${escapeHtml(String(route.label || ''))}"
+                                                title="${escapeHtml(String(route.label || '').trim() || ('Opção ' + (index + 1)))}"
+                                                placeholder="Ex.: Ver modelos"
+                                                onchange="updateIntentRoute(${index}, 'label', this.value)"
+                                            >
+                                            <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opção" onclick="removeIntentRoute(${index})">×</button>
+                                        </div>
+                                    `).join('')}
+                                    <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addIntentRoute()">+ Adicionar opção</button>
+                                </div>
+                            </div>
+                        `}
+                    `;
+                } else {
+                    html += `
+                        <div class="property-inline-row">
+                            <div class="property-group property-group-compact">
+                                <label>Nome do Bloco</label>
+                                <input type="text" value="${escapeHtml(nodeLabelValue)}" onchange="updateNodeProperty('label', this.value)">
+                            </div>
+                            <div class="property-group property-group-compact">
+                                <label>Delay</label>
+                                <div class="property-input-with-unit">
+                                    <input type="number" min="0" step="1" value="${intentResponseDelaySeconds}" onchange="updateNodeProperty('intentResponseDelaySeconds', Math.max(0, parseInt(this.value || '0', 10) || 0))">
+                                    <span class="property-unit">s</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
                     <div class="property-group">
                         <label>Intenções</label>
                         <div class="intent-routes-editor">
@@ -2877,6 +3396,7 @@ function renderProperties() {
                         </div>
                     </div>
                 `;
+                }
             }
             break;
             
@@ -2945,18 +3465,63 @@ function renderProperties() {
             const waitTimeout = Number.isFinite(Number(getNodePropValue('timeout', selectedNode.data.timeout || 300)))
                 ? Math.max(1, Number(getNodePropValue('timeout', selectedNode.data.timeout || 300)))
                 : 300;
+            const waitResponseModeRaw = String(getNodePropValue('responseMode', selectedNode.data.responseMode || 'text')).trim().toLowerCase();
+            const waitResponseMode = waitResponseModeRaw === 'menu' ? 'menu' : 'text';
+            const waitMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Selecione uma opção no menu abaixo:'));
+            const waitMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+            const waitMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Opções'));
+            const waitMenuTitle = String(getNodePropValue('menuTitle', selectedNode.data.menuTitle || ''));
+            const waitMenuFooter = String(getNodePropValue('menuFooter', selectedNode.data.menuFooter || ''));
             html += `
                 <div class="property-group">
                     <label>Timeout (segundos)</label>
                     <input type="number" value="${waitTimeout}" onchange="updateNodeProperty('timeout', Math.max(1, parseInt(this.value || '300', 10) || 300))">
                 </div>
+                <div class="property-group">
+                    <label>Modo de Resposta</label>
+                    <select onchange="updateNodeProperty('responseMode', this.value)">
+                        <option value="text" ${waitResponseMode === 'text' ? 'selected' : ''}>Texto livre (atual)</option>
+                        <option value="menu" ${waitResponseMode === 'menu' ? 'selected' : ''}>Menu interativo</option>
+                    </select>
+                </div>
             `;
+            if (waitResponseMode === 'menu') {
+                html += `
+                    <div class="property-group">
+                        <label>Mensagem do Menu</label>
+                        <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(waitMenuPrompt)}</textarea>
+                    </div>
+                    <div class="property-group">
+                        <label>Texto do Botão</label>
+                        <input type="text" value="${escapeHtml(waitMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
+                    </div>
+                    <div class="property-group">
+                        <label>Título da Seção</label>
+                        <input type="text" value="${escapeHtml(waitMenuSectionTitle)}" onchange="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Opções">
+                    </div>
+                    <div class="property-group">
+                        <label>Título (opcional)</label>
+                        <input type="text" value="${escapeHtml(waitMenuTitle)}" onchange="updateNodeProperty('menuTitle', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <label>Rodapé (opcional)</label>
+                        <input type="text" value="${escapeHtml(waitMenuFooter)}" onchange="updateNodeProperty('menuFooter', this.value)">
+                    </div>
+                `;
+            }
             break;
             
         case 'condition':
             const conditionItems = Array.isArray(getNodePropValue('conditions', selectedNode.data.conditions || []))
                 ? (getNodePropValue('conditions', selectedNode.data.conditions || []) as Array<{ value: string; next?: string }>)
                 : [];
+            const conditionResponseModeRaw = String(getNodePropValue('responseMode', selectedNode.data.responseMode || 'text')).trim().toLowerCase();
+            const conditionResponseMode = conditionResponseModeRaw === 'menu' ? 'menu' : 'text';
+            const conditionMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Selecione uma opção no menu abaixo:'));
+            const conditionMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+            const conditionMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Opções'));
+            const conditionMenuTitle = String(getNodePropValue('menuTitle', selectedNode.data.menuTitle || ''));
+            const conditionMenuFooter = String(getNodePropValue('menuFooter', selectedNode.data.menuFooter || ''));
             html += `
                 <div class="property-group">
                     <label>Condições</label>
@@ -2970,7 +3535,38 @@ function renderProperties() {
                     </div>
                     <button class="add-condition-btn" onclick="addCondition()">+ Adicionar Condição</button>
                 </div>
+                <div class="property-group">
+                    <label>Modo de Resposta</label>
+                    <select onchange="updateNodeProperty('responseMode', this.value)">
+                        <option value="text" ${conditionResponseMode === 'text' ? 'selected' : ''}>Texto livre (atual)</option>
+                        <option value="menu" ${conditionResponseMode === 'menu' ? 'selected' : ''}>Menu interativo</option>
+                    </select>
+                </div>
             `;
+            if (conditionResponseMode === 'menu') {
+                html += `
+                    <div class="property-group">
+                        <label>Mensagem do Menu</label>
+                        <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(conditionMenuPrompt)}</textarea>
+                    </div>
+                    <div class="property-group">
+                        <label>Texto do Botão</label>
+                        <input type="text" value="${escapeHtml(conditionMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
+                    </div>
+                    <div class="property-group">
+                        <label>Título da Seção</label>
+                        <input type="text" value="${escapeHtml(conditionMenuSectionTitle)}" onchange="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Opções">
+                    </div>
+                    <div class="property-group">
+                        <label>Título (opcional)</label>
+                        <input type="text" value="${escapeHtml(conditionMenuTitle)}" onchange="updateNodeProperty('menuTitle', this.value)">
+                    </div>
+                    <div class="property-group">
+                        <label>Rodapé (opcional)</label>
+                        <input type="text" value="${escapeHtml(conditionMenuFooter)}" onchange="updateNodeProperty('menuFooter', this.value)">
+                    </div>
+                `;
+            }
             break;
             
         case 'delay':
@@ -3164,9 +3760,12 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
         || key === 'outputActions'
         || key === 'triggerWelcomeEnabled'
         || key === 'triggerWelcomeRepeatMode'
+        || key === 'menuButtonUrl'
     ) {
         renderProperties();
     }
+
+    renderWhatsappPreview();
 }
 
 function confirmNodePropertyChanges() {
@@ -3211,6 +3810,10 @@ function confirmNodePropertyChanges() {
         }
     }
 
+    if (isIntentTrigger(selectedNode)) {
+        applyFlowBuilderModeToIntentNode(selectedNode, getCurrentFlowBuilderMode());
+    }
+
     resetPendingNodeDraft();
     rerenderNode(selectedNode.id);
     targetNodeIdsToRerender.forEach((targetNodeId) => {
@@ -3218,6 +3821,7 @@ function confirmNodePropertyChanges() {
         rerenderNode(targetNodeId);
     });
     renderProperties();
+    renderWhatsappPreview();
     markFlowDirty();
     notify('success', 'Bloco atualizado', 'Alterações confirmadas com sucesso.');
 }
@@ -3384,6 +3988,10 @@ function cleanupInvalidEdgesForNode(nodeId: string) {
     });
 }
 
+function cleanupInvalidEdgesForAllNodes() {
+    nodes.forEach((node) => cleanupInvalidEdgesForNode(node.id));
+}
+
 function getEditableIntentRoutesDraft() {
     if (!selectedNode || !isIntentTrigger(selectedNode)) return [];
     const existingDraft = getNodePropValue('intentRoutes', null as any);
@@ -3451,9 +4059,10 @@ function addIntentRoute() {
     const routes = getEditableIntentRoutesDraft();
 
     const nextIndex = routes.length + 1;
+    const nextLabelPrefix = isMenuInteractiveIntentNode(selectedNode) ? 'Opção' : 'Intenção';
     const nextRoute = {
         id: normalizeRouteId(`intent-${Date.now()}-${nextIndex}`),
-        label: `Intenção ${nextIndex}`,
+        label: `${nextLabelPrefix} ${nextIndex}`,
         phrases: '',
         response: '',
         followupResponse: '',
@@ -3900,8 +4509,13 @@ function applyZoom() {
 // Limpar canvas
 async function clearCanvas() {
     if (!await showFlowConfirmDialog('Limpar todo o fluxo?', 'Limpar fluxo')) return;
+    const preservedFlowBuilderMode = getCurrentFlowBuilderMode();
     resetEditorState();
-    initializeDefaultIntentFlowSkeleton({ selectTrigger: true, markDirty: true });
+    initializeDefaultIntentFlowSkeleton({
+        selectTrigger: true,
+        markDirty: true,
+        flowBuilderMode: preservedFlowBuilderMode
+    });
 }
 
 function resetEditorState() {
@@ -3915,6 +4529,7 @@ function resetEditorState() {
     currentFlowName = '';
     currentFlowIsActive = true;
     currentFlowSessionId = '';
+    currentFlowBuilderMode = 'humanized';
     zoom = 1;
     pan = { x: 0, y: 0 };
 
@@ -3962,6 +4577,8 @@ function buildTriggerPayload(trigger?: FlowNode) {
 }
 
 function normalizeLoadedFlowData() {
+    currentFlowBuilderMode = inferFlowBuilderModeFromNodes(nodes);
+
     nodes = nodes.map((node) => {
         node.data.collapsed = false;
         node.data.outputActions = sanitizeOutputActionsMap(
@@ -3996,6 +4613,16 @@ function normalizeLoadedFlowData() {
                 : 1;
         }
 
+        if (node.type === 'wait' || node.type === 'condition') {
+            const rawResponseMode = String((node.data as any)?.responseMode || '').trim().toLowerCase();
+            node.data.responseMode = rawResponseMode === 'menu' ? 'menu' : 'text';
+            node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Selecione uma opção no menu abaixo:';
+            node.data.menuButtonText = String((node.data as any)?.menuButtonText || '').trim() || 'Ver Menu';
+            node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Opções';
+            node.data.menuTitle = String((node.data as any)?.menuTitle || '').trim();
+            node.data.menuFooter = String((node.data as any)?.menuFooter || '').trim();
+        }
+
         if (node.type === 'event') {
             const legacyEventId = Number((node.data as any)?.event_id);
             const rawEventId = Number(node.data?.eventId);
@@ -4017,14 +4644,25 @@ function normalizeLoadedFlowData() {
         if (isIntentTrigger(node)) {
             if (node.type === 'trigger') {
                 node.subtype = 'keyword';
-            }
-            if (!node.data.label || node.data.label.toLowerCase() === 'palavra-chave') {
+                const normalizedTriggerLabel = String(node.data?.label || '').trim().toLowerCase();
+                if (!normalizedTriggerLabel || normalizedTriggerLabel === 'palavra-chave' || normalizedTriggerLabel === 'keyword' || normalizedTriggerLabel === 'intenção' || normalizedTriggerLabel === 'intencao') {
+                    node.data.label = 'Início';
+                }
+            } else if (!node.data.label || node.data.label.toLowerCase() === 'palavra-chave') {
                 node.data.label = 'Intenção';
             }
+            node.data.flowBuilderMode = currentFlowBuilderMode;
             const rawIntentDelay = Number(node.data?.intentResponseDelaySeconds);
             node.data.intentResponseDelaySeconds = Number.isFinite(rawIntentDelay)
                 ? Math.max(0, Math.trunc(rawIntentDelay))
                 : 0;
+            node.data.responseMode = currentFlowBuilderMode === 'menu' ? 'menu' : 'text';
+            node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Escolha uma opção no menu abaixo:';
+            node.data.menuButtonText = String((node.data as any)?.menuButtonText || '').trim() || 'Ver Menu';
+            node.data.menuButtonUrl = String((node.data as any)?.menuButtonUrl || '').trim();
+            node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Opções';
+            node.data.menuTitle = String((node.data as any)?.menuTitle || '').trim();
+            node.data.menuFooter = String((node.data as any)?.menuFooter || '').trim();
             node.data.intentDefaultResponse = String(node.data?.intentDefaultResponse || '').trim();
             const intentDefaultFollowupResponses = coerceIntentMessageListForEditor(
                 (node.data as any)?.intentDefaultFollowupResponses,
@@ -4049,6 +4687,7 @@ function normalizeLoadedFlowData() {
                     ? Math.max(1, Math.trunc(rawWelcomeValue))
                     : 1;
             }
+            applyFlowBuilderModeToIntentNode(node, currentFlowBuilderMode);
             syncIntentRoutesFromNode(node);
         }
         return node;
@@ -4066,6 +4705,7 @@ function normalizeLoadedFlowData() {
             inputLabel: String((edge as any)?.inputLabel || '').trim() || undefined
         };
     });
+    cleanupInvalidEdgesForAllNodes();
 }
 
 // Salvar fluxo
@@ -4100,6 +4740,9 @@ async function saveFlow() {
         await showFlowAlertDialog('Sessão expirada. Faça login novamente.', 'Sessao');
         return;
     }
+
+    syncFlowBuilderModeAcrossIntentNodes(getCurrentFlowBuilderMode());
+    cleanupInvalidEdgesForAllNodes();
 
     const trigger = nodes.find(n => n.type === 'trigger');
     const triggerPayload = buildTriggerPayload(trigger);
@@ -4175,11 +4818,44 @@ function renderFlowsError(message: string) {
     container.innerHTML = `<p style="text-align: center; color: var(--danger);">${message}</p>`;
 }
 
+function normalizePendingFlowListSessionScopes() {
+    const nextPending: Record<number, string> = {};
+    flowsCache.forEach((flow) => {
+        const flowId = Number(flow.id);
+        if (!Number.isFinite(flowId)) return;
+
+        const pendingSessionId = normalizeFlowSessionId(pendingFlowListSessionScopes[flowId]);
+        const currentSessionId = normalizeFlowSessionId(flow.session_id);
+        if (pendingSessionId !== currentSessionId) {
+            nextPending[flowId] = pendingSessionId;
+        }
+    });
+    pendingFlowListSessionScopes = nextPending;
+}
+
+function getFlowListSessionScopeValue(flow: FlowSummary) {
+    const flowId = Number(flow.id);
+    if (!Number.isFinite(flowId)) {
+        return normalizeFlowSessionId(flow.session_id);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(pendingFlowListSessionScopes, flowId)) {
+        return normalizeFlowSessionId(pendingFlowListSessionScopes[flowId]);
+    }
+
+    return normalizeFlowSessionId(flow.session_id);
+}
+
+function hasPendingFlowListSessionScopeChange(flow: FlowSummary) {
+    return getFlowListSessionScopeValue(flow) !== normalizeFlowSessionId(flow.session_id);
+}
+
 // Renderizar lista de fluxos
 function renderFlowsList(flows: FlowSummary[]) {
     const container = document.getElementById('flowsList') as HTMLElement | null;
     if (!container) return;
     flowsCache = Array.isArray(flows) ? [...flows] : [];
+    normalizePendingFlowListSessionScopes();
     const mobileListMode = isFlowMobileListMode();
 
     if (renamingFlowId !== null && !flowsCache.some((flow) => Number(flow.id) === Number(renamingFlowId))) {
@@ -4214,7 +4890,9 @@ function renderFlowsList(flows: FlowSummary[]) {
         const escapedFlowName = escapeHtml(flowName);
         const encodedName = encodeURIComponent(flowName);
         const inputValue = escapeHtml(renamingFlowDraft);
-        const sessionOptions = buildFlowSessionScopeOptionsMarkup(flow.session_id);
+        const selectedSessionId = getFlowListSessionScopeValue(flow);
+        const hasPendingSessionScopeChange = hasPendingFlowListSessionScopeChange(flow);
+        const sessionOptions = buildFlowSessionScopeOptionsMarkup(selectedSessionId);
         const itemClasses = [
             'flow-list-item',
             isCurrent ? 'is-current' : '',
@@ -4268,6 +4946,15 @@ function renderFlowsList(flows: FlowSummary[]) {
                 >
                     ${sessionOptions}
                 </select>
+                ${hasPendingSessionScopeChange ? `
+                    <button
+                        class="flow-list-btn flow-list-scope-confirm is-pending"
+                        title="Confirmar conta selecionada"
+                        onclick="confirmFlowListSessionScope(${flow.id}, event)"
+                    >
+                        Confirmar
+                    </button>
+                ` : ''}
                 <button class="flow-list-btn flow-list-toggle ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Desativar fluxo' : 'Ativar fluxo'}" onclick="toggleFlowActivation(${flow.id}, event)">
                     ${isActive ? 'Desativar' : 'Ativar'}
                 </button>
@@ -4519,7 +5206,7 @@ async function toggleFlowActivation(id: number, event?: Event) {
     }
 }
 
-async function updateFlowListSessionScope(id: number, value: string, event?: Event) {
+function updateFlowListSessionScope(id: number, value: string, event?: Event) {
     event?.preventDefault();
     event?.stopPropagation();
 
@@ -4530,7 +5217,31 @@ async function updateFlowListSessionScope(id: number, value: string, event?: Eve
     const targetFlow = flowsCache.find((flow) => Number(flow.id) === flowId);
     const currentSessionId = normalizeFlowSessionId(targetFlow?.session_id);
 
-    if (currentSessionId === nextSessionId) return;
+    if (currentSessionId === nextSessionId) {
+        delete pendingFlowListSessionScopes[flowId];
+    } else {
+        pendingFlowListSessionScopes[flowId] = nextSessionId;
+    }
+
+    renderFlowsList(flowsCache);
+}
+
+async function confirmFlowListSessionScope(id: number, event?: Event) {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    const flowId = Number(id);
+    if (!Number.isFinite(flowId)) return;
+
+    const targetFlow = flowsCache.find((flow) => Number(flow.id) === flowId);
+    const currentSessionId = normalizeFlowSessionId(targetFlow?.session_id);
+    const nextSessionId = normalizeFlowSessionId(pendingFlowListSessionScopes[flowId]);
+
+    if (currentSessionId === nextSessionId) {
+        delete pendingFlowListSessionScopes[flowId];
+        renderFlowsList(flowsCache);
+        return;
+    }
 
     try {
         const response = await fetch(buildFlowApiUrl(`/api/flows/${flowId}`), {
@@ -4546,6 +5257,7 @@ async function updateFlowListSessionScope(id: number, value: string, event?: Eve
             return;
         }
 
+        delete pendingFlowListSessionScopes[flowId];
         if (Number(currentFlowId) === flowId) {
             setCurrentFlowSessionScope(nextSessionId);
         }
@@ -4689,15 +5401,21 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
 
 // Criar novo fluxo
 async function createNewFlow() {
-    const typedName = await showFlowPromptDialog('Escolha um nome para o novo fluxo:', {
+    const draft = await showFlowPromptSelectDialog('Escolha um nome e o formato do novo fluxo:', {
         title: 'Novo fluxo',
+        defaultSelectValue: 'humanized',
         placeholder: 'Ex.: Captacao de leads - Plano Premium',
-        confirmLabel: 'Criar fluxo'
+        confirmLabel: 'Criar fluxo',
+        selectOptions: [
+            { value: 'humanized', label: 'Humanizado' },
+            { value: 'menu', label: 'Menu interativo' }
+        ]
     });
 
-    if (typedName === null) return;
+    if (draft === null) return;
 
-    const nextName = String(typedName || '').trim();
+    const nextName = String(draft.inputValue || '').trim();
+    const nextFlowBuilderMode = normalizeFlowBuilderMode(draft.selectValue || 'humanized');
     if (!nextName) {
         await showFlowAlertDialog('Informe um nome para criar o novo fluxo.', 'Novo fluxo');
         return;
@@ -4707,8 +5425,13 @@ async function createNewFlow() {
     closeFlowsModal({ force: true });
     persistLastOpenFlowId(null);
     currentFlowName = nextName;
+    currentFlowBuilderMode = nextFlowBuilderMode;
     renderCurrentFlowName();
-    initializeDefaultIntentFlowSkeleton({ selectTrigger: true, markDirty: true });
+    initializeDefaultIntentFlowSkeleton({
+        selectTrigger: true,
+        markDirty: true,
+        flowBuilderMode: nextFlowBuilderMode
+    });
 }
 
 function applyAiDraftToEditor(draft: AiGeneratedFlowDraft) {
@@ -4843,6 +5566,7 @@ const windowAny = window as Window & {
     saveFlow?: () => Promise<void>;
     generateFlowWithAi?: () => Promise<void>;
     toggleFlowAiAssistant?: (forceOpen?: boolean) => void;
+    toggleFlowPreview?: (forceOpen?: boolean) => void;
     closeFlowAiAssistant?: () => void;
     sendFlowAiAssistantPrompt?: () => Promise<void>;
     handleFlowAiAssistantInputKeydown?: (event: KeyboardEvent) => void;
@@ -4889,7 +5613,8 @@ const windowAny = window as Window & {
     saveFlowRenameInline?: (id: number, event?: Event) => Promise<void>;
     editFlowFromList?: (id: number, currentName?: string, event?: Event) => Promise<void>;
     toggleFlowActivation?: (id: number, event?: Event) => Promise<void>;
-    updateFlowListSessionScope?: (id: number, value: string, event?: Event) => Promise<void>;
+    updateFlowListSessionScope?: (id: number, value: string, event?: Event) => void;
+    confirmFlowListSessionScope?: (id: number, event?: Event) => Promise<void>;
     duplicateFlow?: (id: number, event?: Event) => Promise<void>;
     discardFlow?: (id: number, event?: Event) => Promise<void>;
     closeFlowsModal?: () => void;
@@ -4902,6 +5627,7 @@ windowAny.clearCanvas = clearCanvas;
 windowAny.saveFlow = saveFlow;
 windowAny.generateFlowWithAi = generateFlowWithAi;
 windowAny.toggleFlowAiAssistant = toggleFlowAiAssistant;
+windowAny.toggleFlowPreview = toggleFlowPreview;
 windowAny.closeFlowAiAssistant = closeFlowAiAssistant;
 windowAny.sendFlowAiAssistantPrompt = sendFlowAiAssistantPrompt;
 windowAny.handleFlowAiAssistantInputKeydown = handleFlowAiAssistantInputKeydown;
@@ -4949,6 +5675,7 @@ windowAny.saveFlowRenameInline = saveFlowRenameInline;
 windowAny.editFlowFromList = editFlowFromList;
 windowAny.toggleFlowActivation = toggleFlowActivation;
 windowAny.updateFlowListSessionScope = updateFlowListSessionScope;
+windowAny.confirmFlowListSessionScope = confirmFlowListSessionScope;
 windowAny.duplicateFlow = duplicateFlow;
 windowAny.discardFlow = discardFlow;
 windowAny.closeFlowsModal = closeFlowsModal;

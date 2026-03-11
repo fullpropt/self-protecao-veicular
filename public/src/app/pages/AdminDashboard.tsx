@@ -178,15 +178,15 @@ const DEFAULT_HTML_TEMPLATE = [
   '<tr><td style="background:#040b09;background-image:radial-gradient(520px 180px at 50% -22%, rgba(35,198,111,0.22), rgba(35,198,111,0) 72%),linear-gradient(135deg,#061511 0%,#0b2a22 52%,#07130f 100%);padding:24px 20px;" align="center">',
   '<img src="{{logo_url}}" alt="ZapVender" style="display:block;height:52px;width:auto;max-width:240px;margin:0 auto;">',
   '</td></tr>',
-  '<tr><td style="padding:28px 24px;">',
-  '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.5;color:#142033;">Olá {{name}},</p>',
-  '<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#344054;">Recebemos seu cadastro no <strong>{{app_name}}</strong>. Para ativar sua conta, confirme seu e-mail clicando no botão abaixo.</p>',
-  '<p style="margin:0 0 20px 0;"><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#1dbf73;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px;">Confirmar e-mail</a></p>',
-  '<p style="margin:0;font-size:13px;line-height:1.6;color:#667085;">Este link expira em {{expires_in_text}}.</p>',
+  '<tr><td style="padding:28px 24px;text-align:center;" align="center">',
+  '<p style="margin:0 0 12px 0;font-size:16px;line-height:1.5;color:#142033;text-align:center;">Olá {{name}},</p>',
+  '<p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#344054;text-align:center;">Recebemos seu cadastro no <strong>{{app_name}}</strong>. Para ativar sua conta, confirme seu e-mail clicando no botão abaixo.</p>',
+  '<p style="margin:0 0 20px 0;text-align:center;"><a href="{{confirmation_url}}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#1dbf73;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px;">Confirmar e-mail</a></p>',
+  '<p style="margin:0;font-size:13px;line-height:1.6;color:#667085;text-align:center;">Este link expira em {{expires_in_text}}.</p>',
   '</td></tr>',
-  '<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;">',
-  '<p style="margin:0 0 6px 0;font-size:12px;line-height:1.5;color:#667085;"><strong>ZapVender</strong> | Plataforma de atendimento e automação para WhatsApp.</p>',
-  '<p style="margin:0;font-size:12px;line-height:1.5;color:#667085;">Suporte: <a href="mailto:{{company_email}}" style="color:#0f766e;text-decoration:none;">{{company_email}}</a></p>',
+  '<tr><td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e4e9f1;text-align:center;" align="center">',
+  '<p style="margin:0 0 6px 0;font-size:12px;line-height:1.5;color:#667085;text-align:center;"><strong>ZapVender</strong> | Plataforma de atendimento e automação para WhatsApp.</p>',
+  '<p style="margin:0;font-size:12px;line-height:1.5;color:#667085;text-align:center;">Suporte: <a href="mailto:{{company_email}}" style="color:#0f766e;text-decoration:none;">{{company_email}}</a></p>',
   '</td></tr>',
   '</table>',
   '</td></tr>',
@@ -898,7 +898,7 @@ export default function AdminDashboard() {
       <style>{`
         .admin-dashboard-react .admin-tabs { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
         .admin-dashboard-react .admin-tab-btn { border: 1px solid var(--border-color); background: var(--surface-muted); color: var(--gray-700); padding: 10px 14px; border-radius: 10px; cursor: pointer; }
-        .admin-dashboard-react .admin-tab-btn.active { background: linear-gradient(120deg, rgba(var(--primary-rgb), 0.24) 0%, rgba(16, 148, 98, 0.12) 100%); border-color: rgba(var(--primary-rgb), 0.45); color: #eafff4; font-weight: 700; }
+        .admin-dashboard-react .admin-tab-btn.active { background: linear-gradient(120deg, rgba(var(--primary-rgb), 0.24) 0%, rgba(var(--primary-rgb), 0.1) 100%); border-color: rgba(var(--primary-rgb), 0.45); color: #eafff4; font-weight: 700; }
         .admin-dashboard-react .admin-overview-hero { border: 1px solid rgba(var(--primary-rgb), 0.2); background: radial-gradient(520px 180px at 0% 0%, rgba(var(--primary-rgb), 0.16), rgba(24, 36, 54, 0) 58%), var(--surface); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
         .admin-dashboard-react .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 14px; }
         .admin-dashboard-react .admin-stat { background: linear-gradient(180deg, rgba(35, 50, 71, 0.75), rgba(24, 36, 54, 0.88)); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; }
@@ -909,14 +909,14 @@ export default function AdminDashboard() {
         .admin-dashboard-react .admin-badge strong { color: #d8e3f4; font-weight: 700; }
         .admin-dashboard-react .admin-alert { margin-bottom: 12px; border-radius: 10px; padding: 10px 12px; border: 1px solid transparent; font-size: 13px; }
         .admin-dashboard-react .admin-alert-error { border-color: rgba(248, 113, 113, 0.45); background: rgba(59, 21, 27, 0.65); color: #fca5a5; }
-        .admin-dashboard-react .admin-alert-success { border-color: rgba(34, 197, 94, 0.42); background: rgba(19, 52, 35, 0.66); color: #86efac; }
+        .admin-dashboard-react .admin-alert-success { border-color: rgba(var(--success-rgb), 0.46); background: rgba(16, 52, 40, 0.7); color: var(--success-light); }
         .admin-dashboard-react .admin-account-card { background: linear-gradient(180deg, rgba(24, 36, 54, 0.94), rgba(15, 23, 42, 0.96)); border: 1px solid rgba(49, 65, 87, 0.95); border-radius: 14px; margin-bottom: 14px; overflow: hidden; }
         .admin-dashboard-react .admin-account-head { padding: 14px; border-bottom: 1px solid rgba(49, 65, 87, 0.95); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .admin-dashboard-react .admin-account-name { margin: 0; font-size: 18px; font-weight: 700; color: #e6f4ec; }
         .admin-dashboard-react .admin-account-meta { color: var(--gray-600); font-size: 12px; margin-top: 4px; }
         .admin-dashboard-react .admin-account-tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
         .admin-dashboard-react .admin-pill { display: inline-flex; align-items: center; font-size: 11px; line-height: 1; border-radius: 999px; padding: 6px 10px; border: 1px solid rgba(148, 163, 184, 0.34); background: rgba(15, 23, 42, 0.42); color: #dbe7f7; }
-        .admin-dashboard-react .admin-pill.is-active { border-color: rgba(34, 197, 94, 0.45); background: rgba(19, 52, 35, 0.7); color: #86efac; }
+        .admin-dashboard-react .admin-pill.is-active { border-color: rgba(var(--success-rgb), 0.46); background: rgba(16, 52, 40, 0.72); color: var(--success-light); }
         .admin-dashboard-react .admin-pill.is-inactive { border-color: rgba(248, 113, 113, 0.42); background: rgba(59, 21, 27, 0.7); color: #fca5a5; }
         .admin-dashboard-react .admin-account-actions { display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
         .admin-dashboard-react .admin-plan-grid { padding: 12px 14px; border-bottom: 1px solid rgba(49, 65, 87, 0.95); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -954,7 +954,7 @@ export default function AdminDashboard() {
         .admin-dashboard-react .admin-inbox-item.active { background: rgba(var(--primary-rgb), 0.12); }
         .admin-dashboard-react .admin-inbox-item-subject { font-size: 13px; font-weight: 600; color: #e6eefb; margin-bottom: 4px; }
         .admin-dashboard-react .admin-inbox-item-meta { font-size: 11px; color: var(--gray-600); display: flex; justify-content: space-between; gap: 8px; }
-        .admin-dashboard-react .admin-inbox-item-unread { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 999px; background: rgba(34, 197, 94, 0.2); color: #86efac; font-size: 10px; font-weight: 700; padding: 0 6px; }
+        .admin-dashboard-react .admin-inbox-item-unread { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 999px; background: rgba(var(--success-rgb), 0.2); color: var(--success-light); font-size: 10px; font-weight: 700; padding: 0 6px; }
         .admin-dashboard-react .admin-inbox-detail { border: 1px solid var(--border-color); border-radius: 12px; background: rgba(15, 23, 42, 0.25); padding: 14px; }
         .admin-dashboard-react .admin-inbox-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
         .admin-dashboard-react .admin-inbox-subject { margin: 0; font-size: 16px; color: #edf4ff; }

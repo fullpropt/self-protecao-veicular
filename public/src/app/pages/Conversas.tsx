@@ -48,8 +48,9 @@ export default function Conversas() {
     <div className="conversas-react">
       <style>{`
 :root {
-            --primary: #178C49;
-            --primary-light: #1FAE5E;
+            --primary: #1ef2a3;
+            --primary-light: #59f7be;
+            --primary-rgb: 30, 242, 163;
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
@@ -138,7 +139,7 @@ export default function Conversas() {
         
         .search-box:focus {
             outline: none;
-            box-shadow: 0 0 0 3px rgba(90, 42, 107, 0.2);
+            box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
         }
         
         /* Lista de Conversas */
@@ -163,12 +164,12 @@ export default function Conversas() {
         }
         
         .conversation-item.active {
-            background: rgba(90, 42, 107, 0.08);
+            background: rgba(var(--primary-rgb), 0.08);
             border-left: 4px solid var(--primary);
         }
         
         .conversation-item.unread {
-            background: #f0f9ff;
+            background: rgba(var(--primary-rgb), 0.06);
         }
         
         .conversation-item.unread .conversation-name {
@@ -479,7 +480,7 @@ export default function Conversas() {
         .chat-input:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(90, 42, 107, 0.1);
+            box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
         }
         
         .chat-send-btn {
