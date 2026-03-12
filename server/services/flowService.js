@@ -909,7 +909,25 @@ class FlowService extends EventEmitter {
                 SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error_message = ?
                 WHERE id = ?
             `, ['Fluxo associado nao encontrado para continuar execucao.', activeRow.id]);
-            return null;
+            return this.restoreExecutionFromStorage(conversation, lead);
+        }
+
+        if (Number(flow?.is_active || 0) !== 1) {
+            await run(`
+                UPDATE flow_executions
+                SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Execucao cancelada automaticamente: fluxo inativo.', activeRow.id]);
+            return this.restoreExecutionFromStorage(conversation, lead);
+        }
+
+        if (!this.flowMatchesConversationSession(flow, conversation?.session_id)) {
+            await run(`
+                UPDATE flow_executions
+                SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Execucao cancelada automaticamente: fluxo fora do escopo da sessao.', activeRow.id]);
+            return this.restoreExecutionFromStorage(conversation, lead);
         }
 
         let parsedVariables = {};
@@ -927,7 +945,12 @@ class FlowService extends EventEmitter {
             resolvedLead = await Lead.findById(activeRow.lead_id);
         }
         if (!resolvedLead) {
-            return null;
+            await run(`
+                UPDATE flow_executions
+                SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Lead associado nao encontrado para continuar execucao.', activeRow.id]);
+            return this.restoreExecutionFromStorage(conversation, lead);
         }
 
         const execution = {
