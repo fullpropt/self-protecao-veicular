@@ -283,7 +283,7 @@ export default function CheckoutSuccess() {
         <h1 className="checkout-success-title">Agora confirme seu email</h1>
         <p className="checkout-success-text">
           Seu checkout do plano <strong>{planLabel}</strong> foi concluído. Estamos enviando um email de confirmação
-          para o endereço informado na Stripe.
+          para o endereço informado no pagamento.
         </p>
 
         <div className="checkout-success-steps">

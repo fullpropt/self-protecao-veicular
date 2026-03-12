@@ -78,6 +78,7 @@ const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
 const stripeCheckoutService = require('./services/stripeCheckoutService');
+const pagarmeCheckoutService = require('./services/pagarmeCheckoutService');
 const planLimitsService = require('./services/planLimitsService');
 const {
     DEFAULT_APP_NAME,
@@ -940,6 +941,217 @@ async function upsertCheckoutRegistrationFromStripePayload(req, payload, options
     }
 }
 
+function getCheckoutRegistrationProvider(registration, fallback = 'stripe') {
+    const metadata = registration?.metadata && typeof registration.metadata === 'object'
+        ? registration.metadata
+        : {};
+    const provider = String(
+        metadata.provider
+        || metadata.checkoutProvider
+        || metadata.paymentProvider
+        || ''
+    ).trim().toLowerCase();
+
+    if (provider === 'pagarme') return 'pagarme';
+    if (provider === 'stripe') return 'stripe';
+    return String(fallback || 'stripe').trim().toLowerCase() || 'stripe';
+}
+
+function buildPagarmePlanMessage(status, planName = 'plano') {
+    const normalizedStatus = pagarmeCheckoutService.normalizePlanStatus(status);
+    const normalizedPlanName = String(planName || 'plano').trim() || 'plano';
+
+    if (normalizedStatus === 'trialing') {
+        return `Assinatura ${normalizedPlanName} em periodo de teste via Pagar.me.`;
+    }
+    if (normalizedStatus === 'past_due') {
+        return `Pagamento pendente para o plano ${normalizedPlanName} no Pagar.me.`;
+    }
+    if (normalizedStatus === 'canceled') {
+        return `Assinatura ${normalizedPlanName} cancelada no Pagar.me.`;
+    }
+    if (normalizedStatus === 'suspended') {
+        return `Assinatura ${normalizedPlanName} suspensa no Pagar.me.`;
+    }
+    if (normalizedStatus === 'expired') {
+        return `Assinatura ${normalizedPlanName} expirada no Pagar.me.`;
+    }
+    return `Assinatura ${normalizedPlanName} ativa e sincronizada via Pagar.me.`;
+}
+
+function resolvePagarmePlanStatusFromRegistration(registration, fallback = 'active') {
+    const metadata = registration?.metadata && typeof registration.metadata === 'object'
+        ? registration.metadata
+        : {};
+    return pagarmeCheckoutService.normalizePlanStatus(
+        metadata.subscriptionStatus
+        || metadata.pagarmeSubscriptionStatus
+        || metadata.planStatus
+        || fallback
+    );
+}
+
+function resolveCheckoutRegistrationPlanStatus(registration, fallback = 'active') {
+    const provider = getCheckoutRegistrationProvider(registration, 'stripe');
+    if (provider === 'pagarme') {
+        return resolvePagarmePlanStatusFromRegistration(registration, fallback);
+    }
+    return resolveStripePlanStatusFromRegistration(registration, fallback);
+}
+
+async function applyPagarmePlanSettingsToOwner(ownerUserId, plan = {}) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    if (!normalizedOwnerUserId) return;
+
+    const planName = String(plan?.name || 'Plano').trim() || 'Plano';
+    const planCode = String(plan?.code || '').trim();
+    const planStatus = pagarmeCheckoutService.normalizePlanStatus(plan?.status);
+    const renewalDate = normalizeOptionalIsoDate(plan?.renewalDate || null);
+    const externalReference = String(
+        plan?.externalReference
+        || plan?.subscriptionId
+        || plan?.checkoutSessionId
+        || ''
+    ).trim();
+    const message = String(plan?.message || buildPagarmePlanMessage(planStatus, planName)).trim();
+    const nowIso = new Date().toISOString();
+
+    await Promise.all([
+        Settings.set(buildScopedSettingsKey('plan_name', normalizedOwnerUserId), planName, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_code', normalizedOwnerUserId), planCode, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_status', normalizedOwnerUserId), planStatus, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_provider', normalizedOwnerUserId), 'pagarme', 'string'),
+        Settings.set(buildScopedSettingsKey('plan_message', normalizedOwnerUserId), message, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_renewal_date', normalizedOwnerUserId), renewalDate || '', 'string'),
+        Settings.set(buildScopedSettingsKey('plan_last_verified_at', normalizedOwnerUserId), nowIso, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_external_reference', normalizedOwnerUserId), externalReference, 'string')
+    ]);
+}
+
+function buildPagarmePlanSnapshot(payload = {}) {
+    return {
+        name: String(payload?.planName || 'Plano').trim() || 'Plano',
+        code: String(payload?.planCode || payload?.planKey || '').trim(),
+        status: pagarmeCheckoutService.normalizePlanStatus(payload?.subscriptionStatus || payload?.status),
+        renewalDate: payload?.renewalDate || null,
+        externalReference: String(payload?.subscriptionId || payload?.sessionId || '').trim(),
+        checkoutSessionId: String(payload?.sessionId || '').trim(),
+        subscriptionId: String(payload?.subscriptionId || '').trim()
+    };
+}
+
+async function upsertCheckoutRegistrationFromPagarmePayload(req, payload, options = {}) {
+    const email = String(payload?.customerEmail || '').trim().toLowerCase();
+    if (!email) {
+        throw new Error('Checkout concluido sem email do cliente');
+    }
+
+    let existing = null;
+    if (payload?.sessionId) {
+        existing = await CheckoutRegistration.findBySessionId(payload.sessionId);
+    }
+    if (!existing && payload?.subscriptionId) {
+        existing = await CheckoutRegistration.findByStripeSubscriptionId(payload.subscriptionId);
+    }
+    if (!existing && payload?.customerId) {
+        existing = await CheckoutRegistration.findByStripeCustomerId(payload.customerId);
+    }
+    if (!existing) {
+        existing = await CheckoutRegistration.findLatestByEmail(email, { onlyIncomplete: true });
+    }
+
+    const sessionId = String(
+        payload?.sessionId
+        || existing?.stripe_checkout_session_id
+        || payload?.subscriptionId
+        || ''
+    ).trim();
+    if (!sessionId) {
+        throw new Error('Checkout do Pagar.me sem identificador persistivel');
+    }
+
+    const existingUser = await User.findActiveByEmail(email);
+    const metadata = {
+        ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
+        ...(payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+        provider: 'pagarme',
+        subscriptionStatus: pagarmeCheckoutService.normalizePlanStatus(payload?.subscriptionStatus),
+        pagarmeSubscriptionStatus: String(payload?.metadata?.pagarmeSubscriptionStatus || payload?.subscriptionStatus || '').trim() || null,
+        renewalDate: payload?.renewalDate || null
+    };
+
+    if (existingUser && isEmailConfirmed(existingUser)) {
+        const ownerUserId = normalizeOwnerUserId(existingUser.owner_user_id) || Number(existingUser.id || 0) || null;
+        if (ownerUserId) {
+            await applyPagarmePlanSettingsToOwner(ownerUserId, buildPagarmePlanSnapshot(payload));
+        }
+
+        return CheckoutRegistration.upsertBySession({
+            email,
+            stripe_checkout_session_id: sessionId,
+            stripe_customer_id: payload.customerId,
+            stripe_subscription_id: payload.subscriptionId,
+            stripe_price_id: payload.priceId,
+            stripe_plan_key: payload.planKey,
+            stripe_plan_code: payload.planCode,
+            stripe_plan_name: payload.planName,
+            status: 'linked_existing_account',
+            email_confirmed: 1,
+            email_confirmed_at: existingUser.email_confirmed_at || new Date().toISOString(),
+            email_confirmation_token_hash: null,
+            email_confirmation_expires_at: null,
+            linked_user_id: existingUser.id,
+            owner_user_id: ownerUserId,
+            metadata,
+            completed_at: existing?.completed_at || new Date().toISOString(),
+            last_email_sent_at: existing?.last_email_sent_at || null
+        });
+    }
+
+    const shouldGenerateNewToken =
+        !existing?.email_confirmation_token_hash
+        || (!Number(existing?.email_confirmed) && isCheckoutRegistrationExpired(existing))
+        || normalizeCheckoutRegistrationStatusValue(existing?.status) === 'email_delivery_failed';
+    const confirmationTokenPayload = shouldGenerateNewToken ? createEmailConfirmationTokenPayload() : null;
+    const registration = await CheckoutRegistration.upsertBySession({
+        email,
+        stripe_checkout_session_id: sessionId,
+        stripe_customer_id: payload.customerId,
+        stripe_subscription_id: payload.subscriptionId,
+        stripe_price_id: payload.priceId,
+        stripe_plan_key: payload.planKey,
+        stripe_plan_code: payload.planCode,
+        stripe_plan_name: payload.planName,
+        status: Number(existing?.email_confirmed) > 0 ? 'email_confirmed' : 'pending_email_confirmation',
+        email_confirmed: Number(existing?.email_confirmed) > 0 ? 1 : 0,
+        email_confirmed_at: existing?.email_confirmed_at || null,
+        email_confirmation_token_hash: confirmationTokenPayload?.tokenHash || existing?.email_confirmation_token_hash || null,
+        email_confirmation_expires_at: confirmationTokenPayload?.expiresAt || existing?.email_confirmation_expires_at || null,
+        linked_user_id: existing?.linked_user_id || null,
+        owner_user_id: existing?.owner_user_id || null,
+        metadata,
+        completed_at: existing?.completed_at || null,
+        last_email_sent_at: existing?.last_email_sent_at || null
+    });
+
+    if (options?.sendEmail === false || !confirmationTokenPayload?.token) {
+        return registration;
+    }
+
+    try {
+        await sendCheckoutRegistrationConfirmationEmail(req, registration, confirmationTokenPayload);
+        return await CheckoutRegistration.update(registration.id, {
+            last_email_sent_at: new Date().toISOString(),
+            status: Number(registration?.email_confirmed) > 0 ? 'email_confirmed' : 'pending_email_confirmation'
+        });
+    } catch (error) {
+        await CheckoutRegistration.update(registration.id, {
+            status: 'email_delivery_failed'
+        });
+        throw error;
+    }
+}
+
 function getSocketRequesterUserId(socket) {
     const userId = Number(socket?.user?.id || 0);
     return Number.isInteger(userId) && userId > 0 ? userId : 0;
@@ -1271,6 +1483,17 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
         return res.json({ received: true });
     } catch (error) {
         console.error('[stripe/webhook] Falha ao processar evento:', error.message);
+        return res.status(400).send(`Webhook Error: ${String(error?.message || 'invalid_event')}`);
+    }
+});
+
+app.post('/pagarme/webhook', express.json({ type: 'application/json' }), async (req, res) => {
+    try {
+        const event = await pagarmeCheckoutService.constructWebhookEvent(req.body);
+        await handlePagarmeWebhookEvent(req, event);
+        return res.json({ received: true });
+    } catch (error) {
+        console.error('[pagarme/webhook] Falha ao processar evento:', error.message);
         return res.status(400).send(`Webhook Error: ${String(error?.message || 'invalid_event')}`);
     }
 });
@@ -10924,6 +11147,290 @@ async function handleStripeWebhookEvent(req, event) {
     }
 }
 
+async function syncPagarmePlanFromRegistration(registration, overrides = {}) {
+    const normalizedRegistration = registration && typeof registration === 'object' ? registration : null;
+    if (!normalizedRegistration) return null;
+
+    const ownerUserId = normalizeOwnerUserId(
+        overrides.ownerUserId
+        || normalizedRegistration.owner_user_id
+    );
+    if (!ownerUserId) return null;
+
+    const metadata = normalizedRegistration.metadata && typeof normalizedRegistration.metadata === 'object'
+        ? normalizedRegistration.metadata
+        : {};
+    const planName = String(
+        overrides.planName
+        || normalizedRegistration.stripe_plan_name
+        || metadata.planName
+        || 'Plano'
+    ).trim() || 'Plano';
+    const planCode = String(
+        overrides.planCode
+        || normalizedRegistration.stripe_plan_code
+        || normalizedRegistration.stripe_plan_key
+        || metadata.planCode
+        || ''
+    ).trim();
+    const planStatus = pagarmeCheckoutService.normalizePlanStatus(
+        overrides.subscriptionStatus
+        || overrides.status
+        || resolvePagarmePlanStatusFromRegistration(normalizedRegistration, 'active')
+    );
+    const renewalDate = overrides.renewalDate || metadata.renewalDate || null;
+    const externalReference = String(
+        overrides.subscriptionId
+        || normalizedRegistration.stripe_subscription_id
+        || overrides.sessionId
+        || normalizedRegistration.stripe_checkout_session_id
+        || ''
+    ).trim();
+
+    await applyPagarmePlanSettingsToOwner(ownerUserId, {
+        name: planName,
+        code: planCode,
+        status: planStatus,
+        renewalDate,
+        externalReference,
+        subscriptionId: String(overrides.subscriptionId || normalizedRegistration.stripe_subscription_id || '').trim(),
+        checkoutSessionId: String(overrides.sessionId || normalizedRegistration.stripe_checkout_session_id || '').trim()
+    });
+
+    return {
+        ownerUserId,
+        planName,
+        planCode,
+        planStatus,
+        renewalDate,
+        externalReference
+    };
+}
+
+async function syncPagarmePlanStatusByIdentifiers(payload = {}) {
+    const subscriptionId = String(payload?.subscriptionId || '').trim();
+    const customerId = String(payload?.customerId || '').trim();
+    const customerEmail = String(payload?.customerEmail || '').trim().toLowerCase();
+    let registration = subscriptionId
+        ? await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
+        : null;
+
+    if (!registration && customerId) {
+        registration = await CheckoutRegistration.findByStripeCustomerId(customerId);
+    }
+    if (!registration && customerEmail) {
+        registration = await CheckoutRegistration.findLatestByEmail(customerEmail);
+    }
+    if (!registration) return null;
+
+    const metadata = {
+        ...(registration?.metadata && typeof registration.metadata === 'object' ? registration.metadata : {}),
+        ...(payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+        provider: 'pagarme',
+        renewalDate: payload?.renewalDate || registration?.metadata?.renewalDate || null,
+        subscriptionStatus: pagarmeCheckoutService.normalizePlanStatus(
+            payload?.subscriptionStatus
+            || payload?.status
+            || registration?.metadata?.subscriptionStatus
+            || 'active'
+        ),
+        pagarmeSubscriptionStatus: String(
+            payload?.metadata?.pagarmeSubscriptionStatus
+            || payload?.subscriptionStatus
+            || registration?.metadata?.pagarmeSubscriptionStatus
+            || ''
+        ).trim() || null
+    };
+    const updatedRegistration = await CheckoutRegistration.update(registration.id, {
+        stripe_customer_id: customerId || registration.stripe_customer_id,
+        stripe_subscription_id: subscriptionId || registration.stripe_subscription_id,
+        stripe_price_id: String(payload?.priceId || registration.stripe_price_id || '').trim() || null,
+        stripe_plan_key: String(payload?.planKey || registration.stripe_plan_key || '').trim() || null,
+        stripe_plan_code: String(payload?.planCode || registration.stripe_plan_code || '').trim() || null,
+        stripe_plan_name: String(payload?.planName || registration.stripe_plan_name || '').trim() || null,
+        metadata
+    });
+
+    if (normalizeOwnerUserId(updatedRegistration?.owner_user_id)) {
+        await syncPagarmePlanFromRegistration(updatedRegistration, {
+            subscriptionId: subscriptionId || updatedRegistration?.stripe_subscription_id || '',
+            sessionId: payload?.sessionId || updatedRegistration?.stripe_checkout_session_id || '',
+            subscriptionStatus: metadata.subscriptionStatus,
+            renewalDate: metadata.renewalDate || null,
+            planName: payload?.planName || updatedRegistration?.stripe_plan_name || '',
+            planCode: payload?.planCode || updatedRegistration?.stripe_plan_code || ''
+        });
+    }
+
+    return updatedRegistration;
+}
+
+function extractPagarmeWebhookType(event = {}) {
+    return String(event?.type || event?.event || event?.name || '').trim();
+}
+
+function extractPagarmeWebhookObject(event = {}) {
+    if (event?.data?.object && typeof event.data.object === 'object') {
+        return event.data.object;
+    }
+    if (event?.data && typeof event.data === 'object') {
+        return event.data;
+    }
+    return {};
+}
+
+function extractPagarmeWebhookCustomerEmail(payload = {}) {
+    return String(
+        payload?.customer?.email
+        || payload?.order?.customer?.email
+        || payload?.charge?.customer?.email
+        || payload?.charges?.[0]?.customer?.email
+        || ''
+    ).trim().toLowerCase();
+}
+
+function extractPagarmeWebhookCustomerId(payload = {}) {
+    return String(
+        payload?.customer?.id
+        || payload?.order?.customer?.id
+        || payload?.charge?.customer?.id
+        || payload?.charges?.[0]?.customer?.id
+        || ''
+    ).trim();
+}
+
+function extractPagarmeWebhookSubscriptionId(payload = {}) {
+    return String(
+        payload?.subscription?.id
+        || payload?.subscription_id
+        || payload?.charge?.last_transaction?.subscription_id
+        || payload?.charges?.[0]?.last_transaction?.subscription_id
+        || payload?.charges?.[0]?.subscription_id
+        || payload?.invoice?.subscription_id
+        || ''
+    ).trim();
+}
+
+function extractPagarmeWebhookPlanId(payload = {}) {
+    return String(
+        payload?.plan?.id
+        || payload?.subscription?.plan?.id
+        || payload?.metadata?.plan_id
+        || ''
+    ).trim();
+}
+
+async function handlePagarmeWebhookEvent(req, event) {
+    const eventType = extractPagarmeWebhookType(event);
+    if (!eventType) return;
+
+    const payloadObject = extractPagarmeWebhookObject(event);
+
+    if (
+        eventType === 'subscription.created'
+        || eventType === 'subscription.updated'
+        || eventType === 'subscription.canceled'
+    ) {
+        const resolvedPayload = await pagarmeCheckoutService.resolveSubscriptionPayload(payloadObject);
+        const latestByEmail = resolvedPayload.customerEmail
+            ? await CheckoutRegistration.findLatestByEmail(resolvedPayload.customerEmail)
+            : null;
+        const normalizedPayload = {
+            ...resolvedPayload,
+            sessionId: String(
+                resolvedPayload?.sessionId
+                || latestByEmail?.stripe_checkout_session_id
+                || ''
+            ).trim(),
+            metadata: {
+                ...(resolvedPayload?.metadata && typeof resolvedPayload.metadata === 'object' ? resolvedPayload.metadata : {}),
+                provider: 'pagarme',
+                planStatus: resolvedPayload.subscriptionStatus
+            }
+        };
+
+        await upsertCheckoutRegistrationFromPagarmePayload(req, normalizedPayload, {
+            sendEmail: eventType !== 'subscription.canceled'
+        });
+        await syncPagarmePlanStatusByIdentifiers(normalizedPayload);
+        console.log('[pagarme/webhook] assinatura sincronizada', JSON.stringify({
+            type: eventType,
+            subscriptionId: normalizedPayload.subscriptionId,
+            email: normalizedPayload.customerEmail || null,
+            planCode: normalizedPayload.planCode || null
+        }));
+        return;
+    }
+
+    if (
+        eventType === 'invoice.paid'
+        || eventType === 'invoice.payment_failed'
+        || eventType === 'order.paid'
+        || eventType === 'order.payment_failed'
+    ) {
+        const customerEmail = extractPagarmeWebhookCustomerEmail(payloadObject);
+        const customerId = extractPagarmeWebhookCustomerId(payloadObject);
+        const subscriptionId = extractPagarmeWebhookSubscriptionId(payloadObject);
+        const existingRegistration = subscriptionId
+            ? await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
+            : (customerId
+                ? await CheckoutRegistration.findByStripeCustomerId(customerId)
+                : (customerEmail ? await CheckoutRegistration.findLatestByEmail(customerEmail) : null));
+
+        let resolvedSubscriptionPayload = null;
+        if (subscriptionId && eventType !== 'order.paid') {
+            try {
+                resolvedSubscriptionPayload = await pagarmeCheckoutService.resolveSubscriptionPayload(subscriptionId);
+            } catch (error) {
+                console.warn('[pagarme/webhook] Falha ao hidratar assinatura a partir de evento financeiro:', error.message);
+            }
+        }
+
+        const normalizedStatus = eventType.endsWith('payment_failed') ? 'past_due' : 'active';
+        const planId = extractPagarmeWebhookPlanId(payloadObject);
+        const inferredPlan = pagarmeCheckoutService.inferPlanByPriceId(planId);
+        const normalizedPayload = {
+            provider: 'pagarme',
+            providerLabel: 'Pagar.me',
+            sessionId: String(existingRegistration?.stripe_checkout_session_id || '').trim(),
+            customerId: String(resolvedSubscriptionPayload?.customerId || customerId || '').trim(),
+            customerEmail: String(resolvedSubscriptionPayload?.customerEmail || customerEmail || '').trim().toLowerCase(),
+            subscriptionId: String(resolvedSubscriptionPayload?.subscriptionId || subscriptionId || '').trim(),
+            subscriptionStatus: normalizedStatus,
+            priceId: String(resolvedSubscriptionPayload?.priceId || planId || existingRegistration?.stripe_price_id || '').trim(),
+            planKey: String(
+                resolvedSubscriptionPayload?.planKey
+                || existingRegistration?.stripe_plan_key
+                || inferredPlan?.key
+                || ''
+            ).trim(),
+            planCode: String(
+                resolvedSubscriptionPayload?.planCode
+                || existingRegistration?.stripe_plan_code
+                || inferredPlan?.code
+                || ''
+            ).trim(),
+            planName: String(
+                resolvedSubscriptionPayload?.planName
+                || existingRegistration?.stripe_plan_name
+                || inferredPlan?.name
+                || 'Plano'
+            ).trim(),
+            renewalDate: resolvedSubscriptionPayload?.renewalDate || existingRegistration?.metadata?.renewalDate || null,
+            metadata: {
+                provider: 'pagarme',
+                planStatus: normalizedStatus
+            }
+        };
+
+        if (eventType === 'order.paid' && normalizedPayload.customerEmail) {
+            await upsertCheckoutRegistrationFromPagarmePayload(req, normalizedPayload);
+        }
+
+        await syncPagarmePlanStatusByIdentifiers(normalizedPayload);
+    }
+}
+
 // ============================================
 
 // ROTAS API REST
@@ -10985,7 +11492,7 @@ app.post('/api/pre-checkout/capture', async (req, res) => {
             body.planKey || body.plan_key || body.plan || 'premium',
             40
         ).toLowerCase() || 'premium';
-        const plan = stripeCheckoutService.getPlanConfig(requestedPlanKey);
+        const plan = pagarmeCheckoutService.getPlanConfig(requestedPlanKey);
         if (!plan) {
             return res.status(400).json({ success: false, error: 'Plano invalido para pre-checkout' });
         }
@@ -11063,7 +11570,7 @@ app.post('/api/pre-checkout/capture', async (req, res) => {
 
 app.get('/billing/checkout/:planKey', async (req, res) => {
     try {
-        const plan = stripeCheckoutService.getPlanConfig(req.params.planKey);
+        const plan = pagarmeCheckoutService.getPlanConfig(req.params.planKey);
         if (!plan) {
             return res.status(404).send('Plano de checkout nao encontrado');
         }
@@ -11080,13 +11587,6 @@ app.get('/billing/checkout/:planKey', async (req, res) => {
             2147483647
         );
 
-        const appBaseUrl = buildPublicAppBaseUrl(req);
-        if (!appBaseUrl) {
-            return res.status(500).send('Nao foi possivel resolver a URL publica da aplicacao');
-        }
-
-        const successUrl = `${appBaseUrl}/#/checkout/sucesso?session_id={CHECKOUT_SESSION_ID}&plan=${encodeURIComponent(plan.code)}`;
-        const cancelUrl = `${appBaseUrl}/#/planos?checkout=cancelado&plan=${encodeURIComponent(plan.code)}`;
         const checkoutMetadata = {
             pre_checkout_name: prefillName || '',
             pre_checkout_whatsapp: prefillWhatsApp || '',
@@ -11094,10 +11594,8 @@ app.get('/billing/checkout/:planKey', async (req, res) => {
             pre_checkout_objective: prefillObjective || '',
             pre_checkout_lead_id: leadCaptureId > 0 ? String(leadCaptureId) : ''
         };
-        const checkoutSession = await stripeCheckoutService.createCheckoutSession({
+        const checkoutSession = await pagarmeCheckoutService.createCheckoutSession({
             plan,
-            successUrl,
-            cancelUrl,
             customer: {
                 email: prefillEmail,
                 name: prefillName,
@@ -11109,7 +11607,7 @@ app.get('/billing/checkout/:planKey', async (req, res) => {
         });
 
         if (!checkoutSession?.url) {
-            throw new Error('Checkout da Stripe nao retornou URL');
+            throw new Error('Checkout do Pagar.me nao retornou URL');
         }
 
         if (prefillEmail && isValidEmailAddress(prefillEmail) && checkoutSession?.id) {
@@ -11122,6 +11620,7 @@ app.get('/billing/checkout/:planKey', async (req, res) => {
                     stripe_plan_name: plan.name,
                     status: 'pending_email_confirmation',
                     metadata: {
+                        provider: 'pagarme',
                         pre_checkout: {
                             name: prefillName || null,
                             whatsapp: prefillWhatsApp || null,
@@ -11777,12 +12276,26 @@ app.post('/api/auth/resend-confirmation', async (req, res) => {
 
         if (!checkoutRegistration && sessionId) {
             try {
+                const checkoutPayload = await pagarmeCheckoutService.resolveCheckoutSessionPayload(sessionId);
+                checkoutRegistration = await upsertCheckoutRegistrationFromPagarmePayload(req, checkoutPayload, {
+                    sendEmail: false
+                });
+            } catch (error) {
+                console.warn('[auth/resend-confirmation] Nao foi possivel hidratar checkout Pagar.me por sessionId', JSON.stringify({
+                    sessionId,
+                    message: String(error?.message || 'erro_desconhecido')
+                }));
+            }
+        }
+
+        if (!checkoutRegistration && sessionId) {
+            try {
                 const checkoutPayload = await stripeCheckoutService.resolveCheckoutSessionPayload(sessionId);
                 checkoutRegistration = await upsertCheckoutRegistrationFromStripePayload(req, checkoutPayload, {
                     sendEmail: false
                 });
             } catch (error) {
-                console.warn('[auth/resend-confirmation] Nao foi possivel hidratar checkout por sessionId', JSON.stringify({
+                console.warn('[auth/resend-confirmation] Nao foi possivel hidratar checkout Stripe por sessionId', JSON.stringify({
                     sessionId,
                     message: String(error?.message || 'erro_desconhecido')
                 }));
@@ -11930,7 +12443,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
         if (checkoutRegistration) {
             const registrationStatus = normalizeCheckoutRegistrationStatusValue(checkoutRegistration.status);
-            const registrationPlanStatus = resolveStripePlanStatusFromRegistration(checkoutRegistration, 'active');
+            const registrationPlanStatus = resolveCheckoutRegistrationPlanStatus(checkoutRegistration, 'active');
 
             if (
                 Number(checkoutRegistration?.linked_user_id) > 0
@@ -11987,7 +12500,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
                     plan: {
                         code: confirmedRegistration.stripe_plan_code || confirmedRegistration.stripe_plan_key || '',
                         name: confirmedRegistration.stripe_plan_name || 'Plano',
-                        status: resolveStripePlanStatusFromRegistration(confirmedRegistration, 'active')
+                        status: resolveCheckoutRegistrationPlanStatus(confirmedRegistration, 'active')
                     }
                 }
             });
@@ -12208,10 +12721,13 @@ app.post('/api/auth/complete-registration', async (req, res) => {
                 'string'
             );
 
-            await applyStripePlanSettingsToOwner(ownerUserId, {
+            const applyPlanSettings = getCheckoutRegistrationProvider(checkoutRegistration) === 'pagarme'
+                ? applyPagarmePlanSettingsToOwner
+                : applyStripePlanSettingsToOwner;
+            await applyPlanSettings(ownerUserId, {
                 name: checkoutRegistration.stripe_plan_name || 'Plano',
                 code: checkoutRegistration.stripe_plan_code || checkoutRegistration.stripe_plan_key || '',
-                status: resolveStripePlanStatusFromRegistration(checkoutRegistration, 'active'),
+                status: resolveCheckoutRegistrationPlanStatus(checkoutRegistration, 'active'),
                 renewalDate: checkoutRegistration?.metadata?.renewalDate || null,
                 externalReference: checkoutRegistration.stripe_subscription_id || checkoutRegistration.stripe_checkout_session_id || '',
                 subscriptionId: checkoutRegistration.stripe_subscription_id || '',
@@ -19453,6 +19969,40 @@ app.post('/api/plan/status/refresh', authenticate, async (req, res) => {
                     renewalDate: Number(subscription?.current_period_end || 0) > 0
                         ? new Date(Number(subscription.current_period_end) * 1000).toISOString()
                         : null
+                });
+                plan = await buildOwnerPlanStatus(ownerScopeUserId);
+            } else {
+                await Settings.set(
+                    buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
+                    nowIso,
+                    'string'
+                );
+                plan = await buildOwnerPlanStatus(ownerScopeUserId);
+            }
+        } else if (String(plan?.provider || '').trim().toLowerCase() === 'pagarme') {
+            const subscriptionId = String(plan?.external_reference || '').trim();
+            if (subscriptionId) {
+                const subscription = await pagarmeCheckoutService.retrieveSubscription(subscriptionId);
+                const subscriptionPayload = await pagarmeCheckoutService.resolveSubscriptionPayload(subscription);
+                const registration = await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
+                    || await CheckoutRegistration.findByStripeCustomerId(subscriptionPayload?.customerId || '');
+
+                await syncPagarmePlanStatusByIdentifiers({
+                    subscriptionId,
+                    customerId: String(subscriptionPayload?.customerId || '').trim(),
+                    customerEmail: String(subscriptionPayload?.customerEmail || '').trim().toLowerCase(),
+                    priceId: String(subscriptionPayload?.priceId || '').trim(),
+                    planKey: subscriptionPayload?.planKey || registration?.stripe_plan_key || '',
+                    planCode: subscriptionPayload?.planCode || registration?.stripe_plan_code || '',
+                    planName: subscriptionPayload?.planName || registration?.stripe_plan_name || '',
+                    subscriptionStatus: subscriptionPayload?.subscriptionStatus || 'active',
+                    renewalDate: subscriptionPayload?.renewalDate || null,
+                    metadata: {
+                        ...(subscriptionPayload?.metadata && typeof subscriptionPayload.metadata === 'object'
+                            ? subscriptionPayload.metadata
+                            : {}),
+                        provider: 'pagarme'
+                    }
                 });
                 plan = await buildOwnerPlanStatus(ownerScopeUserId);
             } else {

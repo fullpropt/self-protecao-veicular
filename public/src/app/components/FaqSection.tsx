@@ -49,7 +49,7 @@ export default function FaqSection() {
         id: 'checkout',
         question: 'Posso contratar direto pelo checkout?',
         answer:
-          'Sim. A estrutura permite checkout direto com Stripe, Asaas ou Mercado Pago.'
+          'Sim. A estrutura permite checkout direto com Pagar.me, Asaas ou Mercado Pago.'
       }
     ],
     []
