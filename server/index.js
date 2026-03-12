@@ -2956,14 +2956,28 @@ function extractInteractiveSelectionFromMessageContent(content) {
     const paramsJson = content?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson;
     if (paramsJson) {
         try {
-            const parsed = typeof paramsJson === 'string' ? JSON.parse(paramsJson) : paramsJson;
+            let parsed = paramsJson;
+            if (typeof parsed === 'string') {
+                const raw = parsed.trim();
+                if (raw) {
+                    try {
+                        parsed = JSON.parse(raw);
+                    } catch (_) {
+                        parsed = JSON.parse(decodeURIComponent(raw));
+                    }
+                }
+            }
             const id = normalizeText(
                 parsed?.id
                 || parsed?.selectedId
                 || parsed?.selected_id
                 || parsed?.selectedRowId
                 || parsed?.selected_row_id
+                || parsed?.rowId
+                || parsed?.row_id
                 || parsed?.optionId
+                || parsed?.option_id
+                || parsed?.value
                 || ''
             );
             const text = normalizeText(
@@ -2971,6 +2985,9 @@ function extractInteractiveSelectionFromMessageContent(content) {
                 || parsed?.title
                 || parsed?.display_text
                 || parsed?.selectedDisplayText
+                || parsed?.displayText
+                || parsed?.label
+                || parsed?.optionLabel
                 || ''
             );
             const description = normalizeText(parsed?.description || '');
@@ -2980,6 +2997,15 @@ function extractInteractiveSelectionFromMessageContent(content) {
         } catch (_) {
             // payload invalido nao impede o processamento da mensagem
         }
+    }
+
+    const interactiveBodyText = normalizeText(
+        content?.interactiveResponseMessage?.body?.text
+        || content?.interactiveResponseMessage?.body?.title
+        || ''
+    );
+    if (interactiveBodyText) {
+        return { id: '', text: interactiveBodyText, description: '', source: 'interactive_body' };
     }
 
     return null;
@@ -8832,6 +8858,19 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
     let text = extractTextFromMessageContent(content);
     let mediaType = detectMediaTypeFromMessageContent(content);
     let persistedMedia = null;
+
+    // Em respostas interativas, alguns clientes preenchem somente id/descricao.
+    if (!text && mediaType === 'text') {
+        const fallbackSelectionText = normalizeText(
+            interactiveSelection?.text
+            || interactiveSelection?.id
+            || interactiveSelection?.description
+            || ''
+        );
+        if (fallbackSelectionText) {
+            text = fallbackSelectionText;
+        }
+    }
 
     // Ignora upserts de controle/protocolo sem conteudo renderizavel.
     if (!text && mediaType === 'text') return;

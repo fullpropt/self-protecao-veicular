@@ -2597,9 +2597,24 @@ class FlowService extends EventEmitter {
                 const minAttemptsBeforeDefault = this.resolveIntentDefaultMinAttempts(currentNode);
                 const shouldWaitForMoreInput = hasSpecificRoutes
                     && (!hasDefaultRoute || noMatchCount < minAttemptsBeforeDefault);
+                const normalizedMessageText = normalizeIntentText(messageText);
+                const normalizedTriggerMessage = normalizeIntentText(
+                    execution?.triggerMessageText
+                    || execution?.variables?.trigger_message
+                    || ''
+                );
+                const isInitialTriggerReplay = Boolean(
+                    noMatchCount === 1
+                    && normalizedMessageText
+                    && normalizedTriggerMessage
+                    && normalizedMessageText === normalizedTriggerMessage
+                );
 
                 // Sem match: mantem aguardando novas mensagens antes de cair no padrao.
                 if (shouldWaitForMoreInput) {
+                    if (intentMenuEnabled && !isInitialTriggerReplay) {
+                        await this.maybeSendIntentNodeMenu(execution, currentNode);
+                    }
                     await this.persistExecutionVariables(execution);
 
                     console.info(
