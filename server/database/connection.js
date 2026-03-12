@@ -47,6 +47,18 @@ function parsePositiveIntEnv(value, fallback, min = 1, max = Number.POSITIVE_INF
     return parsed;
 }
 
+function resolveDatabaseUrl() {
+    const raw = String(process.env.DATABASE_URL || '').trim();
+    if (!raw) return '';
+
+    const unquoted = raw
+        .replace(/^['"]+/, '')
+        .replace(/['"]+$/, '')
+        .trim();
+
+    return unquoted;
+}
+
 function getPostgresPool() {
     if (PostgresPool) return PostgresPool;
     try {
@@ -63,7 +75,8 @@ function getPostgresPool() {
 function getDatabase() {
     if (pool) return pool;
 
-    if (!process.env.DATABASE_URL) {
+    const databaseUrl = resolveDatabaseUrl();
+    if (!databaseUrl) {
         throw new Error('DATABASE_URL e obrigatoria (modo Postgres-only).');
     }
 
@@ -88,7 +101,7 @@ function getDatabase() {
         10 * 60 * 1000
     );
     pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: databaseUrl,
         application_name: applicationName,
         max: poolMax,
         idleTimeoutMillis,
