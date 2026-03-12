@@ -2143,7 +2143,8 @@ class FlowService extends EventEmitter {
         const conversationSessionId = this.normalizeFlowSessionScope(conversation?.session_id);
         const ownerScopeUserId = await resolveOwnerScopeUserIdFromAssignee(
             conversation?.assigned_to,
-            lead?.assigned_to
+            lead?.assigned_to,
+            lead?.owner_user_id
         );
         const flowScopeOptions = ownerScopeUserId
             ? { owner_user_id: ownerScopeUserId, session_id: conversationSessionId || undefined }
@@ -2415,6 +2416,9 @@ class FlowService extends EventEmitter {
 
                 // Sem match: mantem aguardando novas mensagens antes de cair no padrao.
                 if (shouldWaitForMoreInput) {
+                    if (intentMenuEnabled) {
+                        await this.maybeSendIntentNodeMenu(execution, currentNode);
+                    }
                     await this.persistExecutionVariables(execution);
 
                     console.info(
