@@ -2616,11 +2616,12 @@ export default function FlowBuilder() {
 
         .flow-selector-filters {
             min-width: 320px;
-            max-width: 600px;
-            flex: 0 1 560px;
+            max-width: 460px;
+            flex: 0 1 420px;
             display: flex;
             align-items: flex-end;
             gap: 10px;
+            justify-content: flex-end;
         }
 
         .flow-selector-filter {
@@ -2635,10 +2636,17 @@ export default function FlowBuilder() {
             flex: 1 1 360px;
         }
 
+        .flow-selector-body-top {
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-start;
+            margin-bottom: 12px;
+        }
+
         .flow-selector-filter-mode {
             min-width: 170px;
             max-width: 220px;
-            flex: 0 0 190px;
+            flex: 0 0 220px;
         }
 
         .flow-selector-filter-label {
@@ -3311,13 +3319,15 @@ export default function FlowBuilder() {
                 width: 100%;
                 max-width: none;
                 min-width: 0;
-                flex-direction: column;
-                align-items: stretch;
+                justify-content: flex-start;
             }
             .flow-selector-filter {
                 width: 100%;
                 max-width: none;
                 min-width: 0;
+            }
+            .flow-selector-body-top {
+                margin-bottom: 10px;
             }
             .flow-selector-filter-mode {
                 flex: 1 1 auto;
@@ -3687,6 +3697,10 @@ export default function FlowBuilder() {
                                       <option value="">Escolha uma conta WhatsApp</option>
                                   </select>
                               </div>
+                          </div>
+                      </div>
+                      <div className="flow-selector-body">
+                          <div className="flow-selector-body-top">
                               <div className="flow-selector-filter flow-selector-filter-mode" id="flowListModeFilterWrap" hidden>
                                   <label htmlFor="flowListModeFilter" className="flow-selector-filter-label">Tipo de fluxo</label>
                                   <select
@@ -3700,14 +3714,13 @@ export default function FlowBuilder() {
                                   </select>
                               </div>
                           </div>
-                      </div>
-                      <div className="flow-selector-body">
                           <div id="flowsList"></div>
                       </div>
                       <div className="flow-selector-footer card-footer">
                           <button
                               id="flowSelectorCreateBtn"
                               className="btn btn-primary flow-selector-create-btn"
+                              type="button"
                               onClick={() => globals.createNewFlow?.()}
                               disabled
                           >

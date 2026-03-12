@@ -1633,6 +1633,7 @@ function renderFlowListSessionScopeControls() {
         flowsCache = [];
     }
 
+    let resolvedSessionId = normalizeFlowSessionId(flowsListRequiredSessionId);
     if (select) {
         select.innerHTML = buildFlowListSessionScopeOptionsMarkup(flowsListRequiredSessionId);
         const nextValue = normalizeFlowSessionId(flowsListRequiredSessionId) || FLOW_ALL_SESSIONS_VALUE;
@@ -1640,9 +1641,14 @@ function renderFlowListSessionScopeControls() {
             select.value = nextValue;
         }
         select.disabled = options.length === 0;
+        const selectedValue = normalizeFlowSessionId(select.value);
+        if (selectedValue !== normalizeFlowSessionId(flowsListRequiredSessionId)) {
+            flowsListRequiredSessionId = selectedValue;
+        }
+        resolvedSessionId = normalizeFlowSessionId(flowsListRequiredSessionId);
     }
 
-    const hasSelectedSession = Boolean(normalizeFlowSessionId(flowsListRequiredSessionId));
+    const hasSelectedSession = Boolean(resolvedSessionId);
     if (modeFilterWrap) {
         modeFilterWrap.toggleAttribute('hidden', !hasSelectedSession);
     }
@@ -5638,7 +5644,14 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
 
 // Criar novo fluxo
 async function createNewFlow() {
-    const selectedSessionId = normalizeFlowSessionId(flowsListRequiredSessionId);
+    const scopeSelect = document.getElementById('flowListSessionScope') as HTMLSelectElement | null;
+    const selectedSessionId = normalizeFlowSessionId(
+        flowsListRequiredSessionId || scopeSelect?.value || ''
+    );
+    if (selectedSessionId !== normalizeFlowSessionId(flowsListRequiredSessionId)) {
+        flowsListRequiredSessionId = selectedSessionId;
+        renderFlowListSessionScopeControls();
+    }
     if (!selectedSessionId) {
         await showFlowAlertDialog('Selecione uma conta WhatsApp para criar um novo fluxo.', 'Conta WhatsApp');
         return;
