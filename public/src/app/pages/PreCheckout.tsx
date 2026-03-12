@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import PreCheckoutLeadForm from '../components/preCheckout/PreCheckoutLeadForm';
 import PreCheckoutOfferPanel from '../components/preCheckout/PreCheckoutOfferPanel';
-import { brandFullLogoUrl, brandName } from '../lib/brand';
+import { brandFullLogoUrl, brandLogoUrl, brandName } from '../lib/brand';
 import {
   createEmptyPreCheckoutValues,
   extractWhatsappDigits,
@@ -170,6 +170,7 @@ export default function PreCheckout() {
   const [showAllErrors, setShowAllErrors] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     setValues(resolveInitialValues(selectedPlan.key, location.search));
@@ -303,6 +304,42 @@ export default function PreCheckout() {
             onSubmit={handleSubmit}
           />
         </section>
+
+        <footer className="precheckout-footer" aria-label="Rodapé principal">
+          <div className="precheckout-footer-grid">
+            <section className="precheckout-footer-brand-col" aria-label="Marca e posicionamento">
+              <a href="#/planos" className="precheckout-footer-brand" aria-label={`${brandName} página inicial de planos`}>
+                <img src={brandLogoUrl} alt="" aria-hidden="true" />
+                <span>{brandName}</span>
+              </a>
+              <p>
+                Sistema tático de alta performance projetado para escalabilidade financeira em operações complexas de
+                conversão inbound e outbound.
+              </p>
+            </section>
+
+            <nav className="precheckout-footer-col" aria-label="Links de produto">
+              <h3>Produto</h3>
+              <ul>
+                <li><a href="#/planos">Motor de Automação</a></li>
+                <li><a href="#/planos">Segurança API</a></li>
+                <li><a href="#/planos">Log e Métricas</a></li>
+              </ul>
+            </nav>
+
+            <nav className="precheckout-footer-col" aria-label="Links legais">
+              <h3>Legal</h3>
+              <ul>
+                <li><a href="#/login?tab=privacy">Privacidade Total</a></li>
+                <li><a href="#/login?tab=terms">Termos de Uso</a></li>
+              </ul>
+            </nav>
+          </div>
+
+          <div className="precheckout-footer-bottom">
+            <span>{`© ${currentYear} ${brandName} Networks. Todos os direitos reservados.`}</span>
+          </div>
+        </footer>
       </div>
     </main>
   );
