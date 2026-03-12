@@ -1014,7 +1014,7 @@ export default function Whatsapp() {
                                   
                                   <div style={{ display: 'flex', gap: '15px', flexDirection: 'column' }}>
                                       <Link to="/inbox" className="btn btn-primary">Ir para Conversas</Link>
-                                      <button className="btn btn-danger" onClick={() => globals.disconnect?.()}>Desconectar</button>
+                                      <button className="btn btn-danger" onClick={() => globals.disconnect?.()}>Remover conta</button>
                                   </div>
                               </div>
                           </div>

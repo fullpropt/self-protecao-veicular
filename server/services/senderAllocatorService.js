@@ -33,12 +33,6 @@ class SenderAllocatorService {
         return String(value || '').trim();
     }
 
-    buildOwnerBootstrapSessionId(ownerUserId) {
-        const ownerId = this.toPositiveInt(ownerUserId, 0);
-        if (!ownerId) return '';
-        return this.sanitizeSessionId(`owner_${ownerId}_session`);
-    }
-
     buildPlaceholderSession(sessionId, runtime = null) {
         const normalizedSessionId = this.sanitizeSessionId(sessionId);
         if (!normalizedSessionId) return null;
@@ -241,14 +235,6 @@ class SenderAllocatorService {
         let result = merged;
         if (!includeDisabled) {
             result = merged.filter((row) => row.campaign_enabled);
-        }
-
-        if (hasOwnerScope && result.length === 0) {
-            const bootstrapSessionId = this.buildOwnerBootstrapSessionId(ownerUserId);
-            const placeholder = this.buildPlaceholderSession(bootstrapSessionId, runtimeSessions.get(bootstrapSessionId) || null);
-            if (placeholder) {
-                result = [placeholder];
-            }
         }
 
         return result;

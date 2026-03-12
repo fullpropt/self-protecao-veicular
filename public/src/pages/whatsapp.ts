@@ -13,6 +13,7 @@ declare const api:
     | undefined
     | {
           get: (endpoint: string) => Promise<any>;
+          delete?: (endpoint: string) => Promise<any>;
       };
 
 type WhatsappSessionItem = {
@@ -479,16 +480,6 @@ function renderSessionOptions() {
         });
     }
 
-    const defaultSessionId = getDefaultSessionId();
-    if (!seenSessionIds.has(defaultSessionId)) {
-        seenSessionIds.add(defaultSessionId);
-        uniqueSessions.push({
-            session_id: defaultSessionId,
-            status: 'disconnected',
-            connected: false
-        });
-    }
-
     uniqueSessions.sort((a, b) => {
         const byConnected = Number(isConnectedSession(b)) - Number(isConnectedSession(a));
         if (byConnected !== 0) return byConnected;
@@ -938,11 +929,35 @@ function requestPairingCode() {
 // Desconectar
 async function disconnect() {
     const sessionId = syncCurrentSessionFromSelect();
-    if (await appConfirm(`Tem certeza que deseja desconectar a conta ${sessionId}?`, 'Desconectar conta')) {
-        socket?.emit('logout', { sessionId });
-        handleDisconnected();
-        void loadSessionOptions(sessionId);
-        showToast('info', `Conta desconectada: ${sessionId}`);
+    if (!sessionId) {
+        showToast('warning', 'Nenhuma conta selecionada.');
+        return;
+    }
+
+    if (await appConfirm(`Tem certeza que deseja remover a conta ${sessionId}? Essa acao desconecta e exclui a sessao.`, 'Remover conta WhatsApp')) {
+        try {
+            if (typeof api?.delete !== 'function') {
+                throw new Error('API indisponivel');
+            }
+
+            await api.delete(`/api/whatsapp/sessions/${encodeURIComponent(sessionId)}`);
+            unmarkReconnectUiRequested(sessionId);
+
+            const activeSessionId = sanitizeSessionId(localStorage.getItem('zapvender_active_whatsapp_session'));
+            if (activeSessionId === sessionId) {
+                localStorage.removeItem('zapvender_active_whatsapp_session');
+                currentSessionId = getDefaultSessionId();
+                syncGlobalAppSessionId(currentSessionId);
+            }
+
+            handleDisconnected();
+            await loadSessionOptions();
+            socket?.emit('check-session', { sessionId: getCurrentSessionId() });
+            showToast('success', `Conta removida: ${sessionId}`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Nao foi possivel remover a conta.';
+            showToast('error', message);
+        }
     }
 }
 

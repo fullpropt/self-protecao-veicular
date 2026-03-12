@@ -1983,6 +1983,105 @@ async function resetSessionRuntimeAndAuth(sessionId, options = {}) {
     });
 }
 
+function clearPendingSessionRecoveryEntries(sessionId, recoveryMap) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId || !recoveryMap || typeof recoveryMap.entries !== 'function') {
+        return;
+    }
+
+    const recoveryKeyPrefix = `${normalizedSessionId}:`;
+    for (const [recoveryKey, recoveryState] of recoveryMap.entries()) {
+        if (!String(recoveryKey || '').startsWith(recoveryKeyPrefix)) continue;
+        if (recoveryState?.timer) {
+            clearTimeout(recoveryState.timer);
+        }
+        recoveryMap.delete(recoveryKey);
+    }
+}
+
+async function removeSessionCompletely(sessionId, options = {}) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) {
+        throw new Error('sessionId invalido');
+    }
+
+    const explicitOwnerUserId = normalizeOwnerUserId(options.ownerUserId);
+    const explicitCreatedBy = normalizeOwnerUserId(options.createdBy);
+    const runtimeSession = sessions.get(normalizedSessionId);
+    const resolvedOwnerUserId = explicitOwnerUserId
+        || normalizeOwnerUserId(runtimeSession?.ownerUserId)
+        || await resolveSessionOwnerUserId(normalizedSessionId);
+
+    clearSessionReconnectCatchupTimer(normalizedSessionId);
+    if (qrTimeouts.has(normalizedSessionId)) {
+        clearTimeout(qrTimeouts.get(normalizedSessionId));
+        qrTimeouts.delete(normalizedSessionId);
+    }
+    clearPendingSessionRecoveryEntries(normalizedSessionId, pendingCiphertextRecoveries);
+    clearPendingSessionRecoveryEntries(normalizedSessionId, pendingLidResolutionRecoveries);
+
+    if (runtimeSession) {
+        clearRuntimeSessionReconnectTimer(runtimeSession);
+        stopSessionHealthMonitor(runtimeSession);
+        try {
+            if (typeof runtimeSession.socket?.ev?.removeAllListeners === 'function') {
+                runtimeSession.socket.ev.removeAllListeners();
+            }
+        } catch (_) {
+            // ignore listener cleanup failure
+        }
+        try {
+            if (typeof runtimeSession.socket?.logout === 'function') {
+                await runtimeSession.socket.logout();
+            }
+        } catch (_) {
+            // ignore logout failure during explicit removal
+        }
+    }
+
+    sessions.delete(normalizedSessionId);
+    reconnectAttempts.delete(normalizedSessionId);
+    reconnectInFlight.delete(normalizedSessionId);
+    sessionInitLocks.delete(normalizedSessionId);
+    sessionInitLockTimestamps.delete(normalizedSessionId);
+    sessionReconnectCatchupInFlight.delete(normalizedSessionId);
+    sessionHistorySyncQueues.delete(normalizedSessionId);
+    sessionSendRateStateBySessionId.delete(normalizedSessionId);
+    sessionStartupErrors.delete(normalizedSessionId);
+
+    const sessionPath = path.join(SESSIONS_DIR, normalizedSessionId);
+    if (fs.existsSync(sessionPath)) {
+        try {
+            fs.rmSync(sessionPath, { recursive: true, force: true });
+        } catch (error) {
+            console.warn(`[${normalizedSessionId}] Falha ao limpar pasta da sessao removida:`, error.message);
+        }
+    }
+
+    try {
+        await clearPersistedBaileysAuthState(normalizedSessionId);
+    } catch (error) {
+        console.warn(`[${normalizedSessionId}] Falha ao limpar auth state persistido da sessao removida:`, error.message);
+    }
+
+    const deletion = await WhatsAppSession.deleteBySessionId(normalizedSessionId, {
+        owner_user_id: explicitOwnerUserId || undefined,
+        created_by: explicitCreatedBy || undefined
+    });
+
+    invalidateBusinessHoursSettingsCache();
+    emitToOwnerScope(resolvedOwnerUserId || null, 'whatsapp-status', {
+        sessionId: normalizedSessionId,
+        status: 'disconnected'
+    });
+
+    return {
+        sessionId: normalizedSessionId,
+        ownerUserId: resolvedOwnerUserId || null,
+        deletion
+    };
+}
+
 function getSessionDispatchState(sessionId) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
     const session = sessions.get(normalizedSessionId);
@@ -10518,75 +10617,37 @@ io.on('connection', (socket) => {
     
 
     socket.on('logout', async ({ sessionId }) => {
-
-        const normalizedSessionId = sanitizeSessionId(sessionId);
-        if (!normalizedSessionId) {
-            socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
-            return;
-        }
-
-        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
-        if (!planAccess.allowed) return;
-        const ownerScopeUserId = planAccess.ownerScopeUserId;
-        const socketReq = buildSocketRequestLike(socket);
-        if (ownerScopeUserId) {
-            const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
-            if (!canAccessSession) {
-                socket.emit('error', { message: 'Sem permissao para remover esta conta', code: 'SESSION_FORBIDDEN' });
+        try {
+            const normalizedSessionId = sanitizeSessionId(sessionId);
+            if (!normalizedSessionId) {
+                socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
                 return;
             }
-        }
 
-        const session = sessions.get(normalizedSessionId);
-
-        
-
-        if (qrTimeouts.has(normalizedSessionId)) {
-
-            clearTimeout(qrTimeouts.get(normalizedSessionId));
-
-            qrTimeouts.delete(normalizedSessionId);
-
-        }
-
-        
-
-        if (session) {
-            stopSessionHealthMonitor(session);
-
-            try {
-                if (typeof session.socket?.ev?.removeAllListeners === 'function') {
-                    session.socket.ev.removeAllListeners();
+            const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
+            if (!planAccess.allowed) return;
+            const ownerScopeUserId = planAccess.ownerScopeUserId;
+            const socketReq = buildSocketRequestLike(socket);
+            if (ownerScopeUserId) {
+                const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+                if (!canAccessSession) {
+                    socket.emit('error', { message: 'Sem permissao para remover esta conta', code: 'SESSION_FORBIDDEN' });
+                    return;
                 }
-                await session.socket.logout();
-
-            } catch (e) {}
-
-            
-
-            sessions.delete(normalizedSessionId);
-            reconnectAttempts.delete(normalizedSessionId);
-            reconnectInFlight.delete(normalizedSessionId);
-
-            
-
-            const sessionPath = path.join(SESSIONS_DIR, normalizedSessionId);
-
-            if (fs.existsSync(sessionPath)) {
-
-                fs.rmSync(sessionPath, { recursive: true, force: true });
-
             }
+
+            await removeSessionCompletely(normalizedSessionId, {
+                ownerUserId: ownerScopeUserId || undefined,
+                createdBy: ownerScopeUserId || undefined
+            });
+
+            socket.emit('disconnected', { sessionId: normalizedSessionId });
+        } catch (error) {
+            socket.emit('error', {
+                message: error?.message || 'Nao foi possivel remover a conta',
+                code: 'SESSION_REMOVE_FAILED'
+            });
         }
-
-        await clearPersistedBaileysAuthState(normalizedSessionId);
-
-        
-
-        socket.emit('disconnected', { sessionId: normalizedSessionId });
-
-        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId: normalizedSessionId, status: 'disconnected' });
-
     });
 
     
@@ -11261,14 +11322,10 @@ app.delete('/api/whatsapp/sessions/:sessionId', authenticate, requireActiveWhats
             }
         }
 
-        await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
-        await clearPersistedBaileysAuthState(sessionId);
-        await WhatsAppSession.deleteBySessionId(sessionId, {
-            owner_user_id: ownerScopeUserId || undefined,
-            created_by: ownerScopeUserId || undefined
+        await removeSessionCompletely(sessionId, {
+            ownerUserId: ownerScopeUserId || undefined,
+            createdBy: ownerScopeUserId || undefined
         });
-
-        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId, status: 'disconnected' });
         res.json({ success: true, session_id: sessionId });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -11292,12 +11349,12 @@ app.post('/api/whatsapp/disconnect', authenticate, requireActiveWhatsAppPlan, as
             }
         }
 
-        await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
-        await clearPersistedBaileysAuthState(sessionId);
+        await removeSessionCompletely(sessionId, {
+            ownerUserId: ownerScopeUserId || undefined,
+            createdBy: ownerScopeUserId || undefined
+        });
 
-        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId, status: 'disconnected' });
-
-        res.json({ success: true });
+        res.json({ success: true, session_id: sessionId });
 
     } catch (error) {
 

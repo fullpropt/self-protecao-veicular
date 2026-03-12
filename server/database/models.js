@@ -203,6 +203,53 @@ function normalizeFlowSessionScope(value) {
     return normalized || null;
 }
 
+function normalizeSessionScopeList(value) {
+    let parsed = value;
+
+    if (typeof parsed === 'string') {
+        const rawValue = parsed.trim();
+        if (!rawValue) return [];
+        try {
+            parsed = JSON.parse(rawValue);
+        } catch (_) {
+            parsed = rawValue.split(',');
+        }
+    }
+
+    if (!Array.isArray(parsed)) return [];
+
+    const normalized = [];
+    const seen = new Set();
+    for (const item of parsed) {
+        const sessionId = String(item || '').trim();
+        if (!sessionId || seen.has(sessionId)) continue;
+        seen.add(sessionId);
+        normalized.push(sessionId);
+    }
+
+    return normalized;
+}
+
+function parsePlainObject(value) {
+    let parsed = value;
+
+    if (typeof parsed === 'string') {
+        const rawValue = parsed.trim();
+        if (!rawValue) return {};
+        try {
+            parsed = JSON.parse(rawValue);
+        } catch (_) {
+            return {};
+        }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return {};
+    }
+
+    return { ...parsed };
+}
+
 function buildCustomEventKey(name) {
     const fromName = normalizeCustomEventKey(name);
     if (fromName) return fromName;
@@ -1806,25 +1853,87 @@ const WhatsAppSession = {
 
         const requesterOwnerUserId = parsePositiveInteger(options.owner_user_id);
         const requesterCreatedBy = parsePositiveInteger(options.created_by);
-        if (requesterOwnerUserId) {
-            const existing = await this.findBySessionId(normalizedSessionId, {
+        const existing = await this.findBySessionId(normalizedSessionId);
+
+        if (requesterOwnerUserId && existing) {
+            const ownedSession = await this.findBySessionId(normalizedSessionId, {
                 owner_user_id: requesterOwnerUserId
             });
-            if (!existing) {
+            if (!ownedSession) {
                 throw new Error('Sem permissao para remover esta sessao');
             }
-        } else if (requesterCreatedBy) {
-            const existing = await this.findBySessionId(normalizedSessionId, {
+        } else if (requesterCreatedBy && existing) {
+            const ownedSession = await this.findBySessionId(normalizedSessionId, {
                 created_by: requesterCreatedBy
             });
-            if (!existing) {
+            if (!ownedSession) {
                 throw new Error('Sem permissao para remover esta sessao');
             }
         }
 
-        await run('DELETE FROM whatsapp_sessions WHERE session_id = ?', [normalizedSessionId]);
-        await run('DELETE FROM campaign_sender_accounts WHERE session_id = ?', [normalizedSessionId]);
-        return { session_id: normalizedSessionId };
+        const campaignCleanup = await run('DELETE FROM campaign_sender_accounts WHERE session_id = ?', [normalizedSessionId]);
+        const flowCleanup = await run(`
+            UPDATE flows
+            SET session_id = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE session_id = ?
+        `, [normalizedSessionId]);
+
+        let automationCleanupCount = 0;
+        const automationRows = await query(`
+            SELECT id, session_scope
+            FROM automations
+            WHERE session_scope IS NOT NULL
+              AND TRIM(session_scope) <> ''
+              AND session_scope LIKE ?
+        `, [`%${normalizedSessionId}%`]);
+        for (const automation of automationRows) {
+            const sessionScope = normalizeSessionScopeList(automation?.session_scope);
+            if (!sessionScope.includes(normalizedSessionId)) continue;
+
+            const nextSessionScope = sessionScope.filter((sessionId) => sessionId !== normalizedSessionId);
+            const result = await Automation.update(automation.id, {
+                session_scope: nextSessionScope.length ? JSON.stringify(nextSessionScope) : null
+            });
+            automationCleanupCount += Number(result?.changes || 0) || 0;
+        }
+
+        let businessHoursCleanupCount = 0;
+        const businessHoursSettingRows = await query(`
+            SELECT key
+            FROM settings
+            WHERE key = ?
+               OR key LIKE ?
+        `, ['business_hours_by_session', 'user:%:business_hours_by_session']);
+        for (const settingRow of businessHoursSettingRows) {
+            const settingsKey = String(settingRow?.key || '').trim();
+            if (!settingsKey) continue;
+
+            const currentValue = parsePlainObject(await Settings.get(settingsKey));
+            if (!Object.prototype.hasOwnProperty.call(currentValue, normalizedSessionId)) {
+                continue;
+            }
+
+            delete currentValue[normalizedSessionId];
+            if (Object.keys(currentValue).length > 0) {
+                await Settings.set(settingsKey, currentValue, 'json');
+            } else {
+                await run('DELETE FROM settings WHERE key = ?', [settingsKey]);
+            }
+            businessHoursCleanupCount += 1;
+        }
+
+        const sessionCleanup = await run('DELETE FROM whatsapp_sessions WHERE session_id = ?', [normalizedSessionId]);
+        return {
+            session_id: normalizedSessionId,
+            removed: Number(sessionCleanup?.changes || 0) > 0,
+            cleanup: {
+                campaign_sender_accounts: Number(campaignCleanup?.changes || 0) || 0,
+                flows: Number(flowCleanup?.changes || 0) || 0,
+                automations: automationCleanupCount,
+                business_hours_settings: businessHoursCleanupCount
+            }
+        };
     }
 };
 
