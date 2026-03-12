@@ -160,6 +160,7 @@ let pendingNodeDraftId: string | null = null;
 let intentPropertySectionExpandedState: Record<string, boolean> = {};
 let flowsCache: FlowSummary[] = [];
 let pendingFlowListSessionScopes: Record<number, string> = {};
+let flowsListRequiredSessionId = '';
 let renamingFlowId: number | null = null;
 let renamingFlowDraft = '';
 let zoom = 1;
@@ -1536,10 +1537,14 @@ function getFlowSessionScopeOptionLabel(session: FlowWhatsappSessionOption) {
         : `${name} - ${sessionId} - ${status}`;
 }
 
-function buildFlowSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
-    const options = [...flowWhatsappSessionsCache]
+function getAvailableFlowSessionOptions() {
+    return [...flowWhatsappSessionsCache]
         .filter((item) => normalizeFlowSessionId(item.session_id))
         .sort((a, b) => getFlowWhatsappSessionDisplayName(a).localeCompare(getFlowWhatsappSessionDisplayName(b), 'pt-BR'));
+}
+
+function buildFlowSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
+    const options = getAvailableFlowSessionOptions();
     const knownIds = new Set(options.map((item) => normalizeFlowSessionId(item.session_id)));
     const normalizedSelectedSessionId = normalizeFlowSessionId(selectedSessionId);
     const isAllSessionsSelected = !normalizedSelectedSessionId;
@@ -1557,6 +1562,73 @@ function buildFlowSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
     }
 
     return entries.join('');
+}
+
+function buildFlowListSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
+    const options = getAvailableFlowSessionOptions();
+    const normalizedSelectedSessionId = normalizeFlowSessionId(selectedSessionId);
+    const knownIds = new Set(options.map((item) => normalizeFlowSessionId(item.session_id)));
+
+    if (options.length === 0) {
+        return `<option value="${FLOW_ALL_SESSIONS_VALUE}" selected>Nenhuma conta WhatsApp encontrada</option>`;
+    }
+
+    const entries = [
+        `<option value="${FLOW_ALL_SESSIONS_VALUE}"${!normalizedSelectedSessionId ? ' selected' : ''}>Escolha uma conta WhatsApp</option>`,
+        ...options.map((item) => {
+            const sessionId = normalizeFlowSessionId(item.session_id);
+            return `<option value="${escapeHtml(sessionId)}"${sessionId === normalizedSelectedSessionId ? ' selected' : ''}>${escapeHtml(getFlowSessionScopeOptionLabel(item))}</option>`;
+        })
+    ];
+
+    if (normalizedSelectedSessionId && !knownIds.has(normalizedSelectedSessionId)) {
+        entries.push(`<option value="${escapeHtml(normalizedSelectedSessionId)}" selected>Conta indisponível (${escapeHtml(normalizedSelectedSessionId)})</option>`);
+    }
+
+    return entries.join('');
+}
+
+function renderFlowsListSessionSelectionGate(message?: string) {
+    const container = document.getElementById('flowsList') as HTMLElement | null;
+    if (!container) return;
+
+    const fallbackMessage = flowWhatsappSessionsCache.length > 0
+        ? 'Selecione uma conta WhatsApp para visualizar os fluxos desta conta.'
+        : 'Nenhuma conta WhatsApp disponível. Conecte uma conta para continuar.';
+    const nextMessage = String(message || fallbackMessage).trim();
+    container.innerHTML = `<p class="flow-list-empty flow-list-empty-hint">${escapeHtml(nextMessage)}</p>`;
+}
+
+function renderFlowListSessionScopeControls() {
+    const select = document.getElementById('flowListSessionScope') as HTMLSelectElement | null;
+    const createBtn = document.getElementById('flowSelectorCreateBtn') as HTMLButtonElement | null;
+    const options = getAvailableFlowSessionOptions();
+    const currentSelection = normalizeFlowSessionId(flowsListRequiredSessionId);
+    const hasCurrentSelection = options.some((item) => normalizeFlowSessionId(item.session_id) === currentSelection);
+
+    if (currentSelection && !hasCurrentSelection) {
+        flowsListRequiredSessionId = '';
+        pendingFlowListSessionScopes = {};
+        flowsCache = [];
+    }
+
+    if (select) {
+        select.innerHTML = buildFlowListSessionScopeOptionsMarkup(flowsListRequiredSessionId);
+        const nextValue = normalizeFlowSessionId(flowsListRequiredSessionId) || FLOW_ALL_SESSIONS_VALUE;
+        if (Array.from(select.options).some((option) => option.value === nextValue)) {
+            select.value = nextValue;
+        }
+        select.disabled = options.length === 0;
+    }
+
+    if (createBtn) {
+        const hasSelectedSession = Boolean(normalizeFlowSessionId(flowsListRequiredSessionId));
+        createBtn.disabled = !hasSelectedSession;
+        createBtn.setAttribute('aria-disabled', String(!hasSelectedSession));
+        createBtn.title = hasSelectedSession
+            ? 'Criar fluxo para a conta WhatsApp selecionada'
+            : 'Selecione uma conta WhatsApp para criar fluxo';
+    }
 }
 
 function renderFlowSessionScopeControls() {
@@ -1593,7 +1665,10 @@ async function loadFlowWhatsappSessions(options: { silent?: boolean } = {}) {
                 .map((item) => normalizeFlowWhatsappSessionOption(item))
                 .filter((item): item is FlowWhatsappSessionOption => Boolean(item));
             renderFlowSessionScopeControls();
-            if (flowsCache.length > 0) {
+            renderFlowListSessionScopeControls();
+            if (!normalizeFlowSessionId(flowsListRequiredSessionId)) {
+                renderFlowsListSessionSelectionGate();
+            } else if (flowsCache.length > 0) {
                 renderFlowsList(flowsCache);
             }
             return;
@@ -1603,10 +1678,12 @@ async function loadFlowWhatsappSessions(options: { silent?: boolean } = {}) {
     }
 
     flowWhatsappSessionsCache = [];
+    flowsListRequiredSessionId = '';
+    flowsCache = [];
+    pendingFlowListSessionScopes = {};
     renderFlowSessionScopeControls();
-    if (flowsCache.length > 0) {
-        renderFlowsList(flowsCache);
-    }
+    renderFlowListSessionScopeControls();
+    renderFlowsListSessionSelectionGate();
     if (!options.silent) {
         notify('warning', 'Fluxos', 'Não foi possível carregar as contas WhatsApp.');
     }
@@ -4862,13 +4939,23 @@ async function saveFlow() {
 
 // Carregar fluxos
 async function loadFlows() {
+    const selectedSessionId = normalizeFlowSessionId(flowsListRequiredSessionId);
+    if (!selectedSessionId) {
+        flowsCache = [];
+        pendingFlowListSessionScopes = {};
+        renderFlowsListSessionSelectionGate();
+        return;
+    }
+
+    const sessionLabel = getFlowSessionScopeLabel(selectedSessionId);
     const container = document.getElementById('flowsList') as HTMLElement | null;
     if (container) {
-        container.innerHTML = '<p style="text-align: center; color: var(--gray);">Carregando fluxos...</p>';
+        container.innerHTML = `<p style="text-align: center; color: var(--gray);">Carregando fluxos da conta ${escapeHtml(sessionLabel)}...</p>`;
     }
 
     try {
-        const response = await fetch(buildFlowApiUrl('/api/flows'), {
+        const query = new URLSearchParams({ session_id: selectedSessionId }).toString();
+        const response = await fetch(buildFlowApiUrl(`/api/flows?${query}`), {
             headers: buildAuthHeaders(false)
         });
         const result = await readFlowJsonResponse<any>(response, {});
@@ -4944,9 +5031,10 @@ function renderFlowsList(flows: FlowSummary[]) {
     }
 
     if (flows.length === 0) {
+        const selectedSessionLabel = getFlowSessionScopeLabel(flowsListRequiredSessionId);
         container.innerHTML = mobileListMode
-            ? '<p class="flow-list-empty">Nenhum fluxo disponível no momento.</p>'
-            : '<p class="flow-list-empty">Nenhum fluxo criado ainda. Crie um novo para começar.</p>';
+            ? `<p class="flow-list-empty">Nenhum fluxo disponível para ${escapeHtml(selectedSessionLabel)}.</p>`
+            : `<p class="flow-list-empty">Nenhum fluxo criado para ${escapeHtml(selectedSessionLabel)} ainda. Crie um novo para começar.</p>`;
         return;
     }
 
@@ -5291,6 +5379,28 @@ async function toggleFlowActivation(id: number, event?: Event) {
     }
 }
 
+async function updateFlowListRequiredSessionFromSelect() {
+    const select = document.getElementById('flowListSessionScope') as HTMLSelectElement | null;
+    if (!select) return;
+
+    const nextSessionId = normalizeFlowSessionId(select.value);
+    if (nextSessionId === normalizeFlowSessionId(flowsListRequiredSessionId)) return;
+
+    flowsListRequiredSessionId = nextSessionId;
+    renamingFlowId = null;
+    renamingFlowDraft = '';
+    pendingFlowListSessionScopes = {};
+    flowsCache = [];
+    renderFlowListSessionScopeControls();
+
+    if (!flowsListRequiredSessionId) {
+        renderFlowsListSessionSelectionGate();
+        return;
+    }
+
+    await loadFlows();
+}
+
 function updateFlowListSessionScope(id: number, value: string, event?: Event) {
     event?.preventDefault();
     event?.stopPropagation();
@@ -5486,6 +5596,12 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
 
 // Criar novo fluxo
 async function createNewFlow() {
+    const selectedSessionId = normalizeFlowSessionId(flowsListRequiredSessionId);
+    if (!selectedSessionId) {
+        await showFlowAlertDialog('Selecione uma conta WhatsApp para criar um novo fluxo.', 'Conta WhatsApp');
+        return;
+    }
+
     const draft = await showFlowPromptSelectDialog('Escolha um nome e o formato do novo fluxo:', {
         title: 'Novo fluxo',
         defaultSelectValue: 'humanized',
@@ -5510,6 +5626,7 @@ async function createNewFlow() {
     closeFlowsModal({ force: true });
     persistLastOpenFlowId(null);
     currentFlowName = nextName;
+    setCurrentFlowSessionScope(selectedSessionId);
     currentFlowBuilderMode = nextFlowBuilderMode;
     renderCurrentFlowName();
     initializeDefaultIntentFlowSkeleton({
@@ -5625,13 +5742,16 @@ function openFlowsModal() {
     renamingFlowId = null;
     renamingFlowDraft = '';
     pendingFlowListSessionScopes = {};
+    flowsListRequiredSessionId = '';
+    flowsCache = [];
+    renderFlowListSessionScopeControls();
+    renderFlowsListSessionSelectionGate();
     void loadFlowWhatsappSessions({ silent: true });
-    loadFlows();
     const screenTitle = document.getElementById('flowsScreenTitle') as HTMLElement | null;
     if (screenTitle) {
         screenTitle.textContent = currentFlowId
-            ? 'Selecione um Fluxo'
-            : 'Selecione um Fluxo para começar';
+            ? 'Escolha uma conta WhatsApp para listar os fluxos'
+            : 'Escolha uma conta WhatsApp para começar';
     }
     setFlowBuilderScreen('selector');
 }
@@ -5700,6 +5820,7 @@ const windowAny = window as Window & {
     saveFlowRenameInline?: (id: number, event?: Event) => Promise<void>;
     editFlowFromList?: (id: number, currentName?: string, event?: Event) => Promise<void>;
     toggleFlowActivation?: (id: number, event?: Event) => Promise<void>;
+    updateFlowListRequiredSessionFromSelect?: () => Promise<void>;
     updateFlowListSessionScope?: (id: number, value: string, event?: Event) => void;
     confirmFlowListSessionScope?: (id: number, event?: Event) => Promise<void>;
     duplicateFlow?: (id: number, event?: Event) => Promise<void>;
@@ -5762,6 +5883,7 @@ windowAny.handleRenameFlowKeydown = handleRenameFlowKeydown;
 windowAny.saveFlowRenameInline = saveFlowRenameInline;
 windowAny.editFlowFromList = editFlowFromList;
 windowAny.toggleFlowActivation = toggleFlowActivation;
+windowAny.updateFlowListRequiredSessionFromSelect = updateFlowListRequiredSessionFromSelect;
 windowAny.updateFlowListSessionScope = updateFlowListSessionScope;
 windowAny.confirmFlowListSessionScope = confirmFlowListSessionScope;
 windowAny.duplicateFlow = duplicateFlow;
