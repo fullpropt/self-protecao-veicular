@@ -147,6 +147,97 @@ function normalizeCustomerEmail(value) {
     return normalized;
 }
 
+function normalizePhoneDigits(value) {
+    return String(value || '').replace(/\D+/g, '');
+}
+
+function buildCustomerPhonesPayload(value) {
+    const digits = normalizePhoneDigits(value);
+    if (!digits) return null;
+
+    let normalized = digits;
+    let countryCode = '55';
+
+    if (normalized.length > 11 && normalized.startsWith('55')) {
+        countryCode = '55';
+        normalized = normalized.slice(2);
+    } else if (normalized.length > 11) {
+        const extraDigits = normalized.length - 11;
+        countryCode = normalized.slice(0, extraDigits);
+        normalized = normalized.slice(extraDigits);
+    }
+
+    if (normalized.length < 10) return null;
+
+    const areaCode = normalized.slice(0, 2);
+    const number = normalized.slice(2);
+    if (!areaCode || !number) return null;
+
+    return {
+        mobile_phone: {
+            country_code: countryCode,
+            area_code: areaCode,
+            number
+        }
+    };
+}
+
+async function resolvePagarmeCustomerId(customer = {}) {
+    const customerEmail = normalizeCustomerEmail(customer?.email);
+    if (!customerEmail) return '';
+
+    const customerName = sanitizeMetadataValue(customer?.name, 120);
+    const customerPhones = buildCustomerPhonesPayload(customer?.phone);
+
+    try {
+        const existingCustomers = await pagarmeRequest(`/customers?email=${encodeURIComponent(customerEmail)}`);
+        const existingCustomer = existingCustomers?.data?.[0] || null;
+
+        if (existingCustomer?.id) {
+            const updates = {};
+            const existingName = sanitizeMetadataValue(existingCustomer?.name, 120);
+            const existingPhones = existingCustomer?.phones && typeof existingCustomer.phones === 'object'
+                ? existingCustomer.phones
+                : null;
+
+            if (customerName && customerName !== existingName) {
+                updates.name = customerName;
+            }
+
+            if (
+                customerPhones
+                && JSON.stringify(customerPhones) !== JSON.stringify(existingPhones)
+            ) {
+                updates.phones = customerPhones;
+            }
+
+            if (Object.keys(updates).length > 0) {
+                await pagarmeRequest(`/customers/${encodeURIComponent(existingCustomer.id)}`, {
+                    method: 'PUT',
+                    body: updates
+                });
+            }
+
+            return String(existingCustomer.id || '').trim();
+        }
+
+        const createdCustomer = await pagarmeRequest('/customers', {
+            method: 'POST',
+            body: {
+                name: customerName || customerEmail,
+                email: customerEmail,
+                type: 'individual',
+                ...(customerPhones ? { phones: customerPhones } : {})
+            }
+        });
+
+        return String(createdCustomer?.id || '').trim();
+    } catch (error) {
+        console.warn('[pagarmeCheckoutService] Falha ao preparar customer para prefill:', error.message);
+        return '';
+    }
+}
+
 async function pagarmeRequest(path, options = {}) {
     const method = String(options?.method || 'GET').trim().toUpperCase() || 'GET';
     const headers = {
@@ -277,6 +368,14 @@ async function createCheckoutSession({ plan, customer = {}, metadata = {} }) {
             ]
         }
     };
+
+    const customerId = await resolvePagarmeCustomerId(customer);
+    if (customerId) {
+        linkPayload.customer_settings = {
+            customer_id: customerId,
+            editable: true
+        };
+    }
 
     const paymentLink = await pagarmeRequest('/paymentlinks', {
         method: 'POST',
