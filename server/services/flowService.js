@@ -53,6 +53,9 @@ const FLOW_MENU_ROW_PREFIX = 'flow-handle:';
 const FLOW_MENU_BUTTON_TEXT_DEFAULT = 'Ver Menu';
 const FLOW_MENU_SECTION_TITLE_DEFAULT = 'Opcoes';
 const FLOW_MENU_PROMPT_DEFAULT = 'Selecione uma opcao no menu abaixo:';
+const FLOW_END_MENU_PROMPT_DEFAULT = 'Se desejar, escolha uma opcao no menu abaixo:';
+const FLOW_END_MENU_SECTION_TITLE_DEFAULT = 'Finalizacao';
+const FLOW_END_MENU_ROW_PREFIX = 'flow-end-option:';
 
 function normalizeBooleanFlag(value) {
     if (typeof value === 'boolean') return value;
@@ -222,6 +225,24 @@ function parseIntentResponseList(value = null, fallbackValue = '') {
 
     const fallback = sanitizeOutgoingFlowText(value || fallbackValue || '');
     return fallback ? [fallback] : [];
+}
+
+function parseFlowEndOptions(value = null) {
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => sanitizeOutgoingFlowText(item))
+            .filter(Boolean)
+            .slice(0, 10);
+    }
+
+    const raw = sanitizeOutgoingFlowText(value || '');
+    if (!raw) return [];
+
+    return raw
+        .split(/[,;\n|]+/)
+        .map((item) => sanitizeOutgoingFlowText(item))
+        .filter(Boolean)
+        .slice(0, 10);
 }
 
 function parsePathHandleIndex(handleValue = '') {
@@ -1226,6 +1247,108 @@ class FlowService extends EventEmitter {
     resolveMenuButtonUrl(node = null, execution = null) {
         const rawText = this.replaceVariables(node?.data?.menuButtonUrl || '', execution?.variables || {});
         return this.normalizeMenuButtonUrl(rawText);
+    }
+
+    resolveEndNodeFinalMessage(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.content || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText);
+    }
+
+    resolveEndNodeMenuPrompt(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuPrompt || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText) || FLOW_END_MENU_PROMPT_DEFAULT;
+    }
+
+    resolveEndNodeMenuButtonText(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuButtonText || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText) || FLOW_MENU_BUTTON_TEXT_DEFAULT;
+    }
+
+    resolveEndNodeMenuSectionTitle(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuSectionTitle || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText) || FLOW_END_MENU_SECTION_TITLE_DEFAULT;
+    }
+
+    resolveEndNodeMenuOptions(node = null, execution = null) {
+        const options = parseFlowEndOptions(node?.data?.endOptions);
+        if (options.length === 0) return [];
+
+        const variables = execution?.variables || {};
+        const unique = [];
+        const seen = new Set();
+
+        for (const option of options) {
+            const rendered = sanitizeOutgoingFlowText(this.replaceVariables(option, variables));
+            if (!rendered) continue;
+            const normalized = rendered.toLowerCase();
+            if (seen.has(normalized)) continue;
+            seen.add(normalized);
+            unique.push(rendered);
+            if (unique.length >= 10) break;
+        }
+
+        return unique;
+    }
+
+    buildEndNodeMenuPayload(execution = null, node = null) {
+        const options = this.resolveEndNodeMenuOptions(node, execution);
+        if (options.length === 0) return null;
+
+        const rows = options.map((title, index) => ({
+            rowId: `${FLOW_END_MENU_ROW_PREFIX}${index + 1}`,
+            title
+        }));
+
+        return {
+            mediaType: 'list',
+            content: this.resolveEndNodeMenuPrompt(node, execution),
+            listButtonText: this.resolveEndNodeMenuButtonText(node, execution),
+            listSections: [
+                {
+                    title: this.resolveEndNodeMenuSectionTitle(node, execution),
+                    rows
+                }
+            ]
+        };
+    }
+
+    async maybeSendEndNodeFinalMessage(execution = null, node = null) {
+        if (!this.sendFunction) return false;
+        const content = this.resolveEndNodeFinalMessage(node, execution);
+        if (!content) return false;
+
+        await this.sendFunction({
+            leadId: execution?.lead?.id || null,
+            to: execution?.lead?.phone || '',
+            jid: execution?.lead?.jid || '',
+            sessionId: execution?.conversation?.session_id || null,
+            conversationId: execution?.conversation?.id || null,
+            flowId: execution?.flow?.id || null,
+            nodeId: node?.id || null,
+            content
+        });
+        return true;
+    }
+
+    async maybeSendEndNodeMenu(execution = null, node = null) {
+        if (!this.sendFunction) return false;
+        const payload = this.buildEndNodeMenuPayload(execution, node);
+        if (!payload) return false;
+
+        await this.sendFunction({
+            leadId: execution?.lead?.id || null,
+            to: execution?.lead?.phone || '',
+            jid: execution?.lead?.jid || '',
+            sessionId: execution?.conversation?.session_id || null,
+            conversationId: execution?.conversation?.id || null,
+            flowId: execution?.flow?.id || null,
+            nodeId: node?.id || null,
+            content: payload.content,
+            mediaType: payload.mediaType,
+            listButtonText: payload.listButtonText,
+            listSections: payload.listSections
+        });
+        return true;
     }
 
     buildAwaitingInputMenuPayload(execution = null, node = null) {
@@ -2768,6 +2891,8 @@ class FlowService extends EventEmitter {
                 }
                     
                 case 'end':
+                    await this.maybeSendEndNodeFinalMessage(execution, node);
+                    await this.maybeSendEndNodeMenu(execution, node);
                     await this.endFlow(execution, 'completed');
                     break;
                     

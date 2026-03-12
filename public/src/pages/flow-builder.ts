@@ -50,6 +50,7 @@ type NodeData = {
     menuTitle?: string;
     menuFooter?: string;
     menuSectionTitle?: string;
+    endOptions?: string[];
     conditions?: Array<{ value: string; next?: string }>;
     seconds?: number;
     message?: string;
@@ -871,6 +872,24 @@ function parsePhraseList(value: string) {
         .split(',')
         .map((item) => item.trim())
         .filter(Boolean);
+}
+
+function parseEndOptionList(value: string) {
+    return String(value || '')
+        .split(/[\n,;|]+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, 10);
+}
+
+function coerceEndOptionListForEditor(value: unknown) {
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => String(item ?? '').trim())
+            .filter(Boolean)
+            .slice(0, 10);
+    }
+    return parseEndOptionList(String(value || ''));
 }
 
 function coerceIntentMessageListForEditor(value: unknown, fallbackValue: unknown = '') {
@@ -2036,7 +2055,15 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
         status: { label: 'Alterar Status', collapsed: false, status: 2 },
         webhook: { label: 'Webhook', collapsed: false, url: '' },
         event: { label: 'Registrar Evento', collapsed: false, eventId: null, eventKey: '', eventName: '' },
-        end: { label: 'Fim', collapsed: false }
+        end: {
+            label: 'Fim',
+            collapsed: false,
+            content: '',
+            menuPrompt: 'Se desejar, escolha uma opcao no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuSectionTitle: 'Finalizacao',
+            endOptions: ['Voltar ao menu principal']
+        }
     };
     return defaults[type] || { label: type };
 }
@@ -3135,9 +3162,41 @@ function renderProperties() {
     `;
 
     if (selectedNode.type === 'end') {
+        const endMessage = String(getNodePropValue('content', selectedNode.data.content || ''));
+        const endMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Se desejar, escolha uma opcao no menu abaixo:'));
+        const endMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+        const endMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Finalizacao'));
+        const endOptions = coerceEndOptionListForEditor(
+            getNodePropValue('endOptions', (selectedNode.data as any).endOptions || [])
+        );
+        const endOptionsText = endOptions.join('\n');
+
         html += `
-            <div class="output-actions-empty">
-                Este bloco apenas finaliza o fluxo. Nenhuma configuração é necessária.
+            <div class="property-group">
+                <label>Mensagem de finalizacao</label>
+                <textarea onchange="updateNodeProperty('content', this.value)" placeholder="Obrigado pelo contato!">${escapeHtml(endMessage)}</textarea>
+            </div>
+            <div class="property-group">
+                <label>Mensagem das opcoes</label>
+                <textarea onchange="updateNodeProperty('menuPrompt', this.value)" placeholder="Se desejar, escolha uma opcao no menu abaixo:">${escapeHtml(endMenuPrompt)}</textarea>
+            </div>
+            <div class="property-group">
+                <label>Texto do botao</label>
+                <input type="text" value="${escapeHtml(endMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
+            </div>
+            <div class="property-group">
+                <label>Titulo da secao de opcoes</label>
+                <input type="text" value="${escapeHtml(endMenuSectionTitle)}" onchange="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Finalizacao">
+            </div>
+            <div class="property-group">
+                <label>Opcoes finais (uma por linha)</label>
+                <textarea onchange="updateEndNodeOptions(this.value)" placeholder="Voltar ao menu principal">${escapeHtml(endOptionsText)}</textarea>
+                <small style="display:block; margin-top:6px; color:#7b8aa3;">Ao chegar neste bloco, o fluxo e finalizado. O lead pode enviar uma nova mensagem para iniciar novamente.</small>
+            </div>
+            <div class="property-group">
+                <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
+                    Confirmar alteracoes
+                </button>
             </div>
         `;
         container.innerHTML = html;
@@ -3766,6 +3825,10 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
     }
 
     renderWhatsappPreview();
+}
+
+function updateEndNodeOptions(value: string) {
+    updateNodeProperty('endOptions', coerceEndOptionListForEditor(value));
 }
 
 function confirmNodePropertyChanges() {
@@ -4621,6 +4684,14 @@ function normalizeLoadedFlowData() {
             node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Opções';
             node.data.menuTitle = String((node.data as any)?.menuTitle || '').trim();
             node.data.menuFooter = String((node.data as any)?.menuFooter || '').trim();
+        }
+
+        if (node.type === 'end') {
+            node.data.content = String((node.data as any)?.content || '').trim();
+            node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Se desejar, escolha uma opcao no menu abaixo:';
+            node.data.menuButtonText = String((node.data as any)?.menuButtonText || '').trim() || 'Ver Menu';
+            node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Finalizacao';
+            node.data.endOptions = coerceEndOptionListForEditor((node.data as any)?.endOptions);
         }
 
         if (node.type === 'event') {
@@ -5592,6 +5663,7 @@ const windowAny = window as Window & {
     resetZoom?: () => void;
     insertVariable?: (variable: string) => void;
     updateNodeProperty?: (key: keyof NodeData, value: any) => void;
+    updateEndNodeOptions?: (value: string) => void;
     confirmNodePropertyChanges?: () => void;
     updateEventNodeSelection?: (value: string) => void;
     openOutputActionEditor?: (nodeId: string, encodedHandle: string, encodedLabel?: string, event?: Event) => void;
@@ -5653,6 +5725,7 @@ windowAny.zoomOut = zoomOut;
 windowAny.resetZoom = resetZoom;
 windowAny.insertVariable = insertVariable;
 windowAny.updateNodeProperty = updateNodeProperty;
+windowAny.updateEndNodeOptions = updateEndNodeOptions;
 windowAny.confirmNodePropertyChanges = confirmNodePropertyChanges;
 windowAny.updateEventNodeSelection = updateEventNodeSelection;
 windowAny.openOutputActionEditor = openOutputActionEditor;
