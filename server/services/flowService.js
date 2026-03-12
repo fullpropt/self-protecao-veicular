@@ -115,8 +115,8 @@ function isFlowIntentClassifierConfigured() {
 }
 
 function isFlowInlineMenuOptionsEnabled() {
-    const raw = String(process.env.FLOW_MENU_INLINE_OPTIONS_TEXT || 'true').trim().toLowerCase();
-    return raw !== '0' && raw !== 'false' && raw !== 'off';
+    const raw = String(process.env.FLOW_MENU_INLINE_OPTIONS_TEXT || 'false').trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'on';
 }
 
 function readIntentNumberEnv(name, fallback, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY) {
