@@ -1927,11 +1927,14 @@ async function resetSessionRuntimeAndAuth(sessionId, options = {}) {
     if (!normalizedSessionId) return;
 
     const runtimeSession = sessions.get(normalizedSessionId);
+    const shouldLogoutSocket = options?.logoutSocket === true;
     clearSessionReconnectCatchupTimer(normalizedSessionId);
     if (qrTimeouts.has(normalizedSessionId)) {
         clearTimeout(qrTimeouts.get(normalizedSessionId));
         qrTimeouts.delete(normalizedSessionId);
     }
+    clearPendingSessionRecoveryEntries(normalizedSessionId, pendingCiphertextRecoveries);
+    clearPendingSessionRecoveryEntries(normalizedSessionId, pendingLidResolutionRecoveries);
 
     if (runtimeSession) {
         clearRuntimeSessionReconnectTimer(runtimeSession);
@@ -1944,7 +1947,9 @@ async function resetSessionRuntimeAndAuth(sessionId, options = {}) {
             // ignore listener cleanup failure
         }
         try {
-            if (typeof runtimeSession.socket?.end === 'function') {
+            if (shouldLogoutSocket && typeof runtimeSession.socket?.logout === 'function') {
+                await runtimeSession.socket.logout();
+            } else if (typeof runtimeSession.socket?.end === 'function') {
                 await runtimeSession.socket.end(new Error('force_fresh_qr'));
             }
         } catch (_) {
@@ -1957,6 +1962,10 @@ async function resetSessionRuntimeAndAuth(sessionId, options = {}) {
     reconnectInFlight.delete(normalizedSessionId);
     sessionInitLocks.delete(normalizedSessionId);
     sessionInitLockTimestamps.delete(normalizedSessionId);
+    sessionReconnectCatchupInFlight.delete(normalizedSessionId);
+    sessionHistorySyncQueues.delete(normalizedSessionId);
+    sessionSendRateStateBySessionId.delete(normalizedSessionId);
+    sessionStartupErrors.delete(normalizedSessionId);
 
     const sessionPath = path.join(SESSIONS_DIR, normalizedSessionId);
     if (fs.existsSync(sessionPath)) {
@@ -2079,6 +2088,30 @@ async function removeSessionCompletely(sessionId, options = {}) {
         sessionId: normalizedSessionId,
         ownerUserId: resolvedOwnerUserId || null,
         deletion
+    };
+}
+
+async function disconnectSessionPreservingRecord(sessionId, options = {}) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) {
+        throw new Error('sessionId invalido');
+    }
+
+    const explicitOwnerUserId = normalizeOwnerUserId(options.ownerUserId);
+    await resetSessionRuntimeAndAuth(normalizedSessionId, {
+        ownerUserId: explicitOwnerUserId || undefined,
+        logoutSocket: options.logoutSocket !== false
+    });
+
+    const resolvedOwnerUserId = explicitOwnerUserId || await resolveSessionOwnerUserId(normalizedSessionId);
+    emitToOwnerScope(resolvedOwnerUserId || null, 'whatsapp-status', {
+        sessionId: normalizedSessionId,
+        status: 'disconnected'
+    });
+
+    return {
+        sessionId: normalizedSessionId,
+        ownerUserId: resolvedOwnerUserId || null
     };
 }
 
@@ -10681,21 +10714,21 @@ io.on('connection', (socket) => {
             if (ownerScopeUserId) {
                 const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
                 if (!canAccessSession) {
-                    socket.emit('error', { message: 'Sem permissao para remover esta conta', code: 'SESSION_FORBIDDEN' });
+                    socket.emit('error', { message: 'Sem permissao para desconectar esta conta', code: 'SESSION_FORBIDDEN' });
                     return;
                 }
             }
 
-            await removeSessionCompletely(normalizedSessionId, {
+            await disconnectSessionPreservingRecord(normalizedSessionId, {
                 ownerUserId: ownerScopeUserId || undefined,
-                createdBy: ownerScopeUserId || undefined
+                logoutSocket: true
             });
 
             socket.emit('disconnected', { sessionId: normalizedSessionId });
         } catch (error) {
             socket.emit('error', {
-                message: error?.message || 'Nao foi possivel remover a conta',
-                code: 'SESSION_REMOVE_FAILED'
+                message: error?.message || 'Nao foi possivel desconectar a conta',
+                code: 'SESSION_DISCONNECT_FAILED'
             });
         }
     });
@@ -11399,9 +11432,9 @@ app.post('/api/whatsapp/disconnect', authenticate, requireActiveWhatsAppPlan, as
             }
         }
 
-        await removeSessionCompletely(sessionId, {
+        await disconnectSessionPreservingRecord(sessionId, {
             ownerUserId: ownerScopeUserId || undefined,
-            createdBy: ownerScopeUserId || undefined
+            logoutSocket: true
         });
 
         res.json({ success: true, session_id: sessionId });
