@@ -19,6 +19,7 @@ type FlowBuilderGlobals = {
   updateFlowStatusFromSelect?: () => void;
   reloadFlowSessionOptions?: () => void;
   updateFlowListRequiredSessionFromSelect?: () => void | Promise<void>;
+  updateFlowListModeFilterFromSelect?: () => void | Promise<void>;
   zoomIn?: () => void;
   zoomOut?: () => void;
   resetZoom?: () => void;
@@ -2609,13 +2610,31 @@ export default function FlowBuilder() {
             text-align: left;
         }
 
+        .flow-selector-filters {
+            min-width: 320px;
+            max-width: 600px;
+            flex: 0 1 560px;
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
         .flow-selector-filter {
-            min-width: 280px;
-            max-width: 380px;
-            flex: 0 1 360px;
             display: flex;
             flex-direction: column;
             gap: 6px;
+        }
+
+        .flow-selector-filter-account {
+            min-width: 260px;
+            max-width: 420px;
+            flex: 1 1 360px;
+        }
+
+        .flow-selector-filter-mode {
+            min-width: 170px;
+            max-width: 220px;
+            flex: 0 0 190px;
         }
 
         .flow-selector-filter-label {
@@ -3284,10 +3303,20 @@ export default function FlowBuilder() {
                 text-align: left;
                 font-size: 12px;
             }
+            .flow-selector-filters {
+                width: 100%;
+                max-width: none;
+                min-width: 0;
+                flex-direction: column;
+                align-items: stretch;
+            }
             .flow-selector-filter {
                 width: 100%;
                 max-width: none;
                 min-width: 0;
+            }
+            .flow-selector-filter-mode {
+                flex: 1 1 auto;
             }
             .flow-selector-body {
                 padding: 12px;
@@ -3625,7 +3654,7 @@ export default function FlowBuilder() {
                               <span className="flow-name-highlight-status draft" id="currentFlowStatusDisplay">Não salvo</span>
                               <div className="flow-name-highlight-scope">
                                   <div className="flow-scope-label">Conta do fluxo</div>
-                                  <div className="flow-scope-value" id="currentFlowSessionScopeDisplay">Todas as contas WhatsApp</div>
+                                  <div className="flow-scope-value" id="currentFlowSessionScopeDisplay">Conta não definida</div>
                               </div>
                           </div>
                       </div>
@@ -3642,16 +3671,30 @@ export default function FlowBuilder() {
                               </div>
                               <div className="flow-selector-header-copy" id="flowsScreenTitle">Escolha uma conta WhatsApp para começar</div>
                           </div>
-                          <div className="flow-selector-filter">
-                              <label htmlFor="flowListSessionScope" className="flow-selector-filter-label">Conta WhatsApp</label>
-                              <select
-                                  id="flowListSessionScope"
-                                  className="flow-list-scope-select flow-list-scope-filter"
-                                  defaultValue=""
-                                  onChange={() => globals.updateFlowListRequiredSessionFromSelect?.()}
-                              >
-                                  <option value="">Escolha uma conta WhatsApp</option>
-                              </select>
+                          <div className="flow-selector-filters">
+                              <div className="flow-selector-filter flow-selector-filter-account">
+                                  <label htmlFor="flowListSessionScope" className="flow-selector-filter-label">Conta WhatsApp</label>
+                                  <select
+                                      id="flowListSessionScope"
+                                      className="flow-list-scope-select flow-list-scope-filter"
+                                      defaultValue=""
+                                      onChange={() => globals.updateFlowListRequiredSessionFromSelect?.()}
+                                  >
+                                      <option value="">Escolha uma conta WhatsApp</option>
+                                  </select>
+                              </div>
+                              <div className="flow-selector-filter flow-selector-filter-mode">
+                                  <label htmlFor="flowListModeFilter" className="flow-selector-filter-label">Tipo de fluxo</label>
+                                  <select
+                                      id="flowListModeFilter"
+                                      className="flow-list-scope-select flow-list-scope-filter"
+                                      defaultValue="humanized"
+                                      onChange={() => globals.updateFlowListModeFilterFromSelect?.()}
+                                  >
+                                      <option value="humanized">Humanizado</option>
+                                      <option value="menu">Menu interativo</option>
+                                  </select>
+                              </div>
                           </div>
                       </div>
                       <div className="flow-selector-body">
