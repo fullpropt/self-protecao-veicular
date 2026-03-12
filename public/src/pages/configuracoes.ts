@@ -864,6 +864,20 @@ function getPlanStatusBadgeClass(status: string) {
     return 'badge-secondary';
 }
 
+function getPlanTone(planName: unknown) {
+    const normalized = String(planName || '')
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+    if (normalized.includes('monster')) return 'monster';
+    if (normalized.includes('avancad') || normalized.includes('advanced')) return 'advanced';
+    if (normalized.includes('premium')) return 'premium';
+    if (normalized.includes('starter')) return 'starter';
+    return 'default';
+}
+
 function formatPlanDateTime(value: unknown) {
     const raw = String(value || '').trim();
     if (!raw) return '-';
@@ -1003,14 +1017,35 @@ function renderPlanStatus() {
 
     const data = planStatusCache || buildFallbackPlanStatus();
     const statusBadgeClass = getPlanStatusBadgeClass(data.status);
+    const planTone = getPlanTone(data.planName);
 
     container.innerHTML = `
-        <div class="copy-card" style="margin-bottom: 0;">
+        <div class="copy-card settings-plan-card" style="margin-bottom: 0;">
             <div class="copy-card-header" style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <span class="copy-card-title">Situacao do Plano</span>
-                <span class="badge ${statusBadgeClass}">${escapeHtml(data.statusLabel)}</span>
             </div>
-            <p class="text-muted mb-3">${escapeHtml(data.message)}</p>
+            <div class="settings-plan-shell">
+                <div class="settings-plan-hero settings-plan-hero--${escapeHtml(planTone)}">
+                    <div class="settings-plan-hero-top">
+                        <span class="settings-plan-hero-label">Plano atual</span>
+                        <span class="badge ${statusBadgeClass}">${escapeHtml(data.statusLabel)}</span>
+                    </div>
+                    <strong class="settings-plan-hero-name">${escapeHtml(data.planName)}</strong>
+                    <div class="settings-plan-hero-grid">
+                        <div class="settings-plan-hero-metric">
+                            <span class="settings-plan-hero-metric-label">Conexoes WhatsApp</span>
+                            <strong class="settings-plan-hero-metric-value">${escapeHtml(formatPlanMetricValue(data.whatsappSessions))}</strong>
+                            <span class="settings-plan-hero-metric-hint">${escapeHtml(formatPlanMetricHint(data.whatsappSessions))}</span>
+                        </div>
+                        <div class="settings-plan-hero-metric">
+                            <span class="settings-plan-hero-metric-label">Contatos</span>
+                            <strong class="settings-plan-hero-metric-value">${escapeHtml(formatPlanMetricValue(data.contacts))}</strong>
+                            <span class="settings-plan-hero-metric-hint">${escapeHtml(formatPlanMetricHint(data.contacts))}</span>
+                        </div>
+                    </div>
+                    <p class="settings-plan-hero-copy">${escapeHtml(data.message)}</p>
+                </div>
+            </div>
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Admin principal</label>
@@ -1023,30 +1058,12 @@ function renderPlanStatus() {
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Plano</label>
-                    <input type="text" class="form-input" value="${escapeHtml(data.planName)}" readonly />
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
                     <label class="form-label">Renovacao</label>
                     <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.renewalDate))}" readonly />
                 </div>
                 <div class="form-group">
                     <label class="form-label">Última confirmação</label>
                     <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.lastVerifiedAt))}" readonly />
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Conexões WhatsApp</label>
-                    <input type="text" class="form-input" value="${escapeHtml(formatPlanMetricValue(data.whatsappSessions))}" readonly />
-                    <p class="form-help">${escapeHtml(formatPlanMetricHint(data.whatsappSessions))}</p>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Contatos</label>
-                    <input type="text" class="form-input" value="${escapeHtml(formatPlanMetricValue(data.contacts))}" readonly />
-                    <p class="form-help">${escapeHtml(formatPlanMetricHint(data.contacts))}</p>
                 </div>
             </div>
         </div>

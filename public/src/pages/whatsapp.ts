@@ -446,7 +446,7 @@ function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
                     <span class="whatsapp-session-list-name">${escapeHtml(displayName)}</span>
                     <span class="whatsapp-session-list-meta">
                         <span class="whatsapp-session-list-status ${statusClass}">${escapeHtml(statusLabel)}</span>
-                        <span class="whatsapp-session-list-arrow${isExpanded ? ' is-expanded' : ''}" aria-hidden="true">â–¾</span>
+                        <span class="whatsapp-session-list-arrow${isExpanded ? ' is-expanded' : ''}" aria-hidden="true">&#9662;</span>
                     </span>
                 </span>
                 <span class="whatsapp-session-list-detail">${escapeHtml(detail)}</span>
