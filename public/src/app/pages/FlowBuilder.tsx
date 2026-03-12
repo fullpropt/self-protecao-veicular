@@ -156,6 +156,10 @@ export default function FlowBuilder() {
             display: none !important;
         }
 
+        .flow-builder-react #flowListModeFilterWrap[hidden] {
+            display: none !important;
+        }
+
         .flow-builder-react .header-title h1 {
             color: #e7edf7;
             font-size: clamp(28px, 4vw, 40px);

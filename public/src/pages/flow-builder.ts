@@ -5088,9 +5088,7 @@ function renderFlowsList(flows: FlowSummary[]) {
         const escapedFlowName = escapeHtml(flowName);
         const encodedName = encodeURIComponent(flowName);
         const inputValue = escapeHtml(renamingFlowDraft);
-        const selectedSessionId = getFlowListSessionScopeValue(flow);
-        const hasPendingSessionScopeChange = hasPendingFlowListSessionScopeChange(flow);
-        const sessionOptions = buildFlowSessionScopeOptionsMarkup(selectedSessionId);
+        const selectedSessionLabel = getFlowSessionScopeLabel(flowsListRequiredSessionId);
         const flowMode = resolveFlowSummaryBuilderMode(flow);
         const flowModeLabel = getFlowBuilderModeLabel(flowMode);
         const itemClasses = [
@@ -5134,7 +5132,7 @@ function renderFlowsList(flows: FlowSummary[]) {
                         </div>
                     `
                 }
-                <div class="meta">Tipo: ${escapeHtml(flowModeLabel)} | Gatilho: ${getTriggerLabel(flow.trigger_type)} | Conta: ${escapeHtml(getFlowListSessionScopeLabel(flow))} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
+                <div class="meta">Tipo: ${escapeHtml(flowModeLabel)} | Gatilho: ${getTriggerLabel(flow.trigger_type)} | Conta: ${escapeHtml(selectedSessionLabel)} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
             </div>
             <div
                 class="flow-list-actions"
@@ -5143,28 +5141,6 @@ function renderFlowsList(flows: FlowSummary[]) {
                 onmouseup="event.stopPropagation()"
                 onpointerdown="event.stopPropagation()"
             >
-                <select
-                    class="flow-list-scope-select"
-                    title="Conta do fluxo"
-                    onclick="event.stopPropagation()"
-                    onmousedown="event.stopPropagation()"
-                    onmouseup="event.stopPropagation()"
-                    onpointerdown="event.stopPropagation()"
-                    onkeydown="event.stopPropagation()"
-                    oninput="updateFlowListSessionScope(${flow.id}, this.value, event)"
-                    onchange="updateFlowListSessionScope(${flow.id}, this.value, event)"
-                >
-                    ${sessionOptions}
-                </select>
-                ${hasPendingSessionScopeChange ? `
-                    <button
-                        class="flow-list-btn flow-list-scope-confirm is-pending"
-                        title="Confirmar conta selecionada"
-                        onclick="confirmFlowListSessionScope(${flow.id}, event)"
-                    >
-                        Confirmar
-                    </button>
-                ` : ''}
                 <button class="flow-list-btn flow-list-toggle ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Desativar fluxo' : 'Ativar fluxo'}" onclick="toggleFlowActivation(${flow.id}, event)">
                     ${isActive ? 'Desativar' : 'Ativar'}
                 </button>
