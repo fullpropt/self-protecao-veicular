@@ -21,7 +21,7 @@ const PLAN_CATALOG = {
         key: 'advanced',
         code: 'advanced',
         name: 'Avancado',
-        priceId: String(process.env.PAGARME_PLAN_ADVANCED || '').trim(),
+        priceId: String(process.env.PAGARME_PLAN_ADVANCED || process.env.PAGARME_PLAN_AVANCADO || '').trim(),
         trialDays: 0
     }
 };
@@ -264,7 +264,10 @@ async function createCheckoutSession({ plan, customer = {}, metadata = {} }) {
             : `ZapVender ${resolvedPlan.name}`,
         max_paid_sessions: 1,
         payment_settings: {
-            accepted_payment_methods: ['credit_card']
+            accepted_payment_methods: ['credit_card'],
+            credit_card_settings: {
+                operation_type: 'auth_and_capture'
+            }
         },
         cart_settings: {
             recurrences: [
