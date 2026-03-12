@@ -1,6 +1,8 @@
 const Stripe = require('stripe');
 
 const DEFAULT_SUPPORT_EMAIL = 'suporte@zapvender.com';
+const DEFAULT_CHECKOUT_DISPLAY_NAME = 'ZapVender';
+const DEFAULT_CHECKOUT_BRANDING_API_VERSION = '2025-09-30.clover';
 
 const PLAN_CATALOG = {
     starter: {
@@ -69,6 +71,25 @@ function getSupportEmail() {
     return String(process.env.SALES_SUPPORT_EMAIL || DEFAULT_SUPPORT_EMAIL).trim() || DEFAULT_SUPPORT_EMAIL;
 }
 
+function getCheckoutBrandingDisplayName() {
+    return String(process.env.STRIPE_CHECKOUT_DISPLAY_NAME || DEFAULT_CHECKOUT_DISPLAY_NAME).trim();
+}
+
+function getCheckoutBrandingApiVersion() {
+    return String(
+        process.env.STRIPE_CHECKOUT_BRANDING_API_VERSION || DEFAULT_CHECKOUT_BRANDING_API_VERSION
+    ).trim();
+}
+
+function buildCheckoutBrandingSettings() {
+    const displayName = getCheckoutBrandingDisplayName();
+    if (!displayName) return null;
+
+    return {
+        display_name: displayName
+    };
+}
+
 function getStripeClient() {
     if (cachedStripeClient) return cachedStripeClient;
 
@@ -106,7 +127,7 @@ async function createCheckoutSession({ plan, successUrl, cancelUrl }) {
         subscriptionData.trial_period_days = Number(resolvedPlan.trialDays);
     }
 
-    return stripe.checkout.sessions.create({
+    const checkoutSessionPayload = {
         mode: 'subscription',
         locale: 'pt-BR',
         billing_address_collection: 'auto',
@@ -129,7 +150,17 @@ async function createCheckoutSession({ plan, successUrl, cancelUrl }) {
             source: 'zapvender_public_plans'
         },
         subscription_data: subscriptionData
-    });
+    };
+
+    const brandingSettings = buildCheckoutBrandingSettings();
+    const requestOptions = {};
+
+    if (brandingSettings) {
+        checkoutSessionPayload.branding_settings = brandingSettings;
+        requestOptions.apiVersion = getCheckoutBrandingApiVersion();
+    }
+
+    return stripe.checkout.sessions.create(checkoutSessionPayload, requestOptions);
 }
 
 async function constructWebhookEvent(rawBody, signature) {
