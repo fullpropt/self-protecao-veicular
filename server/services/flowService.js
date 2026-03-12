@@ -2240,6 +2240,22 @@ class FlowService extends EventEmitter {
         }
         
         // Se não encontrou por keyword, verificar se é novo contato
+        if (!flow) {
+            const activeKeywordFlows = await loadActiveKeywordFlows();
+            const menuFallbackFlow = this.pickKeywordFlowByIntentTriggerFirstMessageMenu(
+                activeKeywordFlows,
+                conversationSessionId
+            );
+
+            if (menuFallbackFlow) {
+                flow = menuFallbackFlow;
+                console.info(
+                    `[flow-intent] Fallback de menu selecionou fluxo ${flow.id} `
+                    + `(${flow.name || 'sem-nome'}) para conversa sem execucao ativa.`
+                );
+            }
+        }
+
         if (!flow && conversation?.created) {
             flow = await Flow.findByTrigger('new_contact', null, flowScopeOptions);
             if (flow && !this.flowMatchesConversationSession(flow, conversationSessionId)) {
