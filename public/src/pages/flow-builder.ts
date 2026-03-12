@@ -4850,6 +4850,10 @@ function hasPendingFlowListSessionScopeChange(flow: FlowSummary) {
     return getFlowListSessionScopeValue(flow) !== normalizeFlowSessionId(flow.session_id);
 }
 
+function getFlowListSessionScopeLabel(flow: FlowSummary) {
+    return getFlowSessionScopeLabel(getFlowListSessionScopeValue(flow));
+}
+
 // Renderizar lista de fluxos
 function renderFlowsList(flows: FlowSummary[]) {
     const container = document.getElementById('flowsList') as HTMLElement | null;
@@ -4934,14 +4938,24 @@ function renderFlowsList(flows: FlowSummary[]) {
                         </div>
                     `
                 }
-                <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | Conta: ${escapeHtml(getFlowSessionScopeLabel(flow.session_id))} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
+                <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | Conta: ${escapeHtml(getFlowListSessionScopeLabel(flow))} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
             </div>
-            <div class="flow-list-actions">
+            <div
+                class="flow-list-actions"
+                onclick="event.stopPropagation()"
+                onmousedown="event.stopPropagation()"
+                onmouseup="event.stopPropagation()"
+                onpointerdown="event.stopPropagation()"
+            >
                 <select
                     class="flow-list-scope-select"
                     title="Conta do fluxo"
                     onclick="event.stopPropagation()"
                     onmousedown="event.stopPropagation()"
+                    onmouseup="event.stopPropagation()"
+                    onpointerdown="event.stopPropagation()"
+                    onkeydown="event.stopPropagation()"
+                    oninput="updateFlowListSessionScope(${flow.id}, this.value, event)"
                     onchange="updateFlowListSessionScope(${flow.id}, this.value, event)"
                 >
                     ${sessionOptions}
@@ -5539,6 +5553,7 @@ function openFlowsModal() {
     renderFlowStatusControls();
     renamingFlowId = null;
     renamingFlowDraft = '';
+    pendingFlowListSessionScopes = {};
     void loadFlowWhatsappSessions({ silent: true });
     loadFlows();
     const screenTitle = document.getElementById('flowsScreenTitle') as HTMLElement | null;

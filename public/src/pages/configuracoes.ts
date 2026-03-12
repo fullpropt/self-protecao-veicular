@@ -1026,10 +1026,6 @@ function renderPlanStatus() {
                     <label class="form-label">Plano</label>
                     <input type="text" class="form-input" value="${escapeHtml(data.planName)}" readonly />
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Código do plano</label>
-                    <input type="text" class="form-input" value="${escapeHtml(data.planCode || '-')}" readonly />
-                </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
