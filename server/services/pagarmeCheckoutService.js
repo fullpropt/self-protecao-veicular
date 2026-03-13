@@ -227,9 +227,6 @@ async function resolvePagarmeCustomerId(customer = {}) {
             const existingPhones = existingCustomer?.phones && typeof existingCustomer.phones === 'object'
                 ? existingCustomer.phones
                 : null;
-            const existingDocument = normalizeDocumentDigits(existingCustomer?.document || '', existingCustomer?.document_type || documentType);
-            const existingDocumentType = normalizeDocumentType(existingCustomer?.document_type || documentType);
-            const existingType = String(existingCustomer?.type || '').trim().toLowerCase();
 
             if (customerName && customerName !== existingName) {
                 updates.name = customerName;
@@ -240,18 +237,6 @@ async function resolvePagarmeCustomerId(customer = {}) {
                 && JSON.stringify(customerPhones) !== JSON.stringify(existingPhones)
             ) {
                 updates.phones = customerPhones;
-            }
-
-            if (document && document !== existingDocument) {
-                updates.document = document;
-            }
-
-            if (document && documentType !== existingDocumentType) {
-                updates.document_type = documentType;
-            }
-
-            if (customerType && customerType !== existingType) {
-                updates.type = customerType;
             }
 
             if (Object.keys(updates).length > 0) {
