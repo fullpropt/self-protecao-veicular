@@ -216,6 +216,23 @@ async function resolvePagarmeCustomerId(customer = {}) {
     const documentType = normalizeDocumentType(customer?.documentType);
     const document = normalizeDocumentDigits(customer?.documentNumber || customer?.document, documentType);
     const customerType = inferCustomerType(documentType);
+    const createCustomerPayload = {
+        name: customerName || customerEmail,
+        email: customerEmail,
+        type: customerType,
+        ...(document ? { document } : {}),
+        ...(document ? { document_type: documentType } : {}),
+        ...(customerPhones ? { phones: customerPhones } : {})
+    };
+
+    const createCustomer = async () => {
+        const createdCustomer = await pagarmeRequest('/customers', {
+            method: 'POST',
+            body: createCustomerPayload
+        });
+
+        return String(createdCustomer?.id || '').trim();
+    };
 
     try {
         const existingCustomers = await pagarmeRequest(`/customers?email=${encodeURIComponent(customerEmail)}`);
@@ -249,22 +266,15 @@ async function resolvePagarmeCustomerId(customer = {}) {
             return String(existingCustomer.id || '').trim();
         }
 
-        const createdCustomer = await pagarmeRequest('/customers', {
-            method: 'POST',
-            body: {
-                name: customerName || customerEmail,
-                email: customerEmail,
-                type: customerType,
-                ...(document ? { document } : {}),
-                ...(document ? { document_type: documentType } : {}),
-                ...(customerPhones ? { phones: customerPhones } : {})
-            }
-        });
-
-        return String(createdCustomer?.id || '').trim();
+        return createCustomer();
     } catch (error) {
         console.warn('[pagarmeCheckoutService] Falha ao preparar customer para prefill:', error.message);
-        return '';
+        try {
+            return await createCustomer();
+        } catch (creationError) {
+            console.warn('[pagarmeCheckoutService] Falha ao criar customer fallback:', creationError.message);
+            return '';
+        }
     }
 }
 
