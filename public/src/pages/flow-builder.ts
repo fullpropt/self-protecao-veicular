@@ -1060,7 +1060,15 @@ function getIncomingEdgeLabels(node: FlowNode, targetHandle: string) {
 }
 
 function getInputHandles(node: FlowNode) {
-    if (node.type === 'trigger') return [];
+    if (node.type === 'trigger') {
+        return [{
+            handle: DEFAULT_HANDLE,
+            label: '',
+            isConnected: true,
+            isExtra: false,
+            incomingLabels: getIncomingEdgeLabels(node, DEFAULT_HANDLE)
+        }];
+    }
     if (node.type === 'intent' || node.type === 'end') {
         return [{
             handle: DEFAULT_HANDLE,
@@ -2235,7 +2243,6 @@ function getNodeOutputPortsMarkup(node: FlowNode) {
 }
 
 function getNodeInputPortsMarkup(node: FlowNode) {
-    if (node.type === 'trigger') return '<div></div>';
     const handles = getInputHandles(node);
 
     return `
@@ -4247,7 +4254,6 @@ function cleanupInvalidEdgesForNode(nodeId: string) {
         }
 
         if (edge.target === nodeId) {
-            if (node.type === 'trigger') return false;
             return validTargetHandles.has(edgeHandle(edge.targetHandle));
         }
 

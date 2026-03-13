@@ -1373,6 +1373,11 @@ class FlowService extends EventEmitter {
         ];
     }
 
+    hasEndNodeRouteOptions(execution = null, node = null) {
+        const entries = this.buildEndNodeMenuEntries(execution, node);
+        return entries.some((entry) => String(entry?.type || '').trim().toLowerCase() === 'route');
+    }
+
     buildEndNodeMenuPayload(execution = null, node = null) {
         const entries = this.buildEndNodeMenuEntries(execution, node);
         if (entries.length === 0) return null;
@@ -2885,12 +2890,18 @@ class FlowService extends EventEmitter {
             );
 
             if (!endSelection) {
-                await this.maybeSendEndNodeMenu(execution, currentNode);
-                await this.persistExecutionVariables(execution);
+                if (this.hasEndNodeRouteOptions(execution, currentNode)) {
+                    await this.maybeSendEndNodeMenu(execution, currentNode);
+                    await this.persistExecutionVariables(execution);
+                } else {
+                    await this.maybeSendEndNodeFinalMessage(execution, currentNode);
+                    await this.endFlow(execution, 'completed');
+                }
                 return execution;
             }
 
             if (endSelection.action === 'finalize') {
+                await this.maybeSendEndNodeFinalMessage(execution, currentNode);
                 await this.endFlow(execution, 'completed');
                 return execution;
             }
@@ -3143,11 +3154,11 @@ class FlowService extends EventEmitter {
                 }
                     
                 case 'end':
-                    await this.maybeSendEndNodeFinalMessage(execution, node);
-                    if (this.sendFunction) {
+                    if (this.sendFunction && this.hasEndNodeRouteOptions(execution, node)) {
                         await this.maybeSendEndNodeMenu(execution, node);
                         await this.drainPendingIncomingMessages(execution);
                     } else {
+                        await this.maybeSendEndNodeFinalMessage(execution, node);
                         await this.endFlow(execution, 'completed');
                     }
                     break;
