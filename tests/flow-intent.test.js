@@ -1344,7 +1344,7 @@ describe('FlowService intent routing compatibility', () => {
         startFlowSpy.mockRestore();
     });
 
-    test('processIncomingMessage does not auto-start menu flow after first message', async () => {
+    test('processIncomingMessage auto-starts menu flow in existing conversation without active execution', async () => {
         const service = new FlowService();
         intentClassifier.classifyKeywordFlowIntent.mockReset();
         const menuFlow = {
@@ -1380,10 +1380,93 @@ describe('FlowService intent routing compatibility', () => {
             { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
         );
 
-        expect(startFlowSpy).not.toHaveBeenCalled();
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            menuFlow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'oi de novo' })
+        );
         expect(keywordSpy).toHaveBeenCalled();
         expect(newContactSpy).not.toHaveBeenCalled();
-        expect(result).toBeNull();
+        expect(result).toEqual({ id: 902 });
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
+    });
+
+    test('processIncomingMessage ignores active flow with inconsistent menu mode', async () => {
+        const service = new FlowService();
+        intentClassifier.classifyKeywordFlowIntent.mockReset();
+
+        const inconsistentMenuFlow = {
+            id: 15,
+            name: 'Menu Inconsistente',
+            trigger_type: 'keyword',
+            flow_builder_mode: 'humanized',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [
+                {
+                    id: 'trigger-menu-inconsistente',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opcao'
+                    }
+                }
+            ],
+            edges: []
+        };
+        const validMenuFlow = {
+            id: 304,
+            name: 'Menu Valido',
+            trigger_type: 'keyword',
+            flow_builder_mode: 'menu',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [
+                {
+                    id: 'trigger-menu-valido',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opcao'
+                    }
+                }
+            ],
+            edges: []
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([
+            inconsistentMenuFlow,
+            validMenuFlow
+        ]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 903 });
+        intentClassifier.classifyKeywordFlowIntent.mockResolvedValue({ status: 'no_match' });
+
+        const result = await service.processIncomingMessage(
+            { text: 'oi novamente' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
+        );
+
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            validMenuFlow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'oi novamente' })
+        );
+        expect(keywordSpy).toHaveBeenCalled();
+        expect(newContactSpy).not.toHaveBeenCalled();
+        expect(result).toEqual({ id: 903 });
 
         resolveExecutionSpy.mockRestore();
         keywordSpy.mockRestore();

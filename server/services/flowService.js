@@ -956,6 +956,15 @@ class FlowService extends EventEmitter {
             return this.restoreExecutionFromStorage(conversation, lead);
         }
 
+        if (this.hasInconsistentMenuMode(flow)) {
+            await run(`
+                UPDATE flow_executions
+                SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Execucao cancelada automaticamente: fluxo com modo inconsistente.', activeRow.id]);
+            return this.restoreExecutionFromStorage(conversation, lead);
+        }
+
         let parsedVariables = {};
         try {
             const maybeObject = JSON.parse(activeRow.variables || '{}');
@@ -1705,6 +1714,16 @@ class FlowService extends EventEmitter {
         return nodes.find((item) => String(item?.type || '').trim().toLowerCase() === 'trigger') || null;
     }
 
+    hasInconsistentMenuMode(flow = null) {
+        if (!flow) return false;
+        const explicitModeRaw = String(flow?.flow_builder_mode || flow?.flowBuilderMode || '').trim();
+        if (!explicitModeRaw) return false;
+        if (this.normalizeFlowBuilderMode(explicitModeRaw) === 'menu') return false;
+
+        const inferredMode = this.inferFlowBuilderModeFromNodes(flow);
+        return inferredMode === 'menu';
+    }
+
     hasDefaultEdgeToMessageOnce(flow = null, sourceNodeId = '') {
         const normalizedSourceId = String(sourceNodeId || '').trim();
         if (!normalizedSourceId) return false;
@@ -2375,8 +2394,18 @@ class FlowService extends EventEmitter {
                 return activeKeywordFlowsCache;
             }
 
-            activeKeywordFlowsCache = (await Flow.findActiveKeywordFlows(flowScopeOptions))
+            const scopedFlows = (await Flow.findActiveKeywordFlows(flowScopeOptions))
                 .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
+
+            const inconsistentFlows = scopedFlows.filter((item) => this.hasInconsistentMenuMode(item));
+            if (inconsistentFlows.length > 0) {
+                console.warn(
+                    `[flow-intent] Ignorando ${inconsistentFlows.length} fluxo(s) com modo inconsistente `
+                    + `(humanized + no de menu): ${inconsistentFlows.map((item) => item?.id).join(', ')}`
+                );
+            }
+
+            activeKeywordFlowsCache = scopedFlows.filter((item) => !this.hasInconsistentMenuMode(item));
 
             return activeKeywordFlowsCache;
         };
@@ -2460,8 +2489,9 @@ class FlowService extends EventEmitter {
             }
         }
         
-        // Se não encontrou por keyword, verificar se é novo contato
-        if (!flow && conversation?.created) {
+        // Se não encontrou por keyword, tenta fallback para menu interativo
+        // mesmo em conversas já existentes (sem execução ativa).
+        if (!flow) {
             const activeKeywordFlows = await loadActiveKeywordFlows();
             const menuFallbackFlow = this.pickKeywordFlowByIntentTriggerFirstMessageMenu(
                 activeKeywordFlows,
