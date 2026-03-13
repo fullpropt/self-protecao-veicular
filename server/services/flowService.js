@@ -56,6 +56,9 @@ const FLOW_MENU_PROMPT_DEFAULT = 'Selecione uma opcao no menu abaixo:';
 const FLOW_END_MENU_PROMPT_DEFAULT = 'Se desejar, escolha uma opcao no menu abaixo:';
 const FLOW_END_MENU_SECTION_TITLE_DEFAULT = 'Finalizacao';
 const FLOW_END_MENU_ROW_PREFIX = 'flow-end-option:';
+const FLOW_END_MENU_MAX_CUSTOM_OPTIONS = 9;
+const FLOW_END_MENU_FIXED_FINALIZE_LABEL = 'Finalizar';
+const FLOW_END_MENU_FINALIZE_TOKEN = 'finalizar';
 
 function normalizeBooleanFlag(value) {
     if (typeof value === 'boolean') return value;
@@ -232,7 +235,7 @@ function parseFlowEndOptions(value = null) {
         return value
             .map((item) => sanitizeOutgoingFlowText(item))
             .filter(Boolean)
-            .slice(0, 10);
+            .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS);
     }
 
     const raw = sanitizeOutgoingFlowText(value || '');
@@ -242,7 +245,7 @@ function parseFlowEndOptions(value = null) {
         .split(/[,;\n|]+/)
         .map((item) => sanitizeOutgoingFlowText(item))
         .filter(Boolean)
-        .slice(0, 10);
+        .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS);
 }
 
 function parsePathHandleIndex(handleValue = '') {
@@ -1328,8 +1331,6 @@ class FlowService extends EventEmitter {
 
     resolveEndNodeMenuOptions(node = null, execution = null) {
         const options = parseFlowEndOptions(node?.data?.endOptions);
-        if (options.length === 0) return [];
-
         const variables = execution?.variables || {};
         const unique = [];
         const seen = new Set();
@@ -1337,23 +1338,47 @@ class FlowService extends EventEmitter {
         for (const option of options) {
             const rendered = sanitizeOutgoingFlowText(this.replaceVariables(option, variables));
             if (!rendered) continue;
-            const normalized = rendered.toLowerCase();
+            const normalized = normalizeIntentText(rendered);
+            if (!normalized) continue;
+            if (normalized === FLOW_END_MENU_FINALIZE_TOKEN) continue;
             if (seen.has(normalized)) continue;
             seen.add(normalized);
             unique.push(rendered);
-            if (unique.length >= 10) break;
+            if (unique.length >= FLOW_END_MENU_MAX_CUSTOM_OPTIONS) break;
         }
 
         return unique;
     }
 
-    buildEndNodeMenuPayload(execution = null, node = null) {
-        const options = this.resolveEndNodeMenuOptions(node, execution);
-        if (options.length === 0) return null;
+    buildEndNodeMenuEntries(execution = null, node = null) {
+        const customOptions = this.resolveEndNodeMenuOptions(node, execution);
+        const customEntries = customOptions.map((title, index) => {
+            const handle = index === 0 ? 'default' : `path-${index + 1}`;
+            return {
+                type: 'route',
+                handle,
+                rowId: `${FLOW_END_MENU_ROW_PREFIX}${handle}`,
+                title
+            };
+        });
 
-        const rows = options.map((title, index) => ({
-            rowId: `${FLOW_END_MENU_ROW_PREFIX}${index + 1}`,
-            title
+        return [
+            ...customEntries,
+            {
+                type: 'finalize',
+                handle: FLOW_END_MENU_FINALIZE_TOKEN,
+                rowId: `${FLOW_END_MENU_ROW_PREFIX}${FLOW_END_MENU_FINALIZE_TOKEN}`,
+                title: FLOW_END_MENU_FIXED_FINALIZE_LABEL
+            }
+        ];
+    }
+
+    buildEndNodeMenuPayload(execution = null, node = null) {
+        const entries = this.buildEndNodeMenuEntries(execution, node);
+        if (entries.length === 0) return null;
+        const rows = entries.map((entry) => ({
+            rowId: entry.rowId,
+            title: entry.title
         }));
 
         return {
@@ -1367,6 +1392,94 @@ class FlowService extends EventEmitter {
                 }
             ]
         };
+    }
+
+    resolveEndNodeSelectionFromInboundMessage(execution = null, node = null, message = {}, responseText = '') {
+        const entries = this.buildEndNodeMenuEntries(execution, node);
+        if (entries.length === 0) return { action: 'finalize', handle: FLOW_END_MENU_FINALIZE_TOKEN };
+
+        const routeEntryByHandle = new Map();
+        const entryByRowId = new Map();
+        const entryByTitle = new Map();
+
+        for (const entry of entries) {
+            const entryRowId = String(entry?.rowId || '').trim().toLowerCase();
+            if (entryRowId) {
+                entryByRowId.set(entryRowId, entry);
+            }
+
+            if (entry?.type === 'route') {
+                const normalizedHandle = this.normalizeFlowHandle(entry?.handle);
+                routeEntryByHandle.set(normalizedHandle, entry);
+            }
+
+            const normalizedTitle = normalizeIntentText(entry?.title || '');
+            if (normalizedTitle && !entryByTitle.has(normalizedTitle)) {
+                entryByTitle.set(normalizedTitle, entry);
+            }
+        }
+
+        const candidates = [
+            message?.selectionId,
+            message?.selectedRowId,
+            message?.optionId,
+            message?.choiceId,
+            message?.selectionText,
+            responseText
+        ];
+
+        const resolveEntry = (entry = null) => {
+            if (!entry) return null;
+            if (entry.type === 'finalize') {
+                return { action: 'finalize', handle: FLOW_END_MENU_FINALIZE_TOKEN };
+            }
+            return { action: 'route', handle: this.normalizeFlowHandle(entry.handle) };
+        };
+
+        for (const candidateRaw of candidates) {
+            const candidate = String(candidateRaw || '').trim();
+            if (!candidate) continue;
+            const candidateLower = candidate.toLowerCase();
+
+            const directRowMatch = resolveEntry(entryByRowId.get(candidateLower));
+            if (directRowMatch) return directRowMatch;
+
+            if (candidateLower.startsWith(FLOW_END_MENU_ROW_PREFIX)) {
+                const token = candidateLower.slice(FLOW_END_MENU_ROW_PREFIX.length).trim();
+                if (!token) continue;
+                if (token === FLOW_END_MENU_FINALIZE_TOKEN) {
+                    return { action: 'finalize', handle: FLOW_END_MENU_FINALIZE_TOKEN };
+                }
+                const parsedHandle = this.normalizeFlowHandleFromToken(token) || this.normalizeFlowHandle(token);
+                const routeMatch = resolveEntry(routeEntryByHandle.get(parsedHandle));
+                if (routeMatch) return routeMatch;
+            }
+
+            const directHandle = this.normalizeFlowHandleFromToken(candidate);
+            if (directHandle) {
+                const routeMatch = resolveEntry(routeEntryByHandle.get(directHandle));
+                if (routeMatch) return routeMatch;
+            }
+
+            if (/^\d+$/.test(candidateLower)) {
+                const selectedIndex = Number.parseInt(candidateLower, 10);
+                if (Number.isFinite(selectedIndex) && selectedIndex > 0 && selectedIndex <= entries.length) {
+                    const indexedEntry = resolveEntry(entries[selectedIndex - 1]);
+                    if (indexedEntry) return indexedEntry;
+                }
+            }
+
+            const normalizedCandidate = normalizeIntentText(candidate);
+            if (!normalizedCandidate) continue;
+            if (normalizedCandidate === FLOW_END_MENU_FINALIZE_TOKEN) {
+                return { action: 'finalize', handle: FLOW_END_MENU_FINALIZE_TOKEN };
+            }
+
+            const titleMatch = resolveEntry(entryByTitle.get(normalizedCandidate));
+            if (titleMatch) return titleMatch;
+        }
+
+        return null;
     }
 
     async maybeSendEndNodeFinalMessage(execution = null, node = null) {
@@ -2250,6 +2363,10 @@ class FlowService extends EventEmitter {
             return true;
         }
 
+        if (nodeType === 'end') {
+            return true;
+        }
+
         if (nodeType === 'trigger' && (nodeSubtype === 'keyword' || nodeSubtype === 'intent')) {
             return true;
         }
@@ -2758,6 +2875,31 @@ class FlowService extends EventEmitter {
             return execution;
         }
 
+        if (currentNode.type === 'end') {
+            execution.variables.last_response = messageText;
+            const endSelection = this.resolveEndNodeSelectionFromInboundMessage(
+                execution,
+                currentNode,
+                message,
+                messageText
+            );
+
+            if (!endSelection) {
+                await this.maybeSendEndNodeMenu(execution, currentNode);
+                await this.persistExecutionVariables(execution);
+                return execution;
+            }
+
+            if (endSelection.action === 'finalize') {
+                await this.endFlow(execution, 'completed');
+                return execution;
+            }
+
+            this.setNodeEntryHandle(execution, currentNode.id, endSelection.handle);
+            await this.goToNextNode(execution, currentNode);
+            return execution;
+        }
+
         const queuedCount = this.enqueuePendingIncomingMessage(execution, message);
         if (queuedCount > 0) {
             await this.persistExecutionVariables(execution);
@@ -3002,8 +3144,12 @@ class FlowService extends EventEmitter {
                     
                 case 'end':
                     await this.maybeSendEndNodeFinalMessage(execution, node);
-                    await this.maybeSendEndNodeMenu(execution, node);
-                    await this.endFlow(execution, 'completed');
+                    if (this.sendFunction) {
+                        await this.maybeSendEndNodeMenu(execution, node);
+                        await this.drainPendingIncomingMessages(execution);
+                    } else {
+                        await this.endFlow(execution, 'completed');
+                    }
                     break;
                     
                 default:

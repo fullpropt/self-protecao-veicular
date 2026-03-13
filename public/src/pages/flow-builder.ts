@@ -236,6 +236,8 @@ const OUTPUT_ACTION_TYPE_LABELS: Record<OutputActionType, string> = {
     tag: 'Adicionar Tag',
     webhook: 'Webhook'
 };
+const END_NODE_MAX_CUSTOM_OPTIONS = 9;
+const END_NODE_FIXED_OPTION_LABEL = 'Finalizar';
 
 let activeFlowDialogDismiss: (() => void) | null = null;
 let flowAiAssistantOpen = false;
@@ -908,7 +910,7 @@ function parseEndOptionList(value: string) {
         .split(/[\n,;|]+/)
         .map((item) => item.trim())
         .filter(Boolean)
-        .slice(0, 10);
+        .slice(0, END_NODE_MAX_CUSTOM_OPTIONS);
 }
 
 function coerceEndOptionListForEditor(value: unknown) {
@@ -916,9 +918,13 @@ function coerceEndOptionListForEditor(value: unknown) {
         return value
             .map((item) => String(item ?? '').trim())
             .filter(Boolean)
-            .slice(0, 10);
+            .slice(0, END_NODE_MAX_CUSTOM_OPTIONS);
     }
     return parseEndOptionList(String(value || ''));
+}
+
+function getEndNodeCustomOptions(node?: FlowNode | null) {
+    return coerceEndOptionListForEditor((node?.data as any)?.endOptions || []);
 }
 
 function coerceIntentMessageListForEditor(value: unknown, fallbackValue: unknown = '') {
@@ -1104,7 +1110,12 @@ function getPassThroughOutputHandles(node: FlowNode) {
 }
 
 function getOutputHandles(node: FlowNode) {
-    if (node.type === 'end') return [];
+    if (node.type === 'end') {
+        return getEndNodeCustomOptions(node).map((option, index) => ({
+            handle: pathHandleFromIndex(index + 1),
+            label: option || `Opção ${index + 1}`
+        }));
+    }
 
     if (isPathPassThroughNode(node)) {
         return getPassThroughOutputHandles(node);
@@ -2192,8 +2203,6 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
 }
 
 function getNodeOutputPortsMarkup(node: FlowNode) {
-    if (node.type === 'end') return '<div></div>';
-
     const handles = getOutputHandles(node);
     return `
         <div class="node-output-ports">
@@ -3292,7 +3301,6 @@ function renderProperties() {
         const endOptions = coerceEndOptionListForEditor(
             getNodePropValue('endOptions', (selectedNode.data as any).endOptions || [])
         );
-        const endOptionsText = endOptions.join('\n');
 
         html += `
             <div class="property-group">
@@ -3312,9 +3320,35 @@ function renderProperties() {
                 <input type="text" value="${escapeHtml(endMenuSectionTitle)}" onchange="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Finalizacao">
             </div>
             <div class="property-group">
-                <label>Opcoes finais (uma por linha)</label>
-                <textarea onchange="updateEndNodeOptions(this.value)" placeholder="Voltar ao menu principal">${escapeHtml(endOptionsText)}</textarea>
-                <small style="display:block; margin-top:6px; color:#7b8aa3;">Ao chegar neste bloco, o fluxo e finalizado. O lead pode enviar uma nova mensagem para iniciar novamente.</small>
+                <label>Opcoes finais</label>
+                <div class="intent-routes-editor">
+                    ${endOptions.map((option, index) => `
+                        <div class="intent-menu-option-row">
+                            <input
+                                class="intent-route-name-input"
+                                type="text"
+                                value="${escapeHtml(String(option || ''))}"
+                                title="${escapeHtml(String(option || '').trim() || ('Opcao ' + (index + 1)))}"
+                                placeholder="Ex.: Voltar ao menu principal"
+                                onchange="updateEndNodeOption(${index}, this.value)"
+                            >
+                            <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opcao" onclick="removeEndNodeOption(${index})">×</button>
+                        </div>
+                    `).join('')}
+                    <div class="intent-menu-option-row">
+                        <input
+                            class="intent-route-name-input"
+                            type="text"
+                            value="${escapeHtml(END_NODE_FIXED_OPTION_LABEL)}"
+                            readonly
+                            disabled
+                            title="Opcao fixa"
+                        >
+                        <span class="property-helper-text" style="margin:0; white-space:nowrap;">Fixa</span>
+                    </div>
+                    <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addEndNodeOption()">+ Adicionar opcao</button>
+                </div>
+                <small style="display:block; margin-top:6px; color:#7b8aa3;">A opcao "${END_NODE_FIXED_OPTION_LABEL}" sempre encerra o fluxo. As demais opcoes podem seguir para outros blocos.</small>
             </div>
             <div class="property-group">
                 <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
@@ -3846,7 +3880,7 @@ function openOutputActionEditor(nodeId: string, encodedHandle: string, encodedLa
     event?.stopPropagation();
 
     const node = nodes.find((item) => item.id === nodeId);
-    if (!node || node.type === 'end') return;
+    if (!node) return;
 
     selectNode(nodeId);
     selectedOutputActionContext = {
@@ -3948,6 +3982,53 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
     }
 
     renderWhatsappPreview();
+}
+
+function getEditableEndNodeOptionsDraft() {
+    if (!selectedNode || selectedNode.type !== 'end') return [];
+    return coerceEndOptionListForEditor(
+        getNodePropValue('endOptions', (selectedNode.data as any).endOptions || [])
+    );
+}
+
+function commitEndNodeOptionsDraft(options: string[]) {
+    updateNodeProperty('endOptions', coerceEndOptionListForEditor(options));
+}
+
+function addEndNodeOption() {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode || selectedNode.type !== 'end') return;
+
+    const options = getEditableEndNodeOptionsDraft();
+    if (options.length >= END_NODE_MAX_CUSTOM_OPTIONS) {
+        notify('warning', 'Limite atingido', `O bloco final aceita no máximo ${END_NODE_MAX_CUSTOM_OPTIONS} opções personalizadas.`);
+        return;
+    }
+
+    options.push(`Opcao ${options.length + 1}`);
+    commitEndNodeOptionsDraft(options);
+    renderProperties();
+}
+
+function updateEndNodeOption(index: number, value: string) {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode || selectedNode.type !== 'end') return;
+
+    const options = getEditableEndNodeOptionsDraft();
+    if (!options[index]) return;
+    options[index] = String(value || '');
+    commitEndNodeOptionsDraft(options);
+}
+
+function removeEndNodeOption(index: number) {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode || selectedNode.type !== 'end') return;
+
+    const options = getEditableEndNodeOptionsDraft();
+    if (!options[index]) return;
+    options.splice(index, 1);
+    commitEndNodeOptionsDraft(options);
+    renderProperties();
 }
 
 function updateEndNodeOptions(value: string) {
@@ -5894,6 +5975,9 @@ const windowAny = window as Window & {
     insertVariable?: (variable: string) => void;
     updateNodeProperty?: (key: keyof NodeData, value: any) => void;
     updateEndNodeOptions?: (value: string) => void;
+    addEndNodeOption?: () => void;
+    updateEndNodeOption?: (index: number, value: string) => void;
+    removeEndNodeOption?: (index: number) => void;
     confirmNodePropertyChanges?: () => void;
     updateEventNodeSelection?: (value: string) => void;
     openOutputActionEditor?: (nodeId: string, encodedHandle: string, encodedLabel?: string, event?: Event) => void;
@@ -5959,6 +6043,9 @@ windowAny.resetZoom = resetZoom;
 windowAny.insertVariable = insertVariable;
 windowAny.updateNodeProperty = updateNodeProperty;
 windowAny.updateEndNodeOptions = updateEndNodeOptions;
+windowAny.addEndNodeOption = addEndNodeOption;
+windowAny.updateEndNodeOption = updateEndNodeOption;
+windowAny.removeEndNodeOption = removeEndNodeOption;
 windowAny.confirmNodePropertyChanges = confirmNodePropertyChanges;
 windowAny.updateEventNodeSelection = updateEventNodeSelection;
 windowAny.openOutputActionEditor = openOutputActionEditor;
