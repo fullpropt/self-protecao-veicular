@@ -1459,12 +1459,18 @@ async function loadTags() {
             bulkRemoveTagSelect.innerHTML = `<option value="">Selecione uma tag...</option>${tagOptions}`;
         }
     } catch (e) {
-        // ignore
+        console.warn('Falha ao carregar tags para Contatos:', e);
     } finally {
         renderCreateContactTagSuggestions();
         renderEditContactTagSuggestions();
         renderBulkRemoveTagSelectedChips();
     }
+}
+
+async function openImportContactsModal() {
+    await loadTags();
+    await refreshImportTagColumnOptionsFromInputs();
+    openModal('importModal');
 }
 
 async function loadTemplates() {
@@ -1829,6 +1835,7 @@ async function saveContact() {
         applyCustomFieldsValues('contact-custom-field', {});
         clearLeadViewCaches();
         await loadContacts({ forceRefresh: true, silent: true });
+        void loadTags();
         showToast('success', 'Sucesso', 'Contato adicionado!');
     } catch (error) {
         hideLoading();
@@ -1934,6 +1941,7 @@ async function updateContact() {
         clearContactIdFromUrl();
         clearLeadViewCaches();
         await loadContacts({ forceRefresh: true, silent: true });
+        void loadTags();
         showToast('success', 'Sucesso', 'Contato atualizado!');
     } catch (error) {
         hideLoading();
@@ -2559,6 +2567,7 @@ function getStatusLabel(status: number) {
 const windowAny = window as Window & {
     initContacts?: () => void;
     loadContacts?: () => void;
+    openImportContactsModal?: () => Promise<void>;
     changePage?: (delta: number) => void;
     changeContactsSessionFilter?: (sessionId: string) => void;
     filterContacts?: () => void;
@@ -2589,6 +2598,7 @@ const windowAny = window as Window & {
 };
 windowAny.initContacts = initContacts;
 windowAny.loadContacts = loadContacts;
+windowAny.openImportContactsModal = openImportContactsModal;
 windowAny.changePage = changePage;
 windowAny.changeContactsSessionFilter = changeContactsSessionFilter;
 windowAny.filterContacts = filterContacts;
