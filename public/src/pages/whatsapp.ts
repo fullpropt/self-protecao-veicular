@@ -171,11 +171,12 @@ async function loadWhatsappPlanUsage() {
         const response = await api.get('/api/plan/status') as PlanStatusApiPayload;
         const metric = response?.plan?.limits?.whatsapp_sessions;
         const rawMax = metric?.max;
+        const hasFiniteMax = rawMax !== null && typeof rawMax !== 'undefined' && Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0;
         whatsappPlanUsageState = {
             loaded: true,
             planName: String(response?.plan?.name || 'Plano').trim() || 'Plano',
             current: Math.max(0, Number(metric?.current || whatsappPlanUsageState.current || 0) || 0),
-            max: Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0 ? Math.floor(Number(rawMax)) : null,
+            max: hasFiniteMax ? Math.floor(Number(rawMax)) : null,
             unlimited: metric?.unlimited === true || rawMax === null || typeof rawMax === 'undefined'
         };
     } catch (_) {

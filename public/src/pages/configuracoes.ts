@@ -902,7 +902,8 @@ function normalizePlanMetric(
         : null;
     const current = Math.max(0, Number(rawMetric?.current || 0) || 0);
     const rawMax = rawMetric?.max;
-    const max = Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0 ? Math.floor(Number(rawMax)) : null;
+    const hasFiniteMax = rawMax !== null && typeof rawMax !== 'undefined' && Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0;
+    const max = hasFiniteMax ? Math.floor(Number(rawMax)) : null;
     const unlimited = rawMetric?.unlimited === true || max === null;
     const remaining = unlimited ? null : Math.max(Number(rawMetric?.remaining ?? (max - current)) || 0, 0);
 

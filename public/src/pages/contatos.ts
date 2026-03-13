@@ -190,10 +190,11 @@ async function loadContactsPlanUsage() {
         const response = await api.get('/api/plan/status') as PlanStatusApiPayload;
         const metric = response?.plan?.limits?.contacts;
         const rawMax = metric?.max;
+        const hasFiniteMax = rawMax !== null && typeof rawMax !== 'undefined' && Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0;
         contactsPlanUsageState = {
             loaded: true,
             planName: String(response?.plan?.name || 'Plano').trim() || 'Plano',
-            max: Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0 ? Math.floor(Number(rawMax)) : null,
+            max: hasFiniteMax ? Math.floor(Number(rawMax)) : null,
             unlimited: metric?.unlimited === true || rawMax === null || typeof rawMax === 'undefined'
         };
     } catch (_) {
