@@ -20290,9 +20290,8 @@ function normalizeOptionalIsoDate(value) {
 
 function buildPlanLimitSnapshot(current, max, label) {
     const normalizedCurrent = Math.max(0, Number(current || 0) || 0);
-    const normalizedMax = Number.isInteger(Number(max)) && Number(max) >= 0
-        ? Math.floor(Number(max))
-        : null;
+    const hasFiniteMax = max !== null && typeof max !== 'undefined' && Number.isInteger(Number(max)) && Number(max) >= 0;
+    const normalizedMax = hasFiniteMax ? Math.floor(Number(max)) : null;
 
     return {
         label: String(label || '').trim() || 'recurso',
