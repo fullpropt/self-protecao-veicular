@@ -1041,7 +1041,7 @@ function isIdleQrLoadingMessage(message: string) {
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
         .trim();
-    return normalized.startsWith('aguardando conexão');
+    return normalized.startsWith('aguardando conex');
 }
 
 // Mostrar loading do QR
@@ -1195,7 +1195,7 @@ function handleDisconnected() {
     if (qrTimerEl) qrTimerEl.style.display = 'none';
 
     if (shouldShowReconnectUiForSession(getCurrentSessionId())) {
-        showQRLoading('Aguardando conexÃ£o...');
+        showQRLoading('Aguardando conexao...');
     }
     syncConnectionSectionVisibility();
 }
