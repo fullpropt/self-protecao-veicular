@@ -457,6 +457,56 @@ describe('FlowService intent routing compatibility', () => {
         expect(finalizeSelection).toEqual({ action: 'finalize', handle: 'finalizar' });
     });
 
+    test('continueFlow em no end reinicia no menu principal quando nao ha aresta de saida para voltar', async () => {
+        const service = new FlowService();
+        const triggerNode = {
+            id: 'trigger-menu',
+            type: 'trigger',
+            subtype: 'keyword',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Menu principal'
+            }
+        };
+        const endNode = {
+            id: 'end-node',
+            type: 'end',
+            data: {
+                endOptions: ['Voltar ao menu principal']
+            }
+        };
+
+        const execution = {
+            id: 77,
+            flow: {
+                id: 19,
+                nodes: [triggerNode, endNode],
+                edges: [
+                    { source: 'trigger-menu', target: 'end-node', sourceHandle: 'default', targetHandle: 'default' }
+                ]
+            },
+            lead: { id: 26, phone: '5527996459659' },
+            conversation: { id: 331, session_id: 'momnt' },
+            currentNode: 'end-node',
+            variables: {}
+        };
+
+        const executeNodeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue(undefined);
+        const goToNextNodeSpy = jest.spyOn(service, 'goToNextNode').mockResolvedValue(undefined);
+        const endFlowSpy = jest.spyOn(service, 'endFlow').mockResolvedValue(undefined);
+
+        const result = await service.continueFlow(execution, { text: '1' });
+
+        expect(executeNodeSpy).toHaveBeenCalledWith(execution, 'trigger-menu', 'default');
+        expect(goToNextNodeSpy).not.toHaveBeenCalled();
+        expect(endFlowSpy).not.toHaveBeenCalled();
+        expect(result).toBe(execution);
+
+        executeNodeSpy.mockRestore();
+        goToNextNodeSpy.mockRestore();
+        endFlowSpy.mockRestore();
+    });
+
     test('maybeSendIntentNodeMenu envia menu para no trigger em modo menu', async () => {
         const service = new FlowService();
         const sendMock = jest.fn().mockResolvedValue();

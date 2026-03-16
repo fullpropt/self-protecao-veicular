@@ -3032,7 +3032,23 @@ class FlowService extends EventEmitter {
                 return execution;
             }
 
-            this.setNodeEntryHandle(execution, currentNode.id, endSelection.handle);
+            const selectedHandle = this.normalizeFlowHandle(endSelection.handle);
+            const endOutgoingEdges = (execution?.flow?.edges || []).filter(
+                (edge) => String(edge?.source || '').trim() === String(currentNode?.id || '').trim()
+            );
+
+            // Compatibilidade: quando o no de fim oferece "voltar ao menu" sem aresta
+            // de saida configurada, reinicia no no inicial para evitar exigir dupla resposta.
+            if (endOutgoingEdges.length === 0 && selectedHandle === 'default') {
+                const restartNodeId = this.resolveStartNodeId(execution?.flow);
+                if (restartNodeId && restartNodeId !== currentNode.id) {
+                    this.setNodeEntryHandle(execution, restartNodeId, 'default');
+                    await this.executeNode(execution, restartNodeId, 'default');
+                    return execution;
+                }
+            }
+
+            this.setNodeEntryHandle(execution, currentNode.id, selectedHandle);
             await this.goToNextNode(execution, currentNode);
             return execution;
         }
