@@ -260,6 +260,30 @@ function parsePathHandleIndex(handleValue = '') {
     return parsed;
 }
 
+function extractMenuChoiceIndex(rawValue = '', maxOptions = 0) {
+    const normalized = normalizeIntentText(rawValue);
+    if (!normalized) return null;
+
+    const parseInBounds = (rawNumber) => {
+        const parsed = Number.parseInt(String(rawNumber || ''), 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) return null;
+        if (Number.isFinite(maxOptions) && maxOptions > 0 && parsed > maxOptions) return null;
+        return parsed;
+    };
+
+    if (/^\d+$/.test(normalized)) {
+        return parseInBounds(normalized);
+    }
+
+    const numberMatches = normalized.match(/\b\d{1,2}\b/g) || [];
+    if (numberMatches.length !== 1) return null;
+
+    const hasChoiceHint = /\b(opcao|opcoes|op|item|alternativa|numero|num|menu)\b/.test(normalized);
+    if (!hasChoiceHint) return null;
+
+    return parseInBounds(numberMatches[0]);
+}
+
 function parseLeadCustomFields(value) {
     if (!value) return {};
 
@@ -1203,6 +1227,79 @@ class FlowService extends EventEmitter {
         });
     }
 
+    resolveAwaitingInputMenuHandleFromInboundMessage(flow = null, node = null, message = {}, responseText = '') {
+        const options = this.getAwaitingInputMenuOptions(flow, node);
+        if (options.length === 0) return '';
+
+        const optionByHandle = new Map();
+        const optionByRowId = new Map();
+        const optionByTitle = new Map();
+
+        for (const option of options) {
+            const handle = this.normalizeFlowHandle(option?.handle);
+            if (handle) {
+                optionByHandle.set(handle, option);
+            }
+
+            const rowId = String(option?.rowId || '').trim().toLowerCase();
+            if (rowId) {
+                optionByRowId.set(rowId, option);
+            }
+
+            const normalizedTitle = normalizeIntentText(option?.title || '');
+            if (normalizedTitle && !optionByTitle.has(normalizedTitle)) {
+                optionByTitle.set(normalizedTitle, option);
+            }
+        }
+
+        const candidates = [
+            message?.selectionId,
+            message?.selectedRowId,
+            message?.optionId,
+            message?.choiceId,
+            message?.selectionText,
+            responseText
+        ];
+
+        for (const candidateRaw of candidates) {
+            const candidate = String(candidateRaw || '').trim();
+            if (!candidate) continue;
+
+            const candidateLower = candidate.toLowerCase();
+            const directRowMatch = optionByRowId.get(candidateLower);
+            if (directRowMatch?.handle) {
+                return this.normalizeFlowHandle(directRowMatch.handle);
+            }
+
+            if (candidateLower.startsWith(FLOW_MENU_ROW_PREFIX)) {
+                const rowHandle = this.normalizeFlowHandle(candidateLower.slice(FLOW_MENU_ROW_PREFIX.length));
+                if (optionByHandle.has(rowHandle)) return rowHandle;
+            }
+
+            const selectedIndex = extractMenuChoiceIndex(candidate, options.length);
+            if (Number.isFinite(selectedIndex) && selectedIndex > 0) {
+                const selectedOption = options[selectedIndex - 1];
+                if (selectedOption?.handle) {
+                    return this.normalizeFlowHandle(selectedOption.handle);
+                }
+            }
+
+            const directHandle = this.normalizeFlowHandleFromToken(candidate);
+            if (directHandle && optionByHandle.has(directHandle)) {
+                return directHandle;
+            }
+
+            const normalizedCandidate = normalizeIntentText(candidate);
+            if (!normalizedCandidate) continue;
+            const titleMatch = optionByTitle.get(normalizedCandidate);
+            if (titleMatch?.handle) {
+                return this.normalizeFlowHandle(titleMatch.handle);
+            }
+        }
+
+        return '';
+    }
+
     normalizeFlowHandleFromToken(value = '') {
         const rawToken = String(value || '').trim();
         if (!rawToken) return '';
@@ -1466,12 +1563,10 @@ class FlowService extends EventEmitter {
                 if (routeMatch) return routeMatch;
             }
 
-            if (/^\d+$/.test(candidateLower)) {
-                const selectedIndex = Number.parseInt(candidateLower, 10);
-                if (Number.isFinite(selectedIndex) && selectedIndex > 0 && selectedIndex <= entries.length) {
-                    const indexedEntry = resolveEntry(entries[selectedIndex - 1]);
-                    if (indexedEntry) return indexedEntry;
-                }
+            const selectedIndex = extractMenuChoiceIndex(candidate, entries.length);
+            if (Number.isFinite(selectedIndex) && selectedIndex > 0) {
+                const indexedEntry = resolveEntry(entries[selectedIndex - 1]);
+                if (indexedEntry) return indexedEntry;
             }
 
             const normalizedCandidate = normalizeIntentText(candidate);
@@ -1718,11 +1813,9 @@ class FlowService extends EventEmitter {
             const directHandle = this.normalizeFlowHandle(candidate);
             if (optionByHandle.has(directHandle)) return directHandle;
 
-            if (/^\d+$/.test(candidateLower)) {
-                const index = Number.parseInt(candidateLower, 10);
-                if (Number.isFinite(index) && index > 0 && index <= options.length) {
-                    return this.normalizeFlowHandle(options[index - 1]?.handle);
-                }
+            const selectedIndex = extractMenuChoiceIndex(candidate, options.length);
+            if (Number.isFinite(selectedIndex) && selectedIndex > 0) {
+                return this.normalizeFlowHandle(options[selectedIndex - 1]?.handle);
             }
 
             const normalizedCandidate = normalizeIntentRouteHandle(candidate);
@@ -3870,7 +3963,9 @@ class FlowService extends EventEmitter {
         const awaitingInputMenuEnabled = this.isAwaitingInputMenuEnabled(node);
 
         const normalizedPreferredHandle = this.normalizeFlowHandle(preferredSourceHandle);
-        const explicitHandle = this.resolveFlowHandleFromInboundMessage(message, responseText);
+        const explicitHandle = awaitingInputMenuEnabled
+            ? this.resolveAwaitingInputMenuHandleFromInboundMessage(flow, node, message, responseText)
+            : this.resolveFlowHandleFromInboundMessage(message, responseText);
         if (explicitHandle) {
             const explicitEdge = edges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === explicitHandle);
             if (explicitEdge) {
