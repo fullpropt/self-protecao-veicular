@@ -454,39 +454,55 @@
 
         /* ----- INTERACTIVE DASHBOARD MOCKUP ----- */
         .dash-mock-container {
+            --dash-bg: #08121f;
+            --dash-sidebar: #122338;
+            --dash-surface: #152742;
+            --dash-surface-soft: #1a314f;
+            --dash-border: rgba(109, 139, 177, 0.24);
+            --dash-border-strong: rgba(28, 216, 137, 0.36);
+            --dash-text: #f4f8ff;
+            --dash-muted: #8ea5c1;
+            --dash-green: #1fd689;
+            --dash-green-soft: rgba(31, 214, 137, 0.14);
+            --dash-danger: #f07d86;
             width: 100%;
-            max-width: 1000px;
-            min-height: 650px;
+            max-width: 1180px;
+            min-height: 690px;
             height: auto;
-            background: #0b111a;
-            border-radius: 12px;
-            border: 1px solid var(--border-subtle);
+            background: var(--dash-bg);
+            border-radius: 18px;
+            border: 1px solid rgba(116, 149, 191, 0.18);
             display: flex;
-            overflow: visible;
+            overflow: hidden;
             position: relative;
-            transform: perspective(1200px) rotateX(4deg) rotateY(-8deg) scale(0.95);
+            transform: perspective(1400px) rotateX(5deg) rotateY(-9deg) scale(0.95);
+            transform-origin: center top;
             transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.6s;
-            box-shadow: -20px 30px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 255, 163, 0.1);
+            box-shadow:
+                -28px 38px 90px rgba(0, 0, 0, 0.72),
+                0 0 0 1px rgba(255, 255, 255, 0.02),
+                0 0 56px rgba(22, 213, 132, 0.16);
             text-align: left;
         }
 
         .dash-mock-container:hover {
-            transform: perspective(1200px) rotateX(0deg) rotateY(0deg) scale(1.02);
-            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.9), 0 0 60px rgba(0, 255, 163, 0.3);
+            transform: perspective(1400px) rotateX(0deg) rotateY(0deg) scale(1.01);
+            box-shadow:
+                0 44px 90px rgba(0, 0, 0, 0.86),
+                0 0 72px rgba(22, 213, 132, 0.24);
             z-index: 10;
         }
 
         .dash-mock-container::before {
             content: '';
             position: absolute;
-            top: 5%;
-            left: 5%;
-            right: 5%;
-            bottom: -5%;
-            background: linear-gradient(135deg, rgba(0, 255, 163, 0.4) 0%, rgba(122, 0, 244, 0.4) 100%);
-            filter: blur(50px);
+            inset: 4% 5% -10%;
+            background:
+                radial-gradient(circle at 18% 24%, rgba(33, 214, 136, 0.28), rgba(33, 214, 136, 0) 44%),
+                radial-gradient(circle at 82% 78%, rgba(49, 159, 255, 0.18), rgba(49, 159, 255, 0) 42%);
+            filter: blur(60px);
             z-index: -1;
-            opacity: 0;
+            opacity: 0.72;
             transition: opacity 0.6s;
         }
 
@@ -495,44 +511,53 @@
         }
 
         .dash-sidebar {
-            width: 250px;
-            background: #0e1520;
-            border-right: 1px solid var(--border-subtle);
+            width: 260px;
+            background:
+                linear-gradient(180deg, rgba(19, 35, 56, 0.98), rgba(11, 21, 34, 1));
+            border-right: 1px solid rgba(108, 141, 184, 0.14);
             display: flex;
             flex-direction: column;
-            padding: 24px 0;
+            justify-content: space-between;
+            padding: 22px 0 18px;
             z-index: 1;
         }
 
+        .dash-sidebar-main {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
         .dash-sidebar-logo {
-            padding: 0 24px 24px;
+            padding: 0 24px 20px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
             font-family: var(--font-display);
             font-weight: 800;
-            color: var(--primary);
-            font-size: 1.2rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            margin-bottom: 24px;
+            color: var(--dash-green);
+            font-size: 1.08rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            margin-bottom: 4px;
         }
 
         .dash-sidebar-logo img {
-            width: 24px;
+            width: 28px;
+            height: 28px;
+            object-fit: contain;
         }
 
         .dash-nav-group {
-            padding: 0 16px;
-            margin-bottom: 24px;
+            padding: 0 14px;
         }
 
         .dash-nav-title {
-            font-size: 0.65rem;
+            font-size: 0.72rem;
             text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.3);
-            margin-bottom: 12px;
-            padding: 0 8px;
-            letter-spacing: 1px;
+            color: rgba(147, 169, 197, 0.58);
+            margin-bottom: 10px;
+            padding: 0 10px;
+            letter-spacing: 0.12em;
             font-weight: 700;
         }
 
@@ -540,248 +565,278 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 16px;
-            color: var(--text-med);
-            font-size: 0.85rem;
-            border-radius: 8px;
-            margin-bottom: 4px;
-            font-weight: 500;
+            padding: 12px 14px;
+            color: #b7c7da;
+            font-size: 0.96rem;
+            border-radius: 14px;
+            margin-bottom: 6px;
+            font-weight: 600;
             cursor: default;
-            transition: background 0.3s;
+            border: 1px solid transparent;
+            transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+        }
+
+        .dash-nav-item svg {
+            width: 18px;
+            height: 18px;
+            flex: 0 0 auto;
         }
 
         .dash-nav-item:hover {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255, 255, 255, 0.04);
         }
 
         .dash-nav-item.active {
-            background: rgba(0, 255, 163, 0.1);
-            color: var(--primary);
+            background: linear-gradient(180deg, rgba(31, 214, 137, 0.2), rgba(25, 176, 112, 0.16));
+            border-color: var(--dash-border-strong);
+            color: #effef7;
+            box-shadow: inset 0 0 0 1px rgba(31, 214, 137, 0.12);
+        }
+
+        .dash-sidebar-logout {
+            margin: 0 14px;
+            min-height: 46px;
+            border-radius: 14px;
+            border: 1px solid rgba(194, 97, 116, 0.22);
+            background: rgba(70, 32, 48, 0.66);
+            color: #f2d5dd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            letter-spacing: 0.01em;
         }
 
         .dash-content {
             flex: 1;
-            padding: 32px;
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-            background: #0b111a;
+            padding: 28px 28px 24px;
+            display: grid;
+            align-content: start;
+            gap: 22px;
+            background:
+                radial-gradient(circle at 14% 0%, rgba(33, 214, 136, 0.09), rgba(33, 214, 136, 0) 34%),
+                linear-gradient(180deg, #081524 0%, #07111d 100%);
             position: relative;
         }
 
-        .dash-row {
-            display: flex;
-            gap: 24px;
+        .dash-content--legacy {
+            display: none;
+        }
+
+        .dash-page-header h3 {
+            margin: 0;
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--dash-text);
+            letter-spacing: -0.03em;
+        }
+
+        .dash-page-header p {
+            margin: 8px 0 0;
+            font-size: 0.96rem;
+            color: var(--dash-muted);
+        }
+
+        .dash-overview {
+            display: grid;
+            grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+            gap: 22px;
+            align-items: stretch;
+        }
+
+        .dash-chart-card,
+        .dash-general-card,
+        .dash-events-card {
+            background: linear-gradient(180deg, rgba(20, 38, 61, 0.96), rgba(13, 25, 41, 0.98));
+            border: 1px solid var(--dash-border);
+            border-radius: 20px;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.02),
+                0 24px 42px rgba(0, 0, 0, 0.24);
         }
 
         .dash-chart-card {
-            background: #0d1320;
-            border: 1px solid var(--border-subtle);
+            padding: 24px;
+            display: grid;
+            gap: 18px;
+        }
+
+        .dash-card-title {
+            margin: 0;
+            font-size: 1.28rem;
+            font-weight: 800;
+            color: var(--dash-text);
+            letter-spacing: -0.02em;
+        }
+
+        .dash-card-subtitle {
+            margin: 6px 0 0;
+            font-size: 0.9rem;
+            color: var(--dash-muted);
+        }
+
+        .dash-filter-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .dash-filter-box {
+            min-height: 48px;
             border-radius: 14px;
-            flex: 2;
-            height: 220px;
-            position: relative;
-            overflow: hidden;
+            border: 1px solid rgba(116, 147, 184, 0.22);
+            background: rgba(27, 47, 74, 0.88);
+            padding: 0 16px;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: #eef6ff;
+            font-size: 0.92rem;
+            font-weight: 600;
+        }
+
+        .dash-filter-box svg {
+            width: 16px;
+            height: 16px;
+            color: #85a0bf;
+            flex: 0 0 auto;
+        }
+
+        .dash-filter-box--compact {
+            min-width: 140px;
+            min-height: 42px;
+            border-radius: 13px;
+            padding: 0 14px;
+            font-size: 0.88rem;
+        }
+
+        .dash-toggle {
+            display: inline-grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px;
+            padding: 4px;
+            min-width: 188px;
+            border-radius: 14px;
+            border: 1px solid rgba(116, 147, 184, 0.22);
+            background: rgba(21, 37, 59, 0.92);
+        }
+
+        .dash-toggle-btn {
+            min-height: 40px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: #7f98b5;
+            font-size: 0.84rem;
+            font-weight: 700;
+            border: 1px solid transparent;
+        }
+
+        .dash-toggle-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .dash-toggle-btn.is-active {
+            background: rgba(31, 214, 137, 0.14);
+            border-color: rgba(31, 214, 137, 0.42);
+            color: #effff7;
+        }
+
+        .dash-chart-shell {
+            position: relative;
+            min-height: 260px;
+            padding: 18px 16px 12px;
+            border-radius: 18px;
+            border: 1px solid rgba(116, 147, 184, 0.14);
+            background:
+                radial-gradient(circle at 30% 18%, rgba(31, 214, 137, 0.08), rgba(31, 214, 137, 0) 44%),
+                linear-gradient(180deg, rgba(14, 28, 46, 0.96), rgba(10, 20, 34, 0.98));
+            overflow: hidden;
         }
 
         .dash-chart-label {
             position: absolute;
             top: 14px;
             left: 18px;
-            font-size: 0.75rem;
+            font-size: 0.82rem;
             font-weight: 600;
-            color: var(--text-med);
-            letter-spacing: 0.03em;
+            color: rgba(227, 239, 255, 0.78);
+            letter-spacing: 0.01em;
             z-index: 2;
         }
 
-        .dash-status-panel {
-            flex: 1;
-            min-width: 140px;
-            background: #0d1320;
-            border: 1px solid var(--border-subtle);
-            border-radius: 14px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            justify-content: center;
-        }
-
-        .dash-status-item {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .dash-status-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .dash-status-row span:last-child {
-            font-size: 0.7rem;
-            color: var(--text-med);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .dash-status-item strong {
-            font-size: 0.9rem;
-            color: var(--primary);
-            font-weight: 600;
-        }
-
-        .dash-status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 6px;
-            vertical-align: middle;
-        }
-
-        .dash-status-on {
-            background: var(--primary);
-            box-shadow: 0 0 8px var(--primary);
-            animation: dashPulse 2s ease-in-out infinite;
-        }
-
-        @keyframes dashPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .dash-stats-row {
-            display: flex;
-            gap: 24px;
-        }
-
-        .dash-stat-box {
-            background: #111926;
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 24px;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            position: relative;
-            overflow: hidden;
-            transition: background 0.3s;
-        }
-
-        .dash-stat-box:hover {
-            background: #1a2333;
-        }
-
-        .dash-stat-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.4rem;
-        }
-
-        .dash-stat-info {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            margin-left: auto;
-        }
-
-        .dash-stat-val {
-            font-family: var(--font-display);
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #fff;
-            line-height: 1;
-            margin-bottom: 6px;
-        }
-
-        .dash-stat-label {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.5);
-            font-weight: 500;
-        }
-
-        .dash-stat-badge {
-            background: rgba(0, 255, 163, 0.1);
-            color: var(--primary);
-            font-size: 0.75rem;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 4px;
-            margin-top: 8px;
-        }
-
-        /* Animated SVG Chart */
-        .svg-chart {
-            width: 100%;
-            height: 100%;
+        .dash-chart-grid {
             position: absolute;
-            bottom: 0;
-            left: 0;
+            inset: 44px 16px 30px;
+            display: grid;
+            grid-template-rows: repeat(5, minmax(0, 1fr));
+            z-index: 0;
+        }
+
+        .dash-chart-grid span {
+            border-top: 1px solid rgba(154, 176, 205, 0.07);
+        }
+
+        .svg-chart {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            height: 206px;
+            display: block;
             pointer-events: none;
         }
 
         .chart-line {
             fill: none;
-            stroke: var(--primary);
+            stroke: var(--dash-green);
             stroke-width: 3;
             stroke-dasharray: 1000;
             stroke-dashoffset: 1000;
-            animation: drawLine 2.5s ease-out forwards;
+            animation: drawLine 2.3s ease-out forwards;
         }
 
         .chart-area {
             fill: url(#chart-gradient);
             opacity: 0;
-            animation: fadeIn 1s 2s ease-out forwards;
+            animation: fadeIn 1s 1.4s ease-out forwards;
         }
 
         .chart-dots circle {
-            fill: var(--primary);
+            fill: #0c1725;
+            stroke: var(--dash-green);
+            stroke-width: 3;
             opacity: 0;
             transform-origin: center;
             transform-box: fill-box;
             animation: bounceIn 0.5s forwards;
         }
 
-        .chart-dots circle:nth-child(1) {
-            animation-delay: 0.5s;
-        }
-
-        .chart-dots circle:nth-child(2) {
-            animation-delay: 1.0s;
-        }
-
-        .chart-dots circle:nth-child(3) {
-            animation-delay: 1.5s;
-        }
-
-        .chart-dots circle:nth-child(4) {
-            animation-delay: 2.0s;
-        }
-
-        .chart-dots circle:nth-child(5) {
-            animation-delay: 2.5s;
-        }
-
-        .chart-dots circle:nth-child(6) {
-            animation-delay: 2.8s;
-        }
+        .chart-dots circle:nth-child(1) { animation-delay: 0.4s; }
+        .chart-dots circle:nth-child(2) { animation-delay: 0.7s; }
+        .chart-dots circle:nth-child(3) { animation-delay: 1s; }
+        .chart-dots circle:nth-child(4) { animation-delay: 1.3s; }
+        .chart-dots circle:nth-child(5) { animation-delay: 1.6s; }
+        .chart-dots circle:nth-child(6) { animation-delay: 1.9s; }
+        .chart-dots circle:nth-child(7) { animation-delay: 2.2s; }
 
         .chart-bars .chart-bar {
-            fill: url(#chart-gradient);
-            fill: rgba(0, 255, 163, 0.5);
+            fill: rgba(31, 214, 137, 0.18);
+            stroke: rgba(31, 214, 137, 0.08);
+            stroke-width: 1;
             transition: height 0.6s ease-out, y 0.6s ease-out;
+        }
+
+        .chart-axis text {
+            fill: rgba(138, 163, 194, 0.9);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
         }
 
         @keyframes drawLine {
@@ -803,7 +858,7 @@
             }
 
             50% {
-                transform: scale(1.5);
+                transform: scale(1.4);
                 opacity: 1;
             }
 
@@ -813,31 +868,156 @@
             }
         }
 
-        /* Simulating Data processing */
-        .data-processor {
-            position: absolute;
-            top: 24px;
-            right: 32px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            background: rgba(0, 255, 163, 0.1);
-            padding: 6px 14px;
-            border-radius: 100px;
-            border: 1px solid rgba(0, 255, 163, 0.3);
-            color: var(--primary);
-            font-size: 0.75rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            z-index: 10;
+        .dash-general-card {
+            padding: 24px;
+            display: grid;
+            align-content: start;
+            gap: 16px;
         }
 
-        .data-processor .dot {
-            width: 8px;
-            height: 8px;
-            background: var(--primary);
-            border-radius: 50%;
-            animation: pulse 1s infinite;
+        .dash-general-list {
+            display: grid;
+        }
+
+        .dash-general-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(116, 147, 184, 0.16);
+            color: var(--dash-muted);
+            font-size: 0.95rem;
+        }
+
+        .dash-general-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .dash-general-item strong {
+            color: var(--dash-text);
+            font-size: 2rem;
+            line-height: 1;
+            letter-spacing: -0.03em;
+            flex: 0 0 auto;
+        }
+
+        .dash-events-card {
+            padding: 24px;
+            display: grid;
+            gap: 18px;
+        }
+
+        .dash-events-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .dash-events-summary {
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: var(--dash-muted);
+        }
+
+        .dash-events-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .dash-create-btn {
+            min-height: 42px;
+            padding: 0 18px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #1be48f, #19bb73);
+            color: #04140b;
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dash-events-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .dash-event-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto auto;
+            gap: 14px;
+            align-items: center;
+            padding: 16px 18px;
+            border-radius: 16px;
+            border: 1px solid rgba(116, 147, 184, 0.18);
+            background: rgba(16, 30, 48, 0.72);
+        }
+
+        .dash-event-main {
+            min-width: 0;
+        }
+
+        .dash-event-main strong {
+            display: block;
+            color: var(--dash-text);
+            font-size: 1.05rem;
+            margin-bottom: 4px;
+        }
+
+        .dash-event-main span {
+            display: block;
+            color: var(--dash-muted);
+            font-size: 0.87rem;
+            line-height: 1.45;
+        }
+
+        .dash-event-status {
+            border-radius: 999px;
+            padding: 7px 12px;
+            border: 1px solid rgba(31, 214, 137, 0.42);
+            background: rgba(31, 214, 137, 0.12);
+            color: #dbfff0;
+            font-size: 0.76rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .dash-event-count {
+            color: #9bb3ce;
+            font-size: 0.88rem;
+            white-space: nowrap;
+        }
+
+        .dash-event-buttons {
+            display: inline-flex;
+            gap: 8px;
+        }
+
+        .dash-icon-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            border: 1px solid rgba(116, 147, 184, 0.26);
+            background: rgba(20, 37, 59, 0.9);
+            color: #dbe6f4;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dash-icon-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .dash-icon-btn--danger {
+            color: #f3a1ab;
+            border-color: rgba(240, 125, 134, 0.32);
         }
 
         /* ----- ZENVIA-STYLE VIDEO EXPERIENCE ----- */
@@ -2140,10 +2320,9 @@
                 width: 100%;
                 max-width: 100%;
                 height: auto;
-                min-height: 520px;
+                min-height: 600px;
                 transform: none;
-                border-radius: 16px;
-                overflow: visible;
+                border-radius: 18px;
             }
 
             .dash-mock-container:hover {
@@ -2151,13 +2330,13 @@
             }
 
             .dash-sidebar {
-                width: 56px;
-                min-width: 56px;
-                padding: 12px 0;
+                width: 74px;
+                min-width: 74px;
+                padding: 14px 0;
             }
 
             .dash-sidebar-logo {
-                padding: 0 8px 16px;
+                padding: 0 10px 18px;
                 justify-content: center;
                 font-size: 0;
             }
@@ -2168,7 +2347,7 @@
             }
 
             .dash-nav-group {
-                padding: 0 8px;
+                padding: 0 10px;
                 margin-bottom: 8px;
             }
 
@@ -2177,63 +2356,80 @@
             }
 
             .dash-nav-item {
-                padding: 10px;
+                padding: 12px 10px;
                 justify-content: center;
                 font-size: 0;
             }
 
             .dash-nav-item svg {
                 margin: 0;
-                width: 20px;
-                height: 20px;
                 flex-shrink: 0;
             }
 
+            .dash-sidebar-logout {
+                display: none;
+            }
+
             .dash-content {
-                padding: 16px;
-                gap: 16px;
+                padding: 20px;
+                gap: 18px;
                 min-width: 0;
             }
 
-            .dash-row {
+            .dash-page-header h3 {
+                font-size: 1.72rem;
+            }
+
+            .dash-page-header p {
+                font-size: 0.88rem;
+            }
+
+            .dash-overview {
+                grid-template-columns: 1fr;
+                gap: 18px;
+            }
+
+            .dash-chart-card,
+            .dash-general-card,
+            .dash-events-card {
+                padding: 20px;
+            }
+
+            .dash-filter-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .dash-toggle {
+                grid-column: 1 / -1;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .dash-chart-shell {
+                min-height: 224px;
+            }
+
+            .dash-general-item strong {
+                font-size: 1.7rem;
+            }
+
+            .dash-events-header {
                 flex-direction: column;
-                gap: 16px;
+                align-items: stretch;
             }
 
-            .dash-chart-card {
-                height: 160px;
-                min-height: 160px;
+            .dash-events-actions {
+                width: 100%;
+                justify-content: space-between;
             }
 
-            .dash-status-panel {
-                min-width: 120px;
-                padding: 14px;
+            .dash-event-item {
+                grid-template-columns: minmax(0, 1fr) auto auto;
             }
 
-            .dash-stats-row {
-                flex-wrap: wrap;
-                gap: 12px;
-            }
-
-            .dash-stat-box {
-                padding: 12px 16px;
-                min-width: calc(50% - 6px);
-                flex: 1 1 calc(50% - 12px);
-            }
-
-            .dash-stat-val {
-                font-size: 1.25rem;
-            }
-
-            .dash-stat-label {
-                font-size: 0.7rem;
-            }
-
-            .data-processor {
-                top: 12px;
-                right: 16px;
-                padding: 4px 10px;
-                font-size: 0.65rem;
+            .dash-event-buttons {
+                grid-column: 2 / span 2;
+                justify-content: flex-end;
             }
 
             .bento-grid {
@@ -2273,14 +2469,14 @@
             }
 
             .dash-mock-container {
-                min-height: 480px;
-                border-radius: 12px;
+                min-height: 0;
+                border-radius: 14px;
             }
 
             .dash-sidebar {
-                width: 48px;
-                min-width: 48px;
-                padding: 8px 0;
+                width: 58px;
+                min-width: 58px;
+                padding: 10px 0;
             }
 
             .dash-sidebar-logo img {
@@ -2288,27 +2484,86 @@
                 height: 24px;
             }
 
-            .dash-nav-item {
-                padding: 8px;
-            }
-
             .dash-content {
-                padding: 12px;
-                gap: 12px;
+                padding: 14px;
+                gap: 14px;
             }
 
-            .dash-chart-card {
-                height: 120px;
-                min-height: 120px;
+            .dash-page-header h3 {
+                font-size: 1.36rem;
             }
 
-            .dash-stat-box {
-                min-width: 100%;
-                flex: 1 1 100%;
+            .dash-page-header p {
+                font-size: 0.78rem;
+                line-height: 1.45;
             }
 
-            .dash-stat-val {
-                font-size: 1.1rem;
+            .dash-chart-card,
+            .dash-general-card,
+            .dash-events-card {
+                padding: 16px;
+                border-radius: 16px;
+            }
+
+            .dash-card-title {
+                font-size: 1rem;
+            }
+
+            .dash-filter-row {
+                grid-template-columns: 1fr;
+            }
+
+            .dash-filter-box,
+            .dash-filter-box--compact,
+            .dash-toggle,
+            .dash-create-btn {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .dash-chart-shell {
+                min-height: 180px;
+                padding: 14px 12px 12px;
+            }
+
+            .dash-chart-grid {
+                inset: 40px 12px 28px;
+            }
+
+            .svg-chart {
+                height: 154px;
+            }
+
+            .chart-axis text {
+                font-size: 10px;
+            }
+
+            .dash-general-item {
+                padding: 14px 0;
+                font-size: 0.88rem;
+            }
+
+            .dash-general-item strong {
+                font-size: 1.4rem;
+            }
+
+            .dash-events-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .dash-event-item {
+                grid-template-columns: 1fr;
+                padding: 14px;
+            }
+
+            .dash-event-status,
+            .dash-event-count {
+                width: fit-content;
+            }
+
+            .dash-event-buttons {
+                grid-column: auto;
             }
 
             .pricing-grid {
@@ -2462,49 +2717,47 @@
 
         <!-- 3D Interactive Dashboard Mockup Overlay -->
         <div class="dash-mock-container">
-            <!-- Sidebar -->
+            <!-- Sidebar mock -->
             <div class="dash-sidebar">
-                <div class="dash-sidebar-logo">
-                    <img src="./logo.png" alt="ZapVender Icon"> ZapVender
-                </div>
+                <div class="dash-sidebar-main">
+                    <div class="dash-sidebar-logo">
+                        <img src="./logo.png" alt="ZapVender Icon">
+                        <span>ZapVender</span>
+                    </div>
 
-                <div class="dash-nav-group">
-                    <div class="dash-nav-item active">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                        </svg>
-                        Painel de Controle
+                    <div class="dash-nav-group">
+                        <div class="dash-nav-item active">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                            <span>Painel de Controle</span>
+                        </div>
+                        <div class="dash-nav-item">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <span>Contatos</span>
+                        </div>
+                        <div class="dash-nav-item">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                            </svg>
+                            <span>Campanhas</span>
+                        </div>
                     </div>
-                    <div class="dash-nav-item">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                        Contatos
-                    </div>
-                    <div class="dash-nav-item">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                        </svg>
-                        Campanhas
-                    </div>
-                </div>
 
-                <div class="dash-nav-group">
-                    <div class="dash-nav-title">Conversas</div>
-                    <div class="dash-nav-item">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                        </svg>
-                        Inbox
+                    <div class="dash-nav-group">
+                        <div class="dash-nav-title">Conversas</div>
+                        <div class="dash-nav-item">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            <span>Inbox</span>
+                        </div>
                     </div>
-                </div>
 
                 <div class="dash-nav-group">
                     <div class="dash-nav-title">Automação</div>
@@ -2532,10 +2785,256 @@
                         Funil de Vendas
                     </div>
                 </div>
+
+                <div class="dash-nav-group">
+                    <div class="dash-nav-title">Sistema</div>
+                    <div class="dash-nav-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12a9 9 0 1 1-3.27-6.94"></path>
+                            <path d="M22 3 12 13"></path>
+                        </svg>
+                        <span>WhatsApp</span>
+                    </div>
+                    <div class="dash-nav-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                        <span>Configuracoes</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dash-sidebar-logout">
+                <span>Sair</span>
+            </div>
+
+            <div class="dash-content">
+                <div class="dash-page-header">
+                    <h3>Painel de Controle</h3>
+                    <p>Bem-vindo, Rotelli | segunda-feira, 16 de mar&ccedil;o de 2026</p>
+                </div>
+
+                <div class="dash-overview">
+                    <div class="dash-chart-card">
+                        <div>
+                            <h3 class="dash-card-title">Estat&iacute;sticas por per&iacute;odo</h3>
+                        </div>
+
+                        <div class="dash-filter-row">
+                            <div class="dash-filter-box">
+                                <span>09/03/2026</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                            <div class="dash-filter-box">
+                                <span>16/03/2026</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                            <div class="dash-filter-box">
+                                <span>Mensagens</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                            <div class="dash-toggle">
+                                <span class="dash-toggle-btn is-active">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="4 16 9 10 13 13 20 6"></polyline>
+                                        <circle cx="4" cy="16" r="1"></circle>
+                                        <circle cx="9" cy="10" r="1"></circle>
+                                        <circle cx="13" cy="13" r="1"></circle>
+                                        <circle cx="20" cy="6" r="1"></circle>
+                                    </svg>
+                                    <span>Linha</span>
+                                </span>
+                                <span class="dash-toggle-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="6" y1="20" x2="6" y2="10"></line>
+                                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                                        <line x1="18" y1="20" x2="18" y2="14"></line>
+                                    </svg>
+                                    <span>Barras</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="dash-chart-shell">
+                            <div class="dash-chart-label">Mensagens ao longo da semana</div>
+                            <div class="dash-chart-grid">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                            <svg class="svg-chart" viewBox="0 0 740 200" preserveAspectRatio="none">
+                                <defs>
+                                    <linearGradient id="chart-gradient" x1="0" x2="0" y1="0" y2="1">
+                                        <stop offset="0%" stop-color="rgba(31, 214, 137, 0.34)" />
+                                        <stop offset="100%" stop-color="rgba(31, 214, 137, 0)" />
+                                    </linearGradient>
+                                </defs>
+                                <g class="chart-bars" id="dash-chart-bars">
+                                    <rect id="dash-bar-0" class="chart-bar" x="42" y="120" width="54" height="80" rx="10" />
+                                    <rect id="dash-bar-1" class="chart-bar" x="140" y="48" width="54" height="152" rx="10" />
+                                    <rect id="dash-bar-2" class="chart-bar" x="238" y="112" width="54" height="88" rx="10" />
+                                    <rect id="dash-bar-3" class="chart-bar" x="336" y="72" width="54" height="128" rx="10" />
+                                    <rect id="dash-bar-4" class="chart-bar" x="434" y="92" width="54" height="108" rx="10" />
+                                    <rect id="dash-bar-5" class="chart-bar" x="532" y="170" width="54" height="30" rx="10" />
+                                    <rect id="dash-bar-6" class="chart-bar" x="630" y="158" width="54" height="42" rx="10" />
+                                </g>
+                                <path class="chart-area"
+                                    d="M36,148 C88,118 122,52 168,48 C214,44 250,150 292,146 C336,140 376,92 420,95 C470,98 506,110 548,176 C594,182 628,180 684,164 L684,200 L36,200 Z" />
+                                <path class="chart-line"
+                                    d="M36,148 C88,118 122,52 168,48 C214,44 250,150 292,146 C336,140 376,92 420,95 C470,98 506,110 548,176 C594,182 628,180 684,164" />
+                                <g class="chart-dots">
+                                    <circle cx="36" cy="148" r="5" />
+                                    <circle cx="168" cy="48" r="5" />
+                                    <circle cx="292" cy="146" r="5" />
+                                    <circle cx="420" cy="95" r="5" />
+                                    <circle cx="506" cy="110" r="5" />
+                                    <circle cx="548" cy="176" r="5" />
+                                    <circle cx="684" cy="164" r="5" />
+                                </g>
+                                <g class="chart-axis">
+                                    <text x="26" y="194">09/03</text>
+                                    <text x="134" y="194">10/03</text>
+                                    <text x="242" y="194">11/03</text>
+                                    <text x="350" y="194">12/03</text>
+                                    <text x="458" y="194">13/03</text>
+                                    <text x="566" y="194">14/03</text>
+                                    <text x="664" y="194">16/03</text>
+                                </g>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="dash-general-card">
+                        <div>
+                            <h3 class="dash-card-title">Estat&iacute;sticas gerais</h3>
+                        </div>
+                        <div class="dash-general-list">
+                            <div class="dash-general-item">
+                                <span>Contatos com intera&ccedil;&atilde;o</span>
+                                <strong>37</strong>
+                            </div>
+                            <div class="dash-general-item">
+                                <span>Mensagens do contato</span>
+                                <strong>74</strong>
+                            </div>
+                            <div class="dash-general-item">
+                                <span>Intera&ccedil;&otilde;es por inscrito</span>
+                                <strong>2.0</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dash-events-card">
+                    <div class="dash-events-header">
+                        <div>
+                            <h3 class="dash-card-title">Eventos personalizados</h3>
+                            <p class="dash-events-summary">2 evento(s) &middot; 16 disparo(s) no per&iacute;odo</p>
+                        </div>
+                        <div class="dash-events-actions">
+                            <div class="dash-filter-box dash-filter-box--compact">
+                                <span>Este m&ecirc;s</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                            <span class="dash-create-btn">Criar</span>
+                        </div>
+                    </div>
+
+                    <div class="dash-events-list">
+                        <div class="dash-event-item">
+                            <div class="dash-event-main">
+                                <strong>Interessados</strong>
+                                <span>interessados &middot; &Uacute;ltimo disparo: h&aacute; 1 semana (08/03/2026, 18:30)</span>
+                            </div>
+                            <span class="dash-event-status">Ativo</span>
+                            <span class="dash-event-count">13 no per&iacute;odo</span>
+                            <div class="dash-event-buttons">
+                                <span class="dash-icon-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"></path>
+                                    </svg>
+                                </span>
+                                <span class="dash-icon-btn dash-icon-btn--danger">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path>
+                                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                                    </svg>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="dash-event-item">
+                            <div class="dash-event-main">
+                                <strong>Venda</strong>
+                                <span>venda &middot; &Uacute;ltimo disparo: h&aacute; 1 semana (05/03/2026, 13:52)</span>
+                            </div>
+                            <span class="dash-event-status">Ativo</span>
+                            <span class="dash-event-count">3 no per&iacute;odo</span>
+                            <div class="dash-event-buttons">
+                                <span class="dash-icon-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"></path>
+                                    </svg>
+                                </span>
+                                <span class="dash-icon-btn dash-icon-btn--danger">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path>
+                                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                                    </svg>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="dash-event-item">
+                            <div class="dash-event-main">
+                                <strong>Carrinho abandonado</strong>
+                                <span>carrinho_abandonado &middot; &Uacute;ltimo disparo: ontem (15/03/2026, 09:15)</span>
+                            </div>
+                            <span class="dash-event-status">Ativo</span>
+                            <span class="dash-event-count">9 no per&iacute;odo</span>
+                            <div class="dash-event-buttons">
+                                <span class="dash-icon-btn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"></path>
+                                    </svg>
+                                </span>
+                                <span class="dash-icon-btn dash-icon-btn--danger">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path>
+                                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                                    </svg>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Main Content -->
-            <div class="dash-content">
+            <div class="dash-content dash-content--legacy">
                 <div class="data-processor">
                     <div class="dot"></div> PROCESSANDO EVENTOS...
                 </div>
@@ -2563,14 +3062,14 @@
                                 <circle cx="500" cy="180" r="4" />
                                 <circle cx="600" cy="180" r="4" />
                             </g>
-                            <g class="chart-bars" id="dash-chart-bars">
-                                <rect id="dash-bar-0" class="chart-bar" x="45" y="140" width="52" height="60" rx="6" />
-                                <rect id="dash-bar-1" class="chart-bar" x="125" y="120" width="52" height="80" rx="6" />
-                                <rect id="dash-bar-2" class="chart-bar" x="205" y="130" width="52" height="70" rx="6" />
-                                <rect id="dash-bar-3" class="chart-bar" x="285" y="60" width="52" height="140" rx="6" />
-                                <rect id="dash-bar-4" class="chart-bar" x="365" y="100" width="52" height="100" rx="6" />
-                                <rect id="dash-bar-5" class="chart-bar" x="445" y="90" width="52" height="110" rx="6" />
-                                <rect id="dash-bar-6" class="chart-bar" x="525" y="115" width="52" height="85" rx="6" />
+                            <g class="chart-bars" id="dash-chart-bars-legacy">
+                                <rect id="dash-legacy-bar-0" class="chart-bar" x="45" y="140" width="52" height="60" rx="6" />
+                                <rect id="dash-legacy-bar-1" class="chart-bar" x="125" y="120" width="52" height="80" rx="6" />
+                                <rect id="dash-legacy-bar-2" class="chart-bar" x="205" y="130" width="52" height="70" rx="6" />
+                                <rect id="dash-legacy-bar-3" class="chart-bar" x="285" y="60" width="52" height="140" rx="6" />
+                                <rect id="dash-legacy-bar-4" class="chart-bar" x="365" y="100" width="52" height="100" rx="6" />
+                                <rect id="dash-legacy-bar-5" class="chart-bar" x="445" y="90" width="52" height="110" rx="6" />
+                                <rect id="dash-legacy-bar-6" class="chart-bar" x="525" y="115" width="52" height="85" rx="6" />
                             </g>
                         </svg>
                     </div>
@@ -3309,5 +3808,3 @@
 </body>
 
 </html>
-
-
