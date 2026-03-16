@@ -1521,8 +1521,8 @@
 
         .signal-item {
             display: grid;
-            grid-template-columns: auto minmax(0, 1fr) auto;
-            gap: 14px;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 12px;
         }
 
         .compare-card li::before,
@@ -1536,8 +1536,7 @@
             box-shadow: 0 0 18px rgba(0, 255, 163, 0.28);
         }
 
-        .signal-icon,
-        .signal-cue {
+        .signal-icon {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -1551,14 +1550,13 @@
             width: 38px;
             height: 38px;
             border-radius: 14px;
-            border-color: rgba(0, 255, 163, 0.14);
-            background: rgba(0, 255, 163, 0.08);
-            color: var(--primary);
-            box-shadow: 0 0 24px rgba(0, 255, 163, 0.12);
+            border-color: rgba(255, 106, 114, 0.18);
+            background: rgba(255, 106, 114, 0.08);
+            color: #ff6a72;
+            box-shadow: 0 0 24px rgba(255, 106, 114, 0.1);
         }
 
-        .signal-icon svg,
-        .signal-cue svg {
+        .signal-icon svg {
             width: 18px;
             height: 18px;
         }
@@ -1567,18 +1565,6 @@
             min-width: 0;
             color: rgba(241, 247, 255, 0.82);
             line-height: 1.4;
-        }
-
-        .signal-cue {
-            width: 34px;
-            height: 34px;
-            border-radius: 12px;
-            color: rgba(255, 255, 255, 0.72);
-        }
-
-        .signal-cue--symbol {
-            font-size: 1rem;
-            font-weight: 700;
         }
 
         .practical-grid,
@@ -2178,19 +2164,13 @@
             }
 
             .signal-item {
-                grid-template-columns: auto 1fr auto;
+                grid-template-columns: auto 1fr;
             }
 
             .signal-icon {
                 width: 34px;
                 height: 34px;
                 border-radius: 12px;
-            }
-
-            .signal-cue {
-                width: 30px;
-                height: 30px;
-                border-radius: 10px;
             }
 
             .offer-actions .btn {
@@ -4194,7 +4174,6 @@
                                 </svg>
                             </span>
                             <span class="signal-text">Conversas sem dono claro</span>
-                            <span class="signal-cue signal-cue--symbol" aria-hidden="true">?</span>
                         </li>
                         <li class="signal-item">
                             <span class="signal-icon" aria-hidden="true">
@@ -4205,12 +4184,6 @@
                                 </svg>
                             </span>
                             <span class="signal-text">Lead quente esperando resposta</span>
-                            <span class="signal-cue" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="8"></circle>
-                                    <path d="M12 8v4l2 2"></path>
-                                </svg>
-                            </span>
                         </li>
                         <li class="signal-item">
                             <span class="signal-icon" aria-hidden="true">
@@ -4222,12 +4195,6 @@
                                 </svg>
                             </span>
                             <span class="signal-text">Retomadas lembradas tarde demais</span>
-                            <span class="signal-cue" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 6v6l3 3"></path>
-                                    <circle cx="12" cy="12" r="8"></circle>
-                                </svg>
-                            </span>
                         </li>
                         <li class="signal-item">
                             <span class="signal-icon" aria-hidden="true">
@@ -4238,13 +4205,6 @@
                                 </svg>
                             </span>
                             <span class="signal-text">Prioridades escondidas no volume</span>
-                            <span class="signal-cue" aria-hidden="true">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M4 6h16"></path>
-                                    <path d="M7 12h10"></path>
-                                    <path d="M10 18h4"></path>
-                                </svg>
-                            </span>
                         </li>
                     </ul>
                     <p class="story-mini-note">Sem processo, cada venda exige esforço extra para manter contexto, prioridade e continuidade da conversa.</p>
