@@ -1,6 +1,6 @@
 # ============================================
-# Nixpacks Configuration - SELF Proteção Veicular v4.0
-# Configuração otimizada para Railway com Node.js 20 LTS
+# Nixpacks Configuration - ZapVender Bruno
+# Build completo: frontend Vite + backend Node.js
 # ============================================
 
 [phases.setup]
@@ -8,13 +8,15 @@ nixPkgs = ["nodejs_20", "npm", "python311", "gcc", "gnumake"]
 
 [phases.install]
 cmds = [
-    "npm ci --omit=dev --legacy-peer-deps"
+    "npm ci --legacy-peer-deps"
 ]
 
 [phases.build]
 cmds = [
+    "npm run build:frontend",
     "mkdir -p sessions data uploads",
-    "chmod 755 sessions data uploads"
+    "chmod 755 sessions data uploads",
+    "npm prune --omit=dev"
 ]
 
 [start]
@@ -22,4 +24,3 @@ cmd = "npm run db:migrate && node server/index.js"
 
 [variables]
 NODE_ENV = "production"
-NPM_CONFIG_PRODUCTION = "true"
