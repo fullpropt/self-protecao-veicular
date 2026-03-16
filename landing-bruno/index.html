@@ -678,7 +678,7 @@
 
         .dash-filter-row {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 12px;
             align-items: center;
         }
@@ -688,14 +688,22 @@
             border-radius: 14px;
             border: 1px solid rgba(116, 147, 184, 0.22);
             background: rgba(27, 47, 74, 0.88);
-            padding: 0 16px;
+            padding: 0 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
             color: #eef6ff;
-            font-size: 0.92rem;
+            font-size: 0.88rem;
             font-weight: 600;
+            min-width: 0;
+        }
+
+        .dash-filter-box span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .dash-filter-box svg {
@@ -718,10 +726,12 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 4px;
             padding: 4px;
-            min-width: 188px;
+            min-width: 0;
             border-radius: 14px;
             border: 1px solid rgba(116, 147, 184, 0.22);
             background: rgba(21, 37, 59, 0.92);
+            grid-column: 1 / -1;
+            justify-self: start;
         }
 
         .dash-toggle-btn {
@@ -2813,7 +2823,7 @@
             <div class="dash-content">
                 <div class="dash-page-header">
                     <h3>Painel de Controle</h3>
-                    <p>Bem-vindo, Rotelli | segunda-feira, 16 de mar&ccedil;o de 2026</p>
+                    <p>Exemplo ilustrativo do dashboard principal &middot; dados fict&iacute;cios para demonstra&ccedil;&atilde;o</p>
                 </div>
 
                 <div class="dash-overview">
@@ -2824,7 +2834,7 @@
 
                         <div class="dash-filter-row">
                             <div class="dash-filter-box">
-                                <span>09/03/2026</span>
+                                <span>01/03/26</span>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="3" y="4" width="18" height="18" rx="2"></rect>
                                     <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -2833,7 +2843,7 @@
                                 </svg>
                             </div>
                             <div class="dash-filter-box">
-                                <span>16/03/2026</span>
+                                <span>07/03/26</span>
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="3" y="4" width="18" height="18" rx="2"></rect>
                                     <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -2958,13 +2968,13 @@
                         </div>
                     </div>
 
-                    <div class="dash-events-list">
-                        <div class="dash-event-item">
-                            <div class="dash-event-main">
-                                <strong>Interessados</strong>
-                                <span>interessados &middot; &Uacute;ltimo disparo: h&aacute; 1 semana (08/03/2026, 18:30)</span>
-                            </div>
-                            <span class="dash-event-status">Ativo</span>
+                        <div class="dash-events-list">
+                            <div class="dash-event-item">
+                                <div class="dash-event-main">
+                                    <strong>Interessados</strong>
+                                <span>interessados &middot; dado ilustrativo de campanha</span>
+                                </div>
+                                <span class="dash-event-status">Ativo</span>
                             <span class="dash-event-count">13 no per&iacute;odo</span>
                             <div class="dash-event-buttons">
                                 <span class="dash-icon-btn">
@@ -2983,12 +2993,12 @@
                             </div>
                         </div>
 
-                        <div class="dash-event-item">
-                            <div class="dash-event-main">
-                                <strong>Venda</strong>
-                                <span>venda &middot; &Uacute;ltimo disparo: h&aacute; 1 semana (05/03/2026, 13:52)</span>
-                            </div>
-                            <span class="dash-event-status">Ativo</span>
+                            <div class="dash-event-item">
+                                <div class="dash-event-main">
+                                    <strong>Venda</strong>
+                                <span>venda &middot; fluxo de convers&atilde;o em demonstra&ccedil;&atilde;o</span>
+                                </div>
+                                <span class="dash-event-status">Ativo</span>
                             <span class="dash-event-count">3 no per&iacute;odo</span>
                             <div class="dash-event-buttons">
                                 <span class="dash-icon-btn">
@@ -3007,12 +3017,12 @@
                             </div>
                         </div>
 
-                        <div class="dash-event-item">
-                            <div class="dash-event-main">
-                                <strong>Carrinho abandonado</strong>
-                                <span>carrinho_abandonado &middot; &Uacute;ltimo disparo: ontem (15/03/2026, 09:15)</span>
-                            </div>
-                            <span class="dash-event-status">Ativo</span>
+                            <div class="dash-event-item">
+                                <div class="dash-event-main">
+                                    <strong>Carrinho abandonado</strong>
+                                <span>carrinho_abandonado &middot; automa&ccedil;&atilde;o de exemplo</span>
+                                </div>
+                                <span class="dash-event-status">Ativo</span>
                             <span class="dash-event-count">9 no per&iacute;odo</span>
                             <div class="dash-event-buttons">
                                 <span class="dash-icon-btn">
