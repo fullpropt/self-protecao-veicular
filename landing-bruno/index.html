@@ -1297,7 +1297,7 @@
         }
 
         .story-eyebrow {
-            display: inline-flex;
+            display: none;
             align-items: center;
             gap: 10px;
             margin-bottom: 18px;
@@ -1320,7 +1320,8 @@
             font-size: clamp(2rem, 4vw, 3.1rem);
             line-height: 1.05;
             letter-spacing: -0.03em;
-            color: var(--text-high);
+            color: var(--primary);
+            text-shadow: 0 0 24px rgba(0, 255, 163, 0.12);
             max-width: 16ch;
         }
 
@@ -1398,7 +1399,7 @@
         .proof-pill,
         .offer-badge,
         .benefit-badge {
-            display: inline-flex;
+            display: none;
             align-items: center;
             gap: 8px;
             width: fit-content;
@@ -1428,7 +1429,7 @@
         .proof-card h3,
         .objection-card h3,
         .offer-card h3 {
-            margin-top: 18px;
+            margin-top: 0;
             color: var(--text-high);
             font-family: var(--font-display);
             font-size: 1.45rem;
@@ -1676,7 +1677,7 @@
         }
 
         .proof-visual-header {
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: space-between;
             gap: 8px;
@@ -1819,6 +1820,20 @@
             display: flex;
             flex-direction: column;
             gap: 28px;
+        }
+
+        #precos {
+            margin-top: 28px;
+            scroll-margin-top: 110px;
+        }
+
+        #precos .section-tag {
+            display: none;
+        }
+
+        #precos .section-title {
+            color: var(--primary);
+            text-shadow: 0 0 24px rgba(0, 255, 163, 0.12);
         }
 
         .offer-grid {
@@ -4329,35 +4344,97 @@
             </div>
         </section>
 
-    <section class="post-cta-section container" id="precos">
-        <div>
-            <span class="story-eyebrow">CTA final</span>
-            <h2 class="story-heading story-heading--md">Seu WhatsApp j&aacute; recebe oportunidades. A pergunta &eacute;: sua opera&ccedil;&atilde;o est&aacute; preparada para n&atilde;o desperdi&ccedil;&aacute;-las?</h2>
-            <p class="story-lead">Teste o ZapVender e veja sua rotina comercial sair do improviso para um processo mais claro, mais leve e mais previs&iacute;vel.</p>
+    <section class="container section" id="precos">
+        <div class="section-header post-pricing-header">
+            <h2 class="section-title">Escolha o plano ideal para sua opera&ccedil;&atilde;o</h2>
+            <p>Pre&ccedil;os transparentes. Comece com teste gr&aacute;tis no plano recomendado ou fale com vendas para Monster.</p>
         </div>
-        <div class="offer-grid">
-            <article class="offer-card offer-card-primary" id="plano-premium">
-                <span class="offer-badge">7 dias gr&aacute;tis no Premium</span>
-                <h3>Comece com a estrutura certa para vender pelo WhatsApp</h3>
-                <p>Ideal para validar o m&eacute;todo do ZapVender na opera&ccedil;&atilde;o real, sem depender de mem&oacute;ria, planilha paralela ou acompanhamento no improviso.</p>
-                <ul class="offer-list">
-                    <li>Organize conversas por etapa e prioridade</li>
-                    <li>D&ecirc; contexto e dono para cada lead</li>
-                    <li>Teste follow-ups e automa&ccedil;&otilde;es com mais controle</li>
-                </ul>
-                <div class="offer-actions">
-                    <a href="/#/pre-checkout?plan=premium" class="btn btn-primary-large btn-pulse" target="_top" rel="noopener">Come&ccedil;ar teste gr&aacute;tis</a>
-                    <a href="#contato" class="btn btn-ghost">Falar com o time</a>
+
+        <div class="pricing-grid">
+            <div class="price-card">
+                <div class="price-card-inner">
+                    <h3 class="price-name">Starter</h3>
+                    <p class="price-desc">Para come&ccedil;ar com um n&uacute;mero</p>
+                    <div class="price-block">
+                        <div class="price-val">R$ 97<span>/m&ecirc;s</span></div>
+                    </div>
+                    <ul class="price-features">
+                        <li>1 Conex&atilde;o WhatsApp nativa</li>
+                        <li>Construtor de fluxo visual</li>
+                        <li>Inbox unificado</li>
+                        <li>Respostas autom&aacute;ticas 24/7</li>
+                        <li>At&eacute; 1.000 contatos</li>
+                    </ul>
+                    <div class="price-card-cta">
+                        <a href="/#/pre-checkout?plan=starter" class="btn btn-ghost" target="_top" rel="noopener">Assinar Starter</a>
+                    </div>
                 </div>
-            </article>
-            <aside class="offer-card offer-card-secondary">
-                <span class="surface-tag">Opera&ccedil;&atilde;o maior ou mais complexa?</span>
-                <h3>Tamb&eacute;m d&aacute; para conversar com nosso time</h3>
-                <p>Se voc&ecirc; precisa alinhar m&uacute;ltiplos atendentes, etapas espec&iacute;ficas ou uma configura&ccedil;&atilde;o comercial mais avan&ccedil;ada, o time pode te orientar no melhor come&ccedil;o.</p>
-                <div class="story-action">
-                    <a href="mailto:suporte@zapvender.com?subject=Quero%20falar%20com%20o%20time%20do%20ZapVender" class="btn btn-ghost">Solicitar contato</a>
+            </div>
+
+            <div class="price-card popular" id="plano-premium">
+                <div class="price-card-inner">
+                    <h3 class="price-name">Premium</h3>
+                    <p class="price-desc">Para times que escalam vendas</p>
+                    <div class="price-block">
+                        <div class="price-val">R$ 197<span>/m&ecirc;s</span></div>
+                        <div class="price-trial-badge">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            7 dias gr&aacute;tis
+                        </div>
+                    </div>
+                    <ul class="price-features">
+                        <li>3 Conex&otilde;es WhatsApp simult&acirc;neas</li>
+                        <li>Escudo antibloqueio completo</li>
+                        <li>Webhooks e eventos personalizados</li>
+                        <li>Fluxos ilimitados</li>
+                        <li>Suporte priorit&aacute;rio</li>
+                    </ul>
+                    <div class="price-card-cta">
+                        <a href="/#/pre-checkout?plan=premium" class="btn btn-primary-large btn-pulse" target="_top" rel="noopener">Come&ccedil;ar teste gr&aacute;tis</a>
+                        <p class="price-card-note">Sem compromisso. Cancele quando quiser.</p>
+                    </div>
                 </div>
-            </aside>
+            </div>
+
+            <div class="price-card">
+                <div class="price-card-inner">
+                    <h3 class="price-name">Avan&ccedil;ado</h3>
+                    <p class="price-desc">Para opera&ccedil;&otilde;es em crescimento</p>
+                    <div class="price-block">
+                        <div class="price-val">R$ 397<span>/m&ecirc;s</span></div>
+                    </div>
+                    <ul class="price-features">
+                        <li>5 Conex&otilde;es WhatsApp dedicadas</li>
+                        <li>M&uacute;ltiplos agentes ilimitados</li>
+                        <li>CRM completo integrado</li>
+                        <li>Relat&oacute;rios avan&ccedil;ados e funil</li>
+                        <li>API e webhooks ilimitados</li>
+                    </ul>
+                    <div class="price-card-cta">
+                        <a href="/#/pre-checkout?plan=advanced" class="btn btn-ghost" target="_top" rel="noopener">Assinar Avan&ccedil;ado</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="price-card">
+                <div class="price-card-inner">
+                    <h3 class="price-name">Monster</h3>
+                    <p class="price-desc">Solu&ccedil;&otilde;es sob medida</p>
+                    <div class="price-block">
+                        <div class="price-val price-val-custom">Sob consulta</div>
+                    </div>
+                    <ul class="price-features">
+                        <li>Conex&otilde;es ilimitadas</li>
+                        <li>Infraestrutura dedicada</li>
+                        <li>Gerente de conta exclusivo</li>
+                        <li>SLA garantido 99,9%</li>
+                        <li>Onboarding e treinamento</li>
+                    </ul>
+                    <div class="price-card-cta">
+                        <a href="mailto:suporte@zapvender.com?subject=Interesse%20no%20plano%20Monster%20-%20ZapVender&body=Ol%C3%A1%2C%20quero%20saber%20mais%20sobre%20o%20plano%20Monster%20da%20ZapVender." class="btn btn-ghost">Falar com vendas</a>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 
