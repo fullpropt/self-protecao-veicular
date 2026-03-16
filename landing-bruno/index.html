@@ -1164,11 +1164,24 @@
             opacity: 0.72;
         }
 
+        .marquee-section--legacy {
+            display: none;
+        }
+
+        .marquee-track {
+            display: flex;
+            width: max-content;
+            min-width: 100%;
+            animation: scroll 20s linear infinite;
+            will-change: transform;
+        }
+
         .marquee-content {
             display: flex;
+            flex: 0 0 auto;
+            min-width: 100%;
+            justify-content: space-around;
             gap: 52px;
-            min-width: max-content;
-            animation: scroll 20s linear infinite;
             white-space: nowrap;
             font-family: var(--font-display);
             font-weight: 600;
@@ -1523,6 +1536,10 @@
             display: grid;
             grid-template-columns: auto minmax(0, 1fr);
             gap: 12px;
+            padding: 2px 0;
+            border: none;
+            border-radius: 0;
+            background: transparent;
         }
 
         .compare-card li::before,
@@ -1585,6 +1602,76 @@
         .proof-card,
         .objection-card {
             padding: 24px;
+        }
+
+        .practical-card {
+            position: relative;
+            overflow: hidden;
+            isolation: isolate;
+            min-height: 270px;
+        }
+
+        .practical-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 88% 18%, rgba(0, 255, 163, 0.08), transparent 34%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0));
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .practical-card > :not(.practical-visual) {
+            position: relative;
+            z-index: 1;
+        }
+
+        .practical-visual {
+            position: absolute;
+            right: -18px;
+            bottom: -18px;
+            width: clamp(132px, 56%, 210px);
+            color: rgba(0, 255, 163, 0.78);
+            opacity: 0.14;
+            mix-blend-mode: screen;
+            filter: drop-shadow(0 0 24px rgba(0, 255, 163, 0.12));
+            pointer-events: none;
+            user-select: none;
+            z-index: 0;
+        }
+
+        .practical-visual svg {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .practical-card--direction .practical-visual {
+            right: -22px;
+            bottom: -20px;
+            width: clamp(128px, 52%, 200px);
+        }
+
+        .practical-card--priority .practical-visual {
+            right: -18px;
+            top: 34px;
+            bottom: auto;
+            width: clamp(126px, 52%, 196px);
+            opacity: 0.13;
+        }
+
+        .practical-card--followup .practical-visual {
+            right: -24px;
+            bottom: -24px;
+            width: clamp(126px, 52%, 198px);
+        }
+
+        .practical-card--consistency .practical-visual {
+            right: -10px;
+            bottom: -8px;
+            width: clamp(142px, 60%, 220px);
+            opacity: 0.15;
         }
 
         .practical-index {
@@ -2171,6 +2258,15 @@
                 width: 34px;
                 height: 34px;
                 border-radius: 12px;
+            }
+
+            .practical-card {
+                min-height: 250px;
+            }
+
+            .practical-visual {
+                width: clamp(110px, 40%, 160px);
+                opacity: 0.12;
             }
 
             .offer-actions .btn {
@@ -3620,6 +3716,10 @@
             }
             .marquee-content {
                 font-size: 0.85rem;
+                gap: 32px;
+                justify-content: flex-start;
+                min-width: max-content;
+                padding-right: 32px;
             }
             #precos .section-header {
                 margin-bottom: 36px;
@@ -4108,7 +4208,7 @@
         </div>
     </section>
 
-    <section class="marquee-section" aria-label="Recursos principais do ZapVender">
+    <section class="marquee-section marquee-section--legacy" aria-label="Recursos principais do ZapVender">
         <div class="marquee-content">
             <span><i>✦</i><strong>Escala infinita</strong></span>
             <span><i>✦</i><strong>Construtor de fluxo de conversa</strong></span>
@@ -4144,6 +4244,31 @@
                 </div>
             </div>
             <p class="video-caption">Demonstração da plataforma · ZapVender em uso real</p>
+        </div>
+    </section>
+
+    <section class="marquee-section" aria-label="Recursos principais do ZapVender">
+        <div class="marquee-track">
+            <div class="marquee-content">
+                <span><i>&#10022;</i><strong>Escala infinita</strong></span>
+                <span><i>&#10022;</i><strong>Construtor de fluxo de conversa</strong></span>
+                <span><i>&#10022;</i><strong>Blindagem Antibloqueio</strong></span>
+                <span><i>&#10022;</i><strong>Gest&atilde;o de Equipe Avan&ccedil;ada</strong></span>
+                <span><i>&#10022;</i><strong>Escala infinita</strong></span>
+                <span><i>&#10022;</i><strong>Construtor de fluxo de conversa</strong></span>
+                <span><i>&#10022;</i><strong>Blindagem Antibloqueio</strong></span>
+                <span><i>&#10022;</i><strong>Gest&atilde;o de Equipe Avan&ccedil;ada</strong></span>
+            </div>
+            <div class="marquee-content" aria-hidden="true">
+                <span><i>&#10022;</i><strong>Escala infinita</strong></span>
+                <span><i>&#10022;</i><strong>Construtor de fluxo de conversa</strong></span>
+                <span><i>&#10022;</i><strong>Blindagem Antibloqueio</strong></span>
+                <span><i>&#10022;</i><strong>Gest&atilde;o de Equipe Avan&ccedil;ada</strong></span>
+                <span><i>&#10022;</i><strong>Escala infinita</strong></span>
+                <span><i>&#10022;</i><strong>Construtor de fluxo de conversa</strong></span>
+                <span><i>&#10022;</i><strong>Blindagem Antibloqueio</strong></span>
+                <span><i>&#10022;</i><strong>Gest&atilde;o de Equipe Avan&ccedil;ada</strong></span>
+            </div>
         </div>
     </section>
 
@@ -4216,25 +4341,70 @@
             <span class="story-eyebrow">Ganho prático</span>
             <h2 class="story-heading story-heading--md">O que muda na prática quando seu WhatsApp deixa de ser bagunça e vira processo</h2>
             <div class="practical-grid">
-                <article class="practical-card">
+                <article class="practical-card practical-card--direction">
                     <span class="practical-index">01</span>
                     <h3>Cada conversa tem direção</h3>
                     <p>O time sabe em que etapa cada lead está e qual é o próximo passo, sem precisar adivinhar o contexto.</p>
+                    <div class="practical-visual" aria-hidden="true">
+                        <svg viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M34 72H104C116.15 72 126 81.85 126 94V126C126 138.15 116.15 148 104 148H80L56 168L62 148H34C21.85 148 12 138.15 12 126V94C12 81.85 21.85 72 34 72Z" stroke="currentColor" stroke-width="3"/>
+                            <path d="M156 38H226C238.15 38 248 47.85 248 60V92C248 104.15 238.15 114 226 114H204L182 132L186 114H156C143.85 114 134 104.15 134 92V60C134 47.85 143.85 38 156 38Z" stroke="currentColor" stroke-width="3" opacity="0.9"/>
+                            <path d="M72 110C98 116 124 114 150 98" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                            <path d="M139 94L151 98L144 110" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="48" cy="108" r="6" fill="currentColor" fill-opacity="0.18"/>
+                            <circle cx="182" cy="76" r="6" fill="currentColor" fill-opacity="0.18"/>
+                        </svg>
+                    </div>
                 </article>
-                <article class="practical-card">
+                <article class="practical-card practical-card--priority">
                     <span class="practical-index">02</span>
                     <h3>Cada prioridade fica visível</h3>
                     <p>O que está quente aparece primeiro, com mais clareza para agir antes da oportunidade esfriar.</p>
+                    <div class="practical-visual" aria-hidden="true">
+                        <svg viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <ellipse cx="146" cy="110" rx="88" ry="50" stroke="currentColor" stroke-width="3"/>
+                            <ellipse cx="146" cy="110" rx="48" ry="28" stroke="currentColor" stroke-width="3" opacity="0.82"/>
+                            <circle cx="146" cy="110" r="16" stroke="currentColor" stroke-width="3"/>
+                            <circle cx="146" cy="110" r="5" fill="currentColor"/>
+                            <path d="M28 110H62" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.72"/>
+                            <path d="M230 110H262" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.72"/>
+                            <path d="M146 30V54" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.72"/>
+                            <path d="M146 166V190" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.72"/>
+                        </svg>
+                    </div>
                 </article>
-                <article class="practical-card">
+                <article class="practical-card practical-card--followup">
                     <span class="practical-index">03</span>
                     <h3>Cada follow-up acontece na hora certa</h3>
                     <p>Retomadas saem da memória do time e entram em uma rotina previsível, sem planilhas paralelas.</p>
+                    <div class="practical-visual" aria-hidden="true">
+                        <svg viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M34 68H106C118.15 68 128 77.85 128 90V120C128 132.15 118.15 142 106 142H80L56 160L62 142H34C21.85 142 12 132.15 12 120V90C12 77.85 21.85 68 34 68Z" stroke="currentColor" stroke-width="3"/>
+                            <circle cx="178" cy="112" r="54" stroke="currentColor" stroke-width="3"/>
+                            <path d="M178 80V112L202 126" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M88 182C114 198 154 198 186 178" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                            <path d="M180 166L188 178L174 182" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
                 </article>
-                <article class="practical-card">
+                <article class="practical-card practical-card--consistency">
                     <span class="practical-index">04</span>
                     <h3>Cada venda anda com mais consistência</h3>
                     <p>O comercial deixa de depender de heróis e passa a operar com mais ritmo, padrão e continuidade.</p>
+                    <div class="practical-visual" aria-hidden="true">
+                        <svg viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M36 178H232" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.38"/>
+                            <rect x="54" y="126" width="24" height="52" rx="10" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="2.4"/>
+                            <rect x="98" y="104" width="24" height="74" rx="10" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="2.4"/>
+                            <rect x="142" y="82" width="24" height="96" rx="10" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="2.4"/>
+                            <rect x="186" y="60" width="24" height="118" rx="10" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="2.4"/>
+                            <path d="M66 126L110 104L154 82L198 60" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="66" cy="126" r="5" fill="currentColor"/>
+                            <circle cx="110" cy="104" r="5" fill="currentColor"/>
+                            <circle cx="154" cy="82" r="5" fill="currentColor"/>
+                            <circle cx="198" cy="60" r="5" fill="currentColor"/>
+                        </svg>
+                    </div>
                 </article>
             </div>
             <div class="story-action story-action--center">
