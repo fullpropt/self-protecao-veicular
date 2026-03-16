@@ -343,6 +343,10 @@ const FLOW_MESSAGE_QUEUE_ENABLED = parseBooleanEnv(
     process.env.FLOW_MESSAGE_QUEUE_ENABLED,
     true
 );
+const FLOW_REALTIME_DIRECT_SEND_ENABLED = parseBooleanEnv(
+    process.env.FLOW_REALTIME_DIRECT_SEND_ENABLED,
+    true
+);
 const FLOW_MESSAGE_QUEUE_PRIORITY = parsePositiveIntInRange(
     process.env.FLOW_MESSAGE_QUEUE_PRIORITY,
     50,
@@ -9643,6 +9647,26 @@ function buildInlineListFallbackText(description = '', sections = []) {
     return lines.join('\n').trim();
 }
 
+function buildReliableListDescription(description = '', sections = []) {
+    const normalizedDescription = normalizeText(String(description || '').trim());
+    const fallbackText = buildInlineListFallbackText(
+        normalizedDescription || 'Escolha uma opcao no menu abaixo:',
+        sections
+    );
+
+    if (!normalizedDescription) {
+        return fallbackText;
+    }
+
+    const hasInlineOptions = /(?:^|\n)\s*\d+\.\s+\S+/.test(normalizedDescription);
+    const hasNumericHint = /responda com o numero da opcao/i.test(normalizedDescription);
+    if (hasInlineOptions && hasNumericHint) {
+        return normalizedDescription;
+    }
+
+    return fallbackText;
+}
+
 async function sendListMessageWithNativeRelay(session, jid, {
     description = '',
     title = '',
@@ -9845,6 +9869,10 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
                 renderedTextMessage || 'Selecione uma opcao:',
                 sections
             );
+            const reliableDescription = buildReliableListDescription(
+                renderedTextMessage || 'Selecione uma opcao:',
+                sections
+            );
             const interactiveListEnabled = isTruthyEnvFlag(
                 process.env.WHATSAPP_INTERACTIVE_LIST_ENABLED,
                 false
@@ -9857,7 +9885,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
             } else {
                 try {
                     result = await sendListMessageWithNativeRelay(session, jid, {
-                        description: renderedTextMessage || 'Selecione uma opcao:',
+                        description: reliableDescription,
                         title: listTitle,
                         footer: listFooter,
                         buttonText: listButtonText,
@@ -10227,6 +10255,14 @@ function sessionExists(sessionId) {
         const buttonTitle = String(options?.buttonTitle || options?.title || '').trim();
         const buttonFooter = String(options?.buttonFooter || options?.footer || '').trim();
         const isInteractiveDirectMessage = mediaType === 'list' || mediaType === 'button_url';
+        const normalizedFlowId = Number(options?.flowId || options?.flow_id || 0);
+        const shouldBypassQueueForFlow = Boolean(
+            FLOW_REALTIME_DIRECT_SEND_ENABLED
+            && Number.isFinite(normalizedFlowId)
+            && normalizedFlowId > 0
+            && Number.isInteger(normalizedConversationId)
+            && normalizedConversationId > 0
+        );
 
         if (
             FLOW_MESSAGE_QUEUE_ENABLED
@@ -10234,6 +10270,7 @@ function sessionExists(sessionId) {
             && Number.isInteger(normalizedLeadId)
             && normalizedLeadId > 0
             && !isInteractiveDirectMessage
+            && !shouldBypassQueueForFlow
         ) {
             let queuedSessionId = requestedSessionId || resolvedSessionId;
             if (queuedSessionId) {
