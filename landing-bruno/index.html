@@ -467,7 +467,7 @@
             --dash-danger: #f07d86;
             width: 100%;
             max-width: 1180px;
-            min-height: 690px;
+            min-height: 540px;
             height: auto;
             background: var(--dash-bg);
             border-radius: 18px;
@@ -511,32 +511,32 @@
         }
 
         .dash-sidebar {
-            width: 260px;
+            width: 220px;
             background:
                 linear-gradient(180deg, rgba(19, 35, 56, 0.98), rgba(11, 21, 34, 1));
             border-right: 1px solid rgba(108, 141, 184, 0.14);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 22px 0 18px;
+            padding: 16px 0 12px;
             z-index: 1;
         }
 
         .dash-sidebar-main {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 14px;
         }
 
         .dash-sidebar-logo {
-            padding: 0 24px 20px;
+            padding: 0 18px 14px;
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 10px;
             font-family: var(--font-display);
             font-weight: 800;
             color: var(--dash-green);
-            font-size: 1.08rem;
+            font-size: 0.96rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.06);
             margin-bottom: 4px;
         }
@@ -548,14 +548,14 @@
         }
 
         .dash-nav-group {
-            padding: 0 14px;
+            padding: 0 10px;
         }
 
         .dash-nav-title {
-            font-size: 0.72rem;
+            font-size: 0.66rem;
             text-transform: uppercase;
             color: rgba(147, 169, 197, 0.58);
-            margin-bottom: 10px;
+            margin-bottom: 6px;
             padding: 0 10px;
             letter-spacing: 0.12em;
             font-weight: 700;
@@ -564,12 +564,12 @@
         .dash-nav-item {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
+            gap: 10px;
+            padding: 9px 11px;
             color: #b7c7da;
-            font-size: 0.96rem;
-            border-radius: 14px;
-            margin-bottom: 6px;
+            font-size: 0.86rem;
+            border-radius: 12px;
+            margin-bottom: 3px;
             font-weight: 600;
             cursor: default;
             border: 1px solid transparent;
@@ -577,8 +577,8 @@
         }
 
         .dash-nav-item svg {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             flex: 0 0 auto;
         }
 
@@ -594,9 +594,9 @@
         }
 
         .dash-sidebar-logout {
-            margin: 0 14px;
-            min-height: 46px;
-            border-radius: 14px;
+            margin: 0 10px;
+            min-height: 38px;
+            border-radius: 12px;
             border: 1px solid rgba(194, 97, 116, 0.22);
             background: rgba(70, 32, 48, 0.66);
             color: #f2d5dd;
@@ -609,10 +609,10 @@
 
         .dash-content {
             flex: 1;
-            padding: 28px 28px 24px;
+            padding: 20px 20px 16px;
             display: grid;
             align-content: start;
-            gap: 22px;
+            gap: 16px;
             background:
                 radial-gradient(circle at 14% 0%, rgba(33, 214, 136, 0.09), rgba(33, 214, 136, 0) 34%),
                 linear-gradient(180deg, #081524 0%, #07111d 100%);
@@ -626,22 +626,22 @@
         .dash-page-header h3 {
             margin: 0;
             font-family: var(--font-display);
-            font-size: 2rem;
+            font-size: 1.56rem;
             font-weight: 800;
             color: var(--dash-text);
             letter-spacing: -0.03em;
         }
 
         .dash-page-header p {
-            margin: 8px 0 0;
-            font-size: 0.96rem;
+            margin: 5px 0 0;
+            font-size: 0.82rem;
             color: var(--dash-muted);
         }
 
         .dash-overview {
             display: grid;
             grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
-            gap: 22px;
+            gap: 16px;
             align-items: stretch;
         }
 
@@ -657,14 +657,14 @@
         }
 
         .dash-chart-card {
-            padding: 24px;
+            padding: 18px;
             display: grid;
-            gap: 18px;
+            gap: 12px;
         }
 
         .dash-card-title {
             margin: 0;
-            font-size: 1.28rem;
+            font-size: 1.02rem;
             font-weight: 800;
             color: var(--dash-text);
             letter-spacing: -0.02em;
@@ -679,22 +679,22 @@
         .dash-filter-row {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
+            gap: 8px;
             align-items: center;
         }
 
         .dash-filter-box {
-            min-height: 48px;
-            border-radius: 14px;
+            min-height: 38px;
+            border-radius: 11px;
             border: 1px solid rgba(116, 147, 184, 0.22);
             background: rgba(27, 47, 74, 0.88);
-            padding: 0 14px;
+            padding: 0 10px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            gap: 8px;
             color: #eef6ff;
-            font-size: 0.88rem;
+            font-size: 0.78rem;
             font-weight: 600;
             min-width: 0;
         }
@@ -707,27 +707,27 @@
         }
 
         .dash-filter-box svg {
-            width: 16px;
-            height: 16px;
+            width: 15px;
+            height: 15px;
             color: #85a0bf;
             flex: 0 0 auto;
         }
 
         .dash-filter-box--compact {
-            min-width: 140px;
-            min-height: 42px;
-            border-radius: 13px;
-            padding: 0 14px;
-            font-size: 0.88rem;
+            min-width: 112px;
+            min-height: 34px;
+            border-radius: 11px;
+            padding: 0 10px;
+            font-size: 0.78rem;
         }
 
         .dash-toggle {
             display: inline-grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 4px;
-            padding: 4px;
+            gap: 3px;
+            padding: 3px;
             min-width: 0;
-            border-radius: 14px;
+            border-radius: 11px;
             border: 1px solid rgba(116, 147, 184, 0.22);
             background: rgba(21, 37, 59, 0.92);
             grid-column: 1 / -1;
@@ -735,21 +735,21 @@
         }
 
         .dash-toggle-btn {
-            min-height: 40px;
-            border-radius: 10px;
+            min-height: 31px;
+            border-radius: 8px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 5px;
             color: #7f98b5;
-            font-size: 0.84rem;
+            font-size: 0.74rem;
             font-weight: 700;
             border: 1px solid transparent;
         }
 
         .dash-toggle-btn svg {
-            width: 14px;
-            height: 14px;
+            width: 11px;
+            height: 11px;
         }
 
         .dash-toggle-btn.is-active {
@@ -760,9 +760,9 @@
 
         .dash-chart-shell {
             position: relative;
-            min-height: 260px;
-            padding: 18px 16px 12px;
-            border-radius: 18px;
+            min-height: 198px;
+            padding: 12px 10px 10px;
+            border-radius: 14px;
             border: 1px solid rgba(116, 147, 184, 0.14);
             background:
                 radial-gradient(circle at 30% 18%, rgba(31, 214, 137, 0.08), rgba(31, 214, 137, 0) 44%),
@@ -772,9 +772,9 @@
 
         .dash-chart-label {
             position: absolute;
-            top: 14px;
-            left: 18px;
-            font-size: 0.82rem;
+            top: 10px;
+            left: 12px;
+            font-size: 0.7rem;
             font-weight: 600;
             color: rgba(227, 239, 255, 0.78);
             letter-spacing: 0.01em;
@@ -783,7 +783,7 @@
 
         .dash-chart-grid {
             position: absolute;
-            inset: 44px 16px 30px;
+            inset: 32px 10px 24px;
             display: grid;
             grid-template-rows: repeat(5, minmax(0, 1fr));
             z-index: 0;
@@ -797,7 +797,7 @@
             position: relative;
             z-index: 1;
             width: 100%;
-            height: 206px;
+            height: 152px;
             display: block;
             pointer-events: none;
         }
@@ -844,7 +844,7 @@
 
         .chart-axis text {
             fill: rgba(138, 163, 194, 0.9);
-            font-size: 12px;
+            font-size: 9px;
             font-weight: 600;
             letter-spacing: 0.01em;
         }
@@ -879,10 +879,10 @@
         }
 
         .dash-general-card {
-            padding: 24px;
+            padding: 18px;
             display: grid;
             align-content: start;
-            gap: 16px;
+            gap: 10px;
         }
 
         .dash-general-list {
@@ -894,10 +894,10 @@
             align-items: center;
             justify-content: space-between;
             gap: 14px;
-            padding: 16px 0;
+            padding: 11px 0;
             border-bottom: 1px solid rgba(116, 147, 184, 0.16);
             color: var(--dash-muted);
-            font-size: 0.95rem;
+            font-size: 0.82rem;
         }
 
         .dash-general-item:last-child {
@@ -907,44 +907,44 @@
 
         .dash-general-item strong {
             color: var(--dash-text);
-            font-size: 2rem;
+            font-size: 1.56rem;
             line-height: 1;
             letter-spacing: -0.03em;
             flex: 0 0 auto;
         }
 
         .dash-events-card {
-            padding: 24px;
+            padding: 18px;
             display: grid;
-            gap: 18px;
+            gap: 12px;
         }
 
         .dash-events-header {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
-            gap: 16px;
+            gap: 14px;
         }
 
         .dash-events-summary {
-            margin-top: 8px;
-            font-size: 0.9rem;
+            margin-top: 4px;
+            font-size: 0.8rem;
             color: var(--dash-muted);
         }
 
         .dash-events-actions {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
         }
 
         .dash-create-btn {
-            min-height: 42px;
-            padding: 0 18px;
+            min-height: 34px;
+            padding: 0 14px;
             border-radius: 999px;
             background: linear-gradient(135deg, #1be48f, #19bb73);
             color: #04140b;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             font-weight: 800;
             letter-spacing: 0.01em;
             display: inline-flex;
@@ -954,16 +954,16 @@
 
         .dash-events-list {
             display: grid;
-            gap: 12px;
+            gap: 8px;
         }
 
         .dash-event-item {
             display: grid;
             grid-template-columns: minmax(0, 1fr) auto auto auto;
-            gap: 14px;
+            gap: 12px;
             align-items: center;
-            padding: 16px 18px;
-            border-radius: 16px;
+            padding: 12px 14px;
+            border-radius: 12px;
             border: 1px solid rgba(116, 147, 184, 0.18);
             background: rgba(16, 30, 48, 0.72);
         }
@@ -975,31 +975,31 @@
         .dash-event-main strong {
             display: block;
             color: var(--dash-text);
-            font-size: 1.05rem;
-            margin-bottom: 4px;
+            font-size: 0.92rem;
+            margin-bottom: 2px;
         }
 
         .dash-event-main span {
             display: block;
             color: var(--dash-muted);
-            font-size: 0.87rem;
-            line-height: 1.45;
+            font-size: 0.74rem;
+            line-height: 1.28;
         }
 
         .dash-event-status {
             border-radius: 999px;
-            padding: 7px 12px;
+            padding: 5px 9px;
             border: 1px solid rgba(31, 214, 137, 0.42);
             background: rgba(31, 214, 137, 0.12);
             color: #dbfff0;
-            font-size: 0.76rem;
+            font-size: 0.68rem;
             font-weight: 800;
             white-space: nowrap;
         }
 
         .dash-event-count {
             color: #9bb3ce;
-            font-size: 0.88rem;
+            font-size: 0.76rem;
             white-space: nowrap;
         }
 
@@ -1009,9 +1009,9 @@
         }
 
         .dash-icon-btn {
-            width: 38px;
-            height: 38px;
-            border-radius: 12px;
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
             border: 1px solid rgba(116, 147, 184, 0.26);
             background: rgba(20, 37, 59, 0.9);
             color: #dbe6f4;
@@ -1021,8 +1021,8 @@
         }
 
         .dash-icon-btn svg {
-            width: 16px;
-            height: 16px;
+            width: 13px;
+            height: 13px;
         }
 
         .dash-icon-btn--danger {
@@ -1154,24 +1154,25 @@
             color: var(--text-med);
         }
 
-        /* ----- MARQUEE LOGOS ----- */
+        /* ----- MARQUEE FEATURES ----- */
         .marquee-section {
-            padding: 40px 0;
+            padding: 18px 0 16px;
             border-bottom: 1px solid var(--border-subtle);
             overflow: hidden;
             display: flex;
             align-items: center;
-            opacity: 0.6;
+            opacity: 0.72;
         }
 
         .marquee-content {
             display: flex;
-            gap: 60px;
+            gap: 52px;
+            min-width: max-content;
             animation: scroll 20s linear infinite;
             white-space: nowrap;
             font-family: var(--font-display);
             font-weight: 600;
-            font-size: 1.2rem;
+            font-size: 1.05rem;
             color: var(--text-med);
         }
 
@@ -1179,6 +1180,18 @@
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+
+        .marquee-content strong {
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .marquee-content i {
+            font-style: normal;
+            color: var(--primary);
+            font-size: 0.9em;
+            opacity: 0.9;
         }
 
         @keyframes scroll {
@@ -1373,7 +1386,7 @@
         .practical-card,
         .offer-card,
         .compare-card {
-            border-radius: 20px;
+            border-radius: 18px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             background: rgba(12, 12, 14, 0.82);
             box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
@@ -1506,7 +1519,12 @@
             min-width: 0;
         }
 
-        .signal-dot,
+        .signal-item {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            gap: 14px;
+        }
+
         .compare-card li::before,
         .offer-list li::before {
             content: '';
@@ -1518,21 +1536,49 @@
             box-shadow: 0 0 18px rgba(0, 255, 163, 0.28);
         }
 
-        .signal-item span:nth-child(2) {
-            flex: 1;
+        .signal-icon,
+        .signal-cue {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            color: rgba(241, 247, 255, 0.88);
         }
 
-        .signal-state {
-            flex-shrink: 0;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 0.76rem;
+        .signal-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 14px;
+            border-color: rgba(0, 255, 163, 0.14);
+            background: rgba(0, 255, 163, 0.08);
+            color: var(--primary);
+            box-shadow: 0 0 24px rgba(0, 255, 163, 0.12);
+        }
+
+        .signal-icon svg,
+        .signal-cue svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .signal-text {
+            min-width: 0;
+            color: rgba(241, 247, 255, 0.82);
+            line-height: 1.4;
+        }
+
+        .signal-cue {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.72);
+        }
+
+        .signal-cue--symbol {
+            font-size: 1rem;
             font-weight: 700;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: #ffbdbd;
-            background: rgba(255, 102, 125, 0.1);
-            border: 1px solid rgba(255, 102, 125, 0.2);
         }
 
         .practical-grid,
@@ -2128,17 +2174,23 @@
             .signal-item,
             .compare-card li,
             .offer-list li {
-                align-items: flex-start;
+                align-items: center;
             }
 
             .signal-item {
-                display: grid;
-                grid-template-columns: auto 1fr;
+                grid-template-columns: auto 1fr auto;
             }
 
-            .signal-state {
-                grid-column: 2;
-                justify-self: start;
+            .signal-icon {
+                width: 34px;
+                height: 34px;
+                border-radius: 12px;
+            }
+
+            .signal-cue {
+                width: 30px;
+                height: 30px;
+                border-radius: 10px;
             }
 
             .offer-actions .btn {
@@ -3905,13 +3957,13 @@
                         </div>
                     </div>
 
-                        <div class="dash-events-list">
-                            <div class="dash-event-item">
-                                <div class="dash-event-main">
-                                    <strong>Interessados</strong>
+                    <div class="dash-events-list">
+                        <div class="dash-event-item">
+                            <div class="dash-event-main">
+                                <strong>Interessados</strong>
                                 <span>interessados &middot; dado ilustrativo de campanha</span>
-                                </div>
-                                <span class="dash-event-status">Ativo</span>
+                            </div>
+                            <span class="dash-event-status">Ativo</span>
                             <span class="dash-event-count">13 no per&iacute;odo</span>
                             <div class="dash-event-buttons">
                                 <span class="dash-icon-btn">
@@ -3930,37 +3982,13 @@
                             </div>
                         </div>
 
-                            <div class="dash-event-item">
-                                <div class="dash-event-main">
-                                    <strong>Venda</strong>
+                        <div class="dash-event-item">
+                            <div class="dash-event-main">
+                                <strong>Venda</strong>
                                 <span>venda &middot; fluxo de convers&atilde;o em demonstra&ccedil;&atilde;o</span>
-                                </div>
-                                <span class="dash-event-status">Ativo</span>
-                            <span class="dash-event-count">3 no per&iacute;odo</span>
-                            <div class="dash-event-buttons">
-                                <span class="dash-icon-btn">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 20h9"></path>
-                                        <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"></path>
-                                    </svg>
-                                </span>
-                                <span class="dash-icon-btn dash-icon-btn--danger">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <polyline points="3 6 5 6 21 6"></polyline>
-                                        <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path>
-                                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-                                    </svg>
-                                </span>
                             </div>
-                        </div>
-
-                            <div class="dash-event-item">
-                                <div class="dash-event-main">
-                                    <strong>Carrinho abandonado</strong>
-                                <span>carrinho_abandonado &middot; automa&ccedil;&atilde;o de exemplo</span>
-                                </div>
-                                <span class="dash-event-status">Ativo</span>
-                            <span class="dash-event-count">9 no per&iacute;odo</span>
+                            <span class="dash-event-status">Ativo</span>
+                            <span class="dash-event-count">3 no per&iacute;odo</span>
                             <div class="dash-event-buttons">
                                 <span class="dash-icon-btn">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4100,6 +4128,19 @@
         </div>
     </section>
 
+    <section class="marquee-section" aria-label="Recursos principais do ZapVender">
+        <div class="marquee-content">
+            <span><i>✦</i><strong>Escala infinita</strong></span>
+            <span><i>✦</i><strong>Construtor de fluxo de conversa</strong></span>
+            <span><i>✦</i><strong>Blindagem Antibloqueio</strong></span>
+            <span><i>✦</i><strong>Gestão de Equipe Avançada</strong></span>
+            <span aria-hidden="true"><i>✦</i><strong>Escala infinita</strong></span>
+            <span aria-hidden="true"><i>✦</i><strong>Construtor de fluxo de conversa</strong></span>
+            <span aria-hidden="true"><i>✦</i><strong>Blindagem Antibloqueio</strong></span>
+            <span aria-hidden="true"><i>✦</i><strong>Gestão de Equipe Avançada</strong></span>
+        </div>
+    </section>
+
     <!-- ZENVIA-STYLE VIDEO EXPERIENCE -->
     <section class="video-experience" id="experiencia">
         <div class="container">
@@ -4143,10 +4184,68 @@
                     <span class="surface-tag">Quando tudo depende da memória do time</span>
                     <h3>Os gargalos que mais custam vendas no dia a dia</h3>
                     <ul class="signal-list">
-                        <li class="signal-item"><span class="signal-dot"></span><span>Conversas sem dono claro</span><span class="signal-state">Improviso</span></li>
-                        <li class="signal-item"><span class="signal-dot"></span><span>Lead quente esperando resposta</span><span class="signal-state">Atraso</span></li>
-                        <li class="signal-item"><span class="signal-dot"></span><span>Retomadas lembradas tarde demais</span><span class="signal-state">Perda</span></li>
-                        <li class="signal-item"><span class="signal-dot"></span><span>Prioridades escondidas no volume</span><span class="signal-state">Ruído</span></li>
+                        <li class="signal-item">
+                            <span class="signal-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M17 8h5"></path>
+                                    <path d="M19.5 5.5v5"></path>
+                                </svg>
+                            </span>
+                            <span class="signal-text">Conversas sem dono claro</span>
+                            <span class="signal-cue signal-cue--symbol" aria-hidden="true">?</span>
+                        </li>
+                        <li class="signal-item">
+                            <span class="signal-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h9"></path>
+                                    <circle cx="18" cy="8" r="4"></circle>
+                                    <path d="M18 6v2l1.2 1.2"></path>
+                                </svg>
+                            </span>
+                            <span class="signal-text">Lead quente esperando resposta</span>
+                            <span class="signal-cue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="8"></circle>
+                                    <path d="M12 8v4l2 2"></path>
+                                </svg>
+                            </span>
+                        </li>
+                        <li class="signal-item">
+                            <span class="signal-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 0 1 15.36-6.36L21 8"></path>
+                                    <path d="M21 3v5h-5"></path>
+                                    <path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"></path>
+                                    <path d="M8 16H3v5"></path>
+                                </svg>
+                            </span>
+                            <span class="signal-text">Retomadas lembradas tarde demais</span>
+                            <span class="signal-cue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 6v6l3 3"></path>
+                                    <circle cx="12" cy="12" r="8"></circle>
+                                </svg>
+                            </span>
+                        </li>
+                        <li class="signal-item">
+                            <span class="signal-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 7h16"></path>
+                                    <path d="M7 12h10"></path>
+                                    <path d="M10 17h4"></path>
+                                </svg>
+                            </span>
+                            <span class="signal-text">Prioridades escondidas no volume</span>
+                            <span class="signal-cue" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 6h16"></path>
+                                    <path d="M7 12h10"></path>
+                                    <path d="M10 18h4"></path>
+                                </svg>
+                            </span>
+                        </li>
                     </ul>
                     <p class="story-mini-note">Sem processo, cada venda exige esforço extra para manter contexto, prioridade e continuidade da conversa.</p>
                 </aside>
