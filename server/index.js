@@ -178,7 +178,23 @@ const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'self-protecao-veicular-key-2024';
+const INSECURE_ENCRYPTION_KEYS = new Set([
+    'self-protecao-veicular-master-key-2024',
+    'self-protecao-veicular-key-2024',
+    'chave-de-criptografia-32-caracteres',
+    'changeme',
+    'change-me',
+    'default',
+    'encryption-key'
+]);
+const INSECURE_JWT_SECRETS = new Set([
+    'self-protecao-jwt-secret-2024',
+    'sua-chave-secreta-super-segura-aqui-min-32-chars',
+    'changeme',
+    'change-me',
+    'default',
+    'jwt-secret'
+]);
 const APP_BRAND_NAME = 'ZapVender';
 const WHATSAPP_BROWSER_VERSION = '120.0.0';
 const WHATSAPP_BROWSER_NAME_MAX_LENGTH = 40;
@@ -1182,20 +1198,30 @@ async function resolveSocketOwnerUserId(socket) {
 
 
 
-// Avisar se chaves de seguranÃ§a nÃ£o foram configuradas (nÃ£o bloqueia startup para deploy funcionar)
+// Validar segredos de seguranca obrigatorios em producao
 
 if (process.env.NODE_ENV === 'production') {
+    const encryptionKey = String(process.env.ENCRYPTION_KEY || '').trim();
+    const jwtSecret = String(process.env.JWT_SECRET || '').trim();
 
-    if (!process.env.ENCRYPTION_KEY || ENCRYPTION_KEY === 'self-protecao-veicular-key-2024') {
-
-        console.warn('??  AVISO: Configure ENCRYPTION_KEY nas variÃ¡veis de ambiente para produÃ§Ã£o.');
-
+    if (!encryptionKey) {
+        throw new Error('ENCRYPTION_KEY is required in production');
+    }
+    if (INSECURE_ENCRYPTION_KEYS.has(encryptionKey)) {
+        throw new Error('ENCRYPTION_KEY insecure value is not allowed in production');
+    }
+    if (encryptionKey.length < 32) {
+        throw new Error('ENCRYPTION_KEY must be at least 32 characters in production');
     }
 
-    if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'self-protecao-jwt-secret-2024') {
-
-        console.warn('??  AVISO: Configure JWT_SECRET nas variÃ¡veis de ambiente para produÃ§Ã£o.');
-
+    if (!jwtSecret) {
+        throw new Error('JWT_SECRET is required in production');
+    }
+    if (INSECURE_JWT_SECRETS.has(jwtSecret)) {
+        throw new Error('JWT_SECRET insecure value is not allowed in production');
+    }
+    if (jwtSecret.length < 32) {
+        throw new Error('JWT_SECRET must be at least 32 characters in production');
     }
 
 }

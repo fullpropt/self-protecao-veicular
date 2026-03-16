@@ -16,8 +16,26 @@ const PBKDF2_ITERATIONS = 100000;
 // Chave mestra (deve ser configurada via variável de ambiente)
 const DEFAULT_MASTER_KEY = 'self-protecao-veicular-master-key-2024';
 const MASTER_KEY_FROM_ENV = String(process.env.ENCRYPTION_KEY || '').trim();
-if (process.env.NODE_ENV === 'production' && (!MASTER_KEY_FROM_ENV || MASTER_KEY_FROM_ENV === DEFAULT_MASTER_KEY)) {
-    throw new Error('ENCRYPTION_KEY is required in production and cannot use the default value');
+const INSECURE_MASTER_KEYS = new Set([
+    DEFAULT_MASTER_KEY,
+    'self-protecao-veicular-key-2024',
+    'chave-de-criptografia-32-caracteres',
+    'changeme',
+    'change-me',
+    'default',
+    'encryption-key'
+]);
+
+if (process.env.NODE_ENV === 'production') {
+    if (!MASTER_KEY_FROM_ENV) {
+        throw new Error('ENCRYPTION_KEY is required in production');
+    }
+    if (INSECURE_MASTER_KEYS.has(MASTER_KEY_FROM_ENV)) {
+        throw new Error('ENCRYPTION_KEY insecure value is not allowed in production');
+    }
+    if (MASTER_KEY_FROM_ENV.length < 32) {
+        throw new Error('ENCRYPTION_KEY must be at least 32 characters in production');
+    }
 }
 const MASTER_KEY = MASTER_KEY_FROM_ENV || DEFAULT_MASTER_KEY;
 
