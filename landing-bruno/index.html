@@ -1230,6 +1230,862 @@
             letter-spacing: -0.02em;
         }
 
+        /* ----- POST-VIDEO NARRATIVE ----- */
+        .post-video-flow {
+            position: relative;
+            padding: 72px 0 96px;
+        }
+
+        .post-video-flow::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(180deg, rgba(0, 255, 163, 0.04) 0%, rgba(2, 2, 2, 0) 26%),
+                radial-gradient(circle at 14% 18%, rgba(0, 240, 255, 0.09) 0%, transparent 28%),
+                radial-gradient(circle at 82% 12%, rgba(0, 255, 163, 0.1) 0%, transparent 30%),
+                radial-gradient(circle at 50% 62%, rgba(0, 255, 163, 0.05) 0%, transparent 34%);
+            pointer-events: none;
+        }
+
+        .story-block,
+        .post-cta-section,
+        .post-faq-section {
+            position: relative;
+            overflow: hidden;
+            padding: 40px;
+            border-radius: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                linear-gradient(180deg, rgba(17, 31, 53, 0.94) 0%, rgba(8, 16, 29, 0.95) 100%);
+            box-shadow:
+                0 28px 80px rgba(0, 0, 0, 0.28),
+                0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+        }
+
+        .story-block::before,
+        .post-cta-section::before,
+        .post-faq-section::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at top right, rgba(0, 255, 163, 0.12), transparent 32%),
+                radial-gradient(circle at bottom left, rgba(0, 240, 255, 0.08), transparent 28%);
+            pointer-events: none;
+        }
+
+        .story-block > *,
+        .post-cta-section > *,
+        .post-faq-section > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .post-video-flow .story-block + .story-block,
+        .post-video-flow .story-block + .post-cta-section,
+        .post-video-flow .post-cta-section + .post-faq-section,
+        .post-video-flow .post-faq-section + .post-footer {
+            margin-top: 28px;
+        }
+
+        .story-block[id],
+        .post-cta-section#precos,
+        .post-faq-section,
+        .post-footer#contato {
+            scroll-margin-top: 110px;
+        }
+
+        .story-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
+            color: var(--primary);
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+        }
+
+        .story-eyebrow::before {
+            content: '';
+            width: 30px;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(0, 255, 163, 0), rgba(0, 255, 163, 0.85));
+        }
+
+        .story-heading {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 4vw, 3.1rem);
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+            color: var(--text-high);
+            max-width: 16ch;
+        }
+
+        .story-heading--md {
+            max-width: 20ch;
+            font-size: clamp(1.85rem, 3.3vw, 2.7rem);
+        }
+
+        .story-lead {
+            margin-top: 20px;
+            max-width: 62ch;
+            font-size: 1.08rem;
+            color: rgba(255, 255, 255, 0.84);
+            line-height: 1.75;
+        }
+
+        .story-copy {
+            margin-top: 18px;
+            max-width: 62ch;
+            color: var(--text-med);
+            font-size: 1rem;
+            line-height: 1.75;
+        }
+
+        .story-mini-note {
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.62);
+            font-size: 0.92rem;
+            line-height: 1.6;
+        }
+
+        .story-action {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .story-action--center {
+            justify-content: center;
+        }
+
+        .pain-grid,
+        .method-grid,
+        .positioning-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            gap: 28px;
+            align-items: stretch;
+        }
+
+        .pain-surface,
+        .method-board,
+        .positioning-rail,
+        .proof-card,
+        .objection-card,
+        .benefit-card,
+        .practical-card,
+        .offer-card,
+        .compare-card {
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.015) 100%);
+            backdrop-filter: blur(16px);
+        }
+
+        .pain-surface,
+        .method-board,
+        .positioning-rail {
+            padding: 28px;
+        }
+
+        .surface-tag,
+        .proof-pill,
+        .offer-badge,
+        .benefit-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: fit-content;
+            border-radius: 999px;
+            padding: 8px 14px;
+            background: rgba(0, 255, 163, 0.08);
+            border: 1px solid rgba(0, 255, 163, 0.18);
+            color: rgba(255, 255, 255, 0.86);
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .surface-tag::before,
+        .offer-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 12px rgba(0, 255, 163, 0.55);
+        }
+
+        .pain-surface h3,
+        .method-board h3,
+        .compare-card h3,
+        .benefit-card h3,
+        .proof-card h3,
+        .objection-card h3,
+        .offer-card h3 {
+            margin-top: 18px;
+            color: var(--text-high);
+            font-family: var(--font-display);
+            font-size: 1.45rem;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+        }
+
+        .signal-list,
+        .compare-card ul,
+        .offer-list {
+            list-style: none;
+            margin: 20px 0 0;
+            padding: 0;
+            display: grid;
+            gap: 12px;
+        }
+
+        .signal-item,
+        .compare-card li,
+        .offer-list li {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.03);
+            min-width: 0;
+        }
+
+        .signal-dot,
+        .compare-card li::before,
+        .offer-list li::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), #25d366);
+            box-shadow: 0 0 18px rgba(0, 255, 163, 0.28);
+        }
+
+        .signal-item span:nth-child(2) {
+            flex: 1;
+        }
+
+        .signal-state {
+            flex-shrink: 0;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #ffbdbd;
+            background: rgba(255, 102, 125, 0.1);
+            border: 1px solid rgba(255, 102, 125, 0.2);
+        }
+
+        .practical-grid,
+        .benefit-grid,
+        .proof-grid,
+        .objection-grid {
+            display: grid;
+            gap: 18px;
+            margin-top: 28px;
+        }
+
+        .practical-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .practical-card,
+        .benefit-card,
+        .proof-card,
+        .objection-card {
+            padding: 24px;
+        }
+
+        .practical-index {
+            display: inline-flex;
+            margin-bottom: 18px;
+            color: var(--primary);
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+
+        .practical-card h3,
+        .positioning-point strong {
+            color: var(--text-high);
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+        }
+
+        .practical-card p,
+        .benefit-card p,
+        .proof-card p,
+        .objection-card p,
+        .offer-card p,
+        .method-step p,
+        .positioning-point p {
+            margin-top: 12px;
+            color: var(--text-med);
+            line-height: 1.68;
+        }
+
+        .method-board {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .method-step {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 14px;
+            padding: 18px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .method-step:first-of-type {
+            margin-top: 8px;
+        }
+
+        .method-step:last-of-type {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .method-step-number {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            border-radius: 10px;
+            background: rgba(0, 255, 163, 0.1);
+            color: var(--primary);
+            font-weight: 800;
+        }
+
+        .method-step strong {
+            display: block;
+            color: var(--text-high);
+            font-size: 1rem;
+            letter-spacing: -0.01em;
+        }
+
+        .method-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 24px;
+        }
+
+        .method-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            color: rgba(255, 255, 255, 0.82);
+            font-size: 0.86rem;
+            font-weight: 500;
+        }
+
+        .compare-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+            margin-top: 28px;
+        }
+
+        .compare-card {
+            padding: 28px;
+        }
+
+        .compare-card p {
+            margin-top: 12px;
+            color: rgba(255, 255, 255, 0.68);
+        }
+
+        .compare-before li::before {
+            background: linear-gradient(135deg, #ff667d, #ff8f6b);
+            box-shadow: 0 0 18px rgba(255, 102, 125, 0.24);
+        }
+
+        .compare-before li {
+            color: rgba(255, 255, 255, 0.74);
+        }
+
+        .compare-after li {
+            color: rgba(255, 255, 255, 0.88);
+            background: linear-gradient(135deg, rgba(0, 255, 163, 0.09), rgba(255, 255, 255, 0.04));
+            border-color: rgba(0, 255, 163, 0.16);
+        }
+
+        .benefit-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .benefit-badge {
+            margin-bottom: 18px;
+            background: rgba(0, 240, 255, 0.08);
+            border-color: rgba(0, 240, 255, 0.16);
+            color: rgba(255, 255, 255, 0.76);
+        }
+
+        .benefit-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.45);
+        }
+
+        .proof-note {
+            margin-top: 18px;
+            max-width: 62ch;
+            color: rgba(255, 255, 255, 0.72);
+            line-height: 1.72;
+        }
+
+        .proof-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .proof-visual {
+            position: relative;
+            overflow: hidden;
+            min-height: 180px;
+            padding: 18px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background:
+                linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(255, 255, 255, 0.02)),
+                linear-gradient(180deg, rgba(18, 34, 57, 0.96), rgba(11, 21, 36, 0.96));
+            margin-bottom: 18px;
+        }
+
+        .proof-visual-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .proof-pill {
+            padding: 6px 10px;
+            font-size: 0.72rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .proof-pill--muted {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.64);
+        }
+
+        .proof-visual-stats::before {
+            content: '';
+            position: absolute;
+            left: 18px;
+            right: 18px;
+            bottom: 34px;
+            height: 96px;
+            border-radius: 16px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)),
+                repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 24px);
+            opacity: 0.75;
+        }
+
+        .proof-bars {
+            position: absolute;
+            left: 24px;
+            right: 24px;
+            bottom: 24px;
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            height: 96px;
+        }
+
+        .proof-bars span {
+            flex: 1;
+            border-radius: 12px 12px 6px 6px;
+            background: linear-gradient(180deg, rgba(0, 255, 163, 0.92), rgba(0, 255, 163, 0.18));
+            opacity: 0.85;
+        }
+
+        .proof-bars span:nth-child(1) { height: 34%; }
+        .proof-bars span:nth-child(2) { height: 72%; }
+        .proof-bars span:nth-child(3) { height: 46%; }
+        .proof-bars span:nth-child(4) { height: 66%; }
+        .proof-bars span:nth-child(5) { height: 28%; }
+        .proof-bars span:nth-child(6) { height: 52%; }
+
+        .proof-trend {
+            position: absolute;
+            left: 22px;
+            right: 22px;
+            bottom: 38px;
+            height: 92px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 260 96' fill='none'%3E%3Cpath d='M4 78C26 74 40 24 64 18C88 12 112 62 138 54C164 46 178 18 202 30C224 40 236 82 256 74' stroke='%2300ffa3' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='64' cy='18' r='4' fill='%2300ffa3'/%3E%3Ccircle cx='138' cy='54' r='4' fill='%2300ffa3'/%3E%3Ccircle cx='256' cy='74' r='4' fill='%2300ffa3'/%3E%3C/svg%3E") no-repeat center/contain;
+            opacity: 0.95;
+        }
+
+        .proof-event-stack,
+        .proof-messages {
+            display: grid;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .proof-event,
+        .proof-message {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.88rem;
+        }
+
+        .proof-event span,
+        .proof-message span {
+            flex-shrink: 0;
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: rgba(0, 255, 163, 0.1);
+            border: 1px solid rgba(0, 255, 163, 0.16);
+            color: var(--primary);
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .proof-message--in {
+            justify-content: flex-start;
+        }
+
+        .proof-message--out {
+            justify-content: flex-end;
+            background: linear-gradient(135deg, rgba(0, 255, 163, 0.12), rgba(255, 255, 255, 0.04));
+            border-color: rgba(0, 255, 163, 0.18);
+            text-align: right;
+        }
+
+        .objection-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .positioning-rail {
+            display: grid;
+            gap: 14px;
+        }
+
+        .positioning-point {
+            padding: 18px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .positioning-point:first-child {
+            padding-top: 0;
+        }
+
+        .positioning-point:last-child {
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .post-cta-section#precos {
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        .offer-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+            gap: 20px;
+        }
+
+        .offer-card {
+            padding: 30px;
+        }
+
+        .offer-card-primary {
+            border-color: rgba(0, 255, 163, 0.18);
+            background:
+                linear-gradient(135deg, rgba(0, 255, 163, 0.1), rgba(255, 255, 255, 0.03)),
+                linear-gradient(180deg, rgba(17, 31, 53, 0.98), rgba(8, 16, 29, 0.98));
+        }
+
+        .offer-card-secondary {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .offer-list {
+            margin-top: 22px;
+            margin-bottom: 26px;
+        }
+
+        .offer-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .offer-actions .btn {
+            min-width: 0;
+        }
+
+        .post-faq-section {
+            padding: 40px;
+        }
+
+        .faq-list {
+            display: grid;
+            gap: 14px;
+            margin-top: 28px;
+        }
+
+        .faq-item {
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0 22px;
+        }
+
+        .faq-item[open] {
+            border-color: rgba(0, 255, 163, 0.18);
+            background: linear-gradient(135deg, rgba(0, 255, 163, 0.05), rgba(255, 255, 255, 0.03));
+        }
+
+        .faq-item summary {
+            list-style: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 22px 0;
+            color: var(--text-high);
+            font-family: var(--font-display);
+            font-size: 1.12rem;
+            line-height: 1.3;
+        }
+
+        .faq-item summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .faq-item summary::after {
+            content: '+';
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.72);
+            font-size: 1.15rem;
+            font-weight: 500;
+        }
+
+        .faq-item[open] summary::after {
+            content: '−';
+            color: var(--primary);
+            border-color: rgba(0, 255, 163, 0.22);
+        }
+
+        .faq-answer {
+            padding-bottom: 22px;
+            color: var(--text-med);
+            line-height: 1.72;
+        }
+
+        .post-footer {
+            margin-top: 28px;
+            padding-top: 0;
+            border-top: none;
+        }
+
+        .post-footer .footer-grid {
+            margin-bottom: 16px;
+            padding: 36px;
+            border-radius: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                linear-gradient(180deg, rgba(17, 31, 53, 0.9), rgba(8, 16, 29, 0.94));
+        }
+
+        .post-footer .footer-grid > div:first-child {
+            align-items: flex-start;
+            text-align: left;
+        }
+
+        .post-footer .footer-grid > div:first-child .logo {
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        .post-footer p {
+            color: var(--text-med);
+            line-height: 1.7;
+        }
+
+        .footer-note {
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 20px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.55);
+        }
+
+        @media (max-width: 900px) {
+            .post-video-flow {
+                padding: 56px 0 72px;
+            }
+
+            .story-block,
+            .post-cta-section,
+            .post-faq-section {
+                padding: 32px 28px;
+                border-radius: 28px;
+            }
+
+            .pain-grid,
+            .method-grid,
+            .positioning-grid,
+            .offer-grid,
+            .compare-grid,
+            .proof-grid,
+            .objection-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .practical-grid,
+            .benefit-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .story-heading,
+            .story-heading--md {
+                max-width: 100%;
+            }
+
+            .post-footer .footer-grid {
+                padding: 28px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .post-video-flow {
+                padding: 40px 0 56px;
+            }
+
+            .story-block,
+            .post-cta-section#precos,
+            .post-faq-section {
+                padding: 26px 18px;
+                border-radius: 24px;
+            }
+
+            .story-eyebrow {
+                margin-bottom: 14px;
+                font-size: 0.72rem;
+                letter-spacing: 0.14em;
+            }
+
+            .story-heading {
+                font-size: 1.9rem;
+                line-height: 1.08;
+            }
+
+            .story-heading--md {
+                font-size: 1.7rem;
+            }
+
+            .story-lead,
+            .story-copy {
+                font-size: 0.96rem;
+                line-height: 1.68;
+            }
+
+            .pain-surface,
+            .method-board,
+            .positioning-rail,
+            .compare-card,
+            .benefit-card,
+            .proof-card,
+            .objection-card,
+            .offer-card {
+                padding: 22px 18px;
+                border-radius: 22px;
+            }
+
+            .practical-grid,
+            .benefit-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .signal-item,
+            .compare-card li,
+            .offer-list li {
+                align-items: flex-start;
+            }
+
+            .signal-item {
+                display: grid;
+                grid-template-columns: auto 1fr;
+            }
+
+            .signal-state {
+                grid-column: 2;
+                justify-self: start;
+            }
+
+            .offer-actions .btn {
+                width: 100%;
+            }
+
+            .faq-item {
+                padding: 0 16px;
+                border-radius: 20px;
+            }
+
+            .faq-item summary {
+                font-size: 1rem;
+                padding: 18px 0;
+            }
+
+            .post-footer .footer-grid {
+                padding: 22px 18px;
+            }
+        }
+
         .bento-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -3189,253 +4045,375 @@
         </div>
     </section>
 
-    <!-- SOCIAL PROOF MARQUEE -->
-    <div class="marquee-section">
-        <div class="marquee-content">
-            <!-- Repetido 2x para efeito infinito suave -->
-            <span>✦ Conexão Nativa Sem Apis Pagas</span><span>✦ Construtor de Vendas Neural</span><span>✦ Blindagem
-                Antibloqueio</span><span>✦
-                Conversor de Carrinhos</span><span>✦ Gestão de Equipe Avançada</span><span>✦ Escala Infinita</span>
-            <span>✦ Conexão Nativa Sem Apis Pagas</span><span>✦ Construtor de Vendas Neural</span><span>✦ Blindagem
-                Antibloqueio</span><span>✦
-                Conversor de Carrinhos</span><span>✦ Gestão de Equipe Avançada</span><span>✦ Escala Infinita</span>
-        </div>
-    </div>
+    <!-- POST-VIDEO REFRACTOR -->
+    <div class="post-video-flow">
+        <section class="story-block container pain-block" id="plataforma">
+            <div class="pain-grid">
+                <div>
+                    <span class="story-eyebrow">Reenquadramento da dor</span>
+                    <h2 class="story-heading">Seu problema não é falta de lead. É falta de processo no WhatsApp.</h2>
+                    <p class="story-lead">Quando a operação depende da memória do time, do "depois eu respondo" ou de conversas perdidas no meio do dia, a venda vira improviso. E improviso não escala.</p>
+                    <p class="story-copy">O ZapVender organiza o que hoje está solto. Cada conversa ganha contexto. Cada lead entra em uma etapa. Cada follow-up deixa de depender da sorte.</p>
+                    <div class="story-action">
+                        <a href="#plano-premium" class="btn btn-primary-large">Quero transformar meu WhatsApp em operação de vendas</a>
+                    </div>
+                </div>
+                <aside class="pain-surface">
+                    <span class="surface-tag">Quando tudo depende da memória do time</span>
+                    <h3>Os gargalos que mais custam vendas no dia a dia</h3>
+                    <ul class="signal-list">
+                        <li class="signal-item"><span class="signal-dot"></span><span>Conversas sem dono claro</span><span class="signal-state">Improviso</span></li>
+                        <li class="signal-item"><span class="signal-dot"></span><span>Lead quente esperando resposta</span><span class="signal-state">Atraso</span></li>
+                        <li class="signal-item"><span class="signal-dot"></span><span>Retomadas lembradas tarde demais</span><span class="signal-state">Perda</span></li>
+                        <li class="signal-item"><span class="signal-dot"></span><span>Prioridades escondidas no volume</span><span class="signal-state">Ruído</span></li>
+                    </ul>
+                    <p class="story-mini-note">Sem processo, cada venda exige esforço extra para manter contexto, prioridade e continuidade da conversa.</p>
+                </aside>
+            </div>
+        </section>
 
-    <!-- CORE FEATURES / BENTO GRID -->
-    <main class="container section" id="plataforma">
-        <div class="section-header">
-            <span class="section-tag">TECNOLOGIA PROPRIETÁRIA</span>
-            <h2 class="section-title">O fim do atendimento braçal. <br>Apresentamos o Motor de Vendas Automático.</h2>
-            <p>Deixe o trabalho repetitivo e exaustivo com nossos algoritmos de alta conversão. Seu único foco agora é
-                escalar seus lucros.</p>
-        </div>
+        <section class="story-block container gain-block">
+            <span class="story-eyebrow">Ganho prático</span>
+            <h2 class="story-heading story-heading--md">O que muda na prática quando seu WhatsApp deixa de ser bagunça e vira processo</h2>
+            <div class="practical-grid">
+                <article class="practical-card">
+                    <span class="practical-index">01</span>
+                    <h3>Cada conversa tem direção</h3>
+                    <p>O time sabe em que etapa cada lead está e qual é o próximo passo, sem precisar adivinhar o contexto.</p>
+                </article>
+                <article class="practical-card">
+                    <span class="practical-index">02</span>
+                    <h3>Cada prioridade fica visível</h3>
+                    <p>O que está quente aparece primeiro, com mais clareza para agir antes da oportunidade esfriar.</p>
+                </article>
+                <article class="practical-card">
+                    <span class="practical-index">03</span>
+                    <h3>Cada follow-up acontece na hora certa</h3>
+                    <p>Retomadas saem da memória do time e entram em uma rotina previsível, sem planilhas paralelas.</p>
+                </article>
+                <article class="practical-card">
+                    <span class="practical-index">04</span>
+                    <h3>Cada venda anda com mais consistência</h3>
+                    <p>O comercial deixa de depender de heróis e passa a operar com mais ritmo, padrão e continuidade.</p>
+                </article>
+            </div>
+            <div class="story-action story-action--center">
+                <a href="#mecanismo" class="btn btn-ghost">Ver como isso funciona na minha operação</a>
+            </div>
+        </section>
 
-        <div class="bento-grid">
-            <!-- Card 1: Construtor + visual tech + fluxo ao vivo -->
-            <div class="bento-card bento-large card-hover bento-flow-card">
-                <div class="bento-card-content bento-flow-content">
-                    <div class="bento-flow-header">
-                        <div class="bento-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 6h6M9 18h6M6 9v6M18 9v6"/></svg>
-                        </div>
+        <section class="story-block container mechanism-block" id="mecanismo">
+            <div class="method-grid">
+                <div>
+                    <span class="story-eyebrow">Mecanismo simples</span>
+                    <h2 class="story-heading story-heading--md">Não é sobre responder mais mensagens. É sobre conduzir mais vendas com controle.</h2>
+                    <p class="story-lead">O ZapVender junta organização comercial e automação no canal onde a venda já acontece: o WhatsApp.</p>
+                    <p class="story-copy">Em vez de um time perdido entre conversas, etiquetas soltas e follow-ups esquecidos, você passa a operar com funil visual por etapas, responsáveis claros por conversa, prioridades organizadas, follow-ups programados e fluxos ajustados ao seu processo.</p>
+                    <div class="story-action">
+                        <a href="#beneficios" class="btn btn-ghost">Entender o método do ZapVender</a>
+                    </div>
+                </div>
+                <aside class="method-board">
+                    <span class="surface-tag">Como a operação se organiza</span>
+                    <div class="method-step">
+                        <span class="method-step-number">1</span>
                         <div>
-                            <h3>Construtor de Fluxo Inteligente</h3>
-                            <p>Interface visual onde você arrasta e conecta blocos. Crie automações de conversão em minutos, sem código.</p>
+                            <strong>Entrada com contexto</strong>
+                            <p>Cada lead chega com uma etapa visível, em vez de virar só mais uma conversa na lista.</p>
                         </div>
                     </div>
-                    <div class="bento-flow-preview">
-                        <div class="bento-flow-canvas" id="bento-flow-canvas">
-                            <svg class="flow-lines" viewBox="0 0 520 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-                                <path class="flow-line" data-draw="1" d="M 78 100 Q 140 75 203 51"/>
-                                <path class="flow-line" data-draw="2" d="M 78 100 Q 140 104 203 107"/>
-                                <path class="flow-line" data-draw="3" d="M 78 100 Q 208 75 338 51"/>
-                                <path class="flow-line" data-draw="4" d="M 78 100 Q 140 132 203 163"/>
-                                <path class="flow-line" data-draw="5" d="M 203 51 Q 298 75 392 100"/>
-                                <path class="flow-line" data-draw="6" d="M 203 107 Q 298 104 392 100"/>
-                                <path class="flow-line" data-draw="7" d="M 338 51 Q 365 75 392 100"/>
-                                <path class="flow-line" data-draw="8" d="M 203 163 Q 298 132 392 100"/>
-                            </svg>
-                            <div class="flow-node flow-node-lead flow-node-1" style="--i: 0"><span class="flow-node-head"><span class="flow-node-badge flow-badge-green">INTENÇÃO</span><span class="flow-icon flow-icon-bolt"></span></span><span class="flow-node-title">Interesse do Lead</span><span class="flow-node-opt">Onde comprar <span class="flow-dot"></span></span><span class="flow-node-opt">Conhecer os modelos <span class="flow-dot"></span></span><span class="flow-node-opt">Loja Física <span class="flow-dot"></span></span><span class="flow-node-opt">Outra resposta <span class="flow-dot"></span></span></div>
-                            <div class="flow-node flow-node-int flow-node-2" style="--i: 1"><span class="flow-node-head"><span class="flow-node-badge flow-badge-orange">INTENÇÃO</span><span class="flow-icon flow-icon-bolt"></span></span><span class="flow-node-title">Categorias</span><span class="flow-node-opt">Linha esportiva <span class="flow-dot"></span></span><span class="flow-node-opt">Linha clássica <span class="flow-dot"></span></span><span class="flow-node-opt">Outra resposta <span class="flow-dot"></span></span></div>
-                            <div class="flow-node flow-node-int flow-node-3" style="--i: 2"><span class="flow-node-head"><span class="flow-node-badge flow-badge-orange">INTENÇÃO</span><span class="flow-icon flow-icon-bolt"></span></span><span class="flow-node-title">Estilo</span><span class="flow-node-opt">De metal <span class="flow-dot"></span></span><span class="flow-node-opt">Arredondado <span class="flow-dot"></span></span><span class="flow-node-opt">Outra resposta <span class="flow-dot"></span></span></div>
-                            <div class="flow-node flow-node-int flow-node-4" style="--i: 3"><span class="flow-node-head"><span class="flow-node-badge flow-badge-orange">INTENÇÃO</span><span class="flow-icon flow-icon-bolt"></span></span><span class="flow-node-title">Interesse</span><span class="flow-node-opt">Interessado <span class="flow-dot"></span></span><span class="flow-node-opt">Não interessado <span class="flow-dot"></span></span><span class="flow-node-opt">Outra resposta <span class="flow-dot"></span></span></div>
-                            <div class="flow-node flow-node-int flow-node-5" style="--i: 4"><span class="flow-node-head"><span class="flow-node-badge flow-badge-orange">INTENÇÃO</span><span class="flow-icon flow-icon-bolt"></span></span><span class="flow-node-title">Showroom</span><span class="flow-node-opt">Vai no showroom <span class="flow-dot"></span></span><span class="flow-node-opt">Horário de função <span class="flow-dot"></span></span><span class="flow-node-opt">Outra resposta <span class="flow-dot"></span></span></div>
-                            <div class="flow-node flow-node-end flow-node-6" style="--i: 5"><span class="flow-node-head"><span class="flow-node-badge flow-badge-gray">FINALIZAR</span><span class="flow-icon flow-icon-check"></span></span><span class="flow-node-title">Fim</span><span class="flow-node-opt">Dúvida horário</span></div>
+                    <div class="method-step">
+                        <span class="method-step-number">2</span>
+                        <div>
+                            <strong>Prioridade e dono definidos</strong>
+                            <p>O time passa a saber quem assume, o que está quente e onde cada conversa precisa avançar.</p>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Card 2: WhatsApp Atendimento Automático (tech + gamificado) -->
-            <div class="bento-card card-hover bento-wa-auto">
-                <div class="bento-card-content">
-                    <div class="bento-wa-header">
-                        <div class="bento-wa-status">
-                            <span class="bento-wa-dot"></span>
-                            <span>LIVE</span>
-                        </div>
-                        <div class="bento-wa-stats">
-                            <span class="bento-wa-stat"><strong>247</strong> conversas</span>
-                            <span class="bento-wa-stat"><strong>98%</strong> respostas</span>
+                    <div class="method-step">
+                        <span class="method-step-number">3</span>
+                        <div>
+                            <strong>Retomadas e rotinas automatizadas</strong>
+                            <p>O que hoje se perde entre o atendimento manual e a correria vira sequência organizada.</p>
                         </div>
                     </div>
-                    <h3>Atendimento Automático WhatsApp</h3>
-                    <p>Bot 24/7 que responde, qualifica leads e encaminha para sua equipe. Zero fila, zero lead perdido.</p>
-                    <div class="bento-wa-xp">
-                        <span class="bento-wa-xp-label">Nível de automação</span>
-                        <div class="bento-wa-xp-bar"><div class="bento-wa-xp-fill"></div></div>
-                        <span class="bento-wa-xp-val">94%</span>
+                    <div class="method-tags">
+                        <span class="method-tag">Funil visual</span>
+                        <span class="method-tag">Responsável por conversa</span>
+                        <span class="method-tag">Etiquetas e prioridades</span>
+                        <span class="method-tag">Follow-up programado</span>
+                        <span class="method-tag">Fluxos ajustados ao processo</span>
                     </div>
-                    <div class="bento-wa-mock bento-wa-mock-live" id="bento-wa-mock"></div>
-                </div>
+                </aside>
             </div>
+        </section>
 
-            <!-- Card 3 -->
-            <div class="bento-card card-hover bento-metricas">
-                <div class="bento-card-content">
-                    <div class="bento-card-img-wrap">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 64' fill='none'%3E%3Crect x='2' y='2' width='116' height='60' rx='8' stroke='rgba(0,255,163,0.25)' stroke-width='1' fill='rgba(0,255,163,0.04)'/%3E%3Cpath d='M60 18v28M60 46l-10-8M60 46l10-8' stroke='%2300ffa3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' opacity='0.9'/%3E%3Ccircle cx='60' cy='46' r='4' fill='%2300ffa3'/%3E%3Cpath d='M60 12a34 34 0 0 1 0 68 34 34 0 0 1 0-68' stroke='rgba(0,255,163,0.2)' stroke-width='4' fill='none' stroke-dasharray='53 160' stroke-linecap='round'/%3E%3Cpath d='M60 12a34 34 0 0 1 24 12' stroke='%2300ffa3' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='60' cy='12' r='3' fill='%2300ffa3'/%3E%3C/svg%3E" alt="" class="bento-card-img">
-                    </div>
-                    <h3>Métricas e funil em tempo real</h3>
-                    <p>Acompanhe conversões, taxa de resposta e estágios do funil em um só painel. Dados atualizados na hora para você tomar decisões e ajustar campanhas.</p>
-                </div>
+        <section class="story-block container compare-block">
+            <span class="story-eyebrow">Antes e depois</span>
+            <h2 class="story-heading story-heading--md">Antes do ZapVender, vender no WhatsApp parece isso. Depois, parece operação.</h2>
+            <div class="compare-grid">
+                <article class="compare-card compare-before">
+                    <span class="surface-tag">Antes</span>
+                    <h3>Quando a venda depende do improviso</h3>
+                    <p>O comercial fica reativo, cada pessoa cria seu próprio jeito de trabalhar e a operação perde consistência.</p>
+                    <ul>
+                        <li>Conversas misturadas</li>
+                        <li>Lead quente esfriando</li>
+                        <li>Follow-up esquecido</li>
+                        <li>Equipe sem padrão</li>
+                        <li>Atendimento reativo</li>
+                        <li>Gestão sem visibilidade</li>
+                    </ul>
+                </article>
+                <article class="compare-card compare-after">
+                    <span class="surface-tag">Depois</span>
+                    <h3>Quando existe processo no WhatsApp</h3>
+                    <p>As conversas passam a seguir uma lógica comercial clara, com mais contexto, ritmo e previsibilidade.</p>
+                    <ul>
+                        <li>Etapas claras</li>
+                        <li>Prioridades visíveis</li>
+                        <li>Retomadas organizadas</li>
+                        <li>Processo replicável</li>
+                        <li>Atendimento com lógica</li>
+                        <li>Operação mais previsível</li>
+                    </ul>
+                </article>
             </div>
+            <div class="story-action story-action--center">
+                <a href="#plano-premium" class="btn btn-primary-large">Começar meu teste</a>
+            </div>
+        </section>
 
-            <!-- Card 4 -->
-            <div class="bento-card card-hover bento-inbox">
-                <div class="bento-card-content">
-                    <div class="bento-card-img-wrap">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 64' fill='none'%3E%3Crect x='2' y='2' width='116' height='60' rx='8' stroke='rgba(122,0,244,0.25)' stroke-width='1' fill='rgba(122,0,244,0.04)'/%3E%3Cpath d='M14 20h92M14 32h72M14 44h80M14 56h56' stroke='%237a00f4' stroke-width='1' stroke-linecap='round' opacity='0.4'/%3E%3Ccircle cx='26' cy='50' r='5' fill='%237a00f4' opacity='0.35'/%3E%3Ccircle cx='50' cy='50' r='5' fill='%237a00f4' opacity='0.6'/%3E%3Ccircle cx='74' cy='50' r='5' fill='%237a00f4'/%3E%3Crect x='14' y='12' width='8' height='6' rx='1' fill='%237a00f4' opacity='0.2'/%3E%3C/svg%3E" alt="" class="bento-card-img">
-                    </div>
-                    <h3>Inbox Multi-Agentes</h3>
-                    <p>Toda a sua equipe comercial operando números de WhatsApp em uma única tela. Latência zero e
-                        comunicação cristalina sem precisar pagar APIs abusivas.</p>
-                </div>
+        <section class="story-block container benefit-block" id="beneficios">
+            <span class="story-eyebrow">Benefícios práticos</span>
+            <h2 class="story-heading story-heading--md">O ZapVender foi pensado para resolver os gargalos que mais travam vendas no WhatsApp</h2>
+            <div class="benefit-grid">
+                <article class="benefit-card">
+                    <span class="benefit-badge">Processo</span>
+                    <h3>Funil por etapas</h3>
+                    <p>As conversas deixam de competir entre si e passam a avançar com um próximo passo claro dentro da operação.</p>
+                </article>
+                <article class="benefit-card">
+                    <span class="benefit-badge">Clareza</span>
+                    <h3>Responsável por conversa</h3>
+                    <p>Cada lead ganha dono, continuidade e responsabilidade, mesmo quando o time cresce ou se divide por carteira.</p>
+                </article>
+                <article class="benefit-card">
+                    <span class="benefit-badge">Prioridade</span>
+                    <h3>Etiquetas e prioridades</h3>
+                    <p>O que está quente aparece primeiro para o time agir no momento certo, sem depender de lembrar depois.</p>
+                </article>
+                <article class="benefit-card">
+                    <span class="benefit-badge">Consistência</span>
+                    <h3>Follow-up sem esquecer</h3>
+                    <p>Retomadas entram em uma rotina previsível e deixam de depender de planilha, alarme ou boa vontade no fim do dia.</p>
+                </article>
+                <article class="benefit-card">
+                    <span class="benefit-badge">Escala</span>
+                    <h3>Agendamentos e automações</h3>
+                    <p>Tarefas repetitivas saem da frente do time e abrem espaço para vender com mais foco, contexto e velocidade.</p>
+                </article>
+                <article class="benefit-card">
+                    <span class="benefit-badge">Estrutura</span>
+                    <h3>IA para estruturar o fluxo</h3>
+                    <p>Você ganha apoio para desenhar etapas e mensagens com mais clareza, sem começar tudo do zero no improviso.</p>
+                </article>
             </div>
+        </section>
 
-            <!-- Card 5 -->
-            <div class="bento-card bento-large card-hover bento-escala">
-                <div class="bento-card-content bento-escala-inner">
-                    <div class="bento-escala-visual">
-                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 80' fill='none'%3E%3Crect x='2' y='2' width='156' height='76' rx='8' stroke='rgba(0,255,163,0.2)' stroke-width='1' fill='rgba(0,255,163,0.03)'/%3E%3Cpath d='M14 68V36h22v32H14zm28-22v22h22V46H42zm28-14v36h22V32H70zm28 6v30h22V38H98zm28-26v56h22V12H126z' stroke='%2300ffa3' stroke-width='1.2' fill='rgba(0,255,163,0.1)'/%3E%3Cpath d='M14 36c10-14 22-6 34 2s22 0 34 8 22 10 34 2 22-16 34-8' stroke='%2300ffa3' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round' opacity='0.95'/%3E%3C/svg%3E" alt="" class="bento-card-img">
+        <section class="story-block container proof-block">
+            <span class="story-eyebrow">Prova</span>
+            <h2 class="story-heading story-heading--md">Quando existe processo, o WhatsApp para de parecer improviso</h2>
+            <p class="proof-note">O resultado visível é menos ruído operacional e mais clareza para acompanhar etapa, prioridade, retomada e contexto em um só lugar.</p>
+            <div class="proof-grid">
+                <article class="proof-card">
+                    <div class="proof-visual proof-visual-stats">
+                        <div class="proof-visual-header">
+                            <span class="proof-pill">Painel por período</span>
+                            <span class="proof-pill proof-pill--muted">Mensagens</span>
+                        </div>
+                        <div class="proof-bars">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <div class="proof-trend"></div>
                     </div>
-                    <div class="bento-escala-text">
-                        <h3>Escala de mensagens e aumento de faturamento</h3>
-                        <p>Atenda centenas ou milhares de leads ao mesmo tempo, sem aumentar a equipe. Mais conversas no WhatsApp, mais vendas fechadas — o faturamento cresce enquanto você escala a comunicação.</p>
+                    <h3>Visibilidade do que está acontecendo agora</h3>
+                    <p>O time deixa de operar no escuro e passa a enxergar volume, estágio e ritmo de atendimento com mais clareza.</p>
+                </article>
+                <article class="proof-card">
+                    <div class="proof-visual">
+                        <div class="proof-visual-header">
+                            <span class="proof-pill">Eventos</span>
+                            <span class="proof-pill proof-pill--muted">Ativos</span>
+                        </div>
+                        <div class="proof-event-stack">
+                            <div class="proof-event">Lead qualificado <span>Ativo</span></div>
+                            <div class="proof-event">Retomada programada <span>Fila</span></div>
+                            <div class="proof-event">Venda em negociação <span>Etapa</span></div>
+                        </div>
                     </div>
-                </div>
+                    <h3>Automação conectada ao processo comercial</h3>
+                    <p>As regras deixam de viver espalhadas em gambiarra e passam a acompanhar o momento certo de cada conversa.</p>
+                </article>
+                <article class="proof-card">
+                    <div class="proof-visual">
+                        <div class="proof-visual-header">
+                            <span class="proof-pill">Inbox</span>
+                            <span class="proof-pill proof-pill--muted">Prioridades</span>
+                        </div>
+                        <div class="proof-messages">
+                            <div class="proof-message proof-message--in">Lead aguardando retorno <span>quente</span></div>
+                            <div class="proof-message proof-message--out">Retomada já agendada <span>ok</span></div>
+                            <div class="proof-message proof-message--in">Contato em negociação <span>etapa</span></div>
+                        </div>
+                    </div>
+                    <h3>Equipe com mais contexto e menos ruído</h3>
+                    <p>O atendimento passa a ter dono, etapa e prioridade, sem precisar reconstruir a história da conversa toda vez.</p>
+                </article>
             </div>
+        </section>
+
+        <section class="story-block container objection-block">
+            <span class="story-eyebrow">Quebra de objeções</span>
+            <h2 class="story-heading story-heading--md">Talvez você esteja pensando isso agora</h2>
+            <div class="objection-grid">
+                <article class="objection-card">
+                    <h3>Meu time é pequeno.</h3>
+                    <p>Justamente por isso processo importa tanto. Quanto menor o time, maior o impacto de esquecer um lead ou responder fora de hora.</p>
+                </article>
+                <article class="objection-card">
+                    <h3>A gente já vende pelo WhatsApp.</h3>
+                    <p>O ponto não é só vender por lá. É vender com mais clareza, continuidade e controle no canal que já faz parte da sua rotina.</p>
+                </article>
+                <article class="objection-card">
+                    <h3>Não quero atendimento robótico.</h3>
+                    <p>O ZapVender não tenta substituir relacionamento. Ele organiza processo e automatiza o que é repetitivo para o time atender melhor.</p>
+                </article>
+                <article class="objection-card">
+                    <h3>Meu processo é diferente.</h3>
+                    <p>É por isso que a lógica é adaptável. O sistema serve para estruturar a operação real do seu time, e não para forçar um modelo engessado.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="story-block container positioning-block">
+            <div class="positioning-grid">
+                <div>
+                    <span class="story-eyebrow">Posicionamento final</span>
+                    <h2 class="story-heading story-heading--md">O ZapVender não foi feito para quem quer só mandar mensagem. Foi feito para quem quer vender com processo no WhatsApp.</h2>
+                    <p class="story-lead">Se o seu comercial acontece no WhatsApp, você não precisa só de velocidade. Precisa de estrutura.</p>
+                    <p class="story-copy">Estrutura para priorizar, acompanhar, retomar e transformar conversa em venda com mais consistência.</p>
+                </div>
+                <aside class="positioning-rail">
+                    <div class="positioning-point">
+                        <strong>Priorizar sem ruído</strong>
+                        <p>O que merece atenção primeiro deixa de se perder no volume de conversas.</p>
+                    </div>
+                    <div class="positioning-point">
+                        <strong>Acompanhar sem depender da memória</strong>
+                        <p>Cada lead continua do ponto certo, mesmo quando a rotina aperta ou o time se divide.</p>
+                    </div>
+                    <div class="positioning-point">
+                        <strong>Retomar com lógica comercial</strong>
+                        <p>O follow-up sai do improviso e entra em uma cadência mais previsível.</p>
+                    </div>
+                    <div class="positioning-point">
+                        <strong>Escalar com consistência</strong>
+                        <p>O crescimento não exige mais bagunça. Exige estrutura para o WhatsApp funcionar como operação.</p>
+                    </div>
+                </aside>
+            </div>
+        </section>
+
+    <section class="post-cta-section container" id="precos">
+        <div>
+            <span class="story-eyebrow">CTA final</span>
+            <h2 class="story-heading story-heading--md">Seu WhatsApp j&aacute; recebe oportunidades. A pergunta &eacute;: sua opera&ccedil;&atilde;o est&aacute; preparada para n&atilde;o desperdi&ccedil;&aacute;-las?</h2>
+            <p class="story-lead">Teste o ZapVender e veja sua rotina comercial sair do improviso para um processo mais claro, mais leve e mais previs&iacute;vel.</p>
         </div>
-    </main>
-
-    <!-- PRICING -->
-    <section class="container section" id="precos">
-        <div class="section-header">
-            <span class="section-tag" style="color: var(--cyan);">PLANOS</span>
-            <h2 class="section-title">Escolha o plano ideal para sua operação</h2>
-            <p>Preços transparentes. Comece com teste grátis no plano recomendado ou fale com vendas para Monster.</p>
-        </div>
-
-        <div class="pricing-grid">
-            <div class="price-card">
-                <div class="price-card-inner">
-                    <h3 class="price-name">Starter</h3>
-                    <p class="price-desc">Para começar com um número</p>
-                    <div class="price-block">
-                        <div class="price-val">R$ 97<span>/mês</span></div>
-                    </div>
-                    <ul class="price-features">
-                        <li>1 Conexão WhatsApp nativa</li>
-                        <li>Construtor de fluxo visual</li>
-                        <li>Inbox unificado</li>
-                        <li>Respostas automáticas 24/7</li>
-                        <li>Até 1.000 contatos</li>
-                    </ul>
-                    <div class="price-card-cta">
-                        <a href="/#/pre-checkout?plan=starter" class="btn btn-ghost" target="_top" rel="noopener">Assinar Starter</a>
-                    </div>
+        <div class="offer-grid">
+            <article class="offer-card offer-card-primary" id="plano-premium">
+                <span class="offer-badge">7 dias gr&aacute;tis no Premium</span>
+                <h3>Comece com a estrutura certa para vender pelo WhatsApp</h3>
+                <p>Ideal para validar o m&eacute;todo do ZapVender na opera&ccedil;&atilde;o real, sem depender de mem&oacute;ria, planilha paralela ou acompanhamento no improviso.</p>
+                <ul class="offer-list">
+                    <li>Organize conversas por etapa e prioridade</li>
+                    <li>D&ecirc; contexto e dono para cada lead</li>
+                    <li>Teste follow-ups e automa&ccedil;&otilde;es com mais controle</li>
+                </ul>
+                <div class="offer-actions">
+                    <a href="/#/pre-checkout?plan=premium" class="btn btn-primary-large btn-pulse" target="_top" rel="noopener">Come&ccedil;ar teste gr&aacute;tis</a>
+                    <a href="#contato" class="btn btn-ghost">Falar com o time</a>
                 </div>
-            </div>
-
-            <div class="price-card popular" id="plano-premium">
-                <div class="price-card-inner">
-                    <h3 class="price-name">Premium</h3>
-                    <p class="price-desc">Para times que escalam vendas</p>
-                    <div class="price-block">
-                        <div class="price-val">R$ 197<span>/mês</span></div>
-                        <div class="price-trial-badge">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                            7 dias grátis
-                        </div>
-                    </div>
-                    <ul class="price-features">
-                        <li>3 Conexões WhatsApp simultâneas</li>
-                        <li>Escudo antibloqueio completo</li>
-                        <li>Webhooks e eventos personalizados</li>
-                        <li>Fluxos ilimitados</li>
-                        <li>Suporte prioritário</li>
-                    </ul>
-                    <div class="price-card-cta">
-                        <a href="/#/pre-checkout?plan=premium" class="btn btn-primary-large btn-pulse" target="_top" rel="noopener">Começar teste grátis</a>
-                        <p class="price-card-note">Sem compromisso. Cancele quando quiser.</p>
-                    </div>
+            </article>
+            <aside class="offer-card offer-card-secondary">
+                <span class="surface-tag">Opera&ccedil;&atilde;o maior ou mais complexa?</span>
+                <h3>Tamb&eacute;m d&aacute; para conversar com nosso time</h3>
+                <p>Se voc&ecirc; precisa alinhar m&uacute;ltiplos atendentes, etapas espec&iacute;ficas ou uma configura&ccedil;&atilde;o comercial mais avan&ccedil;ada, o time pode te orientar no melhor come&ccedil;o.</p>
+                <div class="story-action">
+                    <a href="mailto:suporte@zapvender.com?subject=Quero%20falar%20com%20o%20time%20do%20ZapVender" class="btn btn-ghost">Solicitar contato</a>
                 </div>
-            </div>
-
-            <div class="price-card">
-                <div class="price-card-inner">
-                    <h3 class="price-name">Avançado</h3>
-                    <p class="price-desc">Para operações em crescimento</p>
-                    <div class="price-block">
-                        <div class="price-val">R$ 397<span>/mês</span></div>
-                    </div>
-                    <ul class="price-features">
-                        <li>5 Conexões WhatsApp dedicadas</li>
-                        <li>Múltiplos agentes ilimitados</li>
-                        <li>CRM completo integrado</li>
-                        <li>Relatórios avançados e funil</li>
-                        <li>API e webhooks ilimitados</li>
-                    </ul>
-                    <div class="price-card-cta">
-                        <a href="/#/pre-checkout?plan=advanced" class="btn btn-ghost" target="_top" rel="noopener">Assinar Avançado</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="price-card">
-                <div class="price-card-inner">
-                    <h3 class="price-name">Monster</h3>
-                    <p class="price-desc">Soluções sob medida</p>
-                    <div class="price-block">
-                        <div class="price-val price-val-custom">Sob consulta</div>
-                    </div>
-                    <ul class="price-features">
-                        <li>Conexões ilimitadas</li>
-                        <li>Infraestrutura dedicada</li>
-                        <li>Gerente de conta exclusivo</li>
-                        <li>SLA garantido 99,9%</li>
-                        <li>Onboarding e treinamento</li>
-                    </ul>
-                    <div class="price-card-cta">
-                        <a href="mailto:suporte@zapvender.com?subject=Interesse%20no%20plano%20Monster%20-%20ZapVender&body=Ol%C3%A1%2C%20quero%20saber%20mais%20sobre%20o%20plano%20Monster%20da%20ZapVender." class="btn btn-ghost">Falar com vendas</a>
-                    </div>
-                </div>
-            </div>
+            </aside>
         </div>
     </section>
 
-    <!-- FOOTER / CONTATO -->
-    <footer class="footer container" id="contato">
+    <section class="post-faq-section container">
+        <span class="story-eyebrow">FAQ final</span>
+        <h2 class="story-heading story-heading--md">D&uacute;vidas comuns antes de come&ccedil;ar</h2>
+        <div class="faq-list">
+            <details class="faq-item" open>
+                <summary>O ZapVender serve para quem vende pelo pr&oacute;prio WhatsApp?</summary>
+                <div class="faq-answer">Sim. O ZapVender foi pensado para opera&ccedil;&otilde;es comerciais que usam o WhatsApp como canal principal de atendimento e vendas e precisam de mais clareza, contexto e continuidade.</div>
+            </details>
+            <details class="faq-item">
+                <summary>O foco &eacute; automa&ccedil;&atilde;o ou organiza&ccedil;&atilde;o?</summary>
+                <div class="faq-answer">Os dois, mas na ordem certa. Primeiro voc&ecirc; estrutura o processo comercial dentro do WhatsApp. Depois automatiza o que faz sentido sem perder contexto nem qualidade no atendimento.</div>
+            </details>
+            <details class="faq-item">
+                <summary>Preciso ter um processo pronto para usar?</summary>
+                <div class="faq-answer">N&atilde;o. Voc&ecirc; pode come&ccedil;ar a partir da opera&ccedil;&atilde;o que j&aacute; existe hoje e ir organizando as etapas, prioridades e retomadas com mais clareza ao longo da implanta&ccedil;&atilde;o.</div>
+            </details>
+            <details class="faq-item">
+                <summary>Isso substitui o vendedor?</summary>
+                <div class="faq-answer">N&atilde;o. O objetivo &eacute; dar mais estrutura para o vendedor trabalhar melhor, com mais visibilidade sobre o que priorizar, acompanhar e retomar em cada conversa.</div>
+            </details>
+        </div>
+    </section>
+
+    <footer class="footer container post-footer" id="contato">
         <div class="footer-grid">
             <div>
                 <a href="#" class="logo" style="margin-bottom: 24px; display: inline-block;">
                     <img src="./logo.png" alt="ZapVender" style="height: 48px; width: auto; object-fit: contain; display: block;">
                 </a>
-                <p style="font-size: 0.9rem;">Sistema tático de alta performance projetado para escabilidade financeira
-                    em operações complexas de conversão inbound e outbound.</p>
+                <p>ZapVender organiza o comercial no WhatsApp com processo, visibilidade e automa&ccedil;&atilde;o no canal onde a venda j&aacute; acontece.</p>
             </div>
             <div class="footer-links">
-                <h4>Produto</h4>
+                <h4>Navega&ccedil;&atilde;o</h4>
                 <ul>
-                    <li><a href="/motor-automacao.html">Motor de Automação</a></li>
-                    <li><a href="/seguranca-api.html">Segurança API</a></li>
-                    <li><a href="/log-metricas.html">Log e Métricas</a></li>
+                    <li><a href="#plataforma">Como funciona</a></li>
+                    <li><a href="#precos">Come&ccedil;ar agora</a></li>
+                    <li><a href="#contato">Contato</a></li>
                 </ul>
             </div>
             <div class="footer-links">
-                <h4>Legal</h4>
+                <h4>Contato</h4>
                 <ul>
-                    <li><a href="/privacidade.html">Privacidade Total</a></li>
-                    <li><a href="/termos-de-uso.html">Termos de Uso</a></li>
+                    <li><a href="mailto:suporte@zapvender.com">suporte@zapvender.com</a></li>
+                    <li><a href="/privacidade.html">Pol&iacute;tica de privacidade</a></li>
+                    <li><a href="/termos-de-uso.html">Termos de uso</a></li>
                 </ul>
             </div>
         </div>
-        <div
-            style="border-top: 1px solid var(--border-subtle); padding-top: 24px; text-align: center; font-size: 0.85rem;">
-            &copy; 2026 ZapVender Networks. Todos os direitos reservados.
+        <div class="footer-note">
+            &copy; 2026 ZapVender. Todos os direitos reservados.
         </div>
     </footer>
+</div>
 
     <!-- Botão: abre chat com IA vendedora → CTA para WhatsApp -->
     <div class="wa-widget" id="wa-widget">
@@ -3504,9 +4482,9 @@
             if (!mock) return;
             var conversas = [
                 { lead: 'Oi, quero saber do plano', bot: 'Olá! Sou o Zap Vender. A maioria começa com 7 dias grátis no Premium. Qual seu WhatsApp que eu te mando o link?' },
-                { lead: 'Quanto custa?', bot: 'Temos o Starter (R$ 97/mês) e o Premium (R$ 197/mês) com 7 dias grátis. O Premium é o mais escolhido. Quer ativar o trial?' },
+                { lead: 'Quanto custa?', bot: 'A maioria começa pelo teste grátis de 7 dias no Premium. Se quiser entender a melhor configuração para sua operação, a equipe te orienta no WhatsApp. Quer ativar o trial?' },
                 { lead: 'Funciona com minha loja?', bot: 'Sim! Integramos com Hotmart, Kiwify, ecommerce, carrinho abandonado. A equipe te ajuda a conectar. Quer que eu te passe o link do teste grátis?' },
-                { lead: 'Quero testar agora', bot: 'Beleza! Role até a seção Planos e clique em "Começar teste grátis", ou fale com a gente pelo botão verde do WhatsApp. Ativamos na hora.' },
+                { lead: 'Quero testar agora', bot: 'Beleza! Role até a seção final e clique em "Começar teste grátis", ou fale com a gente pelo botão verde do WhatsApp. Ativamos na hora.' },
                 { lead: 'Tem suporte?', bot: 'Temos sim. No Premium o suporte é prioritário. E no trial você já pode falar com a equipe pelo WhatsApp.' },
                 { lead: 'Como configuro?', bot: 'É em 3 passos: conecta o WhatsApp, monta os fluxos no painel e o Zap Vender atende sozinho. A maioria coloca no ar em poucos minutos.' }
             ];
@@ -3590,15 +4568,18 @@
 
         // Efeito de Radian Hover no Bento Grid simulando "Lanterna/Spotlight" em Glassmorphism
         const cards = document.querySelectorAll('.card-hover');
-        document.querySelector('.bento-grid').addEventListener('mousemove', (e) => {
-            cards.forEach(card => {
-                const rect = card.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                card.style.setProperty('--mouse-x', `${x}px`);
-                card.style.setProperty('--mouse-y', `${y}px`);
+        const bentoGrid = document.querySelector('.bento-grid');
+        if (cards.length && bentoGrid) {
+            bentoGrid.addEventListener('mousemove', (e) => {
+                cards.forEach(card => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    card.style.setProperty('--mouse-x', `${x}px`);
+                    card.style.setProperty('--mouse-y', `${y}px`);
+                });
             });
-        });
+        }
         // Zenvia-style video: overlay de play
         (function () {
             var video = document.getElementById('hero-video');
@@ -3643,7 +4624,7 @@
 
             var respostas = [
                 { keys: ['preco','preço','valor','custa','quanto','planos','pagar','assinatura','caro','barato','mensal','investimento'],
-                  msg: 'Os planos começam em <b>R$ 97/mês</b> (Starter, 1 conexão). O <b>Premium</b> é R$ 197/mês (3 conexões, 7 dias grátis) e é o mais usado. Tem o <b>Avançado</b> (R$ 397/mês) e o <b>Monster</b> sob consulta. Se quiser, posso te ajudar a escolher ou você dá uma olhada na seção Planos.', cta: false },
+                  msg: 'A maioria começa com <b>7 dias grátis no Premium</b>. Se você quiser entender a melhor configuração para sua operação, a equipe te orienta no WhatsApp e te ajuda a começar.', cta: false },
                 { keys: ['teste','grátis','gratis','experimentar','começar','comecar','demo','demonstração','trial','experiencia'],
                   msg: 'Sim. O plano Premium tem <b>7 dias grátis</b> para você testar — sem compromisso. Se curtir, continua; se não, cancela. Quer que eu te passe o link para ativar o trial?', cta: true },
                 { keys: ['banimento','baniu','bloqueio','bloqueia','seguro','conta','meta','numero','número'],
@@ -3659,16 +4640,16 @@
                 { keys: ['suporte','contato','whatsapp','falar','equipe','humano','atendente','duvida','dúvida'],
                   msg: 'A equipe atende direto no WhatsApp. Se quiser falar com alguém agora, é só usar o botão verde aqui embaixo que a conversa já abre. Eles respondem rápido.', cta: true },
                 { keys: ['agora','hoje','já','quero','ativar','vamos','bora'],
-                  msg: 'Beleza. Para ativar o trial você pode rolar até a seção Planos e clicar em "Começar teste grátis" no plano Premium, ou falar com a equipe pelo botão verde — eles ativam na hora.', cta: true },
+                  msg: 'Beleza. Para ativar o trial você pode rolar até a seção final e clicar em "Começar teste grátis", ou falar com a equipe pelo botão verde — eles ativam na hora.', cta: true },
                 { keys: ['resultado','vendas','aumentar','faturamento','conversao','conversão','escala'],
                   msg: 'Quem usa costuma ver mais conversões e conseguir atender em escala sem aumentar a equipe na mesma proporção. O ideal é testar na sua operação; por isso o trial de 7 dias ajuda a ver se encaixa no seu caso.', cta: false },
                 { keys: ['mensagem','mensagens','enviar','limite','limites','quantas','volume','disparo'],
-                  msg: 'Os limites variam por plano. No Starter você tem até 1.000 contatos; no Premium (3 conexões) e no Avançado (5 conexões) a capacidade sobe. Para o número exato de mensagens por dia, a seção Planos tem o detalhe ou a equipe no WhatsApp pode te passar. Quer que eu te ajude a escolher um plano?', cta: false },
+                  msg: 'Os limites variam conforme a operação e a configuração escolhida. Se quiser validar o melhor cenário para o seu volume, a equipe no WhatsApp te orienta rapidinho.', cta: false },
                 { keys: ['oi','ola','olá','bom dia','boa tarde','boa noite','hey','opa'],
                   msg: 'Oi! Em que posso te ajudar? Pode escolher uma das opções abaixo ou escrever sua dúvida.', cta: false }
             ];
 
-            var fallback = 'Entendi. Se quiser, pode dar uma olhada na seção Planos na página ou falar com a equipe pelo botão verde. Posso te ajudar em mais alguma coisa?';
+            var fallback = 'Entendi. Se quiser, pode seguir para a seção final da página ou falar com a equipe pelo botão verde. Posso te ajudar em mais alguma coisa?';
 
             function normalizar(t) {
                 return (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
