@@ -1365,6 +1365,23 @@
             line-height: 1.75;
         }
 
+        .copy-emphasis {
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.95);
+        }
+
+        .copy-gradient {
+            display: inline-block;
+            font-weight: 700;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.96) 0%, var(--primary) 42%, var(--cyan) 100%);
+            background-size: 200% auto;
+            color: transparent;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 14px rgba(0, 255, 163, 0.18));
+            animation: shine 4.6s linear infinite;
+        }
+
         .story-mini-note {
             margin-top: 20px;
             color: rgba(255, 255, 255, 0.62);
@@ -3798,7 +3815,7 @@
         <p class="hero-tag">Plataforma de automação e vendas no WhatsApp</p>
         <h1>O Motor de Vendas que<br><span>Multiplica Resultados no </span><span class="tech-highlight">WhatsApp.</span>
         </h1>
-        <p>Tecnologia especializada em conversão no WhatsApp. Automatize triagem de leads, recuperação de carrinhos e funis de vendas que trabalham 24/7 — com segurança e escala para sua operação.
+        <p><span class="copy-emphasis">Tecnologia especializada em conversão</span> no WhatsApp. Automatize triagem de leads, recuperação de carrinhos e funis de vendas que trabalham <span class="copy-gradient">24/7</span> — com <span class="copy-emphasis">segurança e escala</span> para sua operação.
         </p>
 
         <div class="hero-btns">
@@ -4290,9 +4307,9 @@
             <div class="pain-grid">
                 <div>
                     <span class="story-eyebrow">Reenquadramento da dor</span>
-                    <h2 class="story-heading">Seu problema não é falta de lead. É falta de processo no WhatsApp.</h2>
-                    <p class="story-lead">Quando a operação depende da memória do time, do "depois eu respondo" ou de conversas perdidas no meio do dia, a venda vira improviso. E improviso não escala.</p>
-                    <p class="story-copy">O ZapVender organiza o que hoje está solto. Cada conversa ganha contexto. Cada lead entra em uma etapa. Cada follow-up deixa de depender da sorte.</p>
+                    <h2 class="story-heading">Seu problema não é falta de lead. É falta de <span class="copy-gradient">processo no WhatsApp</span>.</h2>
+                    <p class="story-lead">Quando a operação depende da memória do time, do "depois eu respondo" ou de conversas perdidas no meio do dia, a venda vira <span class="copy-emphasis">improviso</span>. E improviso <span class="copy-gradient">não escala</span>.</p>
+                    <p class="story-copy">O ZapVender organiza o que hoje está solto. <span class="copy-emphasis">Cada conversa ganha contexto.</span> <span class="copy-emphasis">Cada lead entra em uma etapa.</span> <span class="copy-gradient">Cada follow-up deixa de depender da sorte.</span></p>
                     <div class="story-action">
                         <a href="#plano-premium" class="btn btn-primary-large">Quero transformar meu WhatsApp em operação de vendas</a>
                     </div>
@@ -4351,12 +4368,12 @@
 
         <section class="story-block container gain-block">
             <span class="story-eyebrow">Ganho prático</span>
-            <h2 class="story-heading story-heading--md">O que muda na prática quando seu WhatsApp deixa de ser bagunça e vira processo</h2>
+            <h2 class="story-heading story-heading--md">O que muda na prática quando seu WhatsApp deixa de ser bagunça e vira <span class="copy-gradient">processo</span></h2>
             <div class="practical-grid">
                 <article class="practical-card practical-card--direction">
                     <span class="practical-index">01</span>
-                    <h3>Cada conversa tem direção</h3>
-                    <p>O time sabe em que etapa cada lead está e qual é o próximo passo, sem precisar adivinhar o contexto.</p>
+                    <h3>Cada conversa tem <span class="copy-gradient">direção</span></h3>
+                    <p>O time sabe em que etapa cada lead está e qual é o <span class="copy-emphasis">próximo passo</span>, sem precisar adivinhar o contexto.</p>
                     <div class="practical-visual" aria-hidden="true">
                         <svg viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M34 72H104C116.15 72 126 81.85 126 94V126C126 138.15 116.15 148 104 148H80L56 168L62 148H34C21.85 148 12 138.15 12 126V94C12 81.85 21.85 72 34 72Z" stroke="currentColor" stroke-width="3"/>
@@ -4370,8 +4387,8 @@
                 </article>
                 <article class="practical-card practical-card--priority">
                     <span class="practical-index">02</span>
-                    <h3>Cada prioridade fica visível</h3>
-                    <p>O que está quente aparece primeiro, com mais clareza para agir antes da oportunidade esfriar.</p>
+                    <h3>Cada prioridade fica <span class="copy-gradient">visível</span></h3>
+                    <p>O que está quente <span class="copy-emphasis">aparece primeiro</span>, com mais clareza para agir antes da oportunidade esfriar.</p>
                     <div class="practical-visual" aria-hidden="true">
                         <svg viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <ellipse cx="146" cy="110" rx="88" ry="50" stroke="currentColor" stroke-width="3"/>
@@ -4387,8 +4404,8 @@
                 </article>
                 <article class="practical-card practical-card--followup">
                     <span class="practical-index">03</span>
-                    <h3>Cada follow-up acontece na hora certa</h3>
-                    <p>Retomadas saem da memória do time e entram em uma rotina previsível, sem planilhas paralelas.</p>
+                    <h3>Cada follow-up acontece <span class="copy-gradient">na hora certa</span></h3>
+                    <p>Retomadas saem da memória do time e entram em uma <span class="copy-emphasis">rotina previsível</span>, sem planilhas paralelas.</p>
                     <div class="practical-visual" aria-hidden="true">
                         <svg viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M34 68H106C118.15 68 128 77.85 128 90V120C128 132.15 118.15 142 106 142H80L56 160L62 142H34C21.85 142 12 132.15 12 120V90C12 77.85 21.85 68 34 68Z" stroke="currentColor" stroke-width="3"/>
@@ -4401,8 +4418,8 @@
                 </article>
                 <article class="practical-card practical-card--consistency">
                     <span class="practical-index">04</span>
-                    <h3>Cada venda anda com mais consistência</h3>
-                    <p>O comercial deixa de depender de heróis e passa a operar com mais ritmo, padrão e continuidade.</p>
+                    <h3>Cada venda anda com mais <span class="copy-gradient">consistência</span></h3>
+                    <p>O comercial deixa de depender de heróis e passa a operar com <span class="copy-emphasis">mais ritmo, padrão e continuidade</span>.</p>
                     <div class="practical-visual" aria-hidden="true">
                         <svg viewBox="0 0 260 220" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M36 178H232" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.38"/>
@@ -4428,9 +4445,9 @@
             <div class="method-grid">
                 <div>
                     <span class="story-eyebrow">Mecanismo simples</span>
-                    <h2 class="story-heading story-heading--md">Não é sobre responder mais mensagens. É sobre conduzir mais vendas com controle.</h2>
-                    <p class="story-lead">O ZapVender junta organização comercial e automação no canal onde a venda já acontece: o WhatsApp.</p>
-                    <p class="story-copy">Em vez de um time perdido entre conversas, etiquetas soltas e follow-ups esquecidos, você passa a operar com funil visual por etapas, responsáveis claros por conversa, prioridades organizadas, follow-ups programados e fluxos ajustados ao seu processo.</p>
+                    <h2 class="story-heading story-heading--md">Não é sobre responder mais mensagens. É sobre conduzir <span class="copy-gradient">mais vendas com controle</span>.</h2>
+                    <p class="story-lead">O ZapVender junta <span class="copy-emphasis">organização comercial e automação</span> no canal onde a venda já acontece: o WhatsApp.</p>
+                    <p class="story-copy">Em vez de um time perdido entre conversas, etiquetas soltas e follow-ups esquecidos, você passa a operar com <span class="copy-emphasis">funil visual por etapas</span>, responsáveis claros por conversa, prioridades organizadas, <span class="copy-gradient">follow-ups programados</span> e fluxos ajustados ao seu processo.</p>
                     <div class="story-action">
                         <a href="#beneficios" class="btn btn-ghost">Entender o método do ZapVender</a>
                     </div>
@@ -4471,12 +4488,12 @@
 
         <section class="story-block container compare-block">
             <span class="story-eyebrow">Antes e depois</span>
-            <h2 class="story-heading story-heading--md">Antes do ZapVender, vender no WhatsApp parece isso. Depois, parece operação.</h2>
+            <h2 class="story-heading story-heading--md">Antes do ZapVender, vender no WhatsApp parece isso. Depois, parece <span class="copy-gradient">operação</span>.</h2>
             <div class="compare-grid">
                 <article class="compare-card compare-before">
                     <span class="surface-tag">Antes</span>
                     <h3>Quando a venda depende do improviso</h3>
-                    <p>O comercial fica reativo, cada pessoa cria seu próprio jeito de trabalhar e a operação perde consistência.</p>
+                    <p>O comercial fica <span class="copy-emphasis">reativo</span>, cada pessoa cria seu próprio jeito de trabalhar e a operação perde consistência.</p>
                     <ul>
                         <li>Conversas misturadas</li>
                         <li>Lead quente esfriando</li>
@@ -4489,7 +4506,7 @@
                 <article class="compare-card compare-after">
                     <span class="surface-tag">Depois</span>
                     <h3>Quando existe processo no WhatsApp</h3>
-                    <p>As conversas passam a seguir uma lógica comercial clara, com mais contexto, ritmo e previsibilidade.</p>
+                    <p>As conversas passam a seguir uma <span class="copy-emphasis">lógica comercial clara</span>, com mais contexto, ritmo e <span class="copy-gradient">previsibilidade</span>.</p>
                     <ul>
                         <li>Etapas claras</li>
                         <li>Prioridades visíveis</li>
@@ -4507,45 +4524,45 @@
 
         <section class="story-block container benefit-block" id="beneficios">
             <span class="story-eyebrow">Benefícios práticos</span>
-            <h2 class="story-heading story-heading--md">O ZapVender foi pensado para resolver os gargalos que mais travam vendas no WhatsApp</h2>
+            <h2 class="story-heading story-heading--md">O ZapVender foi pensado para resolver os <span class="copy-gradient">gargalos que mais travam vendas</span> no WhatsApp</h2>
             <div class="benefit-grid">
                 <article class="benefit-card">
                     <span class="benefit-badge">Processo</span>
                     <h3>Funil por etapas</h3>
-                    <p>As conversas deixam de competir entre si e passam a avançar com um próximo passo claro dentro da operação.</p>
+                    <p>As conversas deixam de competir entre si e passam a avançar com um <span class="copy-emphasis">próximo passo claro</span> dentro da operação.</p>
                 </article>
                 <article class="benefit-card">
                     <span class="benefit-badge">Clareza</span>
                     <h3>Responsável por conversa</h3>
-                    <p>Cada lead ganha dono, continuidade e responsabilidade, mesmo quando o time cresce ou se divide por carteira.</p>
+                    <p>Cada lead ganha <span class="copy-emphasis">dono, continuidade e responsabilidade</span>, mesmo quando o time cresce ou se divide por carteira.</p>
                 </article>
                 <article class="benefit-card">
                     <span class="benefit-badge">Prioridade</span>
                     <h3>Etiquetas e prioridades</h3>
-                    <p>O que está quente aparece primeiro para o time agir no momento certo, sem depender de lembrar depois.</p>
+                    <p>O que está quente <span class="copy-emphasis">aparece primeiro</span> para o time agir no momento certo, sem depender de lembrar depois.</p>
                 </article>
                 <article class="benefit-card">
                     <span class="benefit-badge">Consistência</span>
                     <h3>Follow-up sem esquecer</h3>
-                    <p>Retomadas entram em uma rotina previsível e deixam de depender de planilha, alarme ou boa vontade no fim do dia.</p>
+                    <p>Retomadas entram em uma <span class="copy-emphasis">rotina previsível</span> e deixam de depender de planilha, alarme ou boa vontade no fim do dia.</p>
                 </article>
                 <article class="benefit-card">
                     <span class="benefit-badge">Escala</span>
                     <h3>Agendamentos e automações</h3>
-                    <p>Tarefas repetitivas saem da frente do time e abrem espaço para vender com mais foco, contexto e velocidade.</p>
+                    <p>Tarefas repetitivas saem da frente do time e abrem espaço para vender com <span class="copy-emphasis">mais foco, contexto e velocidade</span>.</p>
                 </article>
                 <article class="benefit-card">
                     <span class="benefit-badge">Estrutura</span>
                     <h3>IA para estruturar o fluxo</h3>
-                    <p>Você ganha apoio para desenhar etapas e mensagens com mais clareza, sem começar tudo do zero no improviso.</p>
+                    <p>Você ganha apoio para desenhar etapas e mensagens com <span class="copy-emphasis">mais clareza</span>, sem começar tudo do zero no improviso.</p>
                 </article>
             </div>
         </section>
 
         <section class="story-block container proof-block">
             <span class="story-eyebrow">Prova</span>
-            <h2 class="story-heading story-heading--md">Quando existe processo, o WhatsApp para de parecer improviso</h2>
-            <p class="proof-note">O resultado visível é menos ruído operacional e mais clareza para acompanhar etapa, prioridade, retomada e contexto em um só lugar.</p>
+            <h2 class="story-heading story-heading--md">Quando existe processo, o WhatsApp <span class="copy-gradient">para de parecer improviso</span></h2>
+            <p class="proof-note">O resultado visível é <span class="copy-emphasis">menos ruído operacional</span> e <span class="copy-gradient">mais clareza</span> para acompanhar etapa, prioridade, retomada e contexto em um só lugar.</p>
             <div class="proof-grid">
                 <article class="proof-card">
                     <div class="proof-visual proof-visual-stats">
@@ -4564,7 +4581,7 @@
                         <div class="proof-trend"></div>
                     </div>
                     <h3>Visibilidade do que está acontecendo agora</h3>
-                    <p>O time deixa de operar no escuro e passa a enxergar volume, estágio e ritmo de atendimento com mais clareza.</p>
+                    <p>O time deixa de operar no escuro e passa a enxergar volume, estágio e ritmo de atendimento com <span class="copy-emphasis">mais clareza</span>.</p>
                 </article>
                 <article class="proof-card">
                     <div class="proof-visual">
@@ -4579,7 +4596,7 @@
                         </div>
                     </div>
                     <h3>Automação conectada ao processo comercial</h3>
-                    <p>As regras deixam de viver espalhadas em gambiarra e passam a acompanhar o momento certo de cada conversa.</p>
+                    <p>As regras deixam de viver espalhadas em gambiarra e passam a acompanhar o <span class="copy-emphasis">momento certo de cada conversa</span>.</p>
                 </article>
                 <article class="proof-card">
                     <div class="proof-visual">
@@ -4594,7 +4611,7 @@
                         </div>
                     </div>
                     <h3>Equipe com mais contexto e menos ruído</h3>
-                    <p>O atendimento passa a ter dono, etapa e prioridade, sem precisar reconstruir a história da conversa toda vez.</p>
+                    <p>O atendimento passa a ter <span class="copy-emphasis">dono, etapa e prioridade</span>, sem precisar reconstruir a história da conversa toda vez.</p>
                 </article>
             </div>
         </section>
@@ -4605,19 +4622,19 @@
             <div class="objection-grid">
                 <article class="objection-card">
                     <h3>Meu time é pequeno.</h3>
-                    <p>Justamente por isso processo importa tanto. Quanto menor o time, maior o impacto de esquecer um lead ou responder fora de hora.</p>
+                    <p>Justamente por isso <span class="copy-emphasis">processo importa tanto</span>. Quanto menor o time, maior o impacto de esquecer um lead ou responder fora de hora.</p>
                 </article>
                 <article class="objection-card">
                     <h3>A gente já vende pelo WhatsApp.</h3>
-                    <p>O ponto não é só vender por lá. É vender com mais clareza, continuidade e controle no canal que já faz parte da sua rotina.</p>
+                    <p>O ponto não é só vender por lá. É vender com <span class="copy-gradient">mais clareza, continuidade e controle</span> no canal que já faz parte da sua rotina.</p>
                 </article>
                 <article class="objection-card">
                     <h3>Não quero atendimento robótico.</h3>
-                    <p>O ZapVender não tenta substituir relacionamento. Ele organiza processo e automatiza o que é repetitivo para o time atender melhor.</p>
+                    <p>O ZapVender não tenta substituir relacionamento. Ele <span class="copy-emphasis">organiza processo</span> e automatiza o que é repetitivo para o time atender melhor.</p>
                 </article>
                 <article class="objection-card">
                     <h3>Meu processo é diferente.</h3>
-                    <p>É por isso que a lógica é adaptável. O sistema serve para estruturar a operação real do seu time, e não para forçar um modelo engessado.</p>
+                    <p>É por isso que a lógica é <span class="copy-emphasis">adaptável</span>. O sistema serve para estruturar a operação real do seu time, e não para forçar um modelo engessado.</p>
                 </article>
             </div>
         </section>
@@ -4626,9 +4643,9 @@
             <div class="positioning-grid">
                 <div>
                     <span class="story-eyebrow">Posicionamento final</span>
-                    <h2 class="story-heading story-heading--md">O ZapVender não foi feito para quem quer só mandar mensagem. Foi feito para quem quer vender com processo no WhatsApp.</h2>
-                    <p class="story-lead">Se o seu comercial acontece no WhatsApp, você não precisa só de velocidade. Precisa de estrutura.</p>
-                    <p class="story-copy">Estrutura para priorizar, acompanhar, retomar e transformar conversa em venda com mais consistência.</p>
+                    <h2 class="story-heading story-heading--md">O ZapVender não foi feito para quem quer só mandar mensagem. Foi feito para quem quer <span class="copy-gradient">vender com processo no WhatsApp</span>.</h2>
+                    <p class="story-lead">Se o seu comercial acontece no WhatsApp, você não precisa só de velocidade. <span class="copy-gradient">Precisa de estrutura.</span></p>
+                    <p class="story-copy">Estrutura para <span class="copy-emphasis">priorizar, acompanhar e retomar</span> e <span class="copy-gradient">transformar conversa em venda</span> com mais consistência.</p>
                 </div>
                 <aside class="positioning-rail">
                     <div class="positioning-point">
@@ -4653,8 +4670,8 @@
 
     <section class="container section" id="precos">
         <div class="section-header post-pricing-header">
-            <h2 class="section-title">Escolha o plano ideal para sua opera&ccedil;&atilde;o</h2>
-            <p>Pre&ccedil;os transparentes. Comece com teste gr&aacute;tis no plano recomendado ou fale com vendas para Monster.</p>
+            <h2 class="section-title">Escolha o <span class="copy-gradient">plano ideal</span> para sua opera&ccedil;&atilde;o</h2>
+            <p>Pre&ccedil;os transparentes. Comece com <span class="copy-emphasis">teste gr&aacute;tis</span> no plano recomendado ou fale com vendas para Monster.</p>
         </div>
 
         <div class="pricing-grid">
@@ -4774,7 +4791,7 @@
                 <a href="#" class="logo" style="margin-bottom: 24px; display: inline-block;">
                     <img src="./logo.png" alt="ZapVender" style="height: 48px; width: auto; object-fit: contain; display: block;">
                 </a>
-                <p>ZapVender organiza o comercial no WhatsApp com processo, visibilidade e automa&ccedil;&atilde;o no canal onde a venda j&aacute; acontece.</p>
+                <p>ZapVender organiza o comercial no WhatsApp com <span class="copy-emphasis">processo, visibilidade e automa&ccedil;&atilde;o</span> no canal onde a venda j&aacute; acontece.</p>
             </div>
             <div class="footer-links">
                 <h4>Navega&ccedil;&atilde;o</h4>
