@@ -142,13 +142,13 @@ function renderWhatsappPlanUsage() {
                     ? 'starter'
                     : 'default';
     const usageText = whatsappPlanUsageState.unlimited || whatsappPlanUsageState.max === null
-        ? `${numberFormatter.format(whatsappPlanUsageState.current)} conexoes em uso - sem limite`
-        : `${numberFormatter.format(whatsappPlanUsageState.current)} de ${numberFormatter.format(whatsappPlanUsageState.max)} conexoes em uso`;
+        ? `${numberFormatter.format(whatsappPlanUsageState.current)} conexões em uso - sem limite`
+        : `${numberFormatter.format(whatsappPlanUsageState.current)} de ${numberFormatter.format(whatsappPlanUsageState.max)} conexões em uso`;
     const remainingText = whatsappPlanUsageState.unlimited || whatsappPlanUsageState.max === null
-        ? 'Voce pode adicionar novas contas sem restricao de plano.'
+        ? 'Você pode adicionar novas contas sem restrição de plano.'
         : whatsappPlanUsageState.current >= whatsappPlanUsageState.max
-            ? 'Limite de conexoes atingido para este plano.'
-            : `Restam ${numberFormatter.format(Math.max(whatsappPlanUsageState.max - whatsappPlanUsageState.current, 0))} conexoes disponiveis.`;
+            ? 'Limite de conexões atingido para este plano.'
+            : `Restam ${numberFormatter.format(Math.max(whatsappPlanUsageState.max - whatsappPlanUsageState.current, 0))} conexões disponíveis.`;
 
     container.innerHTML = `
         <div class="whatsapp-plan-panel whatsapp-plan-panel--${escapeHtml(planTone)}">

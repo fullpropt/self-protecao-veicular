@@ -1012,7 +1012,7 @@ function renderPlanStatus() {
     if (!container) return;
 
     if (planStatusLoading && !planStatusCache) {
-        container.innerHTML = '<p style="color: var(--gray-500); margin: 0;">Carregando situacao do plano...</p>';
+        container.innerHTML = '<p style="color: var(--gray-500); margin: 0;">Carregando situação do plano...</p>';
         return;
     }
 
@@ -1023,7 +1023,7 @@ function renderPlanStatus() {
     container.innerHTML = `
         <div class="copy-card settings-plan-card" style="margin-bottom: 0;">
             <div class="copy-card-header" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <span class="copy-card-title">Situacao do Plano</span>
+                <span class="copy-card-title">Situação do Plano</span>
             </div>
             <div class="settings-plan-shell">
                 <div class="settings-plan-hero settings-plan-hero--${escapeHtml(planTone)}">
@@ -1034,7 +1034,7 @@ function renderPlanStatus() {
                     <strong class="settings-plan-hero-name">${escapeHtml(data.planName)}</strong>
                     <div class="settings-plan-hero-grid">
                         <div class="settings-plan-hero-metric">
-                            <span class="settings-plan-hero-metric-label">Conexoes WhatsApp</span>
+                            <span class="settings-plan-hero-metric-label">Conexões WhatsApp</span>
                             <strong class="settings-plan-hero-metric-value">${escapeHtml(formatPlanMetricValue(data.whatsappSessions))}</strong>
                             <span class="settings-plan-hero-metric-hint">${escapeHtml(formatPlanMetricHint(data.whatsappSessions))}</span>
                         </div>
@@ -1059,7 +1059,7 @@ function renderPlanStatus() {
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Renovacao</label>
+                    <label class="form-label">Renovação</label>
                     <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.renewalDate))}" readonly />
                 </div>
                 <div class="form-group">
@@ -1100,7 +1100,7 @@ async function refreshPlanStatus() {
     try {
         const response = await api.post('/api/plan/status/refresh');
         planStatusCache = normalizePlanStatusPayload(response as PlanStatusApiPayload);
-        showToast('success', 'Sucesso', 'Situacao do plano atualizada');
+        showToast('success', 'Sucesso', 'Situação do plano atualizada');
     } catch (error) {
         await loadPlanStatus({ silent: true });
         showToast('warning', 'Aviso', 'Não foi possível confirmar o plano via API');
