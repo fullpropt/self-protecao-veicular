@@ -270,6 +270,25 @@ const INCOMING_MESSAGE_RECEIPTS_CLEANUP_INTERVAL_MS = parsePositiveIntInRange(
     60 * 1000,
     24 * 60 * 60 * 1000
 );
+const CSP_MODE = String(
+    process.env.CSP_MODE
+    || (process.env.NODE_ENV === 'production' ? 'report-only' : 'off')
+).trim().toLowerCase();
+const CSP_REPORT_URI = String(process.env.CSP_REPORT_URI || '/api/security/csp/report').trim()
+    || '/api/security/csp/report';
+const CSP_REPORT_ROUTE_PATH = resolveCspReportRoutePath(CSP_REPORT_URI);
+const CSP_REPORT_LOG_COOLDOWN_MS = parsePositiveIntInRange(
+    process.env.CSP_REPORT_LOG_COOLDOWN_MS,
+    10 * 60 * 1000,
+    1000,
+    24 * 60 * 60 * 1000
+);
+const CSP_REPORT_TRACKER_LIMIT = parsePositiveIntInRange(
+    process.env.CSP_REPORT_TRACKER_LIMIT,
+    4000,
+    100,
+    50000
+);
 const DANGEROUS_UPLOAD_EXTENSIONS = new Set([
     '.html', '.htm', '.svg', '.xml', '.xhtml', '.js', '.mjs', '.css'
 ]);
@@ -388,6 +407,147 @@ function parsePositiveIntInRange(value, fallback, min = 1, max = Number.POSITIVE
         : Number.POSITIVE_INFINITY;
 
     return Math.min(normalizedMax, Math.max(normalizedMin, parsed));
+}
+
+function normalizeCspMode(value = '') {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'enforce' || normalized === 'report-only' || normalized === 'off') {
+        return normalized;
+    }
+    return 'off';
+}
+
+function resolveCspReportRoutePath(value = '') {
+    const raw = String(value || '').trim();
+    if (!raw) return '/api/security/csp/report';
+
+    if (/^https?:\/\//i.test(raw)) {
+        try {
+            const parsed = new URL(raw);
+            return parsed.pathname || '/api/security/csp/report';
+        } catch (_) {
+            return '/api/security/csp/report';
+        }
+    }
+
+    return raw.startsWith('/') ? raw : `/${raw}`;
+}
+
+function buildHelmetCspConfig() {
+    const mode = normalizeCspMode(CSP_MODE);
+    if (mode === 'off') return false;
+
+    const directives = {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'self'"],
+        objectSrc: ["'none'"],
+        formAction: ["'self'"],
+        scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://cdn.socket.io',
+            'https://cdn.jsdelivr.net'
+        ],
+        styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://fonts.googleapis.com'
+        ],
+        fontSrc: [
+            "'self'",
+            'data:',
+            'https://fonts.gstatic.com'
+        ],
+        imgSrc: [
+            "'self'",
+            'data:',
+            'blob:',
+            'https:'
+        ],
+        connectSrc: [
+            "'self'",
+            'ws:',
+            'wss:',
+            'https://api.pagar.me'
+        ],
+        mediaSrc: [
+            "'self'",
+            'data:',
+            'blob:',
+            'https:'
+        ],
+        workerSrc: [
+            "'self'",
+            'blob:'
+        ]
+    };
+
+    if (CSP_REPORT_URI) {
+        directives.reportUri = [CSP_REPORT_URI];
+    }
+
+    return {
+        directives,
+        reportOnly: mode === 'report-only'
+    };
+}
+
+function normalizeCspReportsPayload(payload) {
+    if (!payload) return [];
+
+    const candidates = Array.isArray(payload) ? payload : [payload];
+    const normalized = [];
+
+    for (const item of candidates) {
+        if (!item || typeof item !== 'object') continue;
+
+        const cspReport = item['csp-report'];
+        if (cspReport && typeof cspReport === 'object') {
+            normalized.push(cspReport);
+            continue;
+        }
+
+        const reportBody = item.body;
+        if (reportBody && typeof reportBody === 'object') {
+            normalized.push(reportBody);
+            continue;
+        }
+
+        normalized.push(item);
+    }
+
+    return normalized;
+}
+
+function buildCspReportFingerprint(report = {}) {
+    const blockedUri = String(report['blocked-uri'] || report.blockedURL || '').trim().slice(0, 200);
+    const effectiveDirective = String(report['effective-directive'] || report.effectiveDirective || '').trim().slice(0, 120);
+    const sourceFile = String(report['source-file'] || report.sourceFile || '').trim().slice(0, 200);
+    const disposition = String(report.disposition || '').trim().slice(0, 50);
+    return `${effectiveDirective}|${blockedUri}|${sourceFile}|${disposition}`;
+}
+
+function shouldLogCspReportFingerprint(fingerprint, now = Date.now()) {
+    if (!fingerprint) return false;
+
+    const lastLoggedAt = Number(cspReportLogTracker.get(fingerprint) || 0);
+    if (lastLoggedAt > 0 && (now - lastLoggedAt) < CSP_REPORT_LOG_COOLDOWN_MS) {
+        return false;
+    }
+
+    cspReportLogTracker.set(fingerprint, now);
+
+    if (cspReportLogTracker.size > CSP_REPORT_TRACKER_LIMIT) {
+        const cutoff = now - CSP_REPORT_LOG_COOLDOWN_MS;
+        for (const [key, timestamp] of cspReportLogTracker.entries()) {
+            if (Number(timestamp || 0) < cutoff) {
+                cspReportLogTracker.delete(key);
+            }
+        }
+    }
+
+    return true;
 }
 
 const POSTGRES_WORKER_LEADER_LOCK_ENABLED = USE_POSTGRES && parseBooleanEnv(
@@ -1343,13 +1503,20 @@ const bootstrapPromise = bootstrapDatabase();
 
 // SeguranÃ§a
 
+const helmetCspConfig = buildHelmetCspConfig();
 app.use(helmet({
-
-    contentSecurityPolicy: false,
-
+    contentSecurityPolicy: helmetCspConfig || false,
     crossOriginEmbedderPolicy: false
-
 }));
+
+if (helmetCspConfig) {
+    console.log(
+        `[Security] CSP ativo em modo ${helmetCspConfig.reportOnly ? 'report-only' : 'enforce'} `
+        + `(report-uri: ${CSP_REPORT_URI})`
+    );
+} else {
+    console.log('[Security] CSP desativado');
+}
 
 
 
@@ -1551,6 +1718,51 @@ if (process.env.NODE_ENV !== 'production') {
     app.use(requestLogger);
 
 }
+
+const cspReportBodyParser = express.json({
+    type: [
+        'application/csp-report',
+        'application/reports+json',
+        'application/json'
+    ],
+    limit: '256kb'
+});
+
+app.post(CSP_REPORT_ROUTE_PATH, cspReportBodyParser, (req, res) => {
+    try {
+        if (normalizeCspMode(CSP_MODE) === 'off') {
+            return res.status(204).end();
+        }
+
+        const reports = normalizeCspReportsPayload(req.body);
+        if (!Array.isArray(reports) || reports.length === 0) {
+            return res.status(204).end();
+        }
+
+        const now = Date.now();
+        for (const report of reports) {
+            const fingerprint = buildCspReportFingerprint(report);
+            if (!shouldLogCspReportFingerprint(fingerprint, now)) continue;
+
+            const event = {
+                documentUri: String(report['document-uri'] || report.documentURL || '').trim().slice(0, 240),
+                blockedUri: String(report['blocked-uri'] || report.blockedURL || '').trim().slice(0, 240),
+                violatedDirective: String(report['violated-directive'] || report.violatedDirective || '').trim().slice(0, 140),
+                effectiveDirective: String(report['effective-directive'] || report.effectiveDirective || '').trim().slice(0, 140),
+                sourceFile: String(report['source-file'] || report.sourceFile || '').trim().slice(0, 240),
+                lineNumber: Number(report['line-number'] || report.lineNumber || 0) || null,
+                disposition: String(report.disposition || '').trim().slice(0, 80),
+                userAgent: String(req.headers['user-agent'] || '').trim().slice(0, 180)
+            };
+
+            console.warn(`[Security][CSP][report] ${JSON.stringify(event)}`);
+        }
+    } catch (error) {
+        console.warn('[Security][CSP][report] Falha ao processar payload:', error.message);
+    }
+
+    return res.status(204).end();
+});
 
 app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     try {
@@ -1948,6 +2160,7 @@ const recoveredFlowMessageIds = new Map();
 const processedIncomingMessageKeys = new Map();
 const incomingMessageProcessingLocks = new Map();
 const inboundAutomationProcessingChains = new Map();
+const cspReportLogTracker = new Map();
 let incomingMessageReceiptsCleanupInFlight = false;
 let incomingMessageReceiptsLastCleanupAtMs = 0;
 const sessionReconnectCatchupTimers = new Map();
