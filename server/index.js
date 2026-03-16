@@ -223,6 +223,25 @@ const WHATSAPP_SESSION_RATE_LIMIT_MAX_PER_MINUTE = parsePositiveIntInRange(
 );
 const METRICS_ENABLED = parseBooleanEnv(process.env.METRICS_ENABLED, false);
 const METRICS_BEARER_TOKEN = String(process.env.METRICS_BEARER_TOKEN || '').trim();
+const FLOW_INBOUND_TELEMETRY_ENABLED = parseBooleanEnv(process.env.FLOW_INBOUND_TELEMETRY_ENABLED, false);
+const FLOW_INBOUND_TELEMETRY_SLOW_MS = parsePositiveIntInRange(
+    process.env.FLOW_INBOUND_TELEMETRY_SLOW_MS,
+    1500,
+    100,
+    120000
+);
+const INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS,
+    10 * 60 * 1000,
+    1000,
+    24 * 60 * 60 * 1000
+);
+const INCOMING_MESSAGE_LOCK_STALE_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_LOCK_STALE_MS,
+    120000,
+    1000,
+    30 * 60 * 1000
+);
 const DANGEROUS_UPLOAD_EXTENSIONS = new Set([
     '.html', '.htm', '.svg', '.xml', '.xhtml', '.js', '.mjs', '.css'
 ]);
@@ -1898,6 +1917,9 @@ const sessionInitLockTimestamps = new Map();
 const pendingCiphertextRecoveries = new Map();
 const pendingLidResolutionRecoveries = new Map();
 const recoveredFlowMessageIds = new Map();
+const processedIncomingMessageKeys = new Map();
+const incomingMessageProcessingLocks = new Map();
+const inboundAutomationProcessingChains = new Map();
 const sessionReconnectCatchupTimers = new Map();
 const sessionReconnectCatchupInFlight = new Set();
 const sessionHistorySyncQueues = new Map();
@@ -8712,6 +8734,105 @@ function rememberRecoveredFlowMessage(messageId) {
     }
 }
 
+function buildIncomingMessageIdempotencyKey(sessionId, messageId) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const normalizedMessageId = String(messageId || '').trim();
+    if (!normalizedSessionId || !normalizedMessageId) return '';
+    return `${normalizedSessionId}::${normalizedMessageId}`;
+}
+
+function pruneProcessedIncomingMessageKeys(now = Date.now()) {
+    if (processedIncomingMessageKeys.size === 0) return;
+
+    for (const [key, processedAt] of processedIncomingMessageKeys.entries()) {
+        if ((now - Number(processedAt || 0)) > INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS) {
+            processedIncomingMessageKeys.delete(key);
+        }
+    }
+}
+
+function hasRecentlyProcessedIncomingMessageKey(idempotencyKey, now = Date.now()) {
+    if (!idempotencyKey) return false;
+    pruneProcessedIncomingMessageKeys(now);
+    const processedAt = Number(processedIncomingMessageKeys.get(idempotencyKey) || 0);
+    if (processedAt <= 0) return false;
+    return (now - processedAt) <= INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS;
+}
+
+function rememberProcessedIncomingMessageKey(idempotencyKey, now = Date.now()) {
+    if (!idempotencyKey) return;
+    processedIncomingMessageKeys.set(idempotencyKey, now);
+    if (processedIncomingMessageKeys.size > FLOW_RECOVERY_TRACKER_LIMIT * 4) {
+        pruneProcessedIncomingMessageKeys(now);
+    }
+}
+
+function normalizeConversationProcessingKey(conversationId) {
+    const asNumber = Number(conversationId || 0);
+    if (Number.isInteger(asNumber) && asNumber > 0) {
+        return String(asNumber);
+    }
+    const fallback = String(conversationId || '').trim();
+    return fallback || '';
+}
+
+function runInboundAutomationSerialized(conversationId, task) {
+    if (typeof task !== 'function') {
+        return Promise.resolve(null);
+    }
+
+    const key = normalizeConversationProcessingKey(conversationId);
+    if (!key) {
+        return Promise.resolve().then(() => task());
+    }
+
+    const previousChain = inboundAutomationProcessingChains.get(key) || Promise.resolve();
+    const currentChain = previousChain
+        .catch(() => null)
+        .then(() => task());
+
+    const trackedChain = currentChain.finally(() => {
+        if (inboundAutomationProcessingChains.get(key) === trackedChain) {
+            inboundAutomationProcessingChains.delete(key);
+        }
+    });
+
+    inboundAutomationProcessingChains.set(key, trackedChain);
+    return trackedChain;
+}
+
+function logFlowInboundTelemetry(payload = {}) {
+    const totalMs = Math.max(0, Math.round(Number(payload.totalMs || 0) || 0));
+    if (!FLOW_INBOUND_TELEMETRY_ENABLED && totalMs < FLOW_INBOUND_TELEMETRY_SLOW_MS) {
+        return;
+    }
+
+    const flowMs = Math.max(0, Math.round(Number(payload.flowMs || 0) || 0));
+    const automationsMs = Math.max(0, Math.round(Number(payload.automationsMs || 0) || 0));
+    const lockWaitMs = Math.max(0, Math.round(Number(payload.lockWaitMs || 0) || 0));
+    const outsideHours = payload.outsideHours === true ? '1' : '0';
+    const fromMe = payload.isFromMe === true ? '1' : '0';
+
+    const parts = [
+        `session=${sanitizeSessionId(payload.sessionId) || 'n/a'}`,
+        `conversation=${Number(payload.conversationId || 0) || 'n/a'}`,
+        `message=${String(payload.messageId || '').trim() || 'n/a'}`,
+        `source=${String(payload.source || 'live').trim().toLowerCase() || 'live'}`,
+        `from_me=${fromMe}`,
+        `outside_hours=${outsideHours}`,
+        `total_ms=${totalMs}`,
+        `flow_ms=${flowMs}`,
+        `automations_ms=${automationsMs}`,
+        `lock_wait_ms=${lockWaitMs}`
+    ];
+
+    if (totalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
+        console.warn(`[flow-telemetry][slow] ${parts.join(' ')}`);
+    } else {
+        console.log(`[flow-telemetry] ${parts.join(' ')}`);
+    }
+}
+
 function resolveUserJidFromRawMessage(rawMessage = {}) {
     const key = rawMessage?.key || {};
     const candidates = [
@@ -9126,17 +9247,73 @@ async function getBusinessHoursSettings(ownerUserId = null, forceRefresh = false
 
 async function processIncomingMessage(sessionId, msg, options = {}) {
 
+    const incomingMessageId = String(msg?.key?.id || '').trim();
+    let messageSource = String(options?.source || 'live').trim().toLowerCase();
+    if (!messageSource) messageSource = 'live';
+    let flowProcessingDurationMs = 0;
+    let automationsSchedulingDurationMs = 0;
+    let outsideBusinessHoursBypass = false;
+    let inboundTelemetryConversationId = 0;
+    let inboundTelemetryIsFromMe = Boolean(msg?.key?.fromMe);
+    let inboundLockWaitMs = 0;
+
     if (isGroupMessage(msg)) return;
     if (!msg?.message) return;
-    const messageSource = String(options?.source || 'live').trim().toLowerCase();
-    const preserveUnreadCount = options?.preserveUnreadCount === true;
-    const skipInboundAutomation = options?.skipInboundAutomation === true;
-    const skipWebhook = options?.skipWebhook === true;
-    const skipRealtimeEmit = options?.skipRealtimeEmit === true;
-    const sessionDisplayName = getSessionDisplayName(sessionId);
-    const sessionPhone = getSessionPhone(sessionId);
-    const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
-    registerMessageJidAliases(msg, sessionPhone);
+    const inboundStartedAtMs = Date.now();
+    const idempotencyKey = buildIncomingMessageIdempotencyKey(sessionId, incomingMessageId);
+    let shouldRememberProcessedMessage = false;
+    let releaseIncomingMessageLock = null;
+
+    if (idempotencyKey) {
+        const now = Date.now();
+        if (hasRecentlyProcessedIncomingMessageKey(idempotencyKey, now)) {
+            return;
+        }
+
+        const existingLock = incomingMessageProcessingLocks.get(idempotencyKey);
+        if (existingLock) {
+            const lockAgeMs = now - Number(existingLock.startedAt || now);
+            if (lockAgeMs <= INCOMING_MESSAGE_LOCK_STALE_MS) {
+                const waitStartedAtMs = Date.now();
+                await existingLock.promise.catch(() => null);
+                inboundLockWaitMs = Date.now() - waitStartedAtMs;
+                if (hasRecentlyProcessedIncomingMessageKey(idempotencyKey)) {
+                    return;
+                }
+            } else {
+                incomingMessageProcessingLocks.delete(idempotencyKey);
+            }
+        }
+
+        let lockReleased = false;
+        let resolveLock = null;
+        const lockPromise = new Promise((resolve) => {
+            resolveLock = resolve;
+        });
+        incomingMessageProcessingLocks.set(idempotencyKey, {
+            promise: lockPromise,
+            startedAt: Date.now(),
+            createdByMessageId: incomingMessageId
+        });
+        releaseIncomingMessageLock = () => {
+            if (lockReleased) return;
+            lockReleased = true;
+            incomingMessageProcessingLocks.delete(idempotencyKey);
+            if (typeof resolveLock === 'function') {
+                resolveLock();
+            }
+        };
+    }
+
+    try {
+        const preserveUnreadCount = options?.preserveUnreadCount === true;
+        const skipInboundAutomation = options?.skipInboundAutomation === true;
+        const skipWebhook = options?.skipWebhook === true;
+        const skipRealtimeEmit = options?.skipRealtimeEmit === true;
+        const sessionDisplayName = getSessionDisplayName(sessionId);
+        const sessionPhone = getSessionPhone(sessionId);
+        const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
+        registerMessageJidAliases(msg, sessionPhone);
 
     const fromRaw = msg.key.remoteJid;
     const fromRawNormalized = normalizeUserJidCandidate(fromRaw) || fromRaw;
@@ -9266,6 +9443,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         }
     }
 
+    inboundTelemetryIsFromMe = isFromMe;
     const content = contentForRouting;
     const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
     const interactiveSelectionMetadata = normalizeInteractiveSelectionForMetadata(interactiveSelection);
@@ -9429,6 +9607,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         assigned_to: sessionOwnerUserId || undefined
 
     });
+    inboundTelemetryConversationId = Number(conversation?.id || 0) || 0;
 
 
 
@@ -9436,6 +9615,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 
     if (existingMessage) {
 
+        shouldRememberProcessedMessage = true;
         return;
 
     }
@@ -9493,7 +9673,26 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 
     
 
-    const savedMessage = await Message.create(messageData);
+    let savedMessage;
+    try {
+        savedMessage = await Message.create(messageData);
+        shouldRememberProcessedMessage = true;
+    } catch (error) {
+        const duplicateErrorMessage = String(error?.message || '').toLowerCase();
+        const isDuplicateMessageIdError = (
+            duplicateErrorMessage.includes('message_id')
+            && (
+                duplicateErrorMessage.includes('unique')
+                || duplicateErrorMessage.includes('duplicate')
+                || duplicateErrorMessage.includes('already exists')
+            )
+        );
+        if (isDuplicateMessageIdError) {
+            shouldRememberProcessedMessage = true;
+            return;
+        }
+        throw error;
+    }
 
     const messageTimestampIso = messageData.sent_at || new Date().toISOString();
 
@@ -9580,56 +9779,93 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         }
 
         if (!skipInboundAutomation) {
-            console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
+            await runInboundAutomationSerialized(conversation.id, async () => {
+                const automationStartedAtMs = Date.now();
+                console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
 
-            const businessHoursSettings = await getBusinessHoursSettings(sessionOwnerUserId || null, false, sessionId);
-            const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
+                const businessHoursSettings = await getBusinessHoursSettings(sessionOwnerUserId || null, false, sessionId);
+                const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
 
-            if (isOutsideBusinessHours && !isSelfChat) {
-                const autoReplyText = String(businessHoursSettings.autoReplyMessage || '').trim();
+                if (isOutsideBusinessHours && !isSelfChat) {
+                    outsideBusinessHoursBypass = true;
+                    const autoReplyText = String(businessHoursSettings.autoReplyMessage || '').trim();
 
-                if (autoReplyText && shouldSendOutsideHoursAutoReply(conversation.id)) {
-                    try {
-                        await sendMessage(sessionId, phone, autoReplyText, 'text', {
-                            conversationId: conversation.id
-                        });
-                        markOutsideHoursAutoReplySent(conversation.id);
-                    } catch (autoReplyError) {
-                        console.error(`[${sessionId}] Erro ao enviar resposta fora do horario:`, autoReplyError.message);
+                    if (autoReplyText && shouldSendOutsideHoursAutoReply(conversation.id)) {
+                        try {
+                            await sendMessage(sessionId, phone, autoReplyText, 'text', {
+                                conversationId: conversation.id
+                            });
+                            markOutsideHoursAutoReplySent(conversation.id);
+                        } catch (autoReplyError) {
+                            console.error(`[${sessionId}] Erro ao enviar resposta fora do horario:`, autoReplyError.message);
+                        }
                     }
+
+                    return;
                 }
 
-                return;
-            }
+                // Processar fluxo de automacao
+                if (conversation.is_bot_active) {
+                    const flowStartedAtMs = Date.now();
+                    conversation.created = convCreated;
 
-            // Processar fluxo de automacao
-            if (conversation.is_bot_active) {
-                conversation.created = convCreated;
+                    await flowService.processIncomingMessage(
+                        {
+                            text,
+                            mediaType,
+                            selectionId: interactiveSelection?.id || '',
+                            selectionText: interactiveSelection?.text || ''
+                        },
+                        lead,
+                        conversation
+                    );
+                    flowProcessingDurationMs += Date.now() - flowStartedAtMs;
+                }
 
-                await flowService.processIncomingMessage(
-                    {
-                        text,
-                        mediaType,
-                        selectionId: interactiveSelection?.id || '',
-                        selectionText: interactiveSelection?.text || ''
-                    },
+                const automationsStartedAtMs = Date.now();
+                await scheduleAutomations({
+                    event: AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED,
+                    sessionId,
+                    text,
+                    mediaType,
                     lead,
-                    conversation
-                );
-            }
-
-            await scheduleAutomations({
-                event: AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED,
-                sessionId,
-                text,
-                mediaType,
-                lead,
-                conversation,
-                messageTimestampMs: Date.parse(messageTimestampIso) || Date.now(),
-                leadCreated,
-                conversationCreated: convCreated
+                    conversation,
+                    messageTimestampMs: Date.parse(messageTimestampIso) || Date.now(),
+                    leadCreated,
+                    conversationCreated: convCreated
+                });
+                automationsSchedulingDurationMs += Date.now() - automationsStartedAtMs;
+                const automationTotalMs = Date.now() - automationStartedAtMs;
+                if (!FLOW_INBOUND_TELEMETRY_ENABLED && automationTotalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
+                    console.warn(
+                        `[flow-telemetry][slow] session=${sessionId} conversation=${conversation.id} `
+                        + `message=${incomingMessageId || 'n/a'} scope=automation total_ms=${automationTotalMs}`
+                    );
+                }
             });
         }
+    }
+    } finally {
+        if (idempotencyKey && shouldRememberProcessedMessage) {
+            rememberProcessedIncomingMessageKey(idempotencyKey);
+        }
+        if (typeof releaseIncomingMessageLock === 'function') {
+            releaseIncomingMessageLock();
+        }
+
+        const inboundTotalDurationMs = Date.now() - inboundStartedAtMs;
+        logFlowInboundTelemetry({
+            sessionId,
+            conversationId: inboundTelemetryConversationId,
+            messageId: incomingMessageId,
+            source: messageSource,
+            isFromMe: inboundTelemetryIsFromMe,
+            outsideHours: outsideBusinessHoursBypass,
+            totalMs: inboundTotalDurationMs,
+            flowMs: flowProcessingDurationMs,
+            automationsMs: automationsSchedulingDurationMs,
+            lockWaitMs: inboundLockWaitMs
+        });
     }
 
 }
