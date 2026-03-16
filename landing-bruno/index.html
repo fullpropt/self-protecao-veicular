@@ -1452,6 +1452,59 @@
             justify-self: start;
         }
 
+        .pain-visual {
+            width: 100%;
+            max-width: 600px;
+            justify-self: end;
+            align-self: center;
+            padding: 0;
+            border: none;
+            background: none;
+            box-shadow: none;
+            backdrop-filter: none;
+        }
+
+        .pain-visual:hover {
+            border: none;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .pain-visual > .surface-tag,
+        .pain-visual > h3,
+        .pain-visual > .signal-list,
+        .pain-visual > .story-mini-note:not(.pain-visual-note) {
+            display: none;
+        }
+
+        .pain-scene {
+            position: relative;
+            display: grid;
+            grid-template-columns: minmax(0, 272px) minmax(0, 1fr);
+            gap: 22px;
+            align-items: center;
+        }
+
+        .pain-scene::before,
+        .pain-scene::after {
+            content: '';
+            position: absolute;
+            pointer-events: none;
+            border-radius: 999px;
+            filter: blur(30px);
+            opacity: 0.78;
+        }
+
+        .pain-scene::before {
+            inset: 10% 44% 18% -8%;
+            background: radial-gradient(circle, rgba(0, 255, 163, 0.2), transparent 62%);
+        }
+
+        .pain-scene::after {
+            inset: 12% -10% 14% 58%;
+            background: radial-gradient(circle, rgba(255, 92, 104, 0.16), transparent 60%);
+        }
+
         .gain-block,
         .compare-block,
         .benefit-block,
@@ -1608,6 +1661,379 @@
             color: #ff7a81;
             font-weight: 600;
             line-height: 1.3;
+        }
+
+        .pain-phone-shell {
+            position: relative;
+            width: min(100%, 272px);
+            justify-self: start;
+            padding: 10px;
+            border-radius: 38px;
+            background:
+                linear-gradient(180deg, rgba(102, 158, 133, 0.3), rgba(27, 44, 36, 0.8)),
+                linear-gradient(135deg, rgba(137, 198, 170, 0.22), rgba(16, 24, 21, 0.94));
+            box-shadow:
+                0 22px 56px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.36);
+        }
+
+        .pain-phone-shell::before,
+        .pain-phone-shell::after {
+            content: '';
+            position: absolute;
+            pointer-events: none;
+            border-radius: 999px;
+        }
+
+        .pain-phone-shell::before {
+            inset: 18px 58% 90px -48px;
+            background: radial-gradient(circle, rgba(0, 255, 163, 0.32), transparent 66%);
+            filter: blur(28px);
+            opacity: 0.75;
+        }
+
+        .pain-phone-shell::after {
+            inset: 38px -18px 38px 74%;
+            background: radial-gradient(circle, rgba(255, 92, 104, 0.18), transparent 62%);
+            filter: blur(24px);
+            opacity: 0.7;
+        }
+
+        .pain-phone-frame {
+            position: relative;
+            overflow: hidden;
+            border-radius: 30px;
+            border: 1px solid rgba(220, 255, 241, 0.12);
+            background:
+                linear-gradient(180deg, rgba(21, 24, 28, 0.98), rgba(11, 13, 16, 0.99)),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+            box-shadow:
+                inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+                0 18px 42px rgba(0, 0, 0, 0.42);
+        }
+
+        .pain-phone-notch {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            width: 96px;
+            height: 20px;
+            transform: translateX(-50%);
+            border-radius: 0 0 16px 16px;
+            background: #06080a;
+            z-index: 3;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+        }
+
+        .pain-phone-screen {
+            position: relative;
+            min-height: 548px;
+            padding: 26px 16px 16px;
+            background:
+                radial-gradient(circle at 0% 100%, rgba(0, 255, 163, 0.06), transparent 34%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+        }
+
+        .pain-phone-status,
+        .pain-phone-header,
+        .pain-thread-head,
+        .pain-thread-main,
+        .pain-thread-meta,
+        .pain-phone-header-actions {
+            display: flex;
+            align-items: center;
+        }
+
+        .pain-phone-status,
+        .pain-phone-header {
+            justify-content: space-between;
+        }
+
+        .pain-phone-status {
+            color: rgba(255, 255, 255, 0.88);
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .pain-phone-status-icons {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .pain-phone-status-icons span {
+            display: inline-block;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.88);
+            opacity: 0.92;
+        }
+
+        .pain-phone-status-icons span:nth-child(1) {
+            width: 14px;
+            height: 7px;
+        }
+
+        .pain-phone-status-icons span:nth-child(2) {
+            width: 10px;
+            height: 10px;
+        }
+
+        .pain-phone-status-icons span:nth-child(3) {
+            width: 18px;
+            height: 9px;
+        }
+
+        .pain-phone-header {
+            margin-top: 18px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .pain-phone-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.96);
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .pain-phone-title svg {
+            width: 18px;
+            height: 18px;
+            color: var(--primary);
+            filter: drop-shadow(0 0 12px rgba(0, 255, 163, 0.3));
+        }
+
+        .pain-phone-header-actions {
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .pain-phone-header-actions svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .pain-inbox {
+            margin-top: 16px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .pain-thread {
+            position: relative;
+            padding: 13px 12px 12px;
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
+                rgba(12, 14, 17, 0.96);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+        }
+
+        .pain-thread--focus {
+            border-color: rgba(255, 96, 109, 0.6);
+            background:
+                linear-gradient(180deg, rgba(255, 96, 109, 0.06), rgba(255, 96, 109, 0.025)),
+                rgba(12, 14, 17, 0.96);
+            box-shadow:
+                0 0 0 1px rgba(255, 96, 109, 0.14) inset,
+                0 0 24px rgba(255, 84, 98, 0.12),
+                inset 0 0 18px rgba(255, 80, 96, 0.05);
+        }
+
+        .pain-thread--ghost {
+            opacity: 0.58;
+            padding: 12px 12px;
+        }
+
+        .pain-thread-head {
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .pain-thread-main {
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .pain-avatar {
+            position: relative;
+            width: 38px;
+            height: 38px;
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.14);
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+        }
+
+        .pain-avatar::after {
+            content: '';
+            position: absolute;
+            right: -1px;
+            bottom: 2px;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #74ff86;
+            box-shadow: 0 0 10px rgba(116, 255, 134, 0.4);
+            border: 2px solid rgba(15, 18, 22, 0.95);
+        }
+
+        .pain-avatar--teal {
+            background: linear-gradient(135deg, #43dfb4, #0c785b);
+        }
+
+        .pain-avatar--rose {
+            background: linear-gradient(135deg, #ff8fa0, #8b3240);
+        }
+
+        .pain-avatar--amber {
+            background: linear-gradient(135deg, #ffc27a, #996122);
+        }
+
+        .pain-avatar--slate {
+            background: linear-gradient(135deg, #9fb7d6, #4d6078);
+        }
+
+        .pain-thread-copy {
+            min-width: 0;
+        }
+
+        .pain-thread-copy strong {
+            display: block;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 0.96rem;
+            line-height: 1.15;
+        }
+
+        .pain-thread-copy span {
+            display: block;
+            margin-top: 4px;
+            color: rgba(255, 255, 255, 0.44);
+            font-size: 0.76rem;
+            line-height: 1.35;
+        }
+
+        .pain-thread-pill,
+        .pain-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .pain-thread-pill {
+            padding: 8px 10px;
+            color: #ff979f;
+            border: 1px solid rgba(255, 96, 109, 0.24);
+            background: rgba(255, 96, 109, 0.12);
+        }
+
+        .pain-thread-meta {
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+            padding-left: 48px;
+        }
+
+        .pain-chip {
+            padding: 7px 10px;
+            color: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .pain-chip--danger {
+            color: #ff979f;
+            border-color: rgba(255, 96, 109, 0.2);
+            background: rgba(255, 96, 109, 0.12);
+        }
+
+        .pain-chip--warn {
+            color: #ffc28b;
+            border-color: rgba(255, 190, 122, 0.18);
+            background: rgba(255, 190, 122, 0.1);
+        }
+
+        .pain-callouts {
+            display: grid;
+            gap: 18px;
+            align-content: center;
+            padding-top: 38px;
+        }
+
+        .pain-callout {
+            position: relative;
+            padding: 18px 18px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 96, 109, 0.5);
+            background:
+                linear-gradient(180deg, rgba(55, 15, 20, 0.92), rgba(20, 9, 11, 0.94)),
+                rgba(18, 10, 12, 0.95);
+            box-shadow:
+                0 0 26px rgba(255, 84, 98, 0.14),
+                inset 0 0 18px rgba(255, 84, 98, 0.08);
+        }
+
+        .pain-callout::before,
+        .pain-callout::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .pain-callout::before {
+            left: -34px;
+            width: 30px;
+            height: 2px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(255, 96, 109, 0.85), rgba(255, 96, 109, 0.3));
+            box-shadow: 0 0 12px rgba(255, 84, 98, 0.34);
+        }
+
+        .pain-callout::after {
+            left: -42px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff7a86;
+            box-shadow: 0 0 16px rgba(255, 84, 98, 0.6);
+        }
+
+        .pain-callout span {
+            display: block;
+            color: rgba(255, 255, 255, 0.94);
+            font-family: var(--font-display);
+            font-size: clamp(1.02rem, 1.7vw, 1.34rem);
+            line-height: 1.06;
+            letter-spacing: -0.02em;
+        }
+
+        .pain-callout strong {
+            color: #ff7a86;
+            font-weight: 700;
+        }
+
+        .pain-visual-note {
+            margin-top: 18px;
+            max-width: 26rem;
         }
 
         .practical-grid,
@@ -1812,6 +2238,85 @@
             color: rgba(255, 255, 255, 0.68);
         }
 
+        .compare-points {
+            margin-top: 22px;
+            gap: 14px;
+        }
+
+        .compare-points li {
+            position: relative;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            overflow: hidden;
+        }
+
+        .compare-points li::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            opacity: 1;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+        }
+
+        .compare-points li > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .compare-item-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+        }
+
+        .compare-item-icon svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .compare-item-copy {
+            min-width: 0;
+        }
+
+        .compare-item-copy strong {
+            display: block;
+            color: rgba(255, 255, 255, 0.94);
+            font-size: 1rem;
+            line-height: 1.2;
+            letter-spacing: -0.01em;
+        }
+
+        .compare-item-copy span {
+            display: block;
+            margin-top: 4px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.78rem;
+            line-height: 1.35;
+        }
+
+        .compare-item-note {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
         .compare-before li::before {
             background: linear-gradient(135deg, #ff667d, #ff8f6b);
             box-shadow: 0 0 18px rgba(255, 102, 125, 0.24);
@@ -1821,10 +2326,68 @@
             color: rgba(255, 255, 255, 0.74);
         }
 
+        .compare-before.compare-card {
+            background:
+                radial-gradient(circle at top right, rgba(255, 102, 125, 0.08), transparent 34%),
+                rgba(12, 12, 14, 0.82);
+        }
+
+        .compare-before .compare-points li {
+            border-color: rgba(255, 112, 126, 0.14);
+            background: linear-gradient(180deg, rgba(255, 112, 126, 0.05), rgba(255, 112, 126, 0.02));
+        }
+
+        .compare-before .compare-points li::before {
+            background: linear-gradient(90deg, rgba(255, 102, 125, 0.14), rgba(255, 102, 125, 0));
+            opacity: 0.32;
+        }
+
+        .compare-before .compare-item-icon {
+            background: rgba(255, 102, 125, 0.1);
+            border: 1px solid rgba(255, 102, 125, 0.18);
+            color: #ff7a86;
+            box-shadow: 0 0 24px rgba(255, 102, 125, 0.08);
+        }
+
+        .compare-before .compare-item-note {
+            color: #ff9aa2;
+            background: rgba(255, 102, 125, 0.08);
+            border: 1px solid rgba(255, 102, 125, 0.16);
+        }
+
         .compare-after li {
             color: rgba(255, 255, 255, 0.88);
             background: linear-gradient(135deg, rgba(0, 255, 163, 0.09), rgba(255, 255, 255, 0.04));
             border-color: rgba(0, 255, 163, 0.16);
+        }
+
+        .compare-after.compare-card {
+            background:
+                radial-gradient(circle at top left, rgba(0, 255, 163, 0.08), transparent 34%),
+                rgba(12, 12, 14, 0.82);
+        }
+
+        .compare-after .compare-points li {
+            border-color: rgba(0, 255, 163, 0.16);
+            background: linear-gradient(180deg, rgba(0, 255, 163, 0.08), rgba(0, 255, 163, 0.025));
+        }
+
+        .compare-after .compare-points li::before {
+            background: linear-gradient(90deg, rgba(0, 255, 163, 0.18), rgba(0, 255, 163, 0));
+            opacity: 0.32;
+        }
+
+        .compare-after .compare-item-icon {
+            background: rgba(0, 255, 163, 0.1);
+            border: 1px solid rgba(0, 255, 163, 0.18);
+            color: var(--primary);
+            box-shadow: 0 0 24px rgba(0, 255, 163, 0.08);
+        }
+
+        .compare-after .compare-item-note {
+            color: #b8fff0;
+            background: rgba(0, 255, 163, 0.08);
+            border: 1px solid rgba(0, 255, 163, 0.18);
         }
 
         .benefit-grid {
@@ -2202,6 +2765,31 @@
                 max-width: none;
             }
 
+            .pain-visual {
+                max-width: none;
+                justify-self: stretch;
+            }
+
+            .pain-scene {
+                grid-template-columns: 1fr;
+                gap: 18px;
+            }
+
+            .pain-phone-shell {
+                margin: 0 auto;
+            }
+
+            .pain-callouts {
+                width: min(100%, 420px);
+                margin: 0 auto;
+                padding-top: 0;
+            }
+
+            .pain-callout::before,
+            .pain-callout::after {
+                display: none;
+            }
+
             .practical-grid,
             .benefit-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2258,6 +2846,7 @@
             }
 
             .pain-surface,
+            .pain-visual,
             .method-board,
             .positioning-rail,
             .compare-card,
@@ -2267,6 +2856,62 @@
             .offer-card {
                 padding: 22px 18px;
                 border-radius: 22px;
+            }
+
+            .pain-visual {
+                padding: 0;
+                border-radius: 0;
+            }
+
+            .pain-phone-shell {
+                width: min(100%, 268px);
+                padding: 9px;
+                border-radius: 34px;
+            }
+
+            .pain-phone-frame {
+                border-radius: 26px;
+            }
+
+            .pain-phone-screen {
+                min-height: 500px;
+                padding: 24px 14px 14px;
+            }
+
+            .pain-phone-header {
+                margin-top: 16px;
+                padding-bottom: 12px;
+            }
+
+            .pain-inbox {
+                gap: 10px;
+            }
+
+            .pain-thread {
+                padding: 12px 11px 11px;
+                border-radius: 18px;
+            }
+
+            .pain-thread-copy strong {
+                font-size: 0.9rem;
+            }
+
+            .pain-thread-copy span {
+                font-size: 0.72rem;
+            }
+
+            .pain-thread-meta {
+                gap: 7px;
+                padding-left: 44px;
+            }
+
+            .pain-callout {
+                padding: 16px 16px;
+                border-radius: 20px;
+            }
+
+            .pain-callout span {
+                font-size: 1rem;
             }
 
             .practical-grid,
@@ -2280,6 +2925,16 @@
                 align-items: center;
             }
 
+            .compare-points li {
+                grid-template-columns: auto minmax(0, 1fr);
+            }
+
+            .compare-item-note {
+                grid-column: 2;
+                justify-self: start;
+                margin-top: 2px;
+            }
+
             .signal-item {
                 width: 100%;
                 min-width: 0;
@@ -2288,6 +2943,20 @@
             .signal-icon {
                 width: 16px;
                 height: 16px;
+            }
+
+            .compare-item-icon {
+                width: 38px;
+                height: 38px;
+                border-radius: 12px;
+            }
+
+            .compare-item-copy strong {
+                font-size: 0.96rem;
+            }
+
+            .compare-item-copy span {
+                font-size: 0.76rem;
             }
 
             .practical-card {
@@ -4314,7 +4983,133 @@
                         <a href="#plano-premium" class="btn btn-primary-large">Quero transformar meu WhatsApp em operação de vendas</a>
                     </div>
                 </div>
-                <aside class="pain-surface">
+                <aside class="pain-visual" aria-label="Exemplo visual dos gargalos na inbox">
+                    <div class="pain-scene">
+                        <div class="pain-phone-shell" aria-hidden="true">
+                            <div class="pain-phone-frame">
+                                <div class="pain-phone-notch"></div>
+                                <div class="pain-phone-screen">
+                                    <div class="pain-phone-status">
+                                        <span>5:41</span>
+                                        <span class="pain-phone-status-icons">
+                                            <span></span>
+                                            <span></span>
+                                            <span></span>
+                                        </span>
+                                    </div>
+                                    <div class="pain-phone-header">
+                                        <span class="pain-phone-title">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M15 17H5l-3 3V7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v10Z"></path>
+                                                <path d="M19 9a4 4 0 0 1 0 8"></path>
+                                                <path d="M19 9a4 4 0 0 0 0 8"></path>
+                                            </svg>
+                                            Inbox
+                                        </span>
+                                        <span class="pain-phone-header-actions">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                                <circle cx="11" cy="11" r="6"></circle>
+                                                <path d="M20 20l-3.5-3.5"></path>
+                                            </svg>
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path>
+                                                <path d="M10.5 20a1.5 1.5 0 0 0 3 0"></path>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                    <div class="pain-inbox">
+                                        <article class="pain-thread pain-thread--focus">
+                                            <div class="pain-thread-head">
+                                                <div class="pain-thread-main">
+                                                    <span class="pain-avatar pain-avatar--teal">A</span>
+                                                    <div class="pain-thread-copy">
+                                                        <strong>Lead sem dono</strong>
+                                                        <span>Mensagem aguardando resposta</span>
+                                                    </div>
+                                                </div>
+                                                <span class="pain-thread-pill">Atencao</span>
+                                            </div>
+                                        </article>
+                                        <article class="pain-thread pain-thread--focus">
+                                            <div class="pain-thread-head">
+                                                <div class="pain-thread-main">
+                                                    <span class="pain-avatar pain-avatar--rose">B</span>
+                                                    <div class="pain-thread-copy">
+                                                        <strong>Lead quente</strong>
+                                                        <span>Contato ativo parado no inbox</span>
+                                                    </div>
+                                                </div>
+                                                <span class="pain-thread-pill">Urgente</span>
+                                            </div>
+                                            <div class="pain-thread-meta">
+                                                <span class="pain-chip">Pendente</span>
+                                                <span class="pain-chip pain-chip--danger">Alta</span>
+                                                <span class="pain-chip">Medidor</span>
+                                            </div>
+                                        </article>
+                                        <article class="pain-thread pain-thread--focus">
+                                            <div class="pain-thread-head">
+                                                <div class="pain-thread-main">
+                                                    <span class="pain-avatar pain-avatar--amber">C</span>
+                                                    <div class="pain-thread-copy">
+                                                        <strong>Retomada atrasada</strong>
+                                                        <span>Follow-up saiu da janela ideal</span>
+                                                    </div>
+                                                </div>
+                                                <span class="pain-thread-pill">Sem dono</span>
+                                            </div>
+                                            <div class="pain-thread-meta">
+                                                <span class="pain-chip">Quente</span>
+                                                <span class="pain-chip pain-chip--danger">Urgente</span>
+                                            </div>
+                                        </article>
+                                        <article class="pain-thread pain-thread--focus">
+                                            <div class="pain-thread-head">
+                                                <div class="pain-thread-main">
+                                                    <span class="pain-avatar pain-avatar--slate">D</span>
+                                                    <div class="pain-thread-copy">
+                                                        <strong>Fila misturada</strong>
+                                                        <span>Prioridade escondida no volume</span>
+                                                    </div>
+                                                </div>
+                                                <span class="pain-thread-pill">Alerta</span>
+                                            </div>
+                                            <div class="pain-thread-meta">
+                                                <span class="pain-chip">Pendente</span>
+                                                <span class="pain-chip pain-chip--warn">Quente</span>
+                                            </div>
+                                        </article>
+                                        <article class="pain-thread pain-thread--ghost">
+                                            <div class="pain-thread-head">
+                                                <div class="pain-thread-main">
+                                                    <span class="pain-avatar pain-avatar--teal">E</span>
+                                                    <div class="pain-thread-copy">
+                                                        <strong>Contato antigo</strong>
+                                                        <span>Conversa perdida entre outras prioridades</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </article>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pain-callouts" aria-hidden="true">
+                            <div class="pain-callout">
+                                <span>Conversas sem <strong>dono claro</strong></span>
+                            </div>
+                            <div class="pain-callout">
+                                <span>Lead quente esperando <strong>resposta</strong></span>
+                            </div>
+                            <div class="pain-callout">
+                                <span>Retomadas lembradas <strong>tarde demais</strong></span>
+                            </div>
+                            <div class="pain-callout">
+                                <span>Prioridades escondidas no <strong>volume</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="story-mini-note pain-visual-note">Visual ilustrativo do que acontece quando o inbox concentra oportunidades sem processo, prioridade ou continuidade.</p>
                     <span class="surface-tag">Quando tudo depende da memória do time</span>
                     <h3>Os gargalos que mais custam vendas no dia a dia</h3>
                     <ul class="signal-list">
@@ -4494,26 +5289,195 @@
                     <span class="surface-tag">Antes</span>
                     <h3>Quando a venda depende do improviso</h3>
                     <p>O comercial fica <span class="copy-emphasis">reativo</span>, cada pessoa cria seu próprio jeito de trabalhar e a operação perde consistência.</p>
-                    <ul>
-                        <li>Conversas misturadas</li>
-                        <li>Lead quente esfriando</li>
-                        <li>Follow-up esquecido</li>
-                        <li>Equipe sem padrão</li>
-                        <li>Atendimento reativo</li>
-                        <li>Gestão sem visibilidade</li>
+                    <ul class="compare-points">
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M8 15H5l-3 3V6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v2"></path>
+                                    <path d="M16 18h3l3 3V9a2 2 0 0 0-2-2h-9a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h5"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Conversas misturadas</strong>
+                                <span>Sem contexto compartilhado entre atendimento e venda.</span>
+                            </span>
+                            <span class="compare-item-note">Caos</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 9a4 4 0 1 1 4 4"></path>
+                                    <path d="M18 13v5"></path>
+                                    <path d="M18 18h-3"></path>
+                                    <path d="M9 3v10"></path>
+                                    <path d="M6 6l3-3 3 3"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Lead quente esfriando</strong>
+                                <span>A prioridade de resposta chega tarde demais.</span>
+                            </span>
+                            <span class="compare-item-note">Risco</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="8"></circle>
+                                    <path d="M12 8v4l3 2"></path>
+                                    <path d="M6 4l2 2"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Follow-up esquecido</strong>
+                                <span>A retomada depende da memória ou da correria do dia.</span>
+                            </span>
+                            <span class="compare-item-note">Atraso</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 18h6"></path>
+                                    <path d="M14 18h6"></path>
+                                    <path d="M7 14V6"></path>
+                                    <path d="M17 18V10"></path>
+                                    <circle cx="7" cy="5" r="1.5"></circle>
+                                    <circle cx="17" cy="9" r="1.5"></circle>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Equipe sem padrão</strong>
+                                <span>Cada pessoa atende de um jeito e a qualidade oscila.</span>
+                            </span>
+                            <span class="compare-item-note">Ruído</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M5 12h7"></path>
+                                    <path d="M10 7l5 5-5 5"></path>
+                                    <path d="M19 5v14"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Atendimento reativo</strong>
+                                <span>A equipe age só depois da pressão aparecer.</span>
+                            </span>
+                            <span class="compare-item-note">Pressa</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 3v18h18"></path>
+                                    <path d="M8 15l3-3 3 2 4-5"></path>
+                                    <path d="M16 9h3v3"></path>
+                                    <path d="M4 8l4 4"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Gestão sem visibilidade</strong>
+                                <span>Fica difícil enxergar estágio, ritmo e gargalos.</span>
+                            </span>
+                            <span class="compare-item-note">Escuro</span>
+                        </li>
                     </ul>
                 </article>
                 <article class="compare-card compare-after">
                     <span class="surface-tag">Depois</span>
                     <h3>Quando existe processo no WhatsApp</h3>
                     <p>As conversas passam a seguir uma <span class="copy-emphasis">lógica comercial clara</span>, com mais contexto, ritmo e <span class="copy-gradient">previsibilidade</span>.</p>
-                    <ul>
-                        <li>Etapas claras</li>
-                        <li>Prioridades visíveis</li>
-                        <li>Retomadas organizadas</li>
-                        <li>Processo replicável</li>
-                        <li>Atendimento com lógica</li>
-                        <li>Operação mais previsível</li>
+                    <ul class="compare-points">
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 6h6v4H4z"></path>
+                                    <path d="M14 10h6v4h-6z"></path>
+                                    <path d="M4 14h6v4H4z"></path>
+                                    <path d="M10 8h4"></path>
+                                    <path d="M10 16h4"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Etapas claras</strong>
+                                <span>Cada conversa sabe exatamente em que ponto está.</span>
+                            </span>
+                            <span class="compare-item-note">Clareza</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="8"></circle>
+                                    <circle cx="12" cy="12" r="4"></circle>
+                                    <circle cx="12" cy="12" r="1"></circle>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Prioridades visíveis</strong>
+                                <span>O que está quente aparece primeiro para o time.</span>
+                            </span>
+                            <span class="compare-item-note">Foco</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 0 1 15.36-6.36L21 8"></path>
+                                    <path d="M21 3v5h-5"></path>
+                                    <path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"></path>
+                                    <path d="M8 16H3v5"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Retomadas organizadas</strong>
+                                <span>O follow-up entra em uma cadência previsível.</span>
+                            </span>
+                            <span class="compare-item-note">Ritmo</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 6h6v4H4z"></path>
+                                    <path d="M14 6h6v4h-6z"></path>
+                                    <path d="M9 10v4"></path>
+                                    <path d="M15 10v4"></path>
+                                    <path d="M4 14h6v4H4z"></path>
+                                    <path d="M14 14h6v4h-6z"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Processo replicável</strong>
+                                <span>A equipe inteira segue a mesma lógica comercial.</span>
+                            </span>
+                            <span class="compare-item-note">Padrão</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 7h7"></path>
+                                    <path d="M4 12h11"></path>
+                                    <path d="M4 17h15"></path>
+                                    <path d="M16 7l4 5-4 5"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Atendimento com lógica</strong>
+                                <span>Contexto e próximo passo ficam sempre definidos.</span>
+                            </span>
+                            <span class="compare-item-note">Fluxo</span>
+                        </li>
+                        <li>
+                            <span class="compare-item-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 19V9"></path>
+                                    <path d="M10 19V5"></path>
+                                    <path d="M16 19v-7"></path>
+                                    <path d="M22 19V3"></path>
+                                </svg>
+                            </span>
+                            <span class="compare-item-copy">
+                                <strong>Operação mais previsível</strong>
+                                <span>Você ganha mais controle sobre avanço e volume.</span>
+                            </span>
+                            <span class="compare-item-note">Escala</span>
+                        </li>
                     </ul>
                 </article>
             </div>
