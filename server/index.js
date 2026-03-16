@@ -6967,6 +6967,75 @@ function extractLastMessageFromChat(chat) {
 
 }
 
+function parseConversationMetadataValue(value) {
+    if (!value) return {};
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return { ...value };
+    }
+
+    if (typeof value !== 'string') return {};
+
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return { ...parsed };
+        }
+    } catch (_) {
+        return {};
+    }
+
+    return {};
+}
+
+function resolveConversationLastReadAtMs(metadataValue) {
+    const metadata = parseConversationMetadataValue(metadataValue);
+    const system = metadata?.__system && typeof metadata.__system === 'object' && !Array.isArray(metadata.__system)
+        ? metadata.__system
+        : {};
+    const rawLastReadAt = String(system?.last_read_at || system?.lastReadAt || '').trim();
+    if (!rawLastReadAt) return 0;
+
+    const parsedMs = Date.parse(rawLastReadAt);
+    return Number.isFinite(parsedMs) ? parsedMs : 0;
+}
+
+function buildConversationMetadataWithReadMark(metadataValue, readAtIso = '') {
+    const metadata = parseConversationMetadataValue(metadataValue);
+    const currentSystem = metadata?.__system && typeof metadata.__system === 'object' && !Array.isArray(metadata.__system)
+        ? metadata.__system
+        : {};
+    const effectiveReadAt = String(readAtIso || new Date().toISOString()).trim() || new Date().toISOString();
+
+    return {
+        ...metadata,
+        __system: {
+            ...currentSystem,
+            last_read_at: effectiveReadAt
+        }
+    };
+}
+
+async function markConversationAsReadWithMetadata(conversation, readAtIso = '') {
+    const resolvedConversation = conversation && typeof conversation === 'object'
+        ? conversation
+        : await Conversation.findById(Number(conversation || 0));
+
+    if (!resolvedConversation?.id) return false;
+
+    const metadata = buildConversationMetadataWithReadMark(
+        resolvedConversation.metadata,
+        readAtIso
+    );
+
+    await Conversation.update(resolvedConversation.id, {
+        unread_count: 0,
+        metadata
+    });
+
+    return true;
+}
+
 
 
 async function syncChatsToDatabase(sessionId, payload) {
@@ -7100,40 +7169,38 @@ async function syncChatsToDatabase(sessionId, payload) {
 
 
         const updates = {};
+        const chatConversationTimestampMs = parseMessageTimestampMs(
+            chat?.conversationTimestamp || chat?.lastMessage?.messageTimestamp || chat?.lastMessageTimestamp
+        );
+        const currentUnreadCount = Math.max(0, Number(conversation?.unread_count || 0));
+        let metadata = parseConversationMetadataValue(conversation?.metadata);
+        const lastReadAtMs = resolveConversationLastReadAtMs(metadata);
 
         if (Number.isFinite(unreadCount)) {
-            updates.unread_count = Math.max(0, unreadCount);
+            const normalizedUnreadCount = Math.max(0, unreadCount);
+            const staleUnreadAfterRead = (
+                normalizedUnreadCount > 0
+                && currentUnreadCount === 0
+                && lastReadAtMs > 0
+                && chatConversationTimestampMs > 0
+                && lastReadAtMs >= chatConversationTimestampMs
+            );
 
+            if (!staleUnreadAfterRead) {
+                updates.unread_count = normalizedUnreadCount;
+            }
         }
-
-
 
         const lastMessage = extractLastMessageFromChat(chat);
 
         if (lastMessage) {
-
-            let metadata = {};
-
-            try {
-
-                metadata = conversation?.metadata ? JSON.parse(conversation.metadata) : {};
-
-            } catch (e) {
-
-                metadata = {};
-
-            }
-
             metadata.last_message = lastMessage;
 
-            if (chat?.conversationTimestamp) {
-
-                metadata.last_message_at = new Date(Number(chat.conversationTimestamp) * 1000).toISOString();
-
+            if (chatConversationTimestampMs > 0) {
+                metadata.last_message_at = new Date(chatConversationTimestampMs).toISOString();
             }
 
             updates.metadata = metadata;
-
         }
 
 
@@ -10903,7 +10970,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            await Conversation.markAsRead(normalizedConversationId);
+            await markConversationAsReadWithMetadata(conversation);
 
         } else if (normalizedContactJid && normalizedSessionId) {
 
@@ -10914,7 +10981,7 @@ io.on('connection', (socket) => {
 
                 const conv = await Conversation.findByLeadId(lead.id, normalizedSessionId);
 
-                if (conv) await Conversation.markAsRead(conv.id);
+                if (conv) await markConversationAsReadWithMetadata(conv);
 
             }
 
@@ -15792,7 +15859,7 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
             return res.status(404).json({ error: 'Conversa nao encontrada' });
         }
 
-        await Conversation.markAsRead(conversationId);
+        await markConversationAsReadWithMetadata(conversation);
 
         res.json({ success: true });
 
