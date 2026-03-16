@@ -242,6 +242,34 @@ const INCOMING_MESSAGE_LOCK_STALE_MS = parsePositiveIntInRange(
     1000,
     30 * 60 * 1000
 );
+const FLOW_INBOUND_POSTGRES_LOCK_ENABLED = USE_POSTGRES && parseBooleanEnv(
+    process.env.FLOW_INBOUND_POSTGRES_LOCK_ENABLED,
+    true
+);
+const FLOW_INBOUND_POSTGRES_LOCK_NAMESPACE = parsePositiveIntInRange(
+    process.env.FLOW_INBOUND_POSTGRES_LOCK_NAMESPACE,
+    74121,
+    1,
+    2147483647
+);
+const INCOMING_MESSAGE_RECEIPT_LEASE_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_RECEIPT_LEASE_MS,
+    120000,
+    1000,
+    30 * 60 * 1000
+);
+const INCOMING_MESSAGE_RECEIPTS_RETENTION_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_RECEIPTS_RETENTION_MS,
+    7 * 24 * 60 * 60 * 1000,
+    60 * 1000,
+    90 * 24 * 60 * 60 * 1000
+);
+const INCOMING_MESSAGE_RECEIPTS_CLEANUP_INTERVAL_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_RECEIPTS_CLEANUP_INTERVAL_MS,
+    10 * 60 * 1000,
+    60 * 1000,
+    24 * 60 * 60 * 1000
+);
 const DANGEROUS_UPLOAD_EXTENSIONS = new Set([
     '.html', '.htm', '.svg', '.xml', '.xhtml', '.js', '.mjs', '.css'
 ]);
@@ -1920,6 +1948,8 @@ const recoveredFlowMessageIds = new Map();
 const processedIncomingMessageKeys = new Map();
 const incomingMessageProcessingLocks = new Map();
 const inboundAutomationProcessingChains = new Map();
+let incomingMessageReceiptsCleanupInFlight = false;
+let incomingMessageReceiptsLastCleanupAtMs = 0;
 const sessionReconnectCatchupTimers = new Map();
 const sessionReconnectCatchupInFlight = new Set();
 const sessionHistorySyncQueues = new Map();
@@ -8801,6 +8831,258 @@ function runInboundAutomationSerialized(conversationId, task) {
     return trackedChain;
 }
 
+function normalizeIncomingMessageReceiptSource(value = '') {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized || 'live';
+}
+
+function resolveConversationAdvisoryLockKeyPart(conversationId) {
+    const asNumber = Number(conversationId || 0);
+    if (Number.isInteger(asNumber) && asNumber > 0) {
+        return Math.min(asNumber, 2147483647);
+    }
+
+    const fallback = String(conversationId || '').trim();
+    if (!fallback) return 0;
+
+    const hash = crypto.createHash('sha1').update(fallback).digest();
+    const value = Math.abs(hash.readInt32BE(0));
+    return value > 0 ? value : 1;
+}
+
+async function runWithConversationPostgresLock(conversationId, task) {
+    if (typeof task !== 'function') {
+        return null;
+    }
+
+    if (!FLOW_INBOUND_POSTGRES_LOCK_ENABLED || !USE_POSTGRES) {
+        return await task({ lockWaitMs: 0, mode: 'disabled' });
+    }
+
+    const lockKeyPart = resolveConversationAdvisoryLockKeyPart(conversationId);
+    if (!lockKeyPart) {
+        return await task({ lockWaitMs: 0, mode: 'invalid_key' });
+    }
+
+    let client = null;
+    let lockAcquired = false;
+    let lockMode = 'fallback';
+    let lockWaitMs = 0;
+    const lockStartedAtMs = Date.now();
+
+    try {
+        try {
+            const database = getDatabase();
+            client = await database.connect();
+            await client.query('SELECT pg_advisory_lock($1, $2)', [
+                FLOW_INBOUND_POSTGRES_LOCK_NAMESPACE,
+                lockKeyPart
+            ]);
+            lockAcquired = true;
+            lockMode = 'postgres';
+            lockWaitMs = Date.now() - lockStartedAtMs;
+        } catch (lockError) {
+            lockWaitMs = Date.now() - lockStartedAtMs;
+            console.warn(
+                `[flow-lock] Falha ao adquirir lock Postgres da conversa ${conversationId || 'n/a'} `
+                + `(espera=${lockWaitMs}ms). Seguindo com lock local: ${lockError.message}`
+            );
+        }
+
+        return await task({
+            lockWaitMs,
+            mode: lockMode
+        });
+    } catch (error) {
+        throw error;
+    } finally {
+        if (client) {
+            if (lockAcquired) {
+                try {
+                    await client.query('SELECT pg_advisory_unlock($1, $2)', [
+                        FLOW_INBOUND_POSTGRES_LOCK_NAMESPACE,
+                        lockKeyPart
+                    ]);
+                } catch (unlockError) {
+                    console.error(
+                        `[flow-lock] Falha ao liberar lock Postgres da conversa ${conversationId || 'n/a'}:`,
+                        unlockError.message
+                    );
+                }
+            }
+            client.release();
+        }
+    }
+}
+
+async function claimIncomingMessageReceipt(options = {}) {
+    const normalizedSessionId = sanitizeSessionId(options.sessionId);
+    const normalizedMessageId = String(options.messageId || '').trim();
+    const normalizedSource = normalizeIncomingMessageReceiptSource(options.source);
+    const conversationId = Number(options.conversationId || 0) || null;
+
+    if (!normalizedSessionId || !normalizedMessageId || !USE_POSTGRES) {
+        return { acquired: true, token: '', reason: 'skipped' };
+    }
+
+    const lockToken = crypto.randomBytes(12).toString('hex');
+    const lockedUntilIso = new Date(Date.now() + INCOMING_MESSAGE_RECEIPT_LEASE_MS).toISOString();
+
+    try {
+        const receipt = await queryOne(`
+            INSERT INTO incoming_message_receipts (
+                session_id,
+                message_id,
+                source,
+                status,
+                lock_token,
+                locked_until,
+                conversation_id,
+                updated_at
+            )
+            VALUES (?, ?, ?, 'processing', ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT (session_id, message_id) DO UPDATE
+            SET
+                source = COALESCE(EXCLUDED.source, incoming_message_receipts.source),
+                conversation_id = COALESCE(EXCLUDED.conversation_id, incoming_message_receipts.conversation_id),
+                updated_at = CURRENT_TIMESTAMP,
+                status = CASE
+                    WHEN incoming_message_receipts.status = 'processed' THEN 'processed'
+                    WHEN incoming_message_receipts.locked_until IS NULL THEN 'processing'
+                    WHEN incoming_message_receipts.locked_until <= CURRENT_TIMESTAMP THEN 'processing'
+                    ELSE incoming_message_receipts.status
+                END,
+                lock_token = CASE
+                    WHEN incoming_message_receipts.status = 'processed' THEN incoming_message_receipts.lock_token
+                    WHEN incoming_message_receipts.locked_until IS NULL THEN EXCLUDED.lock_token
+                    WHEN incoming_message_receipts.locked_until <= CURRENT_TIMESTAMP THEN EXCLUDED.lock_token
+                    ELSE incoming_message_receipts.lock_token
+                END,
+                locked_until = CASE
+                    WHEN incoming_message_receipts.status = 'processed' THEN incoming_message_receipts.locked_until
+                    WHEN incoming_message_receipts.locked_until IS NULL THEN EXCLUDED.locked_until
+                    WHEN incoming_message_receipts.locked_until <= CURRENT_TIMESTAMP THEN EXCLUDED.locked_until
+                    ELSE incoming_message_receipts.locked_until
+                END
+            RETURNING id, status, lock_token, processed_at
+        `, [
+            normalizedSessionId,
+            normalizedMessageId,
+            normalizedSource,
+            lockToken,
+            lockedUntilIso,
+            conversationId
+        ]);
+
+        const status = String(receipt?.status || '').trim().toLowerCase();
+        const receiptToken = String(receipt?.lock_token || '').trim();
+
+        if (status === 'processed') {
+            return { acquired: false, token: '', reason: 'already_processed' };
+        }
+        if (receiptToken !== lockToken) {
+            return { acquired: false, token: '', reason: 'in_progress' };
+        }
+
+        return { acquired: true, token: lockToken, reason: 'claimed' };
+    } catch (error) {
+        console.warn(
+            `[flow-idempotency] Falha ao registrar receipt para ${normalizedSessionId}:${normalizedMessageId}. `
+            + `Seguindo em modo local: ${error.message}`
+        );
+        return { acquired: true, token: '', reason: 'fallback_local' };
+    }
+}
+
+async function completeIncomingMessageReceipt(options = {}) {
+    const normalizedSessionId = sanitizeSessionId(options.sessionId);
+    const normalizedMessageId = String(options.messageId || '').trim();
+    const lockToken = String(options.lockToken || '').trim();
+    const conversationId = Number(options.conversationId || 0) || null;
+
+    if (!normalizedSessionId || !normalizedMessageId || !lockToken || !USE_POSTGRES) return;
+
+    await run(`
+        UPDATE incoming_message_receipts
+        SET
+            status = 'processed',
+            processed_at = COALESCE(processed_at, CURRENT_TIMESTAMP),
+            lock_token = NULL,
+            locked_until = NULL,
+            error_message = NULL,
+            conversation_id = COALESCE(?, conversation_id),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE session_id = ?
+          AND message_id = ?
+          AND lock_token = ?
+    `, [conversationId, normalizedSessionId, normalizedMessageId, lockToken]);
+}
+
+async function releaseIncomingMessageReceipt(options = {}) {
+    const normalizedSessionId = sanitizeSessionId(options.sessionId);
+    const normalizedMessageId = String(options.messageId || '').trim();
+    const lockToken = String(options.lockToken || '').trim();
+    const reason = String(options.reason || '').trim().slice(0, 500) || null;
+
+    if (!normalizedSessionId || !normalizedMessageId || !lockToken || !USE_POSTGRES) return;
+
+    await run(`
+        UPDATE incoming_message_receipts
+        SET
+            status = 'pending',
+            lock_token = NULL,
+            locked_until = NULL,
+            processed_at = NULL,
+            error_message = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE session_id = ?
+          AND message_id = ?
+          AND lock_token = ?
+          AND status <> 'processed'
+    `, [reason, normalizedSessionId, normalizedMessageId, lockToken]);
+}
+
+async function cleanupIncomingMessageReceipts(options = {}) {
+    if (!USE_POSTGRES) return { deleted: 0, skipped: 'not_postgres' };
+    if (incomingMessageReceiptsCleanupInFlight) return { deleted: 0, skipped: 'in_flight' };
+
+    const force = options.force === true;
+    const now = Date.now();
+    if (!force && (now - incomingMessageReceiptsLastCleanupAtMs) < INCOMING_MESSAGE_RECEIPTS_CLEANUP_INTERVAL_MS) {
+        return { deleted: 0, skipped: 'interval' };
+    }
+
+    incomingMessageReceiptsCleanupInFlight = true;
+    incomingMessageReceiptsLastCleanupAtMs = now;
+    const cutoffIso = new Date(now - INCOMING_MESSAGE_RECEIPTS_RETENTION_MS).toISOString();
+
+    try {
+        const result = await run(`
+            DELETE FROM incoming_message_receipts
+            WHERE (
+                status = 'processed'
+                AND processed_at IS NOT NULL
+                AND processed_at < ?
+            )
+            OR (
+                status <> 'processed'
+                AND updated_at < ?
+            )
+        `, [cutoffIso, cutoffIso]);
+
+        const deleted = Number(result?.changes || 0) || 0;
+        if (deleted > 0) {
+            console.log(`[flow-idempotency] Cleanup incoming_message_receipts removeu ${deleted} registro(s).`);
+        }
+        return { deleted };
+    } catch (error) {
+        console.warn('[flow-idempotency] Falha ao limpar incoming_message_receipts:', error.message);
+        return { deleted: 0, skipped: 'error' };
+    } finally {
+        incomingMessageReceiptsCleanupInFlight = false;
+    }
+}
+
 function logFlowInboundTelemetry(payload = {}) {
     const totalMs = Math.max(0, Math.round(Number(payload.totalMs || 0) || 0));
     if (!FLOW_INBOUND_TELEMETRY_ENABLED && totalMs < FLOW_INBOUND_TELEMETRY_SLOW_MS) {
@@ -9263,6 +9545,10 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
     const idempotencyKey = buildIncomingMessageIdempotencyKey(sessionId, incomingMessageId);
     let shouldRememberProcessedMessage = false;
     let releaseIncomingMessageLock = null;
+    let incomingReceiptLockToken = '';
+    let incomingReceiptClaimed = false;
+    let processingFailed = false;
+    let processingErrorMessage = '';
 
     if (idempotencyKey) {
         const now = Date.now();
@@ -9314,6 +9600,24 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         const sessionPhone = getSessionPhone(sessionId);
         const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
         registerMessageJidAliases(msg, sessionPhone);
+
+        if (idempotencyKey) {
+            const receiptClaim = await claimIncomingMessageReceipt({
+                sessionId,
+                messageId: incomingMessageId,
+                source: messageSource
+            });
+
+            if (!receiptClaim.acquired) {
+                if (receiptClaim.reason === 'already_processed') {
+                    shouldRememberProcessedMessage = true;
+                }
+                return;
+            }
+
+            incomingReceiptLockToken = String(receiptClaim.token || '').trim();
+            incomingReceiptClaimed = Boolean(incomingReceiptLockToken);
+        }
 
     const fromRaw = msg.key.remoteJid;
     const fromRawNormalized = normalizeUserJidCandidate(fromRaw) || fromRaw;
@@ -9780,72 +10084,107 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 
         if (!skipInboundAutomation) {
             await runInboundAutomationSerialized(conversation.id, async () => {
-                const automationStartedAtMs = Date.now();
-                console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
+                await runWithConversationPostgresLock(conversation.id, async (lockContext = {}) => {
+                    inboundLockWaitMs += Math.max(0, Number(lockContext?.lockWaitMs || 0) || 0);
+                    const automationStartedAtMs = Date.now();
+                    console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
 
-                const businessHoursSettings = await getBusinessHoursSettings(sessionOwnerUserId || null, false, sessionId);
-                const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
+                    const businessHoursSettings = await getBusinessHoursSettings(sessionOwnerUserId || null, false, sessionId);
+                    const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
 
-                if (isOutsideBusinessHours && !isSelfChat) {
-                    outsideBusinessHoursBypass = true;
-                    const autoReplyText = String(businessHoursSettings.autoReplyMessage || '').trim();
+                    if (isOutsideBusinessHours && !isSelfChat) {
+                        outsideBusinessHoursBypass = true;
+                        const autoReplyText = String(businessHoursSettings.autoReplyMessage || '').trim();
 
-                    if (autoReplyText && shouldSendOutsideHoursAutoReply(conversation.id)) {
-                        try {
-                            await sendMessage(sessionId, phone, autoReplyText, 'text', {
-                                conversationId: conversation.id
-                            });
-                            markOutsideHoursAutoReplySent(conversation.id);
-                        } catch (autoReplyError) {
-                            console.error(`[${sessionId}] Erro ao enviar resposta fora do horario:`, autoReplyError.message);
+                        if (autoReplyText && shouldSendOutsideHoursAutoReply(conversation.id)) {
+                            try {
+                                await sendMessage(sessionId, phone, autoReplyText, 'text', {
+                                    conversationId: conversation.id
+                                });
+                                markOutsideHoursAutoReplySent(conversation.id);
+                            } catch (autoReplyError) {
+                                console.error(`[${sessionId}] Erro ao enviar resposta fora do horario:`, autoReplyError.message);
+                            }
                         }
+
+                        return;
                     }
 
-                    return;
-                }
+                    // Processar fluxo de automacao
+                    if (conversation.is_bot_active) {
+                        const flowStartedAtMs = Date.now();
+                        conversation.created = convCreated;
 
-                // Processar fluxo de automacao
-                if (conversation.is_bot_active) {
-                    const flowStartedAtMs = Date.now();
-                    conversation.created = convCreated;
+                        await flowService.processIncomingMessage(
+                            {
+                                text,
+                                mediaType,
+                                selectionId: interactiveSelection?.id || '',
+                                selectionText: interactiveSelection?.text || ''
+                            },
+                            lead,
+                            conversation
+                        );
+                        flowProcessingDurationMs += Date.now() - flowStartedAtMs;
+                    }
 
-                    await flowService.processIncomingMessage(
-                        {
-                            text,
-                            mediaType,
-                            selectionId: interactiveSelection?.id || '',
-                            selectionText: interactiveSelection?.text || ''
-                        },
+                    const automationsStartedAtMs = Date.now();
+                    await scheduleAutomations({
+                        event: AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED,
+                        sessionId,
+                        text,
+                        mediaType,
                         lead,
-                        conversation
-                    );
-                    flowProcessingDurationMs += Date.now() - flowStartedAtMs;
-                }
-
-                const automationsStartedAtMs = Date.now();
-                await scheduleAutomations({
-                    event: AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED,
-                    sessionId,
-                    text,
-                    mediaType,
-                    lead,
-                    conversation,
-                    messageTimestampMs: Date.parse(messageTimestampIso) || Date.now(),
-                    leadCreated,
-                    conversationCreated: convCreated
+                        conversation,
+                        messageTimestampMs: Date.parse(messageTimestampIso) || Date.now(),
+                        leadCreated,
+                        conversationCreated: convCreated
+                    });
+                    automationsSchedulingDurationMs += Date.now() - automationsStartedAtMs;
+                    const automationTotalMs = Date.now() - automationStartedAtMs;
+                    if (!FLOW_INBOUND_TELEMETRY_ENABLED && automationTotalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
+                        console.warn(
+                            `[flow-telemetry][slow] session=${sessionId} conversation=${conversation.id} `
+                            + `message=${incomingMessageId || 'n/a'} scope=automation total_ms=${automationTotalMs}`
+                        );
+                    }
                 });
-                automationsSchedulingDurationMs += Date.now() - automationsStartedAtMs;
-                const automationTotalMs = Date.now() - automationStartedAtMs;
-                if (!FLOW_INBOUND_TELEMETRY_ENABLED && automationTotalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
-                    console.warn(
-                        `[flow-telemetry][slow] session=${sessionId} conversation=${conversation.id} `
-                        + `message=${incomingMessageId || 'n/a'} scope=automation total_ms=${automationTotalMs}`
-                    );
-                }
             });
         }
     }
+    } catch (error) {
+        processingFailed = true;
+        processingErrorMessage = String(error?.message || error || '').trim();
+        throw error;
     } finally {
+        if (incomingReceiptClaimed && incomingReceiptLockToken) {
+            try {
+                if (shouldRememberProcessedMessage) {
+                    await completeIncomingMessageReceipt({
+                        sessionId,
+                        messageId: incomingMessageId,
+                        lockToken: incomingReceiptLockToken,
+                        conversationId: inboundTelemetryConversationId || null
+                    });
+                    cleanupIncomingMessageReceipts().catch(() => null);
+                } else {
+                    await releaseIncomingMessageReceipt({
+                        sessionId,
+                        messageId: incomingMessageId,
+                        lockToken: incomingReceiptLockToken,
+                        reason: processingFailed
+                            ? (processingErrorMessage || 'process_failed')
+                            : 'not_persisted'
+                    });
+                }
+            } catch (receiptFinalizeError) {
+                console.warn(
+                    `[flow-idempotency] Falha ao finalizar receipt ${sessionId}:${incomingMessageId || 'n/a'}:`,
+                    receiptFinalizeError.message
+                );
+            }
+        }
+
         if (idempotencyKey && shouldRememberProcessedMessage) {
             rememberProcessedIncomingMessageKey(idempotencyKey);
         }

@@ -265,6 +265,22 @@ CREATE TABLE IF NOT EXISTS api_rate_limits (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS incoming_message_receipts (
+    id SERIAL PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    source TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'processed')),
+    lock_token TEXT,
+    locked_until TIMESTAMPTZ,
+    conversation_id INTEGER REFERENCES conversations(id),
+    processed_at TIMESTAMPTZ,
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (session_id, message_id)
+);
+
 CREATE TABLE IF NOT EXISTS webhooks (
     id SERIAL PRIMARY KEY,
     uuid TEXT UNIQUE NOT NULL,
@@ -604,6 +620,11 @@ CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority DESC);
 CREATE INDEX IF NOT EXISTS idx_queue_campaign ON message_queue(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_queue_session ON message_queue(session_id);
 CREATE INDEX IF NOT EXISTS idx_api_rate_limits_reset ON api_rate_limits(reset_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_status ON incoming_message_receipts(status);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_locked_until ON incoming_message_receipts(locked_until);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_processed_at ON incoming_message_receipts(processed_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_updated_at ON incoming_message_receipts(updated_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_conversation ON incoming_message_receipts(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_status ON webhook_delivery_queue(status);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_next_attempt ON webhook_delivery_queue(next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_webhook ON webhook_delivery_queue(webhook_id);
