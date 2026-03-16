@@ -1409,6 +1409,11 @@
             align-items: start;
         }
 
+        .pain-grid {
+            grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
+            gap: 18px;
+        }
+
         .pain-surface,
         .method-board,
         .positioning-rail,
@@ -1454,14 +1459,15 @@
 
         .pain-visual {
             width: 100%;
-            max-width: 640px;
+            max-width: 620px;
             justify-self: end;
-            align-self: center;
+            align-self: start;
             padding: 0;
             border: none;
             background: none;
             box-shadow: none;
             backdrop-filter: none;
+            margin-top: -20px;
         }
 
         .pain-visual:hover {
@@ -1470,13 +1476,14 @@
             transform: none;
         }
 
-        .pain-visual > :not(.pain-visual-media):not(.pain-visual-note) {
+        .pain-visual > :not(.pain-visual-media) {
             display: none;
         }
 
         .pain-visual-media {
             position: relative;
             width: 100%;
+            margin-left: -18px;
         }
 
         .pain-visual-media::before {
@@ -1655,11 +1662,6 @@
             width: 100%;
             height: auto;
             filter: drop-shadow(0 28px 54px rgba(0, 0, 0, 0.36));
-        }
-
-        .pain-visual-note {
-            margin-top: 18px;
-            max-width: 30rem;
         }
 
         .practical-grid,
@@ -2390,6 +2392,7 @@
             .pain-visual {
                 max-width: none;
                 justify-self: center;
+                margin-top: 0;
             }
 
             .pain-visual-media {
@@ -2467,14 +2470,12 @@
             .pain-visual {
                 padding: 0;
                 border-radius: 0;
+                margin-top: 0;
             }
 
             .pain-visual-media {
                 max-width: 100%;
-            }
-
-            .pain-visual-note {
-                margin-top: 14px;
+                margin-left: 0;
             }
 
             .practical-grid,
@@ -4675,7 +4676,6 @@
                             </div>
                         </div>
                     </div>
-                    <p class="story-mini-note pain-visual-note">Imagem aplicada na landing para representar, de forma direta, os gargalos que travam prioridade, velocidade e continuidade no WhatsApp.</p>
                     <span class="surface-tag">Quando tudo depende da memória do time</span>
                     <h3>Os gargalos que mais custam vendas no dia a dia</h3>
                     <ul class="signal-list">
