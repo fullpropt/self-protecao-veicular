@@ -1308,6 +1308,10 @@
             margin-top: 84px;
         }
 
+        .post-video-flow .pain-block + .story-block {
+            margin-top: 40px;
+        }
+
         .story-block[id],
         .post-cta-section#precos,
         .post-faq-section,
@@ -1484,6 +1488,7 @@
             position: relative;
             width: 100%;
             margin-left: -18px;
+            overflow: hidden;
         }
 
         .pain-visual-media::before {
@@ -1661,6 +1666,8 @@
             display: block;
             width: 100%;
             height: auto;
+            transform: translateY(-10px);
+            margin-bottom: clamp(-380px, -26vw, -260px);
             filter: drop-shadow(0 28px 54px rgba(0, 0, 0, 0.36));
         }
 
@@ -2400,6 +2407,10 @@
                 margin: 0 auto;
             }
 
+            .pain-visual-image {
+                margin-bottom: clamp(-280px, -24vw, -170px);
+            }
+
             .practical-grid,
             .benefit-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2419,6 +2430,10 @@
             .post-video-flow .post-cta-section + .post-faq-section,
             .post-video-flow .post-faq-section + .post-footer {
                 margin-top: 72px;
+            }
+
+            .post-video-flow .pain-block + .story-block {
+                margin-top: 44px;
             }
         }
 
@@ -2476,6 +2491,11 @@
             .pain-visual-media {
                 max-width: 100%;
                 margin-left: 0;
+            }
+
+            .pain-visual-image {
+                transform: translateY(0);
+                margin-bottom: -140px;
             }
 
             .practical-grid,
