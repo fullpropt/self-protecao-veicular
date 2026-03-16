@@ -1607,6 +1607,10 @@ describe('FlowService intent routing compatibility', () => {
         };
 
         const getCachedSpy = jest.spyOn(service, 'getActiveExecution').mockReturnValue(cachedExecution);
+        const persistedExecutionSpy = jest.spyOn(service, 'fetchExecutionStatusRow').mockResolvedValue({
+            status: 'running',
+            current_node: ''
+        });
         const flowByIdSpy = jest.spyOn(Flow, 'findById').mockResolvedValue({
             id: 20,
             is_active: 0,
@@ -1630,6 +1634,7 @@ describe('FlowService intent routing compatibility', () => {
         expect(result).toBeNull();
 
         getCachedSpy.mockRestore();
+        persistedExecutionSpy.mockRestore();
         flowByIdSpy.mockRestore();
         endFlowSpy.mockRestore();
     });
@@ -1653,6 +1658,10 @@ describe('FlowService intent routing compatibility', () => {
         };
 
         const getCachedSpy = jest.spyOn(service, 'getActiveExecution').mockReturnValue(cachedExecution);
+        const persistedExecutionSpy = jest.spyOn(service, 'fetchExecutionStatusRow').mockResolvedValue({
+            status: 'running',
+            current_node: 'intent-node'
+        });
         const flowByIdSpy = jest.spyOn(Flow, 'findById').mockResolvedValue(refreshedFlow);
         const endFlowSpy = jest.spyOn(service, 'endFlow').mockResolvedValue(undefined);
 
@@ -1665,10 +1674,57 @@ describe('FlowService intent routing compatibility', () => {
         expect(endFlowSpy).not.toHaveBeenCalled();
         expect(result).toBe(cachedExecution);
         expect(cachedExecution.flow).toEqual(refreshedFlow);
+        expect(cachedExecution.currentNode).toBe('intent-node');
 
         getCachedSpy.mockRestore();
+        persistedExecutionSpy.mockRestore();
         flowByIdSpy.mockRestore();
         endFlowSpy.mockRestore();
+    });
+
+    test('resolveActiveExecution discards stale cached execution when persisted status is not running', async () => {
+        const service = new FlowService();
+        const cachedExecution = {
+            id: 993,
+            flow: { id: 19, is_active: 1, flow_builder_mode: 'menu', nodes: [], edges: [] },
+            lead: { id: 26, phone: '5527996459659' },
+            conversation: { id: 331, session_id: 'momnt' },
+            currentNode: 'end-node'
+        };
+
+        const restoredExecution = null;
+        const getCachedSpy = jest.spyOn(service, 'getActiveExecution').mockReturnValue(cachedExecution);
+        const persistedExecutionSpy = jest.spyOn(service, 'fetchExecutionStatusRow').mockResolvedValue({
+            status: 'cancelled',
+            current_node: 'end-node'
+        });
+        const removeSpy = jest.spyOn(service, 'removeActiveExecution').mockImplementation(() => {});
+        const restoreSpy = jest.spyOn(service, 'restoreExecutionFromStorage').mockResolvedValue(restoredExecution);
+        const flowByIdSpy = jest.spyOn(Flow, 'findById').mockResolvedValue({
+            id: 19,
+            is_active: 1,
+            flow_builder_mode: 'menu',
+            session_id: 'momnt',
+            nodes: [],
+            edges: []
+        });
+
+        const result = await service.resolveActiveExecution(
+            { id: 331, session_id: 'momnt' },
+            { id: 26, phone: '5527996459659' }
+        );
+
+        expect(persistedExecutionSpy).toHaveBeenCalledWith(993);
+        expect(removeSpy).toHaveBeenCalledWith(331);
+        expect(restoreSpy).toHaveBeenCalled();
+        expect(flowByIdSpy).not.toHaveBeenCalled();
+        expect(result).toBe(restoredExecution);
+
+        getCachedSpy.mockRestore();
+        persistedExecutionSpy.mockRestore();
+        removeSpy.mockRestore();
+        restoreSpy.mockRestore();
+        flowByIdSpy.mockRestore();
     });
 
     test('processIncomingMessage ignores active flow with inconsistent menu mode', async () => {

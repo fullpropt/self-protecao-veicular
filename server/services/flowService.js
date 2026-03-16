@@ -1042,6 +1042,25 @@ class FlowService extends EventEmitter {
             if (lead) cached.lead = lead;
             if (conversation) cached.conversation = conversation;
 
+            const cachedExecutionId = Number(cached?.id || 0);
+            const cachedConversationId = Number(conversation?.id || cached?.conversation?.id || 0);
+            if (!Number.isInteger(cachedExecutionId) || cachedExecutionId <= 0) {
+                this.removeActiveExecution(cachedConversationId || conversation?.id);
+                return this.restoreExecutionFromStorage(conversation, lead);
+            }
+
+            const persistedExecutionRow = await this.fetchExecutionStatusRow(cachedExecutionId);
+            const persistedStatus = String(persistedExecutionRow?.status || '').trim().toLowerCase();
+            if (!persistedExecutionRow || persistedStatus !== 'running') {
+                this.removeActiveExecution(cachedConversationId || conversation?.id);
+                return this.restoreExecutionFromStorage(conversation, lead);
+            }
+
+            const persistedCurrentNode = String(persistedExecutionRow?.current_node || '').trim();
+            if (persistedCurrentNode) {
+                cached.currentNode = persistedCurrentNode;
+            }
+
             const cachedFlowId = Number(cached?.flow?.id || 0);
             if (!Number.isInteger(cachedFlowId) || cachedFlowId <= 0) {
                 await this.endFlow(cached, 'failed', 'Execucao sem fluxo associado.');
@@ -1074,6 +1093,20 @@ class FlowService extends EventEmitter {
         }
 
         return this.restoreExecutionFromStorage(conversation, lead);
+    }
+
+    async fetchExecutionStatusRow(executionId) {
+        const normalizedExecutionId = Number(executionId || 0);
+        if (!Number.isInteger(normalizedExecutionId) || normalizedExecutionId <= 0) {
+            return null;
+        }
+
+        return queryOne(`
+            SELECT status, current_node
+            FROM flow_executions
+            WHERE id = ?
+            LIMIT 1
+        `, [normalizedExecutionId]);
     }
 
     ensureExecutionVariables(execution) {
