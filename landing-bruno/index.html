@@ -1309,7 +1309,7 @@
         }
 
         .post-video-flow .pain-block + .story-block {
-            margin-top: 40px;
+            margin-top: -128px;
         }
 
         .story-block[id],
@@ -1471,7 +1471,7 @@
             background: none;
             box-shadow: none;
             backdrop-filter: none;
-            margin-top: -20px;
+            margin-top: -40px;
         }
 
         .pain-visual:hover {
@@ -1488,7 +1488,6 @@
             position: relative;
             width: 100%;
             margin-left: -18px;
-            overflow: hidden;
         }
 
         .pain-visual-media::before {
@@ -1666,8 +1665,7 @@
             display: block;
             width: 100%;
             height: auto;
-            transform: translateY(-10px);
-            margin-bottom: clamp(-380px, -26vw, -260px);
+            transform: translateY(-24px);
             filter: drop-shadow(0 28px 54px rgba(0, 0, 0, 0.36));
         }
 
@@ -1881,7 +1879,7 @@
         .compare-points li {
             position: relative;
             display: grid;
-            grid-template-columns: auto minmax(0, 1fr) auto;
+            grid-template-columns: auto minmax(0, 1fr);
             align-items: center;
             gap: 14px;
             padding: 14px 16px;
@@ -1940,16 +1938,7 @@
         }
 
         .compare-item-note {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 0.68rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            white-space: nowrap;
+            display: none;
         }
 
         .compare-before li::before {
@@ -2408,7 +2397,7 @@
             }
 
             .pain-visual-image {
-                margin-bottom: clamp(-280px, -24vw, -170px);
+                transform: translateY(-14px);
             }
 
             .practical-grid,
@@ -2433,7 +2422,7 @@
             }
 
             .post-video-flow .pain-block + .story-block {
-                margin-top: 44px;
+                margin-top: -56px;
             }
         }
 
@@ -2495,7 +2484,6 @@
 
             .pain-visual-image {
                 transform: translateY(0);
-                margin-bottom: -140px;
             }
 
             .practical-grid,
