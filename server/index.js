@@ -9618,12 +9618,6 @@ function normalizeButtonUrlForSend(value) {
     }
 }
 
-function isTruthyEnvFlag(value, fallback = false) {
-    if (value === undefined || value === null || value === '') return fallback;
-    const normalized = String(value).trim().toLowerCase();
-    return normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'yes';
-}
-
 function buildInlineListFallbackText(description = '', sections = []) {
     const prompt = String(description || '').trim() || 'Escolha uma opcao no menu abaixo:';
     const lines = [prompt, ''];
@@ -9645,87 +9639,6 @@ function buildInlineListFallbackText(description = '', sections = []) {
     }
 
     return lines.join('\n').trim();
-}
-
-function buildReliableListDescription(description = '', sections = []) {
-    const normalizedDescription = normalizeText(String(description || '').trim());
-    const fallbackText = buildInlineListFallbackText(
-        normalizedDescription || 'Escolha uma opcao no menu abaixo:',
-        sections
-    );
-
-    if (!normalizedDescription) {
-        return fallbackText;
-    }
-
-    const hasInlineOptions = /(?:^|\n)\s*\d+\.\s+\S+/.test(normalizedDescription);
-    const hasNumericHint = /responda com o numero da opcao/i.test(normalizedDescription);
-    if (hasInlineOptions && hasNumericHint) {
-        return normalizedDescription;
-    }
-
-    return fallbackText;
-}
-
-async function sendListMessageWithNativeRelay(session, jid, {
-    description = '',
-    title = '',
-    footer = '',
-    buttonText = 'Ver Menu',
-    sections = []
-} = {}) {
-    const baileys = await baileysLoader.getBaileys();
-    const listTypeSingleSelect = baileys?.proto?.Message?.ListMessage?.ListType?.SINGLE_SELECT || 1;
-
-    const normalizedSections = (Array.isArray(sections) ? sections : [])
-        .map((section, sectionIndex) => {
-            const rows = (Array.isArray(section?.rows) ? section.rows : [])
-                .map((row, rowIndex) => {
-                    const rowTitle = String(row?.title || '').trim();
-                    if (!rowTitle) return null;
-
-                    const rowId = String(row?.rowId || row?.id || '').trim() || `option-${sectionIndex + 1}-${rowIndex + 1}`;
-                    const rowDescription = String(row?.description || '').trim();
-
-                    return {
-                        title: rowTitle,
-                        rowId,
-                        description: rowDescription || undefined
-                    };
-                })
-                .filter(Boolean);
-
-            if (rows.length === 0) return null;
-
-            return {
-                title: String(section?.title || '').trim() || `Opcoes ${sectionIndex + 1}`,
-                rows
-            };
-        })
-        .filter(Boolean);
-
-    if (normalizedSections.length === 0) {
-        throw new Error('Mensagem de menu sem opcoes validas');
-    }
-
-    const outboundMessage = baileys.generateWAMessageFromContent(jid, {
-        listMessage: {
-            title: title || undefined,
-            description: description || 'Selecione uma opcao:',
-            buttonText: buttonText || 'Ver Menu',
-            footerText: footer || undefined,
-            listType: listTypeSingleSelect,
-            sections: normalizedSections
-        }
-    }, {
-        userJid: session?.socket?.user?.id || undefined
-    });
-
-    await session.socket.relayMessage(jid, outboundMessage.message, {
-        messageId: outboundMessage.key.id
-    });
-
-    return outboundMessage;
 }
 
 /**
@@ -9833,6 +9746,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     const renderedTextMessage = isTextLikeMessage
         ? applyLeadTemplate(message, lead, { mensagem: message || '' })
         : message;
+    let persistedTextMessage = renderedTextMessage;
     const renderedCaption = !isTextLikeMessage && String(options.caption || '').trim()
         ? applyLeadTemplate(options.caption || '', lead, { mensagem: options.caption || '' })
         : (options.caption || '');
@@ -9853,54 +9767,12 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
                 throw new Error('Mensagem de menu sem opcoes validas');
             }
 
-            const listButtonTextRaw = String(options.listButtonText || options.buttonText || '').trim();
-            const listButtonText = listButtonTextRaw
-                ? applyLeadTemplate(listButtonTextRaw, lead, { mensagem: listButtonTextRaw })
-                : 'Ver Menu';
-            const listTitleRaw = String(options.listTitle || options.title || '').trim();
-            const listFooterRaw = String(options.listFooter || options.footer || '').trim();
-            const listTitle = listTitleRaw
-                ? applyLeadTemplate(listTitleRaw, lead, { mensagem: renderedTextMessage || listTitleRaw })
-                : '';
-            const listFooter = listFooterRaw
-                ? applyLeadTemplate(listFooterRaw, lead, { mensagem: renderedTextMessage || listFooterRaw })
-                : '';
             const fallbackText = buildInlineListFallbackText(
                 renderedTextMessage || 'Selecione uma opcao:',
                 sections
             );
-            const reliableDescription = buildReliableListDescription(
-                renderedTextMessage || 'Selecione uma opcao:',
-                sections
-            );
-            const interactiveListEnabled = isTruthyEnvFlag(
-                process.env.WHATSAPP_INTERACTIVE_LIST_ENABLED,
-                false
-            );
-
-            if (!interactiveListEnabled) {
-                result = await session.socket.sendMessage(jid, {
-                    text: fallbackText
-                });
-            } else {
-                try {
-                    result = await sendListMessageWithNativeRelay(session, jid, {
-                        description: reliableDescription,
-                        title: listTitle,
-                        footer: listFooter,
-                        buttonText: listButtonText,
-                        sections
-                    });
-                } catch (nativeListError) {
-                    console.warn(
-                        `[${sessionId}] Falha no envio de lista nativa (${nativeListError.message}). `
-                        + 'Aplicando fallback de texto com opcoes.'
-                    );
-                    result = await session.socket.sendMessage(jid, {
-                        text: fallbackText
-                    });
-                }
-            }
+            result = await session.socket.sendMessage(jid, { text: fallbackText });
+            persistedTextMessage = fallbackText;
 
         } else if (normalizedType === 'button_url') {
             const buttonTextRaw = String(options.buttonText || options.listButtonText || '').trim();
@@ -10070,9 +9942,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             sender_type: 'agent',
 
-            content: isTextLikeMessage ? renderedTextMessage : (renderedCaption || ''),
+            content: isTextLikeMessage ? persistedTextMessage : (renderedCaption || ''),
 
-            content_encrypted: encryptMessage(isTextLikeMessage ? renderedTextMessage : (renderedCaption || '')),
+            content_encrypted: encryptMessage(isTextLikeMessage ? persistedTextMessage : (renderedCaption || '')),
 
             media_type: persistedMediaType,
 
@@ -10120,7 +9992,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         to,
 
-        content: isTextLikeMessage ? renderedTextMessage : (renderedCaption || ''),
+        content: isTextLikeMessage ? persistedTextMessage : (renderedCaption || ''),
 
         type: normalizedType
 
@@ -10242,10 +10114,10 @@ function sessionExists(sessionId) {
             normalizedLeadId = Number(conversationRow?.lead_id || 0);
         }
 
-        const mediaType = String(options?.mediaType || options?.media_type || 'text').trim().toLowerCase() || 'text';
-        const content = String(options?.content || '');
+        let mediaType = String(options?.mediaType || options?.media_type || 'text').trim().toLowerCase() || 'text';
+        let content = String(options?.content || '');
         const mediaUrl = options?.mediaUrl || options?.url || null;
-        const listSections = Array.isArray(options?.listSections)
+        let listSections = Array.isArray(options?.listSections)
             ? options.listSections
             : (Array.isArray(options?.sections) ? options.sections : []);
         const listButtonText = String(options?.listButtonText || options?.buttonText || '').trim();
@@ -10254,6 +10126,16 @@ function sessionExists(sessionId) {
         const buttonUrl = String(options?.buttonUrl || options?.url || '').trim();
         const buttonTitle = String(options?.buttonTitle || options?.title || '').trim();
         const buttonFooter = String(options?.buttonFooter || options?.footer || '').trim();
+
+        if (mediaType === 'list') {
+            content = buildInlineListFallbackText(
+                content || 'Escolha uma opcao no menu abaixo:',
+                listSections
+            );
+            mediaType = 'text';
+            listSections = [];
+        }
+
         const isInteractiveDirectMessage = mediaType === 'list' || mediaType === 'button_url';
         const normalizedFlowId = Number(options?.flowId || options?.flow_id || 0);
         const shouldBypassQueueForFlow = Boolean(
