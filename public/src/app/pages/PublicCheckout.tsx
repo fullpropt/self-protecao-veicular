@@ -22,13 +22,8 @@ type CheckoutPlan = {
 };
 
 type CheckoutFormValues = {
-  fullName: string;
   email: string;
   whatsapp: string;
-  companyName: string;
-  primaryObjective: string;
-  documentType: 'cpf' | 'cnpj';
-  documentNumber: string;
   cardHolderName: string;
   cardNumber: string;
   cardExpiry: string;
@@ -67,8 +62,8 @@ const PLAN_CATALOG: Record<string, CheckoutPlan> = {
     name: 'Premium',
     amountCents: 19700,
     trialDays: 7,
-    accent: '#cfd7e6',
-    accentSoft: 'rgba(207, 215, 230, 0.16)',
+    accent: '#00ffa3',
+    accentSoft: 'rgba(0, 255, 163, 0.12)',
     summary: '3 conexões WhatsApp, contatos ilimitados e 7 dias grátis para ativar sem cobrança do plano hoje.',
     bullets: ['3 conexões WhatsApp', 'Contatos ilimitados', '7 dias grátis']
   },
@@ -124,26 +119,8 @@ function formatCurrencyBRL(amountCents: number) {
   }).format((Number(amountCents || 0) || 0) / 100);
 }
 
-function formatDocumentInput(value: string, documentType: 'cpf' | 'cnpj') {
-  const digits = digitsOnly(value);
-  if (documentType === 'cnpj') {
-    const normalized = digits.slice(0, 14);
-    if (normalized.length <= 2) return normalized;
-    if (normalized.length <= 5) return `${normalized.slice(0, 2)}.${normalized.slice(2)}`;
-    if (normalized.length <= 8) return `${normalized.slice(0, 2)}.${normalized.slice(2, 5)}.${normalized.slice(5)}`;
-    if (normalized.length <= 12) return `${normalized.slice(0, 2)}.${normalized.slice(2, 5)}.${normalized.slice(5, 8)}/${normalized.slice(8)}`;
-    return `${normalized.slice(0, 2)}.${normalized.slice(2, 5)}.${normalized.slice(5, 8)}/${normalized.slice(8, 12)}-${normalized.slice(12)}`;
-  }
-
-  const normalized = digits.slice(0, 11);
-  if (normalized.length <= 3) return normalized;
-  if (normalized.length <= 6) return `${normalized.slice(0, 3)}.${normalized.slice(3)}`;
-  if (normalized.length <= 9) return `${normalized.slice(0, 3)}.${normalized.slice(3, 6)}.${normalized.slice(6)}`;
-  return `${normalized.slice(0, 3)}.${normalized.slice(3, 6)}.${normalized.slice(6, 9)}-${normalized.slice(9)}`;
-}
-
 function formatCardNumber(value: string) {
-  return digitsOnly(value).slice(0, 19).replace(/(.{4})/g, '$1 ').trim();
+  return digitsOnly(value).slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
 }
 
 function formatCardExpiry(value: string) {
@@ -166,22 +143,22 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim().toLowerCase());
 }
 
+function detectCardBrand(number: string): string {
+  const d = digitsOnly(number);
+  if (/^4/.test(d)) return 'visa';
+  if (/^5[1-5]/.test(d) || /^2[2-7]/.test(d)) return 'mastercard';
+  if (/^3[47]/.test(d)) return 'amex';
+  if (/^6(?:011|5)/.test(d)) return 'elo';
+  return '';
+}
+
 function validateForm(values: CheckoutFormValues) {
   const errors: Partial<Record<keyof CheckoutFormValues, string>> = {};
 
-  if (String(values.fullName || '').trim().length < 3) errors.fullName = 'Informe seu nome completo.';
   if (!isValidEmail(values.email)) errors.email = 'Informe um e-mail válido.';
-  if (digitsOnly(values.whatsapp).length < 10) errors.whatsapp = 'Informe um telefone com DDD.';
-
-  const documentDigits = digitsOnly(values.documentNumber);
-  if (values.documentType === 'cnpj') {
-    if (documentDigits.length !== 14) errors.documentNumber = 'Informe um CNPJ válido.';
-  } else if (documentDigits.length !== 11) {
-    errors.documentNumber = 'Informe um CPF válido.';
-  }
-
-  if (String(values.cardHolderName || '').trim().length < 3) errors.cardHolderName = 'Informe o nome do cartão.';
-  if (digitsOnly(values.cardNumber).length < 13) errors.cardNumber = 'Número do cartão inválido.';
+  if (digitsOnly(values.whatsapp).length < 10) errors.whatsapp = 'Informe o WhatsApp com DDD.';
+  if (String(values.cardHolderName || '').trim().length < 3) errors.cardHolderName = 'Nome igual ao do cartão.';
+  if (digitsOnly(values.cardNumber).length < 13) errors.cardNumber = 'Número inválido.';
   if (!parseExpiryParts(values.cardExpiry).month) errors.cardExpiry = 'Validade inválida.';
   if (digitsOnly(values.cardCvv).length < 3) errors.cardCvv = 'CVV inválido.';
 
@@ -202,8 +179,8 @@ function resolveInitialValues(planKey: string, search: string) {
     fullName: getFieldFromSearch(search, ['prefill_name', 'name']),
     email: getFieldFromSearch(search, ['prefill_email', 'email']),
     whatsapp: getFieldFromSearch(search, ['prefill_whatsapp', 'whatsapp', 'phone']),
-    companyName: getFieldFromSearch(search, ['prefill_company_name', 'company_name']),
-    primaryObjective: getFieldFromSearch(search, ['prefill_objective', 'objective'])
+    companyName: '',
+    primaryObjective: ''
   });
 
   const leadCaptureIdRaw = Number(getFieldFromSearch(search, ['lead_capture_id', 'leadCaptureId']));
@@ -216,13 +193,8 @@ function resolveInitialValues(planKey: string, search: string) {
 
   return {
     values: {
-      fullName: resolved.fullName,
       email: resolved.email,
       whatsapp: resolved.whatsapp,
-      companyName: resolved.companyName,
-      primaryObjective: resolved.primaryObjective,
-      documentType: 'cpf' as const,
-      documentNumber: '',
       cardHolderName: resolved.fullName,
       cardNumber: '',
       cardExpiry: '',
@@ -283,18 +255,42 @@ function Field({
   label,
   error,
   full = false,
+  half = false,
   children
 }: {
   label: string;
   error?: string;
   full?: boolean;
+  half?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={`public-checkout-field ${full ? 'full' : ''} ${error ? 'has-error' : ''}`}>
+    <div className={`pco-field ${full ? 'full' : ''} ${half ? 'half' : ''} ${error ? 'has-error' : ''}`}>
       <label>{label}</label>
       {children}
       {error ? <small>{error}</small> : null}
+    </div>
+  );
+}
+
+// Minimalist card preview component
+function CardPreview({ values }: { values: CheckoutFormValues }) {
+  const brand = detectCardBrand(values.cardNumber);
+  const displayNumber = values.cardNumber
+    ? values.cardNumber.replace(/\s/g, '').padEnd(16, '•').replace(/(.{4})/g, '$1 ').trim()
+    : '•••• •••• •••• ••••';
+  const displayExpiry = values.cardExpiry || 'MM/AA';
+  const displayName = values.cardHolderName || 'SEU NOME';
+
+  return (
+    <div className="pco-card-preview">
+      <div className="pco-card-chip" />
+      <div className="pco-card-number">{displayNumber}</div>
+      <div className="pco-card-bottom">
+        <span className="pco-card-holder">{displayName.toUpperCase().slice(0, 22)}</span>
+        <span className="pco-card-expiry">{displayExpiry}</span>
+      </div>
+      {brand && <div className={`pco-card-brand pco-card-brand--${brand}`} />}
     </div>
   );
 }
@@ -368,11 +364,6 @@ export default function PublicCheckout() {
     setValues((current) => {
       if (field === 'email') return { ...current, email: String(nextValue || '').trim().toLowerCase() };
       if (field === 'whatsapp') return { ...current, whatsapp: formatPreCheckoutWhatsappInput(nextValue) };
-      if (field === 'documentType') {
-        const nextType = nextValue === 'cnpj' ? 'cnpj' : 'cpf';
-        return { ...current, documentType: nextType, documentNumber: formatDocumentInput(current.documentNumber, nextType) };
-      }
-      if (field === 'documentNumber') return { ...current, documentNumber: formatDocumentInput(nextValue, current.documentType) };
       if (field === 'cardNumber') return { ...current, cardNumber: formatCardNumber(nextValue) };
       if (field === 'cardExpiry') return { ...current, cardExpiry: formatCardExpiry(nextValue) };
       if (field === 'cardCvv') return { ...current, cardCvv: digitsOnly(nextValue).slice(0, 4) };
@@ -385,7 +376,7 @@ export default function PublicCheckout() {
     if (isSubmitting) return;
 
     if (Object.keys(validationErrors).length > 0) {
-      setSubmitError('Revise os campos destacados antes de continuar.');
+      setSubmitError('Revise os campos antes de continuar.');
       return;
     }
 
@@ -400,13 +391,13 @@ export default function PublicCheckout() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fullName: values.fullName,
+          fullName: values.cardHolderName,
           email: values.email,
           whatsapp: extractWhatsappDigits(values.whatsapp),
-          companyName: values.companyName,
-          primaryObjective: values.primaryObjective,
-          documentType: values.documentType,
-          documentNumber: digitsOnly(values.documentNumber),
+          companyName: '',
+          primaryObjective: '',
+          documentType: 'cpf',
+          documentNumber: '',
           cardToken,
           ...(!cardToken ? buildCardPayload(values) : {}),
           leadCaptureId
@@ -430,104 +421,188 @@ export default function PublicCheckout() {
   const renewalLabel = effectiveTrialDays > 0
     ? `Em ${effectiveTrialDays} dias · ${formatCurrencyBRL(effectiveAmountCents)}`
     : `A cada 30 dias · ${formatCurrencyBRL(effectiveAmountCents)}`;
+  const ctaLabel = isSubmitting
+    ? 'Processando...'
+    : effectiveTrialDays > 0
+      ? `Ativar ${effectiveTrialDays} dias grátis →`
+      : 'Assinar agora →';
 
   return (
-    <div className="public-checkout-page" style={themeStyle}>
-      <div className="public-checkout-shell">
-        <a href="#/planos" className="public-checkout-brand" aria-label="Voltar para os planos">
+    <div className="pco-page" style={themeStyle}>
+      {/* Header minimalista */}
+      <header className="pco-header">
+        <a href="#/planos" className="pco-logo" aria-label="Voltar para os planos">
           <img src={brandFullLogoUrl} alt={brandName} />
         </a>
+        <div className="pco-secure-badge">
+          <span className="pco-lock">🔒</span>
+          <span>Pagamento seguro</span>
+        </div>
+      </header>
 
-        <div className="public-checkout-grid">
-          <section className="public-checkout-card">
-            <div className="public-checkout-eyebrow">Checkout seguro · {plan.name}</div>
-            <h1 className="public-checkout-title">
-              {effectiveTrialDays > 0 ? `${effectiveTrialDays} dias grátis para ativar` : 'Concluir assinatura'}
-            </h1>
-            <p className="public-checkout-copy">{plan.summary}</p>
+      <main className="pco-main">
+        {/* Coluna esquerda — Formulário */}
+        <section className="pco-form-col">
+          {/* Eyebrow */}
+          <div className="pco-eyebrow">
+            <span className="pco-plan-badge">{plan.name}</span>
+            {effectiveTrialDays > 0 && (
+              <span className="pco-trial-badge">{effectiveTrialDays} dias grátis</span>
+            )}
+          </div>
+          <h1 className="pco-title">
+            {effectiveTrialDays > 0 ? 'Ative seu teste grátis' : 'Concluir assinatura'}
+          </h1>
+          <p className="pco-subtitle">
+            {effectiveTrialDays > 0
+              ? 'Nenhuma cobrança hoje. Cancele quando quiser.'
+              : 'Preencha seus dados para ativar agora.'}
+          </p>
 
-            <div className="public-checkout-trust">
-              <div className="public-checkout-pill"><strong>Dados preservados</strong>Nome, e-mail e telefone chegam do pré-checkout.</div>
-              <div className="public-checkout-pill"><strong>Confirmação por e-mail</strong>Após a assinatura, você recebe o link para concluir o cadastro.</div>
-              <div className="public-checkout-pill"><strong>Página própria</strong>O pagamento acontece no ZapVender, sem repetir o fluxo anterior.</div>
+          <form className="pco-form" onSubmit={handleSubmit} noValidate>
+            {/* Seção: Contato */}
+            <div className="pco-section-label">Seu contato</div>
+            <div className="pco-fields-row">
+              <Field label="E-mail" error={validationErrors.email} full>
+                <input
+                  className="pco-input"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="voce@empresa.com"
+                  value={values.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                />
+              </Field>
+              <Field label="WhatsApp (com DDD)" error={validationErrors.whatsapp} full>
+                <input
+                  className="pco-input"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="(11) 99999-9999"
+                  value={values.whatsapp}
+                  onChange={(e) => handleChange('whatsapp', e.target.value)}
+                />
+              </Field>
             </div>
 
-            <form className="public-checkout-form" onSubmit={handleSubmit} noValidate>
-              <div className="public-checkout-section-title">Dados da conta</div>
-              <div className="public-checkout-form-grid">
-                <Field label="Nome completo" error={validationErrors.fullName} full>
-                  <input className="public-checkout-input" autoComplete="name" value={values.fullName} onChange={(event) => handleChange('fullName', event.target.value)} />
-                </Field>
-                <Field label="E-mail" error={validationErrors.email}>
-                  <input className="public-checkout-input" type="email" autoComplete="email" value={values.email} onChange={(event) => handleChange('email', event.target.value)} />
-                </Field>
-                <Field label="Celular com DDD" error={validationErrors.whatsapp}>
-                  <input className="public-checkout-input" type="tel" autoComplete="tel" value={values.whatsapp} onChange={(event) => handleChange('whatsapp', event.target.value)} />
-                </Field>
-                <Field label="Empresa" full>
-                  <input className="public-checkout-input" autoComplete="organization" value={values.companyName} onChange={(event) => handleChange('companyName', event.target.value)} />
-                </Field>
-                <Field label="Documento">
-                  <select className="public-checkout-select" value={values.documentType} onChange={(event) => handleChange('documentType', event.target.value)}>
-                    <option value="cpf">CPF</option>
-                    <option value="cnpj">CNPJ</option>
-                  </select>
-                </Field>
-                <Field label="Número do documento" error={validationErrors.documentNumber}>
-                  <input className="public-checkout-input" inputMode="numeric" value={values.documentNumber} onChange={(event) => handleChange('documentNumber', event.target.value)} />
-                </Field>
-              </div>
+            {/* Seção: Cartão */}
+            <div className="pco-section-label" style={{ marginTop: '28px' }}>Dados do cartão</div>
 
-              <div className="public-checkout-section-title">Pagamento</div>
-              <div className="public-checkout-form-grid">
-                <Field label="Nome impresso no cartão" error={validationErrors.cardHolderName} full>
-                  <input className="public-checkout-input" autoComplete="cc-name" value={values.cardHolderName} onChange={(event) => handleChange('cardHolderName', event.target.value)} />
-                </Field>
-                <Field label="Número do cartão" error={validationErrors.cardNumber} full>
-                  <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-number" value={values.cardNumber} onChange={(event) => handleChange('cardNumber', event.target.value)} />
-                </Field>
-                <Field label="Validade (MM/AA)" error={validationErrors.cardExpiry}>
-                  <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-exp" value={values.cardExpiry} onChange={(event) => handleChange('cardExpiry', event.target.value)} />
-                </Field>
-                <Field label="CVV" error={validationErrors.cardCvv}>
-                  <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-csc" value={values.cardCvv} onChange={(event) => handleChange('cardCvv', event.target.value)} />
-                </Field>
-              </div>
+            <CardPreview values={values} />
 
-              {isLoadingConfig ? <div className="public-checkout-banner">Carregando configuração do checkout...</div> : null}
-              {configError ? <div className="public-checkout-error">{configError}</div> : null}
-              {!isLoadingConfig && !configError && effectiveTrialDays > 0 ? (
-                <div className="public-checkout-banner">
-                  Seu plano entra com <strong>{effectiveTrialDays} dias grátis</strong>. O Pagar.me pode realizar apenas uma verificação temporária do cartão durante a ativação.
-                </div>
-              ) : null}
-              {submitError ? <div className="public-checkout-error">{submitError}</div> : null}
-
-              <button className="public-checkout-submit" type="submit" disabled={isSubmitting || isLoadingConfig}>
-                {isSubmitting ? 'Ativando assinatura...' : effectiveTrialDays > 0 ? `Iniciar ${effectiveTrialDays} dias grátis` : 'Concluir assinatura'}
-              </button>
-            </form>
-          </section>
-
-          <aside className="public-checkout-summary">
-            <div className="public-checkout-eyebrow">Resumo da assinatura</div>
-            <h2>{plan.name}</h2>
-            <p>{plan.summary}</p>
-
-            <div className="public-checkout-plan-card">
-              <div className="public-checkout-price-line"><span>Plano</span><strong>{plan.name}</strong></div>
-              <div className="public-checkout-price-line"><span>{effectiveTrialDays > 0 ? 'Cobrança inicial' : 'Cobrança de hoje'}</span><strong>{todayLabel}</strong></div>
-              <div className="public-checkout-price-line"><span>{effectiveTrialDays > 0 ? 'Primeira renovação' : 'Renovação'}</span><strong>{renewalLabel}</strong></div>
+            <div className="pco-fields-row" style={{ marginTop: '16px' }}>
+              <Field label="Nome impresso no cartão" error={validationErrors.cardHolderName} full>
+                <input
+                  className="pco-input"
+                  autoComplete="cc-name"
+                  placeholder="Ex.: Ana Souza"
+                  value={values.cardHolderName}
+                  onChange={(e) => handleChange('cardHolderName', e.target.value)}
+                />
+              </Field>
+              <Field label="Número do cartão" error={validationErrors.cardNumber} full>
+                <input
+                  className="pco-input pco-input--card"
+                  inputMode="numeric"
+                  autoComplete="cc-number"
+                  placeholder="0000 0000 0000 0000"
+                  value={values.cardNumber}
+                  onChange={(e) => handleChange('cardNumber', e.target.value)}
+                />
+              </Field>
+              <Field label="Validade" error={validationErrors.cardExpiry} half>
+                <input
+                  className="pco-input"
+                  inputMode="numeric"
+                  autoComplete="cc-exp"
+                  placeholder="MM/AA"
+                  value={values.cardExpiry}
+                  onChange={(e) => handleChange('cardExpiry', e.target.value)}
+                />
+              </Field>
+              <Field label="CVV" error={validationErrors.cardCvv} half>
+                <input
+                  className="pco-input"
+                  inputMode="numeric"
+                  autoComplete="cc-csc"
+                  placeholder="•••"
+                  value={values.cardCvv}
+                  onChange={(e) => handleChange('cardCvv', e.target.value)}
+                />
+              </Field>
             </div>
 
-            <ul className="public-checkout-bullets">
-              {plan.bullets.map((bullet) => (
-                <li key={bullet}><span className="public-checkout-bullet-dot" aria-hidden="true"></span><span>{bullet}</span></li>
+            {/* Banners */}
+            {isLoadingConfig && (
+              <div className="pco-banner">Carregando checkout...</div>
+            )}
+            {configError && (
+              <div className="pco-banner pco-banner--error">{configError}</div>
+            )}
+            {!isLoadingConfig && !configError && effectiveTrialDays > 0 && (
+              <div className="pco-banner pco-banner--info">
+                ✅ <strong>{effectiveTrialDays} dias grátis.</strong> Verificação temporária do cartão sem cobrança.
+              </div>
+            )}
+            {submitError && (
+              <div className="pco-banner pco-banner--error">{submitError}</div>
+            )}
+
+            {/* CTA */}
+            <button
+              className="pco-submit"
+              type="submit"
+              disabled={isSubmitting || isLoadingConfig}
+            >
+              {ctaLabel}
+            </button>
+
+            <p className="pco-foot-note">
+              🔒 Pagamento processado com segurança pelo Pagar.me · SSL 256‑bit
+            </p>
+          </form>
+        </section>
+
+        {/* Coluna direita — Resumo */}
+        <aside className="pco-summary-col">
+          <div className="pco-summary-card">
+            <div className="pco-summary-header">
+              <span className="pco-summary-label">Resumo</span>
+              <span className="pco-summary-plan-name">{plan.name}</span>
+            </div>
+
+            <ul className="pco-summary-bullets">
+              {plan.bullets.map((b) => (
+                <li key={b}>
+                  <span className="pco-bullet-dot" aria-hidden="true" />
+                  {b}
+                </li>
               ))}
             </ul>
-          </aside>
-        </div>
-      </div>
+
+            <div className="pco-summary-divider" />
+
+            <div className="pco-price-lines">
+              <div className="pco-price-row">
+                <span>{effectiveTrialDays > 0 ? 'Cobrança inicial' : 'Hoje'}</span>
+                <strong className="pco-price-today">
+                  {effectiveTrialDays > 0 ? 'R$ 0,00' : formatCurrencyBRL(effectiveAmountCents)}
+                </strong>
+              </div>
+              <div className="pco-price-row">
+                <span>{effectiveTrialDays > 0 ? `Após ${effectiveTrialDays} dias` : 'Renovação'}</span>
+                <strong>{formatCurrencyBRL(effectiveAmountCents)}/mês</strong>
+              </div>
+            </div>
+
+            <div className="pco-trust-list">
+              <div className="pco-trust-item">✅ Cancele quando quiser</div>
+              <div className="pco-trust-item">✅ Ativação imediata</div>
+              <div className="pco-trust-item">✅ Sem contrato de fidelidade</div>
+            </div>
+          </div>
+        </aside>
+      </main>
     </div>
   );
 }
