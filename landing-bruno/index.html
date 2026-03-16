@@ -1252,27 +1252,18 @@
         .post-cta-section,
         .post-faq-section {
             position: relative;
-            overflow: hidden;
-            padding: 40px;
-            border-radius: 32px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            background:
-                linear-gradient(180deg, rgba(17, 31, 53, 0.94) 0%, rgba(8, 16, 29, 0.95) 100%);
-            box-shadow:
-                0 28px 80px rgba(0, 0, 0, 0.28),
-                0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+            overflow: visible;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
         }
 
         .story-block::before,
         .post-cta-section::before,
         .post-faq-section::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background:
-                radial-gradient(circle at top right, rgba(0, 255, 163, 0.12), transparent 32%),
-                radial-gradient(circle at bottom left, rgba(0, 240, 255, 0.08), transparent 28%);
-            pointer-events: none;
+            display: none;
         }
 
         .story-block > *,
@@ -1286,7 +1277,7 @@
         .post-video-flow .story-block + .post-cta-section,
         .post-video-flow .post-cta-section + .post-faq-section,
         .post-video-flow .post-faq-section + .post-footer {
-            margin-top: 28px;
+            margin-top: 84px;
         }
 
         .story-block[id],
@@ -1370,7 +1361,7 @@
             display: grid;
             grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
             gap: 28px;
-            align-items: stretch;
+            align-items: start;
         }
 
         .pain-surface,
@@ -1382,17 +1373,72 @@
         .practical-card,
         .offer-card,
         .compare-card {
-            border-radius: 28px;
+            border-radius: 20px;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.015) 100%);
-            backdrop-filter: blur(16px);
+            background: rgba(12, 12, 14, 0.82);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
+            backdrop-filter: blur(12px);
+            transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+        }
+
+        .pain-surface:hover,
+        .method-board:hover,
+        .positioning-rail:hover,
+        .proof-card:hover,
+        .objection-card:hover,
+        .benefit-card:hover,
+        .practical-card:hover,
+        .offer-card:hover,
+        .compare-card:hover {
+            border-color: rgba(0, 255, 163, 0.16);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 255, 163, 0.08);
+            transform: translateY(-2px);
         }
 
         .pain-surface,
         .method-board,
         .positioning-rail {
             padding: 28px;
+        }
+
+        .gain-block,
+        .compare-block,
+        .benefit-block,
+        .proof-block,
+        .objection-block,
+        .post-faq-section {
+            text-align: center;
+        }
+
+        .gain-block .story-heading,
+        .compare-block .story-heading,
+        .benefit-block .story-heading,
+        .proof-block .story-heading,
+        .objection-block .story-heading,
+        .post-faq-section .story-heading {
+            max-width: 18ch;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .gain-block .story-lead,
+        .compare-block .story-lead,
+        .benefit-block .story-lead,
+        .proof-block .story-lead,
+        .objection-block .story-lead,
+        .post-faq-section .story-lead,
+        .proof-note {
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .practical-grid,
+        .compare-grid,
+        .benefit-grid,
+        .proof-grid,
+        .objection-grid,
+        .faq-list {
+            text-align: left;
         }
 
         .surface-tag,
@@ -1589,6 +1635,10 @@
             margin-top: 24px;
         }
 
+        .method-tags {
+            display: none;
+        }
+
         .method-tag {
             display: inline-flex;
             align-items: center;
@@ -1671,8 +1721,9 @@
             border-radius: 20px;
             border: 1px solid rgba(255, 255, 255, 0.06);
             background:
-                linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(255, 255, 255, 0.02)),
-                linear-gradient(180deg, rgba(18, 34, 57, 0.96), rgba(11, 21, 36, 0.96));
+                linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+                radial-gradient(circle at top left, rgba(0, 255, 163, 0.08), transparent 34%),
+                rgba(7, 7, 9, 0.92);
             margin-bottom: 18px;
         }
 
@@ -1885,15 +1936,16 @@
         }
 
         .faq-item {
-            border-radius: 24px;
+            border-radius: 20px;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(12, 12, 14, 0.82);
             padding: 0 22px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.04) inset;
         }
 
         .faq-item[open] {
             border-color: rgba(0, 255, 163, 0.18);
-            background: linear-gradient(135deg, rgba(0, 255, 163, 0.05), rgba(255, 255, 255, 0.03));
+            background: linear-gradient(135deg, rgba(0, 255, 163, 0.05), rgba(12, 12, 14, 0.9));
         }
 
         .faq-item summary {
@@ -1950,10 +2002,10 @@
         .post-footer .footer-grid {
             margin-bottom: 16px;
             padding: 36px;
-            border-radius: 28px;
+            border-radius: 20px;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            background:
-                linear-gradient(180deg, rgba(17, 31, 53, 0.9), rgba(8, 16, 29, 0.94));
+            background: rgba(12, 12, 14, 0.86);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
         }
 
         .post-footer .footer-grid > div:first-child {
@@ -1987,8 +2039,8 @@
             .story-block,
             .post-cta-section,
             .post-faq-section {
-                padding: 32px 28px;
-                border-radius: 28px;
+                padding: 0;
+                border-radius: 0;
             }
 
             .pain-grid,
@@ -2014,6 +2066,13 @@
             .post-footer .footer-grid {
                 padding: 28px;
             }
+
+            .post-video-flow .story-block + .story-block,
+            .post-video-flow .story-block + .post-cta-section,
+            .post-video-flow .post-cta-section + .post-faq-section,
+            .post-video-flow .post-faq-section + .post-footer {
+                margin-top: 72px;
+            }
         }
 
         @media (max-width: 600px) {
@@ -2024,8 +2083,8 @@
             .story-block,
             .post-cta-section#precos,
             .post-faq-section {
-                padding: 26px 18px;
-                border-radius: 24px;
+                padding: 0;
+                border-radius: 0;
             }
 
             .story-eyebrow {
@@ -2098,6 +2157,13 @@
 
             .post-footer .footer-grid {
                 padding: 22px 18px;
+            }
+
+            .post-video-flow .story-block + .story-block,
+            .post-video-flow .story-block + .post-cta-section,
+            .post-video-flow .post-cta-section + .post-faq-section,
+            .post-video-flow .post-faq-section + .post-footer {
+                margin-top: 56px;
             }
         }
 
