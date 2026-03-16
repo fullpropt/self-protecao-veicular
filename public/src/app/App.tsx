@@ -210,6 +210,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
+      <Route path="/home" element={<Planos />} />
       <Route path="/planos" element={<Planos />} />
       <Route path="/venda" element={<Planos />} />
       <Route path="/pre-checkout" element={<PreCheckout />} />

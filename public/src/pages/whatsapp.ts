@@ -200,7 +200,7 @@ function getLoginUrl() {
 }
 
 function getPostLogoutUrl() {
-    return '#/planos';
+    return '#/home';
 }
 
 function normalizePairingPhoneInput(value: string) {

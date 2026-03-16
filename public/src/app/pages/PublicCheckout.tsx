@@ -434,7 +434,7 @@ export default function PublicCheckout() {
   return (
     <div className="public-checkout-page" style={themeStyle}>
       <div className="public-checkout-shell">
-        <a href="#/planos" className="public-checkout-brand" aria-label="Voltar para os planos">
+        <a href="#/home" className="public-checkout-brand" aria-label="Voltar para a pagina inicial">
           <img src={brandFullLogoUrl} alt={brandName} />
         </a>
 

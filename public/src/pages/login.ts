@@ -564,7 +564,7 @@ async function initLogin() {
     windowAny.initLogin = initLogin;
     windowAny.showLogin = () => setAuthMode('login');
     windowAny.showRegister = () => {
-        window.location.hash = '#/planos';
+        window.location.hash = '#/home';
     };
 
     setAuthMode('login');
