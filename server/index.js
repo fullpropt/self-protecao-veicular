@@ -3268,6 +3268,38 @@ function extractInteractiveSelectionFromMessageContent(content) {
     return null;
 }
 
+function normalizeInteractiveSelectionForMetadata(selection = null) {
+    if (!selection || typeof selection !== 'object') return null;
+
+    const id = normalizeText(
+        selection?.id
+        || selection?.selectionId
+        || selection?.selectedId
+        || selection?.selectedRowId
+        || ''
+    );
+    const text = normalizeText(
+        selection?.text
+        || selection?.selectionText
+        || selection?.selectedDisplayText
+        || selection?.title
+        || ''
+    );
+    const description = normalizeText(selection?.description || '');
+    const source = normalizeText(selection?.source || '');
+
+    if (!id && !text && !description) {
+        return null;
+    }
+
+    const normalized = {};
+    if (id) normalized.id = id;
+    if (text) normalized.text = text;
+    if (description) normalized.description = description;
+    if (source) normalized.source = source;
+    return normalized;
+}
+
 function detectMediaTypeFromMessageContent(content) {
     if (!content) return 'text';
     if (content.imageMessage) return 'image';
@@ -7533,6 +7565,8 @@ async function backfillConversationMessagesFromStore(options = {}) {
         if (!messageId) continue;
 
         const content = unwrapMessageContent(waMsg.message);
+        const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
+        const interactiveSelectionMetadata = normalizeInteractiveSelectionForMetadata(interactiveSelection);
         let text = extractTextFromMessageContent(content);
         const mediaType = detectMediaTypeFromMessageContent(content);
         const existingMessage = await Message.findByMessageId(messageId);
@@ -7600,7 +7634,10 @@ async function backfillConversationMessagesFromStore(options = {}) {
             status: normalizedStatus,
             is_from_me: isFromMe,
             sent_at: sentAtIso,
-            metadata: { source: 'store_backfill' }
+            metadata: {
+                source: 'store_backfill',
+                ...(interactiveSelectionMetadata ? { interactiveSelection: interactiveSelectionMetadata } : {})
+            }
         });
 
         inserted += 1;
@@ -8038,6 +8075,10 @@ function isFlowNodeAwaitingInput(flow, nodeId) {
         return true;
     }
 
+    if (nodeType === 'end') {
+        return true;
+    }
+
     if (nodeType === 'trigger' && (nodeSubtype === 'keyword' || nodeSubtype === 'intent')) {
         return true;
     }
@@ -8126,8 +8167,10 @@ async function processRecoveredStoreBackfillMessages(options = {}) {
         const messageId = String(candidate?.message_id || '').trim();
         if (!messageId || hasRecoveredFlowMessage(messageId)) continue;
 
+        const metadata = parseJsonSafe(candidate?.metadata, {});
+        const recoveredSelection = normalizeInteractiveSelectionForMetadata(metadata?.interactiveSelection);
+
         if (requireStoreBackfillSource) {
-            const metadata = parseJsonSafe(candidate?.metadata, {});
             if (String(metadata?.source || '').trim() !== 'store_backfill') continue;
         }
 
@@ -8147,7 +8190,12 @@ async function processRecoveredStoreBackfillMessages(options = {}) {
 
         const refreshedConversation = await Conversation.findById(conversation.id) || conversation;
         await flowService.processIncomingMessage(
-            { text, mediaType: candidate.media_type || 'text' },
+            {
+                text,
+                mediaType: candidate.media_type || 'text',
+                selectionId: recoveredSelection?.id || '',
+                selectionText: recoveredSelection?.text || recoveredSelection?.description || ''
+            },
             lead,
             refreshedConversation
         );
@@ -9123,6 +9171,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 
     const content = contentForRouting;
     const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
+    const interactiveSelectionMetadata = normalizeInteractiveSelectionForMetadata(interactiveSelection);
     let text = extractTextFromMessageContent(content);
     let mediaType = detectMediaTypeFromMessageContent(content);
     let persistedMedia = null;
@@ -9307,6 +9356,13 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
     // Salvar mensagem
 
     const normalizedStatus = isFromMe ? 'sent' : 'delivered';
+    const messageMetadata = {};
+    if (messageSource !== 'live') {
+        messageMetadata.source = messageSource;
+    }
+    if (interactiveSelectionMetadata) {
+        messageMetadata.interactiveSelection = interactiveSelectionMetadata;
+    }
 
     const messageData = {
 
@@ -9332,8 +9388,8 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         is_from_me: isFromMe,
 
         sent_at: msg.messageTimestamp ? new Date(Number(msg.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
-        metadata: messageSource !== 'live'
-            ? { source: messageSource }
+        metadata: Object.keys(messageMetadata).length > 0
+            ? messageMetadata
             : undefined
 
     };

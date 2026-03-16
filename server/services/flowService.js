@@ -3867,6 +3867,7 @@ class FlowService extends EventEmitter {
         const normalizedText = normalizeIntentText(responseText);
         const edges = (flow?.edges || []).filter((edge) => edge.source === node?.id);
         if (edges.length === 0) return null;
+        const awaitingInputMenuEnabled = this.isAwaitingInputMenuEnabled(node);
 
         const normalizedPreferredHandle = this.normalizeFlowHandle(preferredSourceHandle);
         const explicitHandle = this.resolveFlowHandleFromInboundMessage(message, responseText);
@@ -3947,9 +3948,20 @@ class FlowService extends EventEmitter {
         const defaultEdge = unlabeledEdges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === 'default');
         if (defaultEdge) return defaultEdge;
 
-        if (unlabeledEdges.length > 0) return unlabeledEdges[0];
+        if (unlabeledEdges.length > 0) {
+            if (!awaitingInputMenuEnabled || unlabeledEdges.length === 1) {
+                return unlabeledEdges[0];
+            }
+        }
         const preferredAnyEdge = edges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === normalizedPreferredHandle);
         if (preferredAnyEdge) return preferredAnyEdge;
+
+        // Em nos de menu, sem correspondencia explicita, manter aguardando resposta
+        // evita roteamento para uma opcao arbitraria.
+        if (awaitingInputMenuEnabled) {
+            return null;
+        }
+
         return edges[0] || null;
     }
 

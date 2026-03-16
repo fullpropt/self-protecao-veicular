@@ -155,6 +155,38 @@ describe('FlowService intent routing compatibility', () => {
         expect(edge.target).toBe('human-node');
     });
 
+    test('evaluateConditionEdge em menu nao escolhe saida arbitraria sem match explicito', () => {
+        const service = new FlowService();
+        const flow = {
+            nodes: [],
+            edges: [
+                { source: 'wait-menu', target: 'buy-node', sourceHandle: 'path-2', label: 'Comprar' },
+                { source: 'wait-menu', target: 'human-node', sourceHandle: 'path-3', label: 'Falar com humano' }
+            ]
+        };
+        const node = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                outputEntryLabels: {
+                    'path-2': 'Comprar',
+                    'path-3': 'Falar com humano'
+                }
+            }
+        };
+
+        const edge = service.evaluateConditionEdge(
+            flow,
+            node,
+            'mensagem sem opcao',
+            'default',
+            {}
+        );
+
+        expect(edge).toBeNull();
+    });
+
     test('buildIntentNodeMenuPayload monta menu com rotas de intencao', () => {
         const service = new FlowService();
         const intentNode = {
@@ -975,6 +1007,58 @@ describe('FlowService intent routing compatibility', () => {
 
         outputActionsSpy.mockRestore();
         executeSpy.mockRestore();
+    });
+
+    test('continueFlow on wait menu keeps execution waiting when no option matches', async () => {
+        const service = new FlowService();
+        const waitNode = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                outputEntryLabels: {
+                    'path-2': 'Comprar',
+                    'path-3': 'Falar com humano'
+                }
+            }
+        };
+        const nextNode = {
+            id: 'next-mid',
+            type: 'message',
+            data: {}
+        };
+
+        const execution = {
+            id: 124,
+            currentNode: 'wait-menu',
+            flow: {
+                id: 56,
+                nodes: [waitNode, nextNode],
+                edges: [
+                    { source: 'wait-menu', target: 'next-mid', sourceHandle: 'path-2', targetHandle: 'default', label: 'Comprar' },
+                    { source: 'wait-menu', target: 'next-mid', sourceHandle: 'path-3', targetHandle: 'default', label: 'Falar com humano' }
+                ]
+            },
+            conversation: { id: 46 },
+            variables: {}
+        };
+
+        const persistSpy = jest.spyOn(service, 'persistExecutionVariables').mockResolvedValue();
+        const outputActionsSpy = jest.spyOn(service, 'executeOutputActions').mockResolvedValue();
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
+        const endSpy = jest.spyOn(service, 'endFlow').mockResolvedValue();
+
+        await service.continueFlow(execution, { text: 'texto livre sem opcao valida' });
+
+        expect(persistSpy).toHaveBeenCalledTimes(1);
+        expect(outputActionsSpy).not.toHaveBeenCalled();
+        expect(executeSpy).not.toHaveBeenCalled();
+        expect(endSpy).not.toHaveBeenCalled();
+
+        persistSpy.mockRestore();
+        outputActionsSpy.mockRestore();
+        executeSpy.mockRestore();
+        endSpy.mockRestore();
     });
 
     test('goToNextNode marks trigger default -> message_once edge as intent reentry bridge', async () => {
