@@ -75,12 +75,12 @@ Status do bloco: [x] Concluido
 ## P1 - Refatoracao incremental
 
 - [~] Quebra de `server/index.js` por dominio iniciada.
-  Evidencia: extraido bloco de observabilidade/alertas para `server/services/opsMonitoringService.js` e `server/index.js` com wrappers.
+  Evidencia: extraidos blocos de observabilidade/alertas para `server/services/opsMonitoringService.js` e de menu textual para `server/services/flowMenuTextService.js`, com `server/index.js` usando wrappers.
 - [ ] Quebra de `server/database/models.js` por modulo de dominio.
 
 Evidencia atual:
-- `server/index.js` com ~21684 linhas.
-- `server/database/models.js` com ~5085 linhas.
+- `server/index.js` com ~17495 linhas.
+- `server/database/models.js` com ~4553 linhas.
 
 Status do bloco: [~] Parcial inicial
 
