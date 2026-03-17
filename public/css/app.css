@@ -1283,6 +1283,7 @@ body {
 .flow-builder-react.workspace-surface-page .properties-panel {
     background: linear-gradient(180deg, rgba(24, 47, 74, 0.96) 0%, rgba(18, 38, 61, 0.97) 100%);
     border-left-color: rgba(var(--primary-rgb), 0.14);
+    --gray: #9fb5c9;
 }
 
 .inbox-react.workspace-surface-page .conversations-panel,
@@ -1309,6 +1310,20 @@ body {
 .flow-builder-react.workspace-surface-page .flow-preview-panel-header p,
 .flow-builder-react.workspace-surface-page .flow-preview-panel-eyebrow {
     color: rgba(214, 228, 239, 0.62);
+}
+
+.flow-builder-react.workspace-surface-page .properties-panel h4,
+.flow-builder-react.workspace-surface-page .properties-panel .property-type-summary-value,
+.flow-builder-react.workspace-surface-page .properties-panel .property-group label,
+.flow-builder-react.workspace-surface-page .properties-panel .flow-toggle-label {
+    color: #f5fbf8;
+}
+
+.flow-builder-react.workspace-surface-page .properties-panel p,
+.flow-builder-react.workspace-surface-page .properties-panel small,
+.flow-builder-react.workspace-surface-page .properties-panel .property-helper-text,
+.flow-builder-react.workspace-surface-page .properties-panel .property-unit {
+    color: rgba(214, 228, 239, 0.74);
 }
 
 .flow-builder-react.workspace-surface-page .flow-canvas {
