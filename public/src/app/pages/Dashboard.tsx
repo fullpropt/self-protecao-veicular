@@ -1318,7 +1318,7 @@ function StatsPeriod() {
         <div className="stats-period-controls">
           <input type="date" className="form-input" id="statsStartDate" />
           <input type="date" className="form-input" id="statsEndDate" />
-          <select className="form-select" id="statsMetric">
+          <select className="form-select" id="statsMetric" defaultValue="mensagens">
             <option value="novos_contatos">Novos Contatos</option>
             <option value="mensagens">Mensagens</option>
             <option value="interacoes">Interações</option>

@@ -860,11 +860,11 @@ function buildStatsChartFallback(startDate: string, endDate: string) {
 }
 
 function getSelectedStatsMetric(): StatsMetric {
-    const metricRaw = (document.getElementById('statsMetric') as HTMLSelectElement | null)?.value || 'novos_contatos';
+    const metricRaw = (document.getElementById('statsMetric') as HTMLSelectElement | null)?.value || 'mensagens';
     if (metricRaw === 'mensagens' || metricRaw === 'interacoes' || metricRaw === 'novos_contatos') {
         return metricRaw;
     }
-    return 'novos_contatos';
+    return 'mensagens';
 }
 
 function getStatsRangeFromControls() {
@@ -1320,9 +1320,13 @@ function initDashboard() {
     const defaults = getDefaultStatsRange();
     const statsStart = document.getElementById('statsStartDate') as HTMLInputElement | null;
     const statsEnd = document.getElementById('statsEndDate') as HTMLInputElement | null;
+    const statsMetric = document.getElementById('statsMetric') as HTMLSelectElement | null;
     const customEventsPeriod = document.getElementById('customEventsPeriod') as HTMLSelectElement | null;
     if (statsStart && !normalizeDateInputValue(statsStart.value)) statsStart.value = defaults.startDate;
     if (statsEnd && !normalizeDateInputValue(statsEnd.value)) statsEnd.value = defaults.endDate;
+    if (statsMetric && !['mensagens', 'interacoes', 'novos_contatos'].includes(String(statsMetric.value || '').trim().toLowerCase())) {
+        statsMetric.value = 'mensagens';
+    }
     if (customEventsPeriod && !CUSTOM_EVENT_PERIODS[String(customEventsPeriod.value || '').trim().toLowerCase()]) {
         customEventsPeriod.value = 'this_month';
     }
