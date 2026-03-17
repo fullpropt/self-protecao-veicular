@@ -30,6 +30,10 @@ function createWebhookRoutes(options = {}) {
         await controller.regenerateIncomingWebhookCredential(req, res);
     });
 
+    router.post('/api/webhook/incoming', async (req, res) => {
+        await controller.handleIncomingWebhook(req, res);
+    });
+
     return router;
 }
 

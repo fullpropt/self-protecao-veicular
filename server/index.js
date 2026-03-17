@@ -81,6 +81,7 @@ const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
 const { createOpsMonitoringService } = require('./services/opsMonitoringService');
 const { createFlowMenuTextService } = require('./services/flowMenuTextService');
 const { createInboundMessagePipelineService } = require('./services/inboundMessagePipelineService');
+const { createIncomingWebhookService } = require('./services/incomingWebhookService');
 const stripeCheckoutService = require('./services/stripeCheckoutService');
 const pagarmeCheckoutService = require('./services/pagarmeCheckoutService');
 const planLimitsService = require('./services/planLimitsService');
@@ -218,6 +219,15 @@ const APP_BRAND_NAME = 'ZapVender';
 const WHATSAPP_BROWSER_VERSION = '120.0.0';
 const WHATSAPP_BROWSER_NAME_MAX_LENGTH = 40;
 const BUSINESS_HOURS_CACHE_TTL_MS = 30000;
+
+const incomingWebhookService = createIncomingWebhookService({
+    IncomingWebhookCredential,
+    normalizeOwnerUserId,
+    normalizeImportedLeadPhone,
+    parsePositiveIntInRange,
+    parseLeadTagsForMerge,
+    parseLeadCustomFields
+});
 const OUTSIDE_HOURS_AUTO_REPLY_COOLDOWN_MS = 30 * 60 * 1000;
 const DEFAULT_BUSINESS_HOURS_AUTO_REPLY = 'Ol\u00E1! Nosso atendimento est\u00E1 fora do hor\u00E1rio de funcionamento no momento. Retornaremos assim que estivermos online.';
 const LEAD_AVATAR_SYNC_TTL_MS = parseInt(process.env.LEAD_AVATAR_SYNC_TTL_MS || '', 10) || (6 * 60 * 60 * 1000);
@@ -1554,7 +1564,7 @@ async function bootstrapDatabase() {
         }
 
         try {
-            await ensureLegacyIncomingWebhookCredentialBridge();
+            await incomingWebhookService.ensureLegacyIncomingWebhookCredentialBridge();
         } catch (incomingWebhookBridgeError) {
             console.error('[IncomingWebhook] Falha ao sincronizar credencial legada:', incomingWebhookBridgeError.message);
         }
@@ -18115,9 +18125,12 @@ app.use(createWebhookRoutes({
     getRequesterRole,
     isUserAdminRole,
     IncomingWebhookCredential,
-    resolveIncomingWebhookOwnerUserId,
-    normalizeIncomingWebhookSecret,
-    serializeIncomingWebhookCredentialForApi
+    resolveIncomingWebhookOwnerUserId: incomingWebhookService.resolveIncomingWebhookOwnerUserId,
+    normalizeIncomingWebhookSecret: incomingWebhookService.normalizeIncomingWebhookSecret,
+    serializeIncomingWebhookCredentialForApi: incomingWebhookService.serializeIncomingWebhookCredentialForApi,
+    resolveIncomingWebhookOwnerContext: incomingWebhookService.resolveIncomingWebhookOwnerContext,
+    normalizeIncomingWebhookLeadPayload: incomingWebhookService.normalizeIncomingWebhookLeadPayload,
+    Lead
 }));
 
 
@@ -19400,217 +19413,6 @@ app.post('/api/admin/audits/tenant-integrity/run', authenticate, async (req, res
         console.error('[TenantIntegrityAudit][manual-endpoint] falha:', error);
         res.status(500).json({ error: 'Falha ao executar auditoria de integridade', details: error.message });
     }
-});
-
-
-
-// Webhook de entrada (para receber dados externos)
-
-function resolveIncomingWebhookOwnerUserId() {
-    const value = normalizeOwnerUserId(process.env.WEBHOOK_INCOMING_OWNER_USER_ID);
-    return value || null;
-}
-
-function normalizeIncomingWebhookSecret(value) {
-    return String(value || '').trim();
-}
-
-function extractIncomingWebhookSecret(req, payload = null) {
-    const sourcePayload = payload && typeof payload === 'object' ? payload : {};
-    const bodySecret = normalizeIncomingWebhookSecret(sourcePayload.secret);
-    if (bodySecret) {
-        return bodySecret;
-    }
-
-    const headerSecret = normalizeIncomingWebhookSecret(
-        req.get('x-webhook-secret')
-        || req.get('x-incoming-webhook-secret')
-        || req.get('x-api-key')
-    );
-    if (headerSecret) {
-        return headerSecret;
-    }
-
-    const authorization = normalizeIncomingWebhookSecret(req.get('authorization'));
-    if (authorization && /^bearer\s+/i.test(authorization)) {
-        return normalizeIncomingWebhookSecret(authorization.replace(/^bearer\s+/i, ''));
-    }
-
-    return '';
-}
-
-function timingSafeIncomingWebhookSecretEquals(inputSecret, expectedSecret) {
-    const left = normalizeIncomingWebhookSecret(inputSecret);
-    const right = normalizeIncomingWebhookSecret(expectedSecret);
-    if (!left || !right) return false;
-
-    const leftBuffer = Buffer.from(left, 'utf8');
-    const rightBuffer = Buffer.from(right, 'utf8');
-    if (leftBuffer.length !== rightBuffer.length) return false;
-
-    try {
-        return crypto.timingSafeEqual(leftBuffer, rightBuffer);
-    } catch (_) {
-        return false;
-    }
-}
-
-function maskIncomingWebhookSecret(prefix = '', suffix = '') {
-    const normalizedPrefix = String(prefix || '').trim();
-    const normalizedSuffix = String(suffix || '').trim();
-    if (!normalizedPrefix && !normalizedSuffix) return '';
-    return `${normalizedPrefix}***${normalizedSuffix}`;
-}
-
-function serializeIncomingWebhookCredentialForApi(credential) {
-    if (!credential) return null;
-    return {
-        id: Number(credential.id || 0) || null,
-        owner_user_id: Number(credential.owner_user_id || 0) || null,
-        secret_masked: maskIncomingWebhookSecret(credential.secret_prefix, credential.secret_suffix),
-        secret_prefix: String(credential.secret_prefix || '').trim(),
-        secret_suffix: String(credential.secret_suffix || '').trim(),
-        created_by: Number(credential.created_by || 0) || null,
-        last_rotated_at: credential.last_rotated_at || null,
-        last_used_at: credential.last_used_at || null,
-        created_at: credential.created_at || null,
-        updated_at: credential.updated_at || null
-    };
-}
-
-async function ensureLegacyIncomingWebhookCredentialBridge() {
-    const legacySecret = normalizeIncomingWebhookSecret(process.env.WEBHOOK_SECRET);
-    const legacyOwnerUserId = resolveIncomingWebhookOwnerUserId();
-
-    if (!legacySecret || !legacyOwnerUserId) {
-        return;
-    }
-
-    const existingOwnerCredential = await IncomingWebhookCredential.findByOwnerUserId(legacyOwnerUserId);
-    if (existingOwnerCredential) {
-        return;
-    }
-
-    try {
-        await IncomingWebhookCredential.upsertForOwner(legacyOwnerUserId, {
-            secret: legacySecret
-        });
-        console.log(`[IncomingWebhook] Credencial legada sincronizada para owner ${legacyOwnerUserId}`);
-    } catch (error) {
-        console.warn(`[IncomingWebhook] Nao foi possivel sincronizar credencial legada do owner ${legacyOwnerUserId}: ${error.message}`);
-    }
-}
-
-async function resolveIncomingWebhookOwnerContext(req, payload = null) {
-    const sourcePayload = payload && typeof payload === 'object' ? payload : {};
-    const secret = extractIncomingWebhookSecret(req, sourcePayload);
-    if (!secret) {
-        return {
-            ownerUserId: null,
-            source: 'missing-secret'
-        };
-    }
-
-    let tableLookupFailed = false;
-    try {
-        const credential = await IncomingWebhookCredential.findOwnerBySecret(secret);
-        const ownerUserId = normalizeOwnerUserId(credential?.owner_user_id);
-        if (ownerUserId) {
-            return {
-                ownerUserId,
-                source: 'owner-secret',
-                credential
-            };
-        }
-    } catch (error) {
-        tableLookupFailed = true;
-        console.error('[IncomingWebhook] Falha ao validar credencial por owner:', error.message);
-    }
-
-    const legacySecret = normalizeIncomingWebhookSecret(process.env.WEBHOOK_SECRET);
-    const legacyOwnerUserId = resolveIncomingWebhookOwnerUserId();
-    if (
-        legacySecret
-        && legacyOwnerUserId
-        && timingSafeIncomingWebhookSecretEquals(secret, legacySecret)
-    ) {
-        return {
-            ownerUserId: legacyOwnerUserId,
-            source: 'legacy-secret'
-        };
-    }
-
-    return {
-        ownerUserId: null,
-        source: tableLookupFailed ? 'lookup-error' : 'invalid-secret'
-    };
-}
-
-function normalizeIncomingWebhookLeadPayload(rawData, ownerUserId) {
-    const sourceData = rawData && typeof rawData === 'object' ? rawData : {};
-    const phone = normalizeImportedLeadPhone(
-        sourceData.phone
-        || sourceData.telefone
-        || sourceData.whatsapp
-        || sourceData.celular
-        || sourceData.numero
-    );
-
-    const name = String(sourceData.name || sourceData.nome || '').trim() || 'Sem nome';
-    const email = String(sourceData.email || '').trim().toLowerCase();
-    const status = parsePositiveIntInRange(sourceData.status, 1, 1, 4);
-    const tags = Array.from(new Set(parseLeadTagsForMerge(sourceData.tags)));
-    const customFields = parseLeadCustomFields(sourceData.custom_fields);
-
-    const payload = {
-        name,
-        phone,
-        email,
-        status,
-        tags,
-        source: 'webhook',
-        assigned_to: ownerUserId,
-        owner_user_id: ownerUserId
-    };
-
-    if (Object.keys(customFields).length > 0) {
-        payload.custom_fields = customFields;
-    }
-
-    return payload;
-}
-
-app.post('/api/webhook/incoming', async (req, res) => {
-    const payload = req.body && typeof req.body === 'object' ? req.body : {};
-    const event = String(payload.event || '').trim().toLowerCase();
-    const data = payload.data;
-    const ownerContext = await resolveIncomingWebhookOwnerContext(req, payload);
-    if (!ownerContext.ownerUserId) {
-        if (ownerContext.source === 'lookup-error') {
-            return res.status(503).json({ error: 'Webhook incoming indisponivel' });
-        }
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    if (event === 'lead.create' && data) {
-        try {
-            const ownerUserId = ownerContext.ownerUserId;
-            const leadPayload = normalizeIncomingWebhookLeadPayload(data, ownerUserId);
-            if (!leadPayload.phone) {
-                return res.status(400).json({ error: 'Telefone obrigatorio para lead.create' });
-            }
-
-            const result = await Lead.create(leadPayload);
-            return res.json({ success: true, leadId: result.id });
-        } catch (error) {
-            return res.status(Number(error?.statusCode || 400) || 400).json({
-                error: error.message,
-                ...(error?.code ? { code: error.code } : {})
-            });
-        }
-    }
-
-    return res.json({ success: true, received: true });
 });
 
 

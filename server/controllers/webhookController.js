@@ -9,6 +9,9 @@ function createWebhookController(options = {}) {
     const resolveIncomingWebhookOwnerUserId = options.resolveIncomingWebhookOwnerUserId;
     const normalizeIncomingWebhookSecret = options.normalizeIncomingWebhookSecret;
     const serializeIncomingWebhookCredentialForApi = options.serializeIncomingWebhookCredentialForApi;
+    const resolveIncomingWebhookOwnerContext = options.resolveIncomingWebhookOwnerContext;
+    const normalizeIncomingWebhookLeadPayload = options.normalizeIncomingWebhookLeadPayload;
+    const Lead = options.Lead;
 
     return {
         async listWebhooks(req, res) {
@@ -139,6 +142,39 @@ function createWebhookController(options = {}) {
                 console.error('[IncomingWebhook] Falha ao regenerar credencial:', error);
                 return res.status(400).json({ error: error.message || 'Falha ao regenerar credencial do webhook de entrada' });
             }
+        },
+
+        async handleIncomingWebhook(req, res) {
+            const payload = req.body && typeof req.body === 'object' ? req.body : {};
+            const event = String(payload.event || '').trim().toLowerCase();
+            const data = payload.data;
+            const ownerContext = await resolveIncomingWebhookOwnerContext(req, payload);
+            if (!ownerContext.ownerUserId) {
+                if (ownerContext.source === 'lookup-error') {
+                    return res.status(503).json({ error: 'Webhook incoming indisponivel' });
+                }
+                return res.status(401).json({ error: 'Unauthorized' });
+            }
+
+            if (event === 'lead.create' && data) {
+                try {
+                    const ownerUserId = ownerContext.ownerUserId;
+                    const leadPayload = normalizeIncomingWebhookLeadPayload(data, ownerUserId);
+                    if (!leadPayload.phone) {
+                        return res.status(400).json({ error: 'Telefone obrigatorio para lead.create' });
+                    }
+
+                    const result = await Lead.create(leadPayload);
+                    return res.json({ success: true, leadId: result.id });
+                } catch (error) {
+                    return res.status(Number(error?.statusCode || 400) || 400).json({
+                        error: error.message,
+                        ...(error?.code ? { code: error.code } : {})
+                    });
+                }
+            }
+
+            return res.json({ success: true, received: true });
         }
     };
 }
