@@ -99,6 +99,16 @@ function DashboardStyles() {
             grid-column: 1 / -1;
             justify-self: start;
           }
+          .account-health-summary-row {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+          .account-health-summary-side {
+            justify-self: start;
+          }
+          .account-health-detail-grid {
+            grid-template-columns: 1fr;
+          }
           .account-health-risk {
             justify-items: start;
             min-width: 0;
@@ -421,6 +431,164 @@ function DashboardStyles() {
           margin: 14px 0 0;
           font-size: 12px;
           color: rgba(214, 228, 239, 0.6);
+        }
+        .account-health-account {
+          transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+        }
+        .account-health-account[open] {
+          border-color: rgba(var(--primary-rgb), 0.28);
+          background:
+            linear-gradient(180deg, rgba(13, 28, 46, 0.94), rgba(9, 19, 34, 0.98));
+        }
+        .account-health-summary-row {
+          list-style: none;
+          display: grid;
+          grid-template-columns: minmax(240px, 1.2fr) minmax(280px, 1.8fr) auto;
+          gap: 14px;
+          align-items: center;
+          padding: 14px 16px;
+          cursor: pointer;
+        }
+        .account-health-summary-row::-webkit-details-marker {
+          display: none;
+        }
+        .account-health-summary-row::marker {
+          content: '';
+        }
+        .account-health-summary-row:hover {
+          background: rgba(255, 255, 255, 0.02);
+        }
+        .account-health-summary-main {
+          min-width: 0;
+          display: grid;
+          gap: 7px;
+        }
+        .account-health-summary-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          min-width: 0;
+        }
+        .account-health-summary-note {
+          font-size: 12px;
+          color: rgba(214, 228, 239, 0.78);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .account-health-summary-metrics {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          justify-content: flex-start;
+        }
+        .account-health-metric-chip {
+          min-width: 86px;
+          padding: 8px 10px;
+          border-radius: 12px;
+          border: 1px solid rgba(148, 163, 184, 0.16);
+          background: rgba(255, 255, 255, 0.03);
+        }
+        .account-health-metric-chip-label {
+          display: block;
+          margin-bottom: 2px;
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(214, 228, 239, 0.52);
+        }
+        .account-health-metric-chip-value {
+          display: block;
+          font-size: 16px;
+          font-weight: 700;
+          color: #f4fbf8;
+          line-height: 1.1;
+        }
+        .account-health-summary-side {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          justify-self: end;
+        }
+        .account-health-summary-caret {
+          width: 30px;
+          height: 30px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          background: rgba(255, 255, 255, 0.03);
+          color: rgba(214, 228, 239, 0.74);
+          font-size: 12px;
+          transition: transform 0.2s ease;
+        }
+        .account-health-account[open] .account-health-summary-caret {
+          transform: rotate(180deg);
+        }
+        .account-health-details {
+          padding: 0 16px 16px;
+          border-top: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        .account-health-detail-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+          padding-top: 14px;
+        }
+        .account-health-detail-card {
+          min-width: 0;
+          padding: 14px;
+          border-radius: 14px;
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          background: rgba(255, 255, 255, 0.03);
+        }
+        .account-health-detail-card-title {
+          display: block;
+          margin-bottom: 10px;
+          font-size: 11px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(214, 228, 239, 0.54);
+        }
+        .account-health-detail-list {
+          display: grid;
+          gap: 8px;
+        }
+        .account-health-detail-item {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          font-size: 12px;
+          color: rgba(214, 228, 239, 0.68);
+        }
+        .account-health-detail-item strong {
+          color: #f4fbf8;
+          font-size: 14px;
+          text-align: right;
+        }
+        .account-health-detail-text {
+          margin: 0;
+          font-size: 13px;
+          line-height: 1.5;
+          color: rgba(228, 239, 244, 0.82);
+        }
+        .account-health-dispatches {
+          margin-top: 14px;
+          padding: 14px;
+          border-radius: 14px;
+          border: 1px solid rgba(148, 163, 184, 0.12);
+          background: rgba(255, 255, 255, 0.02);
+        }
+        .account-health-dispatches-head {
+          margin-bottom: 10px;
+        }
+        .account-health-dispatch-row {
+          grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(90px, 0.5fr));
+          padding: 10px 12px;
+          border-radius: 12px;
         }
         .events-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
         .events-header h3 { margin: 0; }
@@ -770,15 +938,13 @@ function DashboardStyles() {
           .events-empty { padding: 20px 10px; }
           .events-empty-emoji { width: 34px; height: 34px; margin-bottom: 10px; }
           .account-health-summary { justify-content: flex-start; }
-          .account-health-account-head,
-          .account-health-metrics,
-          .account-health-ops,
-          .account-health-dispatches { padding-left: 14px; padding-right: 14px; }
-          .account-health-metrics { grid-template-columns: 1fr 1fr; }
-          .account-health-metric,
-          .account-health-op { padding: 12px; }
-          .account-health-metric-value,
-          .account-health-op-value { font-size: 20px; }
+          .account-health-summary-row,
+          .account-health-details { padding-left: 12px; padding-right: 12px; }
+          .account-health-summary-metrics { gap: 6px; }
+          .account-health-metric-chip { min-width: calc(50% - 3px); flex: 1 1 calc(50% - 3px); }
+          .account-health-summary-side { width: 100%; justify-content: space-between; }
+          .account-health-detail-card,
+          .account-health-dispatches { padding: 12px; }
         }
       `}</style>
   );
@@ -864,7 +1030,7 @@ function AccountHealthCard() {
         <div className="account-health-empty">Carregando saude das contas...</div>
       </div>
       <p className="account-health-footnote">
-        Taxa de resposta considera os contatos que responderam depois de receber um disparo hoje.
+        Cada linha mostra o essencial. Abra apenas as contas que pedirem contexto ou investigacao.
       </p>
     </section>
   );

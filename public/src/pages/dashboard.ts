@@ -639,15 +639,22 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
         const responseRate = Number(account.response_rate || 0);
         const dispatches = Array.isArray(account.dispatches) ? account.dispatches : [];
         const cooldownActive = account.cooldown_active === true;
-        const lastSentText = account.last_sent_at
-            ? `Ultimo disparo ${escapeHtml(formatDate(account.last_sent_at, 'time'))}`
-            : 'Sem disparos hoje';
+        const dailyUsage = formatAccountHealthLimit(account.sent_today, account.daily_limit);
+        const hourlyUsage = formatAccountHealthLimit(account.sent_last_hour, account.hourly_limit);
+        const cooldownValue = cooldownActive ? formatAccountHealthTime(account.cooldown_until, 'time') : 'Livre';
+        const summaryNote = cooldownActive
+            ? `Cooldown ate ${escapeHtml(formatAccountHealthTime(account.cooldown_until, 'time'))}`
+            : (account.last_sent_at
+                ? `Ultimo disparo ${escapeHtml(formatDate(account.last_sent_at, 'time'))}`
+                : 'Sem disparos hoje');
+        const shouldOpen = account.risk_level === 'critical' || account.risk_level === 'attention' || cooldownActive;
+        const openAttribute = shouldOpen ? ' open' : '';
 
         return `
-            <section class="account-health-account">
-                <div class="account-health-account-head">
-                    <div class="account-health-account-title">
-                        <div class="account-health-account-name-row">
+            <details class="account-health-account"${openAttribute}>
+                <summary class="account-health-summary-row">
+                    <div class="account-health-summary-main">
+                        <div class="account-health-summary-title-row">
                             <span class="account-health-account-name">${sessionName}</span>
                             <span class="account-health-pill ${statusClass}">${statusLabel}</span>
                             ${account.campaign_enabled === false ? '<span class="account-health-pill is-paused">Disparo pausado</span>' : ''}
@@ -655,88 +662,134 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                         <div class="account-health-account-meta">
                             <span>${phone}</span>
                             <span>Sessao: ${sessionId}</span>
-                            <span>${lastSentText}</span>
+                            <span class="account-health-summary-note">${summaryNote}</span>
                         </div>
                     </div>
-                    <div class="account-health-risk">
+
+                    <div class="account-health-summary-metrics">
+                        <span class="account-health-metric-chip">
+                            <span class="account-health-metric-chip-label">Enviadas</span>
+                            <strong class="account-health-metric-chip-value">${formatNumber(sentToday)}</strong>
+                        </span>
+                        <span class="account-health-metric-chip">
+                            <span class="account-health-metric-chip-label">Responderam</span>
+                            <strong class="account-health-metric-chip-value">${formatNumber(repliedToday)}</strong>
+                        </span>
+                        <span class="account-health-metric-chip">
+                            <span class="account-health-metric-chip-label">Taxa</span>
+                            <strong class="account-health-metric-chip-value">${formatPercent(responseRate)}</strong>
+                        </span>
+                        <span class="account-health-metric-chip">
+                            <span class="account-health-metric-chip-label">Uso dia</span>
+                            <strong class="account-health-metric-chip-value">${escapeHtml(dailyUsage)}</strong>
+                        </span>
+                    </div>
+
+                    <div class="account-health-summary-side">
                         <span class="account-health-risk-badge ${riskClass}">${riskLabel}</span>
-                        <span class="account-health-risk-text">${riskReason}</span>
+                        <span class="account-health-summary-caret" aria-hidden="true">v</span>
                     </div>
-                </div>
+                </summary>
 
-                <div class="account-health-metrics">
-                    <div class="account-health-metric">
-                        <span class="account-health-metric-label">Enviadas hoje</span>
-                        <strong class="account-health-metric-value">${formatNumber(sentToday)}</strong>
-                        <span class="account-health-metric-sub">${formatNumber(uniqueLeadsToday)} contato(s) impactado(s)</span>
-                    </div>
-                    <div class="account-health-metric">
-                        <span class="account-health-metric-label">Responderam</span>
-                        <strong class="account-health-metric-value">${formatNumber(repliedToday)}</strong>
-                        <span class="account-health-metric-sub">Leads que responderam apos o disparo</span>
-                    </div>
-                    <div class="account-health-metric">
-                        <span class="account-health-metric-label">Taxa de resposta</span>
-                        <strong class="account-health-metric-value">${formatPercent(responseRate)}</strong>
-                        <span class="account-health-metric-sub">Calculada sobre contatos impactados</span>
-                    </div>
-                    <div class="account-health-metric">
-                        <span class="account-health-metric-label">Ultima hora</span>
-                        <strong class="account-health-metric-value">${formatNumber(sentLastHour)}</strong>
-                        <span class="account-health-metric-sub">Volume recente de disparos</span>
-                    </div>
-                </div>
+                <div class="account-health-details">
+                    <div class="account-health-detail-grid">
+                        <section class="account-health-detail-card">
+                            <span class="account-health-detail-card-title">Resposta do dia</span>
+                            <div class="account-health-detail-list">
+                                <div class="account-health-detail-item">
+                                    <span>Contatos impactados</span>
+                                    <strong>${formatNumber(uniqueLeadsToday)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Responderam</span>
+                                    <strong>${formatNumber(repliedToday)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Taxa de resposta</span>
+                                    <strong>${formatPercent(responseRate)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Ultimo disparo</span>
+                                    <strong>${account.last_sent_at ? escapeHtml(formatDate(account.last_sent_at, 'time')) : '-'}</strong>
+                                </div>
+                            </div>
+                        </section>
 
-                <div class="account-health-ops">
-                    <div class="account-health-op">
-                        <span class="account-health-op-label">Uso diario</span>
-                        <strong class="account-health-op-value">${escapeHtml(formatAccountHealthLimit(account.sent_today, account.daily_limit))}</strong>
-                        <span class="account-health-op-sub">${escapeHtml(formatAccountHealthLimitHint(account.daily_limit, account.daily_usage_ratio, 'Sem limite diario configurado'))}</span>
-                    </div>
-                    <div class="account-health-op">
-                        <span class="account-health-op-label">Uso por hora</span>
-                        <strong class="account-health-op-value">${escapeHtml(formatAccountHealthLimit(account.sent_last_hour, account.hourly_limit))}</strong>
-                        <span class="account-health-op-sub">${escapeHtml(formatAccountHealthLimitHint(account.hourly_limit, account.hourly_usage_ratio, 'Sem limite por hora configurado'))}</span>
-                    </div>
-                    <div class="account-health-op">
-                        <span class="account-health-op-label">Cooldown</span>
-                        <strong class="account-health-op-value">${cooldownActive ? escapeHtml(formatAccountHealthTime(account.cooldown_until, 'time')) : 'Livre'}</strong>
-                        <span class="account-health-op-sub">${cooldownActive ? `Ativo ate ${escapeHtml(formatAccountHealthTime(account.cooldown_until, 'datetime'))}` : 'Sem resfriamento automatico ativo'}</span>
-                    </div>
-                </div>
+                        <section class="account-health-detail-card">
+                            <span class="account-health-detail-card-title">Ritmo da conta</span>
+                            <div class="account-health-detail-list">
+                                <div class="account-health-detail-item">
+                                    <span>Uso diario</span>
+                                    <strong>${escapeHtml(dailyUsage)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Uso por hora</span>
+                                    <strong>${escapeHtml(hourlyUsage)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Cooldown</span>
+                                    <strong>${escapeHtml(cooldownValue)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Ultima hora</span>
+                                    <strong>${formatNumber(sentLastHour)}</strong>
+                                </div>
+                            </div>
+                        </section>
 
-                <div class="account-health-dispatches">
-                    <div class="account-health-dispatches-head">
-                        <strong>Disparos do dia</strong>
-                        <span>Leitura por conta para acompanhar risco operacional</span>
+                        <section class="account-health-detail-card">
+                            <span class="account-health-detail-card-title">Leitura operacional</span>
+                            <p class="account-health-detail-text">${riskReason}</p>
+                            <div class="account-health-detail-list" style="margin-top: 12px;">
+                                <div class="account-health-detail-item">
+                                    <span>Status da sessao</span>
+                                    <strong>${statusLabel}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Sessao</span>
+                                    <strong>${sessionId}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Limite diario</span>
+                                    <strong>${escapeHtml(formatAccountHealthLimitHint(account.daily_limit, account.daily_usage_ratio, 'Nao configurado'))}</strong>
+                                </div>
+                            </div>
+                        </section>
                     </div>
-                    <div class="account-health-dispatch-list">
-                        ${dispatches.length
-                            ? dispatches.map((dispatch) => `
-                                <article class="account-health-dispatch-row">
-                                    <div class="account-health-dispatch-main">
-                                        <span class="account-health-dispatch-name">${escapeHtml(String(dispatch.campaign_name || 'Envios avulsos'))}</span>
-                                        <span class="account-health-dispatch-meta">${dispatch.last_sent_at ? `Ultimo envio ${escapeHtml(formatDate(dispatch.last_sent_at, 'time'))}` : 'Sem horario registrado'}</span>
-                                    </div>
-                                    <div class="account-health-dispatch-stat">
-                                        <strong>${formatNumber(toNonNegativeInt(dispatch.sent_today))}</strong>
-                                        <span>enviadas</span>
-                                    </div>
-                                    <div class="account-health-dispatch-stat">
-                                        <strong>${formatNumber(toNonNegativeInt(dispatch.replied_today))}</strong>
-                                        <span>responderam</span>
-                                    </div>
-                                    <div class="account-health-dispatch-stat">
-                                        <strong>${formatPercent(Number(dispatch.response_rate || 0))}</strong>
-                                        <span>taxa</span>
-                                    </div>
-                                </article>
-                            `).join('')
-                            : '<div class="account-health-empty">Nenhum disparo enviado hoje nesta conta.</div>'
-                        }
+
+                    <div class="account-health-dispatches">
+                        <div class="account-health-dispatches-head">
+                            <strong>Disparos do dia</strong>
+                            <span>Expanda apenas as contas que pedirem investigacao.</span>
+                        </div>
+                        <div class="account-health-dispatch-list">
+                            ${dispatches.length
+                                ? dispatches.map((dispatch) => `
+                                    <article class="account-health-dispatch-row">
+                                        <div class="account-health-dispatch-main">
+                                            <span class="account-health-dispatch-name">${escapeHtml(String(dispatch.campaign_name || 'Envios avulsos'))}</span>
+                                            <span class="account-health-dispatch-meta">${dispatch.last_sent_at ? `Ultimo envio ${escapeHtml(formatDate(dispatch.last_sent_at, 'time'))}` : 'Sem horario registrado'}</span>
+                                        </div>
+                                        <div class="account-health-dispatch-stat">
+                                            <strong>${formatNumber(toNonNegativeInt(dispatch.sent_today))}</strong>
+                                            <span>enviadas</span>
+                                        </div>
+                                        <div class="account-health-dispatch-stat">
+                                            <strong>${formatNumber(toNonNegativeInt(dispatch.replied_today))}</strong>
+                                            <span>responderam</span>
+                                        </div>
+                                        <div class="account-health-dispatch-stat">
+                                            <strong>${formatPercent(Number(dispatch.response_rate || 0))}</strong>
+                                            <span>taxa</span>
+                                        </div>
+                                    </article>
+                                `).join('')
+                                : '<div class="account-health-empty">Nenhum disparo enviado hoje nesta conta.</div>'
+                            }
+                        </div>
                     </div>
                 </div>
-            </section>
+            </details>
         `;
     }).join('');
 }
