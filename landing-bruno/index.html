@@ -282,14 +282,7 @@
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding-top: 112px;
-        }
-
-        .hero-tag {
-            font-size: 0.9rem;
-            color: var(--text-med);
-            margin-bottom: 28px;
-            letter-spacing: 0.02em;
+            padding-top: 152px;
         }
 
         .hero h1 {
@@ -1405,8 +1398,7 @@
         }
 
         .pain-grid,
-        .method-grid,
-        .positioning-grid {
+        .method-grid {
             display: grid;
             grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
             gap: 28px;
@@ -1432,7 +1424,6 @@
 
         .pain-surface,
         .method-board,
-        .positioning-rail,
         .proof-card,
         .objection-card,
         .benefit-card,
@@ -1449,7 +1440,6 @@
 
         .pain-surface:hover,
         .method-board:hover,
-        .positioning-rail:hover,
         .proof-card:hover,
         .objection-card:hover,
         .benefit-card:hover,
@@ -1462,8 +1452,7 @@
         }
 
         .pain-surface,
-        .method-board,
-        .positioning-rail {
+        .method-board {
             padding: 28px;
         }
 
@@ -1780,8 +1769,7 @@
             font-weight: 700;
         }
 
-        .practical-card h3,
-        .positioning-point strong {
+        .practical-card h3 {
             color: var(--text-high);
             font-family: var(--font-display);
             font-size: 1.25rem;
@@ -1794,8 +1782,7 @@
         .proof-card p,
         .objection-card p,
         .offer-card p,
-        .method-step p,
-        .positioning-point p {
+        .method-step p {
             margin-top: 12px;
             color: var(--text-med);
             line-height: 1.68;
@@ -2258,23 +2245,24 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .positioning-rail {
-            display: grid;
-            gap: 14px;
+        .objection-card p {
+            position: relative;
+            padding-left: 28px;
         }
 
-        .positioning-point {
-            padding: 18px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .positioning-point:first-child {
-            padding-top: 0;
-        }
-
-        .positioning-point:last-child {
-            padding-bottom: 0;
-            border-bottom: none;
+        .objection-card p::before {
+            content: '➜';
+            position: absolute;
+            left: 0;
+            top: 0.08em;
+            font-size: 1rem;
+            font-weight: 800;
+            line-height: 1;
+            background: linear-gradient(90deg, var(--cyan), var(--primary));
+            color: transparent;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(0, 255, 163, 0.24));
         }
 
         .post-cta-section#precos {
@@ -2456,7 +2444,6 @@
 
             .pain-grid,
             .method-grid,
-            .positioning-grid,
             .offer-grid,
             .compare-grid,
             .proof-grid,
@@ -2558,7 +2545,6 @@
 
             .pain-surface,
             .method-board,
-            .positioning-rail,
             .compare-card,
             .benefit-card,
             .proof-card,
@@ -3916,17 +3902,12 @@
             }
 
             .hero {
-                padding-top: 100px;
+                padding-top: 122px;
             }
 
             .hero h1 {
                 font-size: 2rem;
                 line-height: 1.15;
-            }
-
-            .hero-tag {
-                font-size: 0.8rem;
-                margin-bottom: 20px;
             }
 
             .dash-mock-container {
@@ -4168,7 +4149,6 @@
 
     <!-- HERO -->
     <section class="container hero">
-        <p class="hero-tag">Plataforma de automação e vendas no WhatsApp</p>
         <h1>O Motor de Vendas que<br><span>Multiplica Resultados no </span><span class="tech-highlight">WhatsApp.</span>
         </h1>
         <p><span class="copy-emphasis">Tecnologia especializada em conversão</span> no WhatsApp. Automatize triagem de leads, recuperação de carrinhos e funis de vendas que trabalham <span class="copy-gradient">24/7</span> — com <span class="copy-emphasis">segurança e escala</span> para sua operação.
@@ -5263,35 +5243,6 @@
                     <h3>Meu processo é diferente.</h3>
                     <p>É por isso que a lógica é <span class="copy-emphasis">adaptável</span>. O sistema serve para estruturar a operação real do seu time, e não para forçar um modelo engessado.</p>
                 </article>
-            </div>
-        </section>
-
-        <section class="story-block container positioning-block">
-            <div class="positioning-grid">
-                <div>
-                    <span class="story-eyebrow">Posicionamento final</span>
-                    <h2 class="story-heading story-heading--md">O ZapVender não foi feito para quem quer só mandar mensagem. Foi feito para quem quer <span class="copy-gradient">vender com processo no WhatsApp</span>.</h2>
-                    <p class="story-lead">Se o seu comercial acontece no WhatsApp, você não precisa só de velocidade. <span class="copy-gradient">Precisa de estrutura.</span></p>
-                    <p class="story-copy">Estrutura para <span class="copy-emphasis">priorizar, acompanhar e retomar</span> e <span class="copy-gradient">transformar conversa em venda</span> com mais consistência.</p>
-                </div>
-                <aside class="positioning-rail">
-                    <div class="positioning-point">
-                        <strong>Priorizar sem ruído</strong>
-                        <p>O que merece atenção primeiro deixa de se perder no volume de conversas.</p>
-                    </div>
-                    <div class="positioning-point">
-                        <strong>Acompanhar sem depender da memória</strong>
-                        <p>Cada lead continua do ponto certo, mesmo quando a rotina aperta ou o time se divide.</p>
-                    </div>
-                    <div class="positioning-point">
-                        <strong>Retomar com lógica comercial</strong>
-                        <p>O follow-up sai do improviso e entra em uma cadência mais previsível.</p>
-                    </div>
-                    <div class="positioning-point">
-                        <strong>Escalar com consistência</strong>
-                        <p>O crescimento não exige mais bagunça. Exige estrutura para o WhatsApp funcionar como operação.</p>
-                    </div>
-                </aside>
             </div>
         </section>
 
