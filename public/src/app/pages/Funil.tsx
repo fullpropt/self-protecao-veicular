@@ -41,7 +41,7 @@ export default function Funil() {
   const globals = window as Window & FunilGlobals;
 
   return (
-    <div className="funil-react">
+    <div className="funil-react workspace-surface-page">
       <style>{`
         .funnel-visual {
             display: flex;

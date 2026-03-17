@@ -64,7 +64,7 @@ export default function FlowBuilder() {
   };
 
   return (
-    <div className="flow-builder-react is-selector-screen">
+    <div className="flow-builder-react is-selector-screen workspace-surface-page">
       <style>{`
         .flow-builder-react {
             --primary: #1ef2a3;

@@ -43,7 +43,7 @@ export default function Automacao() {
   const globals = window as Window & AutomacaoGlobals;
 
   return (
-    <div className="automacao-react">
+    <div className="automacao-react workspace-surface-page">
       <style>{`
 .automation-card {
             background: var(--surface);
