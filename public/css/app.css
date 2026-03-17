@@ -219,7 +219,7 @@ body {
     padding-right: 30px;
     background: linear-gradient(180deg, rgba(8, 15, 27, 0.98) 0%, rgba(9, 18, 32, 0.98) 100%);
     color: var(--primary);
-    border-radius: var(--border-radius-full);
+    border-radius: var(--border-radius-full) 0 0 var(--border-radius-full);
     border: none;
     box-shadow:
         inset 0 1px 0 rgba(var(--primary-rgb), 0.06),
@@ -227,18 +227,27 @@ body {
         0 0 14px rgba(var(--primary-rgb), 0.03);
 }
 
+.nav-link.active::before,
 .nav-link.active::after {
     content: "";
     position: absolute;
-    top: 0;
-    bottom: 0;
-    right: -18px;
-    width: 26px;
-    background: linear-gradient(180deg, rgba(8, 15, 27, 0.98) 0%, rgba(9, 18, 32, 0.98) 100%);
-    border-top-right-radius: 22px;
-    border-bottom-right-radius: 22px;
-    box-shadow: 8px 0 14px rgba(var(--primary-rgb), 0.03);
+    right: 0;
+    width: 20px;
+    height: 20px;
+    background: transparent;
     pointer-events: none;
+}
+
+.nav-link.active::before {
+    top: -20px;
+    border-bottom-right-radius: 20px;
+    box-shadow: 8px 8px 0 8px rgba(8, 15, 27, 0.98);
+}
+
+.nav-link.active::after {
+    bottom: -20px;
+    border-top-right-radius: 20px;
+    box-shadow: 8px -8px 0 8px rgba(9, 18, 32, 0.98);
 }
 
 /* Hide sidebar WhatsApp menu entry only on mobile */
