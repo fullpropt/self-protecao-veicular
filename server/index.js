@@ -15015,6 +15015,7 @@ function buildDashboardAccountRisk(account) {
     const sentLastHour = Number(account?.sent_last_hour || 0);
     const dailyLimit = Number(account?.daily_limit || 0);
     const hourlyLimit = Number(account?.hourly_limit || 0);
+    const possibleBlockedContacts = Number(account?.possible_blocked_contacts || 0);
     const dailyUsageRatio = dailyLimit > 0 ? sentToday / dailyLimit : null;
     const hourlyUsageRatio = hourlyLimit > 0 ? sentLastHour / hourlyLimit : null;
 
@@ -15116,6 +15117,18 @@ function buildDashboardAccountRisk(account) {
             level: 'attention',
             label: 'Engajamento baixo',
             reason: 'Poucas respostas para o volume enviado.',
+            cooldown_active: false,
+            daily_usage_ratio: dailyUsageRatio,
+            hourly_usage_ratio: hourlyUsageRatio,
+            sort_weight: 2
+        };
+    }
+
+    if (possibleBlockedContacts >= 3) {
+        return {
+            level: 'attention',
+            label: 'Entregas em alerta',
+            reason: `${possibleBlockedContacts} contato(s) com suspeita de bloqueio ou entrega travada.`,
             cooldown_active: false,
             daily_usage_ratio: dailyUsageRatio,
             hourly_usage_ratio: hourlyUsageRatio,
@@ -15333,6 +15346,8 @@ app.get('/api/dashboard/account-health', authenticate, async (req, res) => {
 
         const sessionPlaceholders = sessionIds.map(() => '?').join(', ');
         const lastHourIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const blockedSignalWindowStartIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const blockedSignalStableBeforeIso = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
         let leadScopeSql = '';
         const leadScopeParams = [];
 
@@ -15483,8 +15498,96 @@ app.get('/api/dashboard/account-health', authenticate, async (req, res) => {
             endIso
         ]);
 
+        const blockedSignalRows = await query(`
+            WITH outbound_recent AS (
+                SELECT
+                    c.session_id,
+                    m.lead_id,
+                    COUNT(*)::int AS outbound_recent,
+                    SUM(CASE WHEN m.status IN ('delivered', 'read') THEN 1 ELSE 0 END)::int AS delivered_recent,
+                    MAX(COALESCE(m.sent_at, m.created_at)) AS last_outbound_at
+                FROM messages m
+                INNER JOIN conversations c ON c.id = m.conversation_id
+                INNER JOIN leads l ON l.id = m.lead_id
+                WHERE m.is_from_me = 1
+                  AND c.session_id IN (${sessionPlaceholders})
+                  AND COALESCE(m.sent_at, m.created_at) >= ?
+                  AND COALESCE(m.sent_at, m.created_at) < ?
+                  ${leadScopeSql}
+                GROUP BY c.session_id, m.lead_id
+            ),
+            latest_outbound AS (
+                SELECT DISTINCT ON (c.session_id, m.lead_id)
+                    c.session_id,
+                    m.lead_id,
+                    m.status AS last_status,
+                    COALESCE(m.sent_at, m.created_at) AS last_outbound_at
+                FROM messages m
+                INNER JOIN conversations c ON c.id = m.conversation_id
+                INNER JOIN leads l ON l.id = m.lead_id
+                WHERE m.is_from_me = 1
+                  AND c.session_id IN (${sessionPlaceholders})
+                  AND COALESCE(m.sent_at, m.created_at) >= ?
+                  AND COALESCE(m.sent_at, m.created_at) < ?
+                  ${leadScopeSql}
+                ORDER BY c.session_id, m.lead_id, COALESCE(m.sent_at, m.created_at) DESC, m.id DESC
+            ),
+            incoming_recent AS (
+                SELECT
+                    c.session_id,
+                    m.lead_id,
+                    MAX(COALESCE(m.sent_at, m.created_at)) AS last_incoming_at
+                FROM messages m
+                INNER JOIN conversations c ON c.id = m.conversation_id
+                INNER JOIN leads l ON l.id = m.lead_id
+                WHERE m.is_from_me = 0
+                  AND c.session_id IN (${sessionPlaceholders})
+                  AND COALESCE(m.sent_at, m.created_at) >= ?
+                  AND COALESCE(m.sent_at, m.created_at) < ?
+                  ${leadScopeSql}
+                GROUP BY c.session_id, m.lead_id
+            )
+            SELECT
+                ob.session_id,
+                COUNT(*) FILTER (
+                    WHERE ob.outbound_recent >= 2
+                      AND COALESCE(ob.delivered_recent, 0) = 0
+                      AND COALESCE(lo.last_status, 'pending') IN ('pending', 'sent')
+                      AND COALESCE(lo.last_outbound_at, ob.last_outbound_at) < ?
+                      AND ir.last_incoming_at IS NULL
+                )::int AS possible_blocked_contacts
+            FROM outbound_recent ob
+            LEFT JOIN latest_outbound lo
+              ON lo.session_id = ob.session_id
+             AND lo.lead_id = ob.lead_id
+            LEFT JOIN incoming_recent ir
+              ON ir.session_id = ob.session_id
+             AND ir.lead_id = ob.lead_id
+            GROUP BY ob.session_id
+        `, [
+            ...sessionIds,
+            blockedSignalWindowStartIso,
+            endIso,
+            ...leadScopeParams,
+            ...sessionIds,
+            blockedSignalWindowStartIso,
+            endIso,
+            ...leadScopeParams,
+            ...sessionIds,
+            blockedSignalWindowStartIso,
+            endIso,
+            ...leadScopeParams,
+            blockedSignalStableBeforeIso
+        ]);
+
         const summaryBySessionId = new Map(
             (sessionSummaryRows || []).map((row) => [normalizeDashboardHealthText(row?.session_id), row])
+        );
+        const blockedSignalBySessionId = new Map(
+            (blockedSignalRows || []).map((row) => [
+                normalizeDashboardHealthText(row?.session_id),
+                Number(row?.possible_blocked_contacts || 0)
+            ])
         );
         const dispatchesBySessionId = new Map();
 
@@ -15516,6 +15619,7 @@ app.get('/api/dashboard/account-health', authenticate, async (req, res) => {
         const accounts = (sessionsList || []).map((session) => {
             const sessionId = normalizeDashboardHealthText(session?.session_id);
             const metrics = summaryBySessionId.get(sessionId) || null;
+            const possibleBlockedContacts = Number(blockedSignalBySessionId.get(sessionId) || 0);
             const sentToday = Number(metrics?.sent_today || 0);
             const uniqueLeadsToday = Number(metrics?.unique_leads_today || 0);
             const repliedToday = Number(metrics?.replied_today || 0);
@@ -15528,7 +15632,8 @@ app.get('/api/dashboard/account-health', authenticate, async (req, res) => {
                 sent_today: sentToday,
                 unique_leads_today: uniqueLeadsToday,
                 response_rate: responseRate,
-                sent_last_hour: sentLastHour
+                sent_last_hour: sentLastHour,
+                possible_blocked_contacts: possibleBlockedContacts
             });
 
             return {
@@ -15554,6 +15659,7 @@ app.get('/api/dashboard/account-health', authenticate, async (req, res) => {
                 risk_reason: risk.reason,
                 daily_usage_ratio: risk.daily_usage_ratio,
                 hourly_usage_ratio: risk.hourly_usage_ratio,
+                possible_blocked_contacts: possibleBlockedContacts,
                 dispatches: dispatchesBySessionId.get(sessionId) || [],
                 risk_sort_weight: risk.sort_weight
             };

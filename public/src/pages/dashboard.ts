@@ -101,6 +101,7 @@ type AccountHealthAccount = {
     risk_reason?: string;
     daily_usage_ratio?: number | null;
     hourly_usage_ratio?: number | null;
+    possible_blocked_contacts?: number;
     dispatches?: AccountHealthDispatch[];
 };
 type AccountHealthSummary = {
@@ -605,11 +606,11 @@ function renderAccountHealthSummary(summaryInput: AccountHealthSummary | null | 
     const updatedAtLabel = generatedAt ? formatDate(generatedAt, 'time') : '-';
 
     summary.innerHTML = [
-        `<span class="account-health-summary-item"><strong>${formatNumber(totalAccounts)}</strong> conta(s)</span>`,
-        `<span class="account-health-summary-item"><strong>${formatNumber(critical)}</strong> em risco alto</span>`,
-        `<span class="account-health-summary-item"><strong>${formatNumber(attention)}</strong> pedem atencao</span>`,
-        `<span class="account-health-summary-item"><strong>${formatNumber(cooldown)}</strong> em cooldown</span>`,
-        `<span class="account-health-summary-item">Atualizado <strong>${escapeHtml(updatedAtLabel)}</strong></span>`
+        `<span class="account-health-summary-item is-total"><strong>${formatNumber(totalAccounts)}</strong> conta(s)</span>`,
+        `<span class="account-health-summary-item is-critical"><strong>${formatNumber(critical)}</strong> em risco alto</span>`,
+        `<span class="account-health-summary-item is-attention"><strong>${formatNumber(attention)}</strong> pedem atencao</span>`,
+        `<span class="account-health-summary-item is-cooldown"><strong>${formatNumber(cooldown)}</strong> em cooldown</span>`,
+        `<span class="account-health-summary-item is-updated">Atualizado <strong>${escapeHtml(updatedAtLabel)}</strong></span>`
     ].join('');
 }
 
@@ -639,9 +640,13 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
         const responseRate = Number(account.response_rate || 0);
         const dispatches = Array.isArray(account.dispatches) ? account.dispatches : [];
         const cooldownActive = account.cooldown_active === true;
+        const possibleBlockedContacts = toNonNegativeInt(account.possible_blocked_contacts);
         const dailyUsage = formatAccountHealthLimit(account.sent_today, account.daily_limit);
         const hourlyUsage = formatAccountHealthLimit(account.sent_last_hour, account.hourly_limit);
         const cooldownValue = cooldownActive ? formatAccountHealthTime(account.cooldown_until, 'time') : 'Livre';
+        const possibleBlockedText = possibleBlockedContacts > 0
+            ? `${formatNumber(possibleBlockedContacts)} contato(s)`
+            : 'Nenhum sinal forte';
         const summaryNote = cooldownActive
             ? `Cooldown ate ${escapeHtml(formatAccountHealthTime(account.cooldown_until, 'time'))}`
             : (account.last_sent_at
@@ -649,9 +654,15 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                 : 'Sem disparos hoje');
         const shouldOpen = account.risk_level === 'critical' || account.risk_level === 'attention' || cooldownActive;
         const openAttribute = shouldOpen ? ' open' : '';
+        const accountRiskClass = getAccountHealthRiskClass(account.risk_level).replace('is-', '');
+        const accountClasses = [
+            'account-health-account',
+            `is-${accountRiskClass}`,
+            possibleBlockedContacts > 0 ? 'has-block-signal' : ''
+        ].filter(Boolean).join(' ');
 
         return `
-            <details class="account-health-account"${openAttribute}>
+            <details class="${accountClasses}"${openAttribute}>
                 <summary class="account-health-summary-row">
                     <div class="account-health-summary-main">
                         <div class="account-health-summary-title-row">
@@ -667,22 +678,28 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                     </div>
 
                     <div class="account-health-summary-metrics">
-                        <span class="account-health-metric-chip">
+                        <span class="account-health-metric-chip is-sent">
                             <span class="account-health-metric-chip-label">Enviadas</span>
                             <strong class="account-health-metric-chip-value">${formatNumber(sentToday)}</strong>
                         </span>
-                        <span class="account-health-metric-chip">
+                        <span class="account-health-metric-chip is-replied">
                             <span class="account-health-metric-chip-label">Responderam</span>
                             <strong class="account-health-metric-chip-value">${formatNumber(repliedToday)}</strong>
                         </span>
-                        <span class="account-health-metric-chip">
+                        <span class="account-health-metric-chip is-rate">
                             <span class="account-health-metric-chip-label">Taxa</span>
                             <strong class="account-health-metric-chip-value">${formatPercent(responseRate)}</strong>
                         </span>
-                        <span class="account-health-metric-chip">
+                        <span class="account-health-metric-chip is-usage">
                             <span class="account-health-metric-chip-label">Uso dia</span>
                             <strong class="account-health-metric-chip-value">${escapeHtml(dailyUsage)}</strong>
                         </span>
+                        ${possibleBlockedContacts > 0 ? `
+                            <span class="account-health-metric-chip is-blocked">
+                                <span class="account-health-metric-chip-label">Sem entrega</span>
+                                <strong class="account-health-metric-chip-value">${formatNumber(possibleBlockedContacts)}</strong>
+                            </span>
+                        ` : ''}
                     </div>
 
                     <div class="account-health-summary-side">
@@ -693,7 +710,7 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
 
                 <div class="account-health-details">
                     <div class="account-health-detail-grid">
-                        <section class="account-health-detail-card">
+                        <section class="account-health-detail-card is-response">
                             <span class="account-health-detail-card-title">Resposta do dia</span>
                             <div class="account-health-detail-list">
                                 <div class="account-health-detail-item">
@@ -715,7 +732,7 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                             </div>
                         </section>
 
-                        <section class="account-health-detail-card">
+                        <section class="account-health-detail-card is-rhythm">
                             <span class="account-health-detail-card-title">Ritmo da conta</span>
                             <div class="account-health-detail-list">
                                 <div class="account-health-detail-item">
@@ -737,8 +754,8 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                             </div>
                         </section>
 
-                        <section class="account-health-detail-card">
-                            <span class="account-health-detail-card-title">Leitura operacional</span>
+                        <section class="account-health-detail-card is-insight">
+                            <span class="account-health-detail-card-title">Leitura e alertas</span>
                             <p class="account-health-detail-text">${riskReason}</p>
                             <div class="account-health-detail-list" style="margin-top: 12px;">
                                 <div class="account-health-detail-item">
@@ -753,7 +770,16 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                                     <span>Limite diario</span>
                                     <strong>${escapeHtml(formatAccountHealthLimitHint(account.daily_limit, account.daily_usage_ratio, 'Nao configurado'))}</strong>
                                 </div>
+                                <div class="account-health-detail-item">
+                                    <span>Possivel bloqueio</span>
+                                    <strong>${escapeHtml(possibleBlockedText)}</strong>
+                                </div>
                             </div>
+                            ${possibleBlockedContacts > 0 ? `
+                                <p class="account-health-detail-text" style="margin-top: 12px; color: rgba(214, 228, 239, 0.68);">
+                                    Suspeita de bloqueio considera 2 ou mais envios recentes sem entrega, leitura ou resposta.
+                                </p>
+                            ` : ''}
                         </section>
                     </div>
 

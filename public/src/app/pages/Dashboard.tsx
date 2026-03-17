@@ -202,15 +202,62 @@ function DashboardStyles() {
         .account-health-summary-item strong {
           color: #f4fbf8;
         }
+        .account-health-summary-item.is-total {
+          border-color: rgba(var(--primary-rgb), 0.28);
+          background: rgba(var(--primary-rgb), 0.1);
+        }
+        .account-health-summary-item.is-critical {
+          border-color: rgba(248, 113, 113, 0.24);
+          background: rgba(248, 113, 113, 0.08);
+        }
+        .account-health-summary-item.is-attention {
+          border-color: rgba(250, 204, 21, 0.24);
+          background: rgba(250, 204, 21, 0.08);
+        }
+        .account-health-summary-item.is-cooldown {
+          border-color: rgba(56, 189, 248, 0.24);
+          background: rgba(56, 189, 248, 0.08);
+        }
+        .account-health-summary-item.is-updated {
+          background: rgba(16, 185, 129, 0.08);
+        }
         .account-health-list {
           display: grid;
           gap: 14px;
         }
         .account-health-account {
+          position: relative;
           border: 1px solid rgba(148, 163, 184, 0.18);
           border-radius: 18px;
           background: linear-gradient(180deg, rgba(12, 24, 40, 0.78), rgba(10, 20, 34, 0.92));
           overflow: hidden;
+        }
+        .account-health-account::before {
+          content: '';
+          position: absolute;
+          inset: 0 auto 0 0;
+          width: 3px;
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.85), rgba(14, 165, 233, 0.55));
+          opacity: 0.7;
+        }
+        .account-health-account.is-critical::before {
+          background: linear-gradient(180deg, rgba(248, 113, 113, 0.9), rgba(251, 191, 36, 0.5));
+        }
+        .account-health-account.is-attention::before {
+          background: linear-gradient(180deg, rgba(250, 204, 21, 0.85), rgba(45, 212, 191, 0.45));
+        }
+        .account-health-account.is-healthy::before {
+          background: linear-gradient(180deg, rgba(16, 185, 129, 0.85), rgba(34, 197, 94, 0.45));
+        }
+        .account-health-account.is-paused::before {
+          background: linear-gradient(180deg, rgba(148, 163, 184, 0.8), rgba(71, 85, 105, 0.5));
+        }
+        .account-health-account.has-block-signal::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(circle at right top, rgba(250, 204, 21, 0.08), transparent 32%);
+          pointer-events: none;
         }
         .account-health-account-head {
           display: flex;
@@ -435,10 +482,48 @@ function DashboardStyles() {
         .account-health-account {
           transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
         }
+        .account-health-account.is-critical {
+          background:
+            radial-gradient(circle at right top, rgba(248, 113, 113, 0.08), transparent 30%),
+            linear-gradient(180deg, rgba(18, 25, 39, 0.92), rgba(11, 19, 33, 0.98));
+        }
+        .account-health-account.is-attention {
+          background:
+            radial-gradient(circle at right top, rgba(250, 204, 21, 0.07), transparent 30%),
+            linear-gradient(180deg, rgba(16, 26, 41, 0.92), rgba(10, 20, 35, 0.98));
+        }
+        .account-health-account.is-healthy {
+          background:
+            radial-gradient(circle at right top, rgba(16, 185, 129, 0.06), transparent 30%),
+            linear-gradient(180deg, rgba(11, 24, 40, 0.9), rgba(9, 20, 34, 0.98));
+        }
+        .account-health-account.is-paused {
+          background:
+            radial-gradient(circle at right top, rgba(148, 163, 184, 0.06), transparent 30%),
+            linear-gradient(180deg, rgba(14, 22, 36, 0.9), rgba(10, 19, 32, 0.98));
+        }
         .account-health-account[open] {
           border-color: rgba(var(--primary-rgb), 0.28);
           background:
             linear-gradient(180deg, rgba(13, 28, 46, 0.94), rgba(9, 19, 34, 0.98));
+        }
+        .account-health-account.is-critical[open] {
+          border-color: rgba(248, 113, 113, 0.26);
+          background:
+            radial-gradient(circle at right top, rgba(248, 113, 113, 0.1), transparent 32%),
+            linear-gradient(180deg, rgba(24, 26, 38, 0.96), rgba(12, 19, 31, 0.99));
+        }
+        .account-health-account.is-attention[open] {
+          border-color: rgba(250, 204, 21, 0.24);
+          background:
+            radial-gradient(circle at right top, rgba(250, 204, 21, 0.1), transparent 32%),
+            linear-gradient(180deg, rgba(20, 28, 40, 0.96), rgba(10, 20, 34, 0.99));
+        }
+        .account-health-account.is-healthy[open] {
+          border-color: rgba(16, 185, 129, 0.22);
+          background:
+            radial-gradient(circle at right top, rgba(16, 185, 129, 0.08), transparent 32%),
+            linear-gradient(180deg, rgba(12, 28, 44, 0.96), rgba(9, 19, 34, 0.99));
         }
         .account-health-summary-row {
           list-style: none;
@@ -489,6 +574,26 @@ function DashboardStyles() {
           border-radius: 12px;
           border: 1px solid rgba(148, 163, 184, 0.16);
           background: rgba(255, 255, 255, 0.03);
+        }
+        .account-health-metric-chip.is-sent {
+          background: linear-gradient(180deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.04));
+          border-color: rgba(59, 130, 246, 0.2);
+        }
+        .account-health-metric-chip.is-replied {
+          background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04));
+          border-color: rgba(16, 185, 129, 0.2);
+        }
+        .account-health-metric-chip.is-rate {
+          background: linear-gradient(180deg, rgba(45, 212, 191, 0.12), rgba(45, 212, 191, 0.04));
+          border-color: rgba(45, 212, 191, 0.2);
+        }
+        .account-health-metric-chip.is-usage {
+          background: linear-gradient(180deg, rgba(250, 204, 21, 0.1), rgba(250, 204, 21, 0.03));
+          border-color: rgba(250, 204, 21, 0.2);
+        }
+        .account-health-metric-chip.is-blocked {
+          background: linear-gradient(180deg, rgba(249, 115, 22, 0.14), rgba(250, 204, 21, 0.04));
+          border-color: rgba(249, 115, 22, 0.24);
         }
         .account-health-metric-chip-label {
           display: block;
@@ -543,6 +648,18 @@ function DashboardStyles() {
           border-radius: 14px;
           border: 1px solid rgba(148, 163, 184, 0.14);
           background: rgba(255, 255, 255, 0.03);
+        }
+        .account-health-detail-card.is-response {
+          background: linear-gradient(180deg, rgba(45, 212, 191, 0.08), rgba(255, 255, 255, 0.02));
+          border-color: rgba(45, 212, 191, 0.16);
+        }
+        .account-health-detail-card.is-rhythm {
+          background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.02));
+          border-color: rgba(59, 130, 246, 0.16);
+        }
+        .account-health-detail-card.is-insight {
+          background: linear-gradient(180deg, rgba(250, 204, 21, 0.08), rgba(255, 255, 255, 0.02));
+          border-color: rgba(250, 204, 21, 0.16);
         }
         .account-health-detail-card-title {
           display: block;
