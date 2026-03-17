@@ -903,19 +903,28 @@ function getStatsRangeFromControls() {
 function getStatsMetricColors(metric: StatsMetric) {
     if (metric === 'mensagens') {
         return {
-            borderColor: '#22c55e',
-            backgroundColor: 'rgba(34, 197, 94, 0.16)'
+            borderColor: '#2ef2b6',
+            backgroundColor: 'rgba(46, 242, 182, 0.18)',
+            glowColor: 'rgba(46, 242, 182, 0.36)',
+            pointColor: '#c7fff0',
+            gridColor: 'rgba(46, 242, 182, 0.1)'
         };
     }
     if (metric === 'interacoes') {
         return {
-            borderColor: '#38bdf8',
-            backgroundColor: 'rgba(56, 189, 248, 0.16)'
+            borderColor: '#38d8ff',
+            backgroundColor: 'rgba(56, 216, 255, 0.18)',
+            glowColor: 'rgba(56, 216, 255, 0.34)',
+            pointColor: '#d5f8ff',
+            gridColor: 'rgba(56, 216, 255, 0.1)'
         };
     }
     return {
-        borderColor: '#667eea',
-        backgroundColor: 'rgba(102, 126, 234, 0.16)'
+        borderColor: '#7c9cff',
+        backgroundColor: 'rgba(124, 156, 255, 0.18)',
+        glowColor: 'rgba(124, 156, 255, 0.34)',
+        pointColor: '#ecf2ff',
+        gridColor: 'rgba(124, 156, 255, 0.1)'
     };
 }
 
@@ -930,6 +939,8 @@ function updateChartTypeButtonsState() {
 function renderStatsChart(labels: string[], values: number[], metric: StatsMetric) {
     const ctx = document.getElementById('statsChart') as HTMLCanvasElement | null;
     if (!ctx || typeof Chart === 'undefined') return;
+    const canvasCtx = ctx.getContext('2d');
+    if (!canvasCtx) return;
 
     const chartLib = Chart as unknown as {
         getChart?: (canvas: HTMLCanvasElement) => { destroy: () => void } | undefined;
@@ -942,32 +953,91 @@ function renderStatsChart(labels: string[], values: number[], metric: StatsMetri
     }
 
     const palette = getStatsMetricColors(metric);
+    const areaGradient = canvasCtx.createLinearGradient(0, 0, 0, Math.max(ctx.height || 220, 220));
+    areaGradient.addColorStop(0, palette.backgroundColor);
+    areaGradient.addColorStop(0.48, palette.glowColor);
+    areaGradient.addColorStop(1, 'rgba(7, 16, 30, 0.02)');
+
+    const neonGlowPlugin = {
+        id: 'dashboardNeonGlow',
+        beforeDatasetsDraw(chart: { ctx: CanvasRenderingContext2D }) {
+            chart.ctx.save();
+            chart.ctx.shadowColor = palette.glowColor;
+            chart.ctx.shadowBlur = statsChartType === 'line' ? 18 : 10;
+            chart.ctx.shadowOffsetX = 0;
+            chart.ctx.shadowOffsetY = 0;
+        },
+        afterDatasetsDraw(chart: { ctx: CanvasRenderingContext2D }) {
+            chart.ctx.restore();
+        }
+    };
+
     const dataset = {
         label: STATS_METRIC_LABELS[metric],
         data: values,
         borderColor: palette.borderColor,
-        backgroundColor: palette.backgroundColor,
-        borderWidth: 2,
+        backgroundColor: areaGradient,
+        borderWidth: statsChartType === 'line' ? 2.4 : 0,
         fill: statsChartType === 'line',
-        tension: statsChartType === 'line' ? 0.3 : 0,
-        pointRadius: statsChartType === 'line' ? 3 : 0,
-        pointHoverRadius: statsChartType === 'line' ? 5 : 0
+        tension: statsChartType === 'line' ? 0.36 : 0,
+        pointRadius: statsChartType === 'line' ? 3.2 : 0,
+        pointHoverRadius: statsChartType === 'line' ? 5.5 : 0,
+        pointBackgroundColor: palette.pointColor,
+        pointBorderColor: palette.borderColor,
+        pointBorderWidth: statsChartType === 'line' ? 1.4 : 0,
+        pointHoverBackgroundColor: '#ffffff',
+        pointHoverBorderColor: palette.borderColor,
+        pointHoverBorderWidth: 2,
+        barThickness: statsChartType === 'bar' ? 18 : undefined,
+        maxBarThickness: statsChartType === 'bar' ? 22 : undefined,
+        borderRadius: statsChartType === 'bar' ? 14 : 0
     };
 
     statsChartInstance = new Chart(ctx, {
         type: statsChartType,
         data: { labels, datasets: [dataset] },
+        plugins: [neonGlowPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            layout: {
+                padding: { top: 8, left: 2, right: 6, bottom: 0 }
+            },
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(6, 14, 28, 0.92)',
+                    borderColor: palette.glowColor,
+                    borderWidth: 1,
+                    padding: 10,
+                    titleColor: '#e8f7ff',
+                    bodyColor: '#d6ecff',
+                    displayColors: false
+                }
             },
             scales: {
+                x: {
+                    grid: {
+                        color: 'rgba(125, 211, 252, 0.045)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: 'rgba(214, 228, 239, 0.52)'
+                    }
+                },
                 y: {
                     beginAtZero: true,
+                    grid: {
+                        color: palette.gridColor,
+                        drawBorder: false
+                    },
                     ticks: {
-                        precision: 0
+                        precision: 0,
+                        color: 'rgba(214, 228, 239, 0.58)'
                     }
                 }
             }

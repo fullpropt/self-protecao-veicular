@@ -38,6 +38,26 @@ function DashboardStyles() {
         @media (max-width: 900px) { .dashboard-botconversa { grid-template-columns: 1fr; } }
         .stats-period-card, .stats-general-card, .events-personalized-card { background: var(--surface); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-md); padding: 24px; border: 1px solid var(--border-color); }
         .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 600; }
+        .stats-period-card {
+          position: relative;
+          overflow: hidden;
+          border-color: rgba(56, 189, 248, 0.16);
+          background:
+            radial-gradient(circle at 12% 0%, rgba(34, 211, 238, 0.18), transparent 26%),
+            radial-gradient(circle at 84% 100%, rgba(96, 165, 250, 0.12), transparent 28%),
+            linear-gradient(180deg, rgba(8, 22, 40, 0.98), rgba(8, 18, 33, 0.98));
+          box-shadow:
+            0 22px 48px rgba(2, 6, 23, 0.28),
+            inset 0 1px 0 rgba(125, 211, 252, 0.05);
+        }
+        .stats-period-card::after {
+          content: '';
+          position: absolute;
+          inset: auto 24px 24px 24px;
+          height: 1px;
+          background: linear-gradient(90deg, rgba(34, 211, 238, 0), rgba(34, 211, 238, 0.3), rgba(96, 165, 250, 0));
+          pointer-events: none;
+        }
         .stats-period-controls {
           display: grid;
           grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(180px, 1fr) auto;
@@ -90,6 +110,34 @@ function DashboardStyles() {
         }
         .chart-type-toggle .chart-btn .chart-btn-label {
           line-height: 1;
+        }
+        .stats-period-chart {
+          position: relative;
+          min-height: 228px;
+          padding: 16px 14px 10px;
+          border-radius: 18px;
+          border: 1px solid rgba(56, 189, 248, 0.14);
+          background:
+            linear-gradient(rgba(125, 211, 252, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(125, 211, 252, 0.04) 1px, transparent 1px),
+            radial-gradient(circle at top, rgba(34, 211, 238, 0.08), transparent 48%),
+            linear-gradient(180deg, rgba(8, 20, 37, 0.9), rgba(6, 14, 28, 0.94));
+          background-size: 100% 100%, 12.5% 100%, 100% 100%, 100% 100%;
+          box-shadow:
+            inset 0 1px 0 rgba(125, 211, 252, 0.04),
+            inset 0 0 32px rgba(8, 145, 178, 0.06);
+        }
+        .stats-period-chart::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(180deg, rgba(34, 211, 238, 0.03), rgba(34, 211, 238, 0));
+          pointer-events: none;
+        }
+        .stats-period-chart canvas {
+          position: relative;
+          z-index: 1;
         }
         @media (max-width: 900px) {
           .stats-period-controls {
@@ -151,6 +199,58 @@ function DashboardStyles() {
           font-size: 18px;
           margin-left: 12px;
           flex-shrink: 0;
+        }
+        .dashboard-react .stats-grid .stat-card {
+          position: relative;
+          overflow: hidden;
+        }
+        .dashboard-react .stats-grid .stat-icon {
+          position: relative;
+          width: 48px;
+          height: 48px;
+          border-radius: 15px;
+          border: 1px solid rgba(148, 163, 184, 0.16);
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.022));
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.04),
+            0 12px 24px rgba(2, 6, 23, 0.16);
+          color: rgba(226, 236, 243, 0.9);
+        }
+        .dashboard-react .stats-grid .stat-icon::after {
+          content: '';
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 4px;
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(226, 236, 243, 0.34);
+          box-shadow: 0 0 10px rgba(226, 236, 243, 0.12);
+        }
+        .dashboard-react .stats-grid .stat-icon .icon {
+          width: 20px;
+          height: 20px;
+        }
+        .dashboard-react .stats-grid .stat-icon.primary,
+        .dashboard-react .stats-grid .stat-icon.success,
+        .dashboard-react .stats-grid .stat-icon.warning,
+        .dashboard-react .stats-grid .stat-icon.info {
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.022));
+          color: rgba(226, 236, 243, 0.9);
+        }
+        .dashboard-react .stats-grid .stat-icon.primary::after {
+          background: rgba(103, 232, 249, 0.44);
+        }
+        .dashboard-react .stats-grid .stat-icon.success::after {
+          background: rgba(167, 243, 208, 0.44);
+        }
+        .dashboard-react .stats-grid .stat-icon.warning::after {
+          background: rgba(253, 224, 71, 0.4);
+        }
+        .dashboard-react .stats-grid .stat-icon.info::after {
+          background: rgba(191, 219, 254, 0.42);
         }
         .account-health-card {
           margin-bottom: 24px;
@@ -1052,6 +1152,7 @@ function DashboardStyles() {
           .events-header { gap: 8px; margin-bottom: 12px; }
           .events-controls { width: 100%; margin-left: 0; }
           .events-controls .form-select, .events-controls .btn { width: 100%; }
+          .stats-period-chart { min-height: 190px; padding: 12px 10px 8px; border-radius: 14px; }
           .events-row-head { align-items: flex-start; }
           .events-row-main { min-width: 0; }
           .events-row-side { width: 100%; justify-content: space-between; }
@@ -1345,7 +1446,7 @@ function StatsCards() {
   return (
     <div className="stats-grid">
       <div className="stat-card">
-        <div className="stat-icon primary"><span className="icon icon-contacts"></span></div>
+        <div className="stat-icon primary"><span className="icon icon-user"></span></div>
         <div className="stat-content">
           <div className="stat-value" id="totalLeads">0</div>
           <div className="stat-label">Total de Leads</div>
@@ -1361,7 +1462,7 @@ function StatsCards() {
         </div>
       </div>
       <div className="stat-card">
-        <div className="stat-icon warning"><span className="icon icon-clock"></span></div>
+        <div className="stat-icon warning"><span className="icon icon-spark"></span></div>
         <div className="stat-content">
           <div className="stat-value" id="pendingLeads">0</div>
           <div className="stat-label">Em Andamento</div>
@@ -1369,7 +1470,7 @@ function StatsCards() {
         </div>
       </div>
       <div className="stat-card">
-        <div className="stat-icon info"><span className="icon icon-chart-bar"></span></div>
+        <div className="stat-icon info"><span className="icon icon-chart-line"></span></div>
         <div className="stat-content">
           <div className="stat-value" id="conversionRate">0.0%</div>
           <div className="stat-label">Conversão</div>
