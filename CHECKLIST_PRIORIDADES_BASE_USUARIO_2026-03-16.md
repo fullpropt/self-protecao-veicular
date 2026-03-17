@@ -54,6 +54,8 @@ Status do bloco: [~] Parcial (tecnicamente avancado)
   Evidencia: variaveis aplicadas no Railway em 2026-03-17 e validacao com `/metrics` retornando `200` com bearer token e `401` sem token.
 - [x] Alertas operacionais de fila/fluxo com cooldown implementados.
   Evidencia: `runOpsAlertsCycle`, `buildOpsThresholdState` e metricas `zapvender_ops_alert_*` em `server/index.js`.
+- [x] Notificacao externa de alertas operacionais via webhook configuravel.
+  Evidencia: `dispatchOpsAlertExternalNotification` + envs `OPS_ALERT_NOTIFY_*` em `server/index.js` e `.env.example`.
 - [~] Logging estruturado aplicado nos pontos criticos de inbound/locks/idempotencia.
   Evidencia: `logStructured(...)` com eventos `flow.inbound.*`, `flow.idempotency.*` e `flow.lock.*` em `server/index.js`.
 
@@ -111,5 +113,5 @@ Status do bloco: [~] Parcial baixo
 
 Proximo foco recomendado:
 1. Fechar P0 Seguranca com rotacao completa de segredos externos (revogacao + troca + evidencia).
-2. Consolidar observabilidade com dashboard + notificacao externa (Grafana/Alertmanager/Sentry).
+2. Consolidar observabilidade com dashboard e politicas de alerta (Grafana/Alertmanager/Sentry), usando o webhook externo ja disponivel.
 3. Iniciar P1 Refatoracao incremental (`server/index.js` e `server/database/models.js` por dominio).

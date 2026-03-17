@@ -265,6 +265,22 @@ const OPS_ALERT_FLOW_RUNNING_WARN = parsePositiveIntInRange(
     1,
     100000000
 );
+const OPS_ALERT_NOTIFY_WEBHOOK_URL = String(process.env.OPS_ALERT_NOTIFY_WEBHOOK_URL || '').trim();
+const OPS_ALERT_NOTIFY_BEARER_TOKEN = String(process.env.OPS_ALERT_NOTIFY_BEARER_TOKEN || '').trim();
+const OPS_ALERT_NOTIFY_ENABLED = parseBooleanEnv(
+    process.env.OPS_ALERT_NOTIFY_ENABLED,
+    Boolean(OPS_ALERT_NOTIFY_WEBHOOK_URL)
+);
+const OPS_ALERT_NOTIFY_TIMEOUT_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERT_NOTIFY_TIMEOUT_MS,
+    5000,
+    500,
+    120000
+);
+const OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT = parseBooleanEnv(
+    process.env.OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT,
+    true
+);
 const APP_LOG_LEVEL = parseLogLevel(
     process.env.LOG_LEVEL,
     process.env.NODE_ENV === 'production' ? 'info' : 'debug'
@@ -1684,6 +1700,12 @@ const corsOptionsDelegate = (req, callback) => {
 
 app.use(cors(corsOptionsDelegate));
 
+let opsAlertsIntervalId = null;
+let opsAlertsBootstrapTimeoutId = null;
+let opsAlertsIsRunning = false;
+let opsAlertsLastSummary = null;
+const opsAlertsLastTriggerByKey = new Map();
+
 async function getOpsRuntimeSnapshot() {
     const connectedSessions = Array.from(sessions.values()).filter((session) => session?.isConnected === true).length;
     const totalSessions = sessions.size;
@@ -1733,6 +1755,14 @@ function buildOpsMetricsLines(snapshot = {}, thresholdState = {}) {
     const queueSent = Number(snapshot.queueSent || 0) || 0;
     const queueFailed = Number(snapshot.queueFailed || 0) || 0;
     const flowRunning = Number(snapshot.flowRunning || 0) || 0;
+    const lastCycle = (opsAlertsLastSummary && typeof opsAlertsLastSummary === 'object')
+        ? opsAlertsLastSummary
+        : {};
+    const lastCycleTriggered = Number(lastCycle.alertsTriggered || 0) || 0;
+    const lastCycleSuppressed = Number(lastCycle.alertsSuppressedByCooldown || 0) || 0;
+    const lastCycleNotifySent = Number(lastCycle.notificationsSent || 0) || 0;
+    const lastCycleNotifyFailed = Number(lastCycle.notificationsFailed || 0) || 0;
+    const lastCycleNotifySkipped = Number(lastCycle.notificationsSkipped || 0) || 0;
 
     return [
         '# HELP zapvender_process_uptime_seconds Node process uptime in seconds',
@@ -1762,6 +1792,9 @@ function buildOpsMetricsLines(snapshot = {}, thresholdState = {}) {
         '# HELP zapvender_ops_alerts_enabled Ops alerts worker enabled (1=true)',
         '# TYPE zapvender_ops_alerts_enabled gauge',
         `zapvender_ops_alerts_enabled ${OPS_ALERTS_ENABLED ? 1 : 0}`,
+        '# HELP zapvender_ops_alert_notify_enabled Ops alert external notifier enabled (1=true)',
+        '# TYPE zapvender_ops_alert_notify_enabled gauge',
+        `zapvender_ops_alert_notify_enabled ${OPS_ALERT_NOTIFY_ENABLED ? 1 : 0}`,
         '# HELP zapvender_ops_alert_queue_pending_warn_threshold Alert threshold for pending queue messages',
         '# TYPE zapvender_ops_alert_queue_pending_warn_threshold gauge',
         `zapvender_ops_alert_queue_pending_warn_threshold ${OPS_ALERT_QUEUE_PENDING_WARN}`,
@@ -1779,7 +1812,22 @@ function buildOpsMetricsLines(snapshot = {}, thresholdState = {}) {
         `zapvender_ops_alert_queue_failed_exceeded ${Number(thresholdState.queueFailedExceeded || 0)}`,
         '# HELP zapvender_ops_alert_flow_running_exceeded Flow running threshold exceeded (1=true)',
         '# TYPE zapvender_ops_alert_flow_running_exceeded gauge',
-        `zapvender_ops_alert_flow_running_exceeded ${Number(thresholdState.flowRunningExceeded || 0)}`
+        `zapvender_ops_alert_flow_running_exceeded ${Number(thresholdState.flowRunningExceeded || 0)}`,
+        '# HELP zapvender_ops_alert_last_cycle_triggered Alerts triggered in last ops cycle',
+        '# TYPE zapvender_ops_alert_last_cycle_triggered gauge',
+        `zapvender_ops_alert_last_cycle_triggered ${lastCycleTriggered}`,
+        '# HELP zapvender_ops_alert_last_cycle_suppressed Alerts suppressed by cooldown in last ops cycle',
+        '# TYPE zapvender_ops_alert_last_cycle_suppressed gauge',
+        `zapvender_ops_alert_last_cycle_suppressed ${lastCycleSuppressed}`,
+        '# HELP zapvender_ops_alert_last_cycle_notify_sent External notifications sent in last ops cycle',
+        '# TYPE zapvender_ops_alert_last_cycle_notify_sent gauge',
+        `zapvender_ops_alert_last_cycle_notify_sent ${lastCycleNotifySent}`,
+        '# HELP zapvender_ops_alert_last_cycle_notify_failed External notifications failed in last ops cycle',
+        '# TYPE zapvender_ops_alert_last_cycle_notify_failed gauge',
+        `zapvender_ops_alert_last_cycle_notify_failed ${lastCycleNotifyFailed}`,
+        '# HELP zapvender_ops_alert_last_cycle_notify_skipped External notifications skipped in last ops cycle',
+        '# TYPE zapvender_ops_alert_last_cycle_notify_skipped gauge',
+        `zapvender_ops_alert_last_cycle_notify_skipped ${lastCycleNotifySkipped}`
     ];
 }
 
@@ -2287,11 +2335,6 @@ let flowAwaitingInputRecoveryIntervalId = null;
 let flowAwaitingInputRecoveryBootstrapTimeoutId = null;
 let flowAwaitingInputRecoveryIsRunning = false;
 let flowAwaitingInputRecoveryLastSummary = null;
-let opsAlertsIntervalId = null;
-let opsAlertsBootstrapTimeoutId = null;
-let opsAlertsIsRunning = false;
-let opsAlertsLastSummary = null;
-const opsAlertsLastTriggerByKey = new Map();
 const FLOW_RECOVERY_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_DELAY_MS || '', 10) || 2500;
 const FLOW_RECOVERY_WINDOW_MS = parseInt(process.env.FLOW_RECOVERY_WINDOW_MS || '', 10) || (5 * 60 * 1000);
 const FLOW_RECOVERY_TRACKER_LIMIT = 4000;
@@ -9032,6 +9075,129 @@ function buildOpsAlertsFromSnapshot(snapshot = {}, thresholdState = {}) {
     return alerts;
 }
 
+function resolveOpsAlertNotifyUrl() {
+    const rawValue = String(OPS_ALERT_NOTIFY_WEBHOOK_URL || '').trim();
+    if (!rawValue) return '';
+    try {
+        return new URL(rawValue).toString();
+    } catch (_) {
+        return '';
+    }
+}
+
+function buildOpsAlertNotificationPayload(options = {}) {
+    const alert = options.alert || {};
+    const summary = options.summary || {};
+    const snapshot = options.snapshot || {};
+    const trigger = String(options.trigger || '').trim() || 'ops-alert-worker';
+    const payload = {
+        source: 'zapvender',
+        app: APP_BRAND_NAME,
+        event: 'ops.alert.threshold_exceeded',
+        emittedAt: new Date().toISOString(),
+        environment: String(process.env.NODE_ENV || '').trim() || 'development',
+        trigger,
+        alert: {
+            key: String(alert.key || '').trim() || 'unknown',
+            metric: String(alert.metric || '').trim() || 'unknown',
+            value: Number(alert.value || 0) || 0,
+            threshold: Number(alert.threshold || 0) || 0,
+            message: String(alert.message || '').trim() || 'Ops alert threshold exceeded',
+            cooldownMs: OPS_ALERTS_COOLDOWN_MS
+        },
+        cycle: {
+            alertsEvaluated: Number(summary.alertsEvaluated || 0) || 0,
+            alertsTriggered: Number(summary.alertsTriggered || 0) || 0,
+            alertsSuppressedByCooldown: Number(summary.alertsSuppressedByCooldown || 0) || 0
+        }
+    };
+
+    if (OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT) {
+        payload.snapshot = {
+            queuePending: Number(snapshot.queuePending || 0) || 0,
+            queueFailed: Number(snapshot.queueFailed || 0) || 0,
+            queueProcessing: Number(snapshot.queueProcessing || 0) || 0,
+            flowRunning: Number(snapshot.flowRunning || 0) || 0,
+            sessionsConnected: Number(snapshot.connectedSessions || 0) || 0,
+            sessionsTotal: Number(snapshot.totalSessions || 0) || 0
+        };
+    }
+
+    return payload;
+}
+
+async function dispatchOpsAlertExternalNotification(options = {}) {
+    if (!OPS_ALERT_NOTIFY_ENABLED) {
+        return { skipped: 'disabled' };
+    }
+
+    const webhookUrl = resolveOpsAlertNotifyUrl();
+    if (!webhookUrl) {
+        return { skipped: 'invalid_webhook_url' };
+    }
+
+    const alert = options.alert || {};
+    const trigger = String(options.trigger || '').trim() || 'ops-alert-worker';
+    const payload = buildOpsAlertNotificationPayload(options);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), OPS_ALERT_NOTIFY_TIMEOUT_MS);
+    const startedAtMs = Date.now();
+
+    try {
+        const headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': `${APP_BRAND_NAME}/ops-alert-notifier`
+        };
+        if (OPS_ALERT_NOTIFY_BEARER_TOKEN) {
+            headers.Authorization = `Bearer ${OPS_ALERT_NOTIFY_BEARER_TOKEN}`;
+        }
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        });
+
+        const durationMs = Math.max(0, Date.now() - startedAtMs);
+        if (!response.ok) {
+            const responseBody = String(await response.text().catch(() => '')).trim().slice(0, 240);
+            throw new Error(`http_${response.status}${responseBody ? `_${responseBody}` : ''}`);
+        }
+
+        logStructured(
+            'info',
+            'ops.alert.notification_sent',
+            {
+                trigger,
+                alertKey: String(alert.key || '').trim() || 'unknown',
+                metric: String(alert.metric || '').trim() || 'unknown',
+                statusCode: Number(response.status || 0) || 0,
+                durationMs
+            },
+            'Notificacao externa de alerta enviada'
+        );
+        return { sent: true, statusCode: response.status, durationMs };
+    } catch (error) {
+        const durationMs = Math.max(0, Date.now() - startedAtMs);
+        logStructured(
+            'error',
+            'ops.alert.notification_failed',
+            {
+                trigger,
+                alertKey: String(alert.key || '').trim() || 'unknown',
+                metric: String(alert.metric || '').trim() || 'unknown',
+                durationMs,
+                error: normalizeErrorForLog(error)
+            },
+            'Falha ao enviar notificacao externa de alerta'
+        );
+        return { sent: false, error: normalizeErrorForLog(error), durationMs };
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 async function runOpsAlertsCycle(options = {}) {
     const trigger = String(options.trigger || 'ops-alert-worker').trim() || 'ops-alert-worker';
     const force = options.force === true;
@@ -9050,6 +9216,9 @@ async function runOpsAlertsCycle(options = {}) {
         alertsEvaluated: 0,
         alertsTriggered: 0,
         alertsSuppressedByCooldown: 0,
+        notificationsSent: 0,
+        notificationsFailed: 0,
+        notificationsSkipped: 0,
         elapsedMs: 0
     };
 
@@ -9080,6 +9249,31 @@ async function runOpsAlertsCycle(options = {}) {
                 },
                 alert.message
             );
+
+            const notifyResult = await dispatchOpsAlertExternalNotification({
+                alert,
+                snapshot,
+                summary,
+                trigger
+            });
+            if (notifyResult?.sent === true) {
+                summary.notificationsSent += 1;
+            } else if (notifyResult?.skipped) {
+                summary.notificationsSkipped += 1;
+                if (notifyResult.skipped === 'invalid_webhook_url') {
+                    logStructured(
+                        'warn',
+                        'ops.alert.notification_skipped',
+                        {
+                            reason: notifyResult.skipped,
+                            trigger
+                        },
+                        'Notificador externo de alerta com URL invalida'
+                    );
+                }
+            } else {
+                summary.notificationsFailed += 1;
+            }
         }
 
         return summary;
@@ -9118,6 +9312,16 @@ function startOpsAlertsWorker() {
         return;
     }
 
+    const notifyUrlValid = Boolean(resolveOpsAlertNotifyUrl());
+    if (OPS_ALERT_NOTIFY_ENABLED && !notifyUrlValid) {
+        logStructured(
+            'warn',
+            'ops.alert.notification_config_invalid',
+            { reason: 'invalid_webhook_url' },
+            'Notificador externo de alerta habilitado, mas URL do webhook e invalida'
+        );
+    }
+
     const runCycle = () => {
         runOpsAlertsCycle({
             trigger: 'ops-alert-worker'
@@ -9150,7 +9354,9 @@ function startOpsAlertsWorker() {
             cooldownMs: OPS_ALERTS_COOLDOWN_MS,
             queuePendingWarn: OPS_ALERT_QUEUE_PENDING_WARN,
             queueFailedWarn: OPS_ALERT_QUEUE_FAILED_WARN,
-            flowRunningWarn: OPS_ALERT_FLOW_RUNNING_WARN
+            flowRunningWarn: OPS_ALERT_FLOW_RUNNING_WARN,
+            notifyEnabled: OPS_ALERT_NOTIFY_ENABLED,
+            notifyWebhookConfigured: notifyUrlValid
         },
         'Worker de alertas operacionais ativo'
     );
