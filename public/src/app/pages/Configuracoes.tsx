@@ -100,6 +100,7 @@ export default function Configuracoes() {
             .settings-nav .settings-nav-item[data-panel="conexao"],
             .settings-nav .settings-nav-item[data-panel="users"],
             .settings-nav .settings-nav-item[data-panel="plan"] { display: flex; }
+            .settings-plan-hero-grid { grid-template-columns: 1fr; }
         }
         .settings-nav {
             background: var(--surface);
@@ -168,6 +169,127 @@ export default function Configuracoes() {
             border-radius: var(--border-radius);
             padding: 20px;
             margin-bottom: 15px;
+        }
+        .settings-plan-shell {
+            margin-bottom: 22px;
+        }
+        .settings-plan-hero {
+            position: relative;
+            overflow: hidden;
+            display: grid;
+            gap: 16px;
+            padding: 24px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                radial-gradient(circle at top right, var(--plan-glow, rgba(255, 255, 255, 0.12)), transparent 48%),
+                linear-gradient(135deg, rgba(17, 32, 53, 0.94) 0%, rgba(10, 22, 38, 0.98) 100%);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+        .settings-plan-hero::after {
+            content: '';
+            position: absolute;
+            inset: auto -20% -55% auto;
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            background: var(--plan-orb, rgba(255, 255, 255, 0.12));
+            filter: blur(60px);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .settings-plan-hero--starter {
+            --plan-glow: rgba(34, 197, 94, 0.22);
+            --plan-orb: rgba(34, 197, 94, 0.18);
+        }
+        .settings-plan-hero--premium {
+            --plan-glow: rgba(226, 232, 240, 0.20);
+            --plan-orb: rgba(148, 163, 184, 0.18);
+        }
+        .settings-plan-hero--advanced {
+            --plan-glow: rgba(245, 158, 11, 0.22);
+            --plan-orb: rgba(251, 191, 36, 0.18);
+        }
+        .settings-plan-hero--monster {
+            --plan-glow: rgba(96, 165, 250, 0.24);
+            --plan-orb: rgba(34, 211, 238, 0.18);
+        }
+        .settings-plan-hero-top,
+        .settings-plan-hero-grid,
+        .settings-plan-hero-copy,
+        .settings-plan-hero-name {
+            position: relative;
+            z-index: 1;
+        }
+        .settings-plan-hero-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .settings-plan-hero-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(191, 212, 233, 0.70);
+        }
+        .settings-plan-hero-name {
+            display: block;
+            font-size: clamp(30px, 4vw, 42px);
+            font-weight: 800;
+            line-height: 0.95;
+            letter-spacing: -0.05em;
+            color: transparent;
+            background: linear-gradient(120deg, #f8fafc 0%, #dbeafe 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+        }
+        .settings-plan-hero--starter .settings-plan-hero-name {
+            background-image: linear-gradient(120deg, #d1fae5 0%, #4ade80 50%, #15803d 100%);
+        }
+        .settings-plan-hero--premium .settings-plan-hero-name {
+            background-image: linear-gradient(120deg, #ffffff 0%, #dce3eb 40%, #94a3b8 100%);
+        }
+        .settings-plan-hero--advanced .settings-plan-hero-name {
+            background-image: linear-gradient(120deg, #fef3c7 0%, #fbbf24 45%, #b45309 100%);
+        }
+        .settings-plan-hero--monster .settings-plan-hero-name {
+            background-image: linear-gradient(120deg, #e0f2fe 0%, #7dd3fc 28%, #60a5fa 58%, #22d3ee 100%);
+        }
+        .settings-plan-hero-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+        .settings-plan-hero-metric {
+            display: grid;
+            gap: 6px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: rgba(8, 17, 30, 0.36);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+        .settings-plan-hero-metric-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: rgba(191, 212, 233, 0.72);
+        }
+        .settings-plan-hero-metric-value {
+            color: #f8fafc;
+            font-size: 19px;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .settings-plan-hero-metric-hint,
+        .settings-plan-hero-copy {
+            color: rgba(191, 212, 233, 0.82);
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 0;
         }
         .copy-card-header {
             display: flex;

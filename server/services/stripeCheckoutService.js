@@ -1,6 +1,8 @@
 const Stripe = require('stripe');
 
 const DEFAULT_SUPPORT_EMAIL = 'suporte@zapvender.com';
+const DEFAULT_CHECKOUT_DISPLAY_NAME = 'ZapVender';
+const DEFAULT_CHECKOUT_BRANDING_API_VERSION = '2025-09-30.clover';
 
 const PLAN_CATALOG = {
     starter: {
@@ -67,6 +69,25 @@ function inferPlanByPriceId(priceId) {
 
 function getSupportEmail() {
     return String(process.env.SALES_SUPPORT_EMAIL || DEFAULT_SUPPORT_EMAIL).trim() || DEFAULT_SUPPORT_EMAIL;
+}
+
+function getCheckoutBrandingDisplayName() {
+    return String(process.env.STRIPE_CHECKOUT_DISPLAY_NAME || DEFAULT_CHECKOUT_DISPLAY_NAME).trim();
+}
+
+function getCheckoutBrandingApiVersion() {
+    return String(
+        process.env.STRIPE_CHECKOUT_BRANDING_API_VERSION || DEFAULT_CHECKOUT_BRANDING_API_VERSION
+    ).trim();
+}
+
+function buildCheckoutBrandingSettings() {
+    const displayName = getCheckoutBrandingDisplayName();
+    if (!displayName) return null;
+
+    return {
+        display_name: displayName
+    };
 }
 
 function getStripeClient() {
@@ -191,7 +212,7 @@ async function createCheckoutSession({ plan, successUrl, cancelUrl, customer = {
         subscriptionData.trial_period_days = Number(resolvedPlan.trialDays);
     }
 
-    const sessionPayload = {
+    const checkoutSessionPayload = {
         mode: 'subscription',
         locale: 'pt-BR',
         billing_address_collection: 'auto',
@@ -213,12 +234,20 @@ async function createCheckoutSession({ plan, successUrl, cancelUrl, customer = {
 
     const customerId = await resolveStripeCustomerId(stripe, customer, checkoutMetadata);
     if (customerId) {
-        sessionPayload.customer = customerId;
+        checkoutSessionPayload.customer = customerId;
     } else if (customerEmail) {
-        sessionPayload.customer_email = customerEmail;
+        checkoutSessionPayload.customer_email = customerEmail;
     }
 
-    return stripe.checkout.sessions.create(sessionPayload);
+    const brandingSettings = buildCheckoutBrandingSettings();
+    const requestOptions = {};
+
+    if (brandingSettings) {
+        checkoutSessionPayload.branding_settings = brandingSettings;
+        requestOptions.apiVersion = getCheckoutBrandingApiVersion();
+    }
+
+    return stripe.checkout.sessions.create(checkoutSessionPayload, requestOptions);
 }
 
 async function constructWebhookEvent(rawBody, signature) {

@@ -190,10 +190,11 @@ async function loadContactsPlanUsage() {
         const response = await api.get('/api/plan/status') as PlanStatusApiPayload;
         const metric = response?.plan?.limits?.contacts;
         const rawMax = metric?.max;
+        const hasFiniteMax = rawMax !== null && typeof rawMax !== 'undefined' && Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0;
         contactsPlanUsageState = {
             loaded: true,
             planName: String(response?.plan?.name || 'Plano').trim() || 'Plano',
-            max: Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0 ? Math.floor(Number(rawMax)) : null,
+            max: hasFiniteMax ? Math.floor(Number(rawMax)) : null,
             unlimited: metric?.unlimited === true || rawMax === null || typeof rawMax === 'undefined'
         };
     } catch (_) {
@@ -393,6 +394,45 @@ function getImportValue(normalizedRow: Record<string, string>, aliases: string[]
             return String(value).trim();
         }
     }
+    return '';
+}
+
+function resolveImportContactName(normalizedRow: Record<string, string>) {
+    const directName = getImportValue(normalizedRow, [
+        'nome',
+        'name',
+        'nome_completo',
+        'contato',
+        'cliente',
+        'full_name'
+    ]);
+    if (directName) return directName;
+
+    const ignoredKeys = new Set([
+        'telefone',
+        'phone',
+        'whatsapp',
+        'celular',
+        'fone',
+        'numero',
+        'email',
+        'e_mail',
+        'mail',
+        'tag',
+        'tags',
+        'etiqueta',
+        'etiquetas',
+        'status',
+        'situacao'
+    ]);
+
+    for (const [key, rawValue] of Object.entries(normalizedRow || {})) {
+        const normalizedKey = normalizeImportHeader(key);
+        if (!normalizedKey || ignoredKeys.has(normalizedKey)) continue;
+        const value = String(rawValue || '').trim();
+        if (value) return value;
+    }
+
     return '';
 }
 
@@ -1459,12 +1499,18 @@ async function loadTags() {
             bulkRemoveTagSelect.innerHTML = `<option value="">Selecione uma tag...</option>${tagOptions}`;
         }
     } catch (e) {
-        // ignore
+        console.warn('Falha ao carregar tags para Contatos:', e);
     } finally {
         renderCreateContactTagSuggestions();
         renderEditContactTagSuggestions();
         renderBulkRemoveTagSelectedChips();
     }
+}
+
+async function openImportContactsModal() {
+    await loadTags();
+    await refreshImportTagColumnOptionsFromInputs();
+    openModal('importModal');
 }
 
 async function loadTemplates() {
@@ -1829,6 +1875,7 @@ async function saveContact() {
         applyCustomFieldsValues('contact-custom-field', {});
         clearLeadViewCaches();
         await loadContacts({ forceRefresh: true, silent: true });
+        void loadTags();
         showToast('success', 'Sucesso', 'Contato adicionado!');
     } catch (error) {
         hideLoading();
@@ -1934,6 +1981,7 @@ async function updateContact() {
         clearContactIdFromUrl();
         clearLeadViewCaches();
         await loadContacts({ forceRefresh: true, silent: true });
+        void loadTags();
         showToast('success', 'Sucesso', 'Contato atualizado!');
     } catch (error) {
         hideLoading();
@@ -2449,7 +2497,7 @@ async function importContacts() {
         }
 
         const payload: Record<string, any> = {
-            name: getImportValue(normalizedRow, ['nome', 'name', 'nome_completo', 'contato']) || 'Sem nome',
+            name: resolveImportContactName(normalizedRow) || 'Sem nome',
             phone,
             email: getImportValue(normalizedRow, ['email', 'e-mail', 'mail']),
             status,
@@ -2476,6 +2524,7 @@ async function importContacts() {
         let skipped = 0;
         let failed = 0;
         let limitErrorMessage = '';
+        let firstChunkErrorMessage = '';
 
         for (let offset = 0; offset < leadsToImport.length; offset += CONTACTS_IMPORT_BATCH_SIZE) {
             const chunk = leadsToImport.slice(offset, offset + CONTACTS_IMPORT_BATCH_SIZE);
@@ -2493,6 +2542,9 @@ async function importContacts() {
                 if (getErrorCode(error).startsWith('PLAN_')) {
                     limitErrorMessage = error instanceof Error ? error.message : 'Limite do plano atingido';
                     break;
+                }
+                if (!firstChunkErrorMessage && error instanceof Error && String(error.message || '').trim()) {
+                    firstChunkErrorMessage = String(error.message || '').trim();
                 }
                 failed += chunk.length;
             }
@@ -2518,7 +2570,10 @@ async function importContacts() {
         }
 
         if ((imported + updated) <= 0 && failed > 0) {
-            showToast('error', 'Erro', `Falha na importação (${failed} com erro)`);
+            const errorMessage = firstChunkErrorMessage
+                ? `Falha na importacao (${failed} com erro): ${firstChunkErrorMessage}`
+                : `Falha na importacao (${failed} com erro)`;
+            showToast('error', 'Erro', errorMessage);
             return;
         }
 
@@ -2559,6 +2614,7 @@ function getStatusLabel(status: number) {
 const windowAny = window as Window & {
     initContacts?: () => void;
     loadContacts?: () => void;
+    openImportContactsModal?: () => Promise<void>;
     changePage?: (delta: number) => void;
     changeContactsSessionFilter?: (sessionId: string) => void;
     filterContacts?: () => void;
@@ -2589,6 +2645,7 @@ const windowAny = window as Window & {
 };
 windowAny.initContacts = initContacts;
 windowAny.loadContacts = loadContacts;
+windowAny.openImportContactsModal = openImportContactsModal;
 windowAny.changePage = changePage;
 windowAny.changeContactsSessionFilter = changeContactsSessionFilter;
 windowAny.filterContacts = filterContacts;

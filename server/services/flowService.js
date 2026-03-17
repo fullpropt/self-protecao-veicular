@@ -53,6 +53,12 @@ const FLOW_MENU_ROW_PREFIX = 'flow-handle:';
 const FLOW_MENU_BUTTON_TEXT_DEFAULT = 'Ver Menu';
 const FLOW_MENU_SECTION_TITLE_DEFAULT = 'Opcoes';
 const FLOW_MENU_PROMPT_DEFAULT = 'Selecione uma opcao no menu abaixo:';
+const FLOW_END_MENU_PROMPT_DEFAULT = 'Se desejar, escolha uma opcao no menu abaixo:';
+const FLOW_END_MENU_SECTION_TITLE_DEFAULT = 'Finalizacao';
+const FLOW_END_MENU_ROW_PREFIX = 'flow-end-option:';
+const FLOW_END_MENU_MAX_CUSTOM_OPTIONS = 9;
+const FLOW_END_MENU_FIXED_FINALIZE_LABEL = 'Finalizar';
+const FLOW_END_MENU_FINALIZE_TOKEN = 'finalizar';
 
 function normalizeBooleanFlag(value) {
     if (typeof value === 'boolean') return value;
@@ -112,6 +118,11 @@ function isFlowIntentClassifierConfigured() {
         return false;
     }
     return Boolean(String(process.env.GEMINI_API_KEY || '').trim());
+}
+
+function isFlowInlineMenuOptionsEnabled() {
+    const raw = String(process.env.FLOW_MENU_INLINE_OPTIONS_TEXT || 'false').trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'on';
 }
 
 function readIntentNumberEnv(name, fallback, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY) {
@@ -219,6 +230,24 @@ function parseIntentResponseList(value = null, fallbackValue = '') {
     return fallback ? [fallback] : [];
 }
 
+function parseFlowEndOptions(value = null) {
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => sanitizeOutgoingFlowText(item))
+            .filter(Boolean)
+            .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS);
+    }
+
+    const raw = sanitizeOutgoingFlowText(value || '');
+    if (!raw) return [];
+
+    return raw
+        .split(/[,;\n|]+/)
+        .map((item) => sanitizeOutgoingFlowText(item))
+        .filter(Boolean)
+        .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS);
+}
+
 function parsePathHandleIndex(handleValue = '') {
     const normalized = String(handleValue || '').trim().toLowerCase();
     if (!normalized || normalized === 'default') return 1;
@@ -229,6 +258,30 @@ function parsePathHandleIndex(handleValue = '') {
     const parsed = Number.parseInt(match[1], 10);
     if (!Number.isFinite(parsed) || parsed < 1) return null;
     return parsed;
+}
+
+function extractMenuChoiceIndex(rawValue = '', maxOptions = 0) {
+    const normalized = normalizeIntentText(rawValue);
+    if (!normalized) return null;
+
+    const parseInBounds = (rawNumber) => {
+        const parsed = Number.parseInt(String(rawNumber || ''), 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) return null;
+        if (Number.isFinite(maxOptions) && maxOptions > 0 && parsed > maxOptions) return null;
+        return parsed;
+    };
+
+    if (/^\d+$/.test(normalized)) {
+        return parseInBounds(normalized);
+    }
+
+    const numberMatches = normalized.match(/\b\d{1,2}\b/g) || [];
+    if (numberMatches.length !== 1) return null;
+
+    const hasChoiceHint = /\b(opcao|opcoes|op|item|alternativa|numero|num|menu)\b/.test(normalized);
+    if (!hasChoiceHint) return null;
+
+    return parseInBounds(numberMatches[0]);
 }
 
 function parseLeadCustomFields(value) {
@@ -909,7 +962,34 @@ class FlowService extends EventEmitter {
                 SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error_message = ?
                 WHERE id = ?
             `, ['Fluxo associado nao encontrado para continuar execucao.', activeRow.id]);
-            return null;
+            return this.restoreExecutionFromStorage(conversation, lead);
+        }
+
+        if (Number(flow?.is_active || 0) !== 1) {
+            await run(`
+                UPDATE flow_executions
+                SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Execucao cancelada automaticamente: fluxo inativo.', activeRow.id]);
+            return this.restoreExecutionFromStorage(conversation, lead);
+        }
+
+        if (!this.flowMatchesConversationSession(flow, conversation?.session_id)) {
+            await run(`
+                UPDATE flow_executions
+                SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Execucao cancelada automaticamente: fluxo fora do escopo da sessao.', activeRow.id]);
+            return this.restoreExecutionFromStorage(conversation, lead);
+        }
+
+        if (this.hasInconsistentMenuMode(flow)) {
+            await run(`
+                UPDATE flow_executions
+                SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Execucao cancelada automaticamente: fluxo com modo inconsistente.', activeRow.id]);
+            return this.restoreExecutionFromStorage(conversation, lead);
         }
 
         let parsedVariables = {};
@@ -927,7 +1007,12 @@ class FlowService extends EventEmitter {
             resolvedLead = await Lead.findById(activeRow.lead_id);
         }
         if (!resolvedLead) {
-            return null;
+            await run(`
+                UPDATE flow_executions
+                SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error_message = ?
+                WHERE id = ?
+            `, ['Lead associado nao encontrado para continuar execucao.', activeRow.id]);
+            return this.restoreExecutionFromStorage(conversation, lead);
         }
 
         const execution = {
@@ -956,10 +1041,72 @@ class FlowService extends EventEmitter {
         if (cached) {
             if (lead) cached.lead = lead;
             if (conversation) cached.conversation = conversation;
+
+            const cachedExecutionId = Number(cached?.id || 0);
+            const cachedConversationId = Number(conversation?.id || cached?.conversation?.id || 0);
+            if (!Number.isInteger(cachedExecutionId) || cachedExecutionId <= 0) {
+                this.removeActiveExecution(cachedConversationId || conversation?.id);
+                return this.restoreExecutionFromStorage(conversation, lead);
+            }
+
+            const persistedExecutionRow = await this.fetchExecutionStatusRow(cachedExecutionId);
+            const persistedStatus = String(persistedExecutionRow?.status || '').trim().toLowerCase();
+            if (!persistedExecutionRow || persistedStatus !== 'running') {
+                this.removeActiveExecution(cachedConversationId || conversation?.id);
+                return this.restoreExecutionFromStorage(conversation, lead);
+            }
+
+            const persistedCurrentNode = String(persistedExecutionRow?.current_node || '').trim();
+            if (persistedCurrentNode) {
+                cached.currentNode = persistedCurrentNode;
+            }
+
+            const cachedFlowId = Number(cached?.flow?.id || 0);
+            if (!Number.isInteger(cachedFlowId) || cachedFlowId <= 0) {
+                await this.endFlow(cached, 'failed', 'Execucao sem fluxo associado.');
+                return null;
+            }
+
+            const refreshedFlow = await Flow.findById(cachedFlowId);
+            if (!refreshedFlow) {
+                await this.endFlow(cached, 'failed', 'Fluxo associado nao encontrado para continuar execucao.');
+                return null;
+            }
+
+            if (Number(refreshedFlow?.is_active || 0) !== 1) {
+                await this.endFlow(cached, 'cancelled', 'Execucao cancelada automaticamente: fluxo inativo.');
+                return null;
+            }
+
+            if (!this.flowMatchesConversationSession(refreshedFlow, cached?.conversation?.session_id)) {
+                await this.endFlow(cached, 'cancelled', 'Execucao cancelada automaticamente: fluxo fora do escopo da sessao.');
+                return null;
+            }
+
+            if (this.hasInconsistentMenuMode(refreshedFlow)) {
+                await this.endFlow(cached, 'cancelled', 'Execucao cancelada automaticamente: fluxo com modo inconsistente.');
+                return null;
+            }
+
+            cached.flow = refreshedFlow;
             return cached;
         }
 
         return this.restoreExecutionFromStorage(conversation, lead);
+    }
+
+    async fetchExecutionStatusRow(executionId) {
+        const normalizedExecutionId = Number(executionId || 0);
+        if (!Number.isInteger(normalizedExecutionId) || normalizedExecutionId <= 0) {
+            return null;
+        }
+
+        return queryOne(`
+            SELECT status, current_node
+            FROM flow_executions
+            WHERE id = ?
+            LIMIT 1
+        `, [normalizedExecutionId]);
     }
 
     ensureExecutionVariables(execution) {
@@ -978,6 +1125,25 @@ class FlowService extends EventEmitter {
         const normalized = String(value || '').trim().toLowerCase();
         if (FLOW_INPUT_RESPONSE_MODES.has(normalized)) return normalized;
         return 'text';
+    }
+
+    normalizeFlowBuilderMode(value = '') {
+        return String(value || '').trim().toLowerCase() === 'menu' ? 'menu' : 'humanized';
+    }
+
+    inferFlowBuilderModeFromNodes(flow = null) {
+        const nodes = Array.isArray(flow?.nodes) ? flow.nodes : [];
+        const hasIntentMenuNode = nodes.some((node) => this.isIntentMenuEnabled(node));
+        return hasIntentMenuNode ? 'menu' : 'humanized';
+    }
+
+    isMenuFlowBuilderMode(flow = null) {
+        const explicitModeRaw = String(flow?.flow_builder_mode || flow?.flowBuilderMode || '').trim();
+        if (explicitModeRaw) {
+            return this.normalizeFlowBuilderMode(explicitModeRaw) === 'menu';
+        }
+
+        return this.inferFlowBuilderModeFromNodes(flow) === 'menu';
     }
 
     normalizeMenuButtonUrl(value = '') {
@@ -1094,6 +1260,79 @@ class FlowService extends EventEmitter {
         });
     }
 
+    resolveAwaitingInputMenuHandleFromInboundMessage(flow = null, node = null, message = {}, responseText = '') {
+        const options = this.getAwaitingInputMenuOptions(flow, node);
+        if (options.length === 0) return '';
+
+        const optionByHandle = new Map();
+        const optionByRowId = new Map();
+        const optionByTitle = new Map();
+
+        for (const option of options) {
+            const handle = this.normalizeFlowHandle(option?.handle);
+            if (handle) {
+                optionByHandle.set(handle, option);
+            }
+
+            const rowId = String(option?.rowId || '').trim().toLowerCase();
+            if (rowId) {
+                optionByRowId.set(rowId, option);
+            }
+
+            const normalizedTitle = normalizeIntentText(option?.title || '');
+            if (normalizedTitle && !optionByTitle.has(normalizedTitle)) {
+                optionByTitle.set(normalizedTitle, option);
+            }
+        }
+
+        const candidates = [
+            message?.selectionId,
+            message?.selectedRowId,
+            message?.optionId,
+            message?.choiceId,
+            message?.selectionText,
+            responseText
+        ];
+
+        for (const candidateRaw of candidates) {
+            const candidate = String(candidateRaw || '').trim();
+            if (!candidate) continue;
+
+            const candidateLower = candidate.toLowerCase();
+            const directRowMatch = optionByRowId.get(candidateLower);
+            if (directRowMatch?.handle) {
+                return this.normalizeFlowHandle(directRowMatch.handle);
+            }
+
+            if (candidateLower.startsWith(FLOW_MENU_ROW_PREFIX)) {
+                const rowHandle = this.normalizeFlowHandle(candidateLower.slice(FLOW_MENU_ROW_PREFIX.length));
+                if (optionByHandle.has(rowHandle)) return rowHandle;
+            }
+
+            const selectedIndex = extractMenuChoiceIndex(candidate, options.length);
+            if (Number.isFinite(selectedIndex) && selectedIndex > 0) {
+                const selectedOption = options[selectedIndex - 1];
+                if (selectedOption?.handle) {
+                    return this.normalizeFlowHandle(selectedOption.handle);
+                }
+            }
+
+            const directHandle = this.normalizeFlowHandleFromToken(candidate);
+            if (directHandle && optionByHandle.has(directHandle)) {
+                return directHandle;
+            }
+
+            const normalizedCandidate = normalizeIntentText(candidate);
+            if (!normalizedCandidate) continue;
+            const titleMatch = optionByTitle.get(normalizedCandidate);
+            if (titleMatch?.handle) {
+                return this.normalizeFlowHandle(titleMatch.handle);
+            }
+        }
+
+        return '';
+    }
+
     normalizeFlowHandleFromToken(value = '') {
         const rawToken = String(value || '').trim();
         if (!rawToken) return '';
@@ -1149,6 +1388,28 @@ class FlowService extends EventEmitter {
         return sanitized || FLOW_MENU_PROMPT_DEFAULT;
     }
 
+    buildInlineMenuPrompt(basePrompt = '', rows = []) {
+        const prompt = sanitizeOutgoingFlowText(basePrompt || '') || FLOW_MENU_PROMPT_DEFAULT;
+        if (!isFlowInlineMenuOptionsEnabled()) {
+            return prompt;
+        }
+
+        const normalizedRows = Array.isArray(rows) ? rows : [];
+        if (normalizedRows.length === 0) {
+            return prompt;
+        }
+
+        const numberedOptions = normalizedRows
+            .map((row, index) => `${index + 1}. ${sanitizeOutgoingFlowText(row?.title || '')}`)
+            .filter((line) => !/^\d+\.\s*$/.test(line));
+
+        if (numberedOptions.length === 0) {
+            return prompt;
+        }
+
+        return `${prompt}\n\n${numberedOptions.join('\n')}\n\nResponda com o numero da opcao.`;
+    }
+
     resolveMenuButtonText(node = null, execution = null) {
         const rawText = this.replaceVariables(node?.data?.menuButtonText || '', execution?.variables || {});
         const sanitized = sanitizeOutgoingFlowText(rawText);
@@ -1178,6 +1439,221 @@ class FlowService extends EventEmitter {
         return this.normalizeMenuButtonUrl(rawText);
     }
 
+    resolveEndNodeFinalMessage(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.content || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText);
+    }
+
+    resolveEndNodeMenuPrompt(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuPrompt || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText) || FLOW_END_MENU_PROMPT_DEFAULT;
+    }
+
+    resolveEndNodeMenuButtonText(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuButtonText || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText) || FLOW_MENU_BUTTON_TEXT_DEFAULT;
+    }
+
+    resolveEndNodeMenuSectionTitle(node = null, execution = null) {
+        const rawText = this.replaceVariables(node?.data?.menuSectionTitle || '', execution?.variables || {});
+        return sanitizeOutgoingFlowText(rawText) || FLOW_END_MENU_SECTION_TITLE_DEFAULT;
+    }
+
+    resolveEndNodeMenuOptions(node = null, execution = null) {
+        const options = parseFlowEndOptions(node?.data?.endOptions);
+        const variables = execution?.variables || {};
+        const unique = [];
+        const seen = new Set();
+
+        for (const option of options) {
+            const rendered = sanitizeOutgoingFlowText(this.replaceVariables(option, variables));
+            if (!rendered) continue;
+            const normalized = normalizeIntentText(rendered);
+            if (!normalized) continue;
+            if (normalized === FLOW_END_MENU_FINALIZE_TOKEN) continue;
+            if (seen.has(normalized)) continue;
+            seen.add(normalized);
+            unique.push(rendered);
+            if (unique.length >= FLOW_END_MENU_MAX_CUSTOM_OPTIONS) break;
+        }
+
+        return unique;
+    }
+
+    buildEndNodeMenuEntries(execution = null, node = null) {
+        const customOptions = this.resolveEndNodeMenuOptions(node, execution);
+        const customEntries = customOptions.map((title, index) => {
+            const handle = index === 0 ? 'default' : `path-${index + 1}`;
+            return {
+                type: 'route',
+                handle,
+                rowId: `${FLOW_END_MENU_ROW_PREFIX}${handle}`,
+                title
+            };
+        });
+
+        return [
+            ...customEntries,
+            {
+                type: 'finalize',
+                handle: FLOW_END_MENU_FINALIZE_TOKEN,
+                rowId: `${FLOW_END_MENU_ROW_PREFIX}${FLOW_END_MENU_FINALIZE_TOKEN}`,
+                title: FLOW_END_MENU_FIXED_FINALIZE_LABEL
+            }
+        ];
+    }
+
+    hasEndNodeRouteOptions(execution = null, node = null) {
+        const entries = this.buildEndNodeMenuEntries(execution, node);
+        return entries.some((entry) => String(entry?.type || '').trim().toLowerCase() === 'route');
+    }
+
+    buildEndNodeMenuPayload(execution = null, node = null) {
+        const entries = this.buildEndNodeMenuEntries(execution, node);
+        if (entries.length === 0) return null;
+        const rows = entries.map((entry) => ({
+            rowId: entry.rowId,
+            title: entry.title
+        }));
+
+        return {
+            mediaType: 'list',
+            content: this.resolveEndNodeMenuPrompt(node, execution),
+            listButtonText: this.resolveEndNodeMenuButtonText(node, execution),
+            listSections: [
+                {
+                    title: this.resolveEndNodeMenuSectionTitle(node, execution),
+                    rows
+                }
+            ]
+        };
+    }
+
+    resolveEndNodeSelectionFromInboundMessage(execution = null, node = null, message = {}, responseText = '') {
+        const entries = this.buildEndNodeMenuEntries(execution, node);
+        if (entries.length === 0) return { action: 'finalize', handle: FLOW_END_MENU_FINALIZE_TOKEN };
+
+        const routeEntryByHandle = new Map();
+        const entryByRowId = new Map();
+        const entryByTitle = new Map();
+
+        for (const entry of entries) {
+            const entryRowId = String(entry?.rowId || '').trim().toLowerCase();
+            if (entryRowId) {
+                entryByRowId.set(entryRowId, entry);
+            }
+
+            if (entry?.type === 'route') {
+                const normalizedHandle = this.normalizeFlowHandle(entry?.handle);
+                routeEntryByHandle.set(normalizedHandle, entry);
+            }
+
+            const normalizedTitle = normalizeIntentText(entry?.title || '');
+            if (normalizedTitle && !entryByTitle.has(normalizedTitle)) {
+                entryByTitle.set(normalizedTitle, entry);
+            }
+        }
+
+        const candidates = [
+            message?.selectionId,
+            message?.selectedRowId,
+            message?.optionId,
+            message?.choiceId,
+            message?.selectionText,
+            responseText
+        ];
+
+        const resolveEntry = (entry = null) => {
+            if (!entry) return null;
+            if (entry.type === 'finalize') {
+                return { action: 'finalize', handle: FLOW_END_MENU_FINALIZE_TOKEN };
+            }
+            return { action: 'route', handle: this.normalizeFlowHandle(entry.handle) };
+        };
+
+        for (const candidateRaw of candidates) {
+            const candidate = String(candidateRaw || '').trim();
+            if (!candidate) continue;
+            const candidateLower = candidate.toLowerCase();
+
+            const directRowMatch = resolveEntry(entryByRowId.get(candidateLower));
+            if (directRowMatch) return directRowMatch;
+
+            if (candidateLower.startsWith(FLOW_END_MENU_ROW_PREFIX)) {
+                const token = candidateLower.slice(FLOW_END_MENU_ROW_PREFIX.length).trim();
+                if (!token) continue;
+                if (token === FLOW_END_MENU_FINALIZE_TOKEN) {
+                    return { action: 'finalize', handle: FLOW_END_MENU_FINALIZE_TOKEN };
+                }
+                const parsedHandle = this.normalizeFlowHandleFromToken(token) || this.normalizeFlowHandle(token);
+                const routeMatch = resolveEntry(routeEntryByHandle.get(parsedHandle));
+                if (routeMatch) return routeMatch;
+            }
+
+            const directHandle = this.normalizeFlowHandleFromToken(candidate);
+            if (directHandle) {
+                const routeMatch = resolveEntry(routeEntryByHandle.get(directHandle));
+                if (routeMatch) return routeMatch;
+            }
+
+            const selectedIndex = extractMenuChoiceIndex(candidate, entries.length);
+            if (Number.isFinite(selectedIndex) && selectedIndex > 0) {
+                const indexedEntry = resolveEntry(entries[selectedIndex - 1]);
+                if (indexedEntry) return indexedEntry;
+            }
+
+            const normalizedCandidate = normalizeIntentText(candidate);
+            if (!normalizedCandidate) continue;
+            if (normalizedCandidate === FLOW_END_MENU_FINALIZE_TOKEN) {
+                return { action: 'finalize', handle: FLOW_END_MENU_FINALIZE_TOKEN };
+            }
+
+            const titleMatch = resolveEntry(entryByTitle.get(normalizedCandidate));
+            if (titleMatch) return titleMatch;
+        }
+
+        return null;
+    }
+
+    async maybeSendEndNodeFinalMessage(execution = null, node = null) {
+        if (!this.sendFunction) return false;
+        const content = this.resolveEndNodeFinalMessage(node, execution);
+        if (!content) return false;
+
+        await this.sendFunction({
+            leadId: execution?.lead?.id || null,
+            to: execution?.lead?.phone || '',
+            jid: execution?.lead?.jid || '',
+            sessionId: execution?.conversation?.session_id || null,
+            conversationId: execution?.conversation?.id || null,
+            flowId: execution?.flow?.id || null,
+            nodeId: node?.id || null,
+            content
+        });
+        return true;
+    }
+
+    async maybeSendEndNodeMenu(execution = null, node = null) {
+        if (!this.sendFunction) return false;
+        const payload = this.buildEndNodeMenuPayload(execution, node);
+        if (!payload) return false;
+
+        await this.sendFunction({
+            leadId: execution?.lead?.id || null,
+            to: execution?.lead?.phone || '',
+            jid: execution?.lead?.jid || '',
+            sessionId: execution?.conversation?.session_id || null,
+            conversationId: execution?.conversation?.id || null,
+            flowId: execution?.flow?.id || null,
+            nodeId: node?.id || null,
+            content: payload.content,
+            mediaType: payload.mediaType,
+            listButtonText: payload.listButtonText,
+            listSections: payload.listSections
+        });
+        return true;
+    }
+
     buildAwaitingInputMenuPayload(execution = null, node = null) {
         if (!this.isAwaitingInputMenuEnabled(node)) return null;
 
@@ -1197,7 +1673,7 @@ class FlowService extends EventEmitter {
 
         return {
             mediaType: 'list',
-            content: this.resolveMenuPrompt(node, execution),
+            content: this.buildInlineMenuPrompt(this.resolveMenuPrompt(node, execution), rows),
             listButtonText: this.resolveMenuButtonText(node, execution),
             listTitle: menuTitle || undefined,
             listFooter: menuFooter || undefined,
@@ -1244,8 +1720,26 @@ class FlowService extends EventEmitter {
         return this.normalizeFlowResponseMode(node?.data?.responseMode || 'text') === 'menu';
     }
 
-    isIntentLinkButtonEnabled(node = null, execution = null) {
+    isIntentMenuEnabledForExecution(execution = null, node = null) {
         if (!this.isIntentMenuEnabled(node)) return false;
+        const flow = execution?.flow;
+        const explicitModeRaw = String(flow?.flow_builder_mode || flow?.flowBuilderMode || '').trim();
+        if (explicitModeRaw) {
+            return this.normalizeFlowBuilderMode(explicitModeRaw) === 'menu';
+        }
+
+        const hasFlowNodes = Array.isArray(flow?.nodes) && flow.nodes.length > 0;
+        if (hasFlowNodes) {
+            return this.inferFlowBuilderModeFromNodes(flow) === 'menu';
+        }
+
+        // Compatibilidade: quando o contexto nao traz metadados do fluxo,
+        // usa o proprio no para decidir o modo.
+        return true;
+    }
+
+    isIntentLinkButtonEnabled(node = null, execution = null) {
+        if (!this.isIntentMenuEnabledForExecution(execution, node)) return false;
         return Boolean(this.resolveMenuButtonUrl(node, execution));
     }
 
@@ -1269,9 +1763,7 @@ class FlowService extends EventEmitter {
         }
 
         const hasDefaultFromEdges = handlesFromEdges.includes('default');
-        const handles = handlesFromEdges.length > 0
-            ? handlesFromEdges
-            : routeHandleOrder.filter(Boolean);
+        const handles = handlesFromEdges.length > 0 ? handlesFromEdges : [];
         if (hasDefaultFromEdges && !handles.includes('default')) {
             handles.push('default');
         }
@@ -1354,11 +1846,9 @@ class FlowService extends EventEmitter {
             const directHandle = this.normalizeFlowHandle(candidate);
             if (optionByHandle.has(directHandle)) return directHandle;
 
-            if (/^\d+$/.test(candidateLower)) {
-                const index = Number.parseInt(candidateLower, 10);
-                if (Number.isFinite(index) && index > 0 && index <= options.length) {
-                    return this.normalizeFlowHandle(options[index - 1]?.handle);
-                }
+            const selectedIndex = extractMenuChoiceIndex(candidate, options.length);
+            if (Number.isFinite(selectedIndex) && selectedIndex > 0) {
+                return this.normalizeFlowHandle(options[selectedIndex - 1]?.handle);
             }
 
             const normalizedCandidate = normalizeIntentRouteHandle(candidate);
@@ -1376,7 +1866,7 @@ class FlowService extends EventEmitter {
     }
 
     buildIntentNodeMenuPayload(execution = null, node = null) {
-        if (!this.isIntentMenuEnabled(node)) return null;
+        if (!this.isIntentMenuEnabledForExecution(execution, node)) return null;
         if (this.isIntentLinkButtonEnabled(node, execution)) return null;
 
         const options = this.getIntentMenuOptions(execution?.flow, node);
@@ -1392,7 +1882,7 @@ class FlowService extends EventEmitter {
 
         return {
             mediaType: 'list',
-            content: this.resolveMenuPrompt(node, execution),
+            content: this.buildInlineMenuPrompt(this.resolveMenuPrompt(node, execution), rows),
             listButtonText: this.resolveMenuButtonText(node, execution),
             listTitle: this.resolveMenuTitle(node, execution) || undefined,
             listFooter: this.resolveMenuFooter(node, execution) || undefined,
@@ -1497,6 +1987,16 @@ class FlowService extends EventEmitter {
         return nodes.find((item) => String(item?.type || '').trim().toLowerCase() === 'trigger') || null;
     }
 
+    hasInconsistentMenuMode(flow = null) {
+        if (!flow) return false;
+        const explicitModeRaw = String(flow?.flow_builder_mode || flow?.flowBuilderMode || '').trim();
+        if (!explicitModeRaw) return false;
+        if (this.normalizeFlowBuilderMode(explicitModeRaw) === 'menu') return false;
+
+        const inferredMode = this.inferFlowBuilderModeFromNodes(flow);
+        return inferredMode === 'menu';
+    }
+
     hasDefaultEdgeToMessageOnce(flow = null, sourceNodeId = '') {
         const normalizedSourceId = String(sourceNodeId || '').trim();
         if (!normalizedSourceId) return false;
@@ -1570,12 +2070,24 @@ class FlowService extends EventEmitter {
         const topPriorityFlows = pool.filter((item) => Number(item?.priority || 0) === highestPriority);
         if (topPriorityFlows.length === 1) return topPriorityFlows[0];
 
-        return null;
+        // Em empate de prioridade, seleciona de forma deterministica para
+        // evitar que o fluxo deixe de iniciar por ambiguidade.
+        return [...topPriorityFlows].sort((a, b) => {
+            const idA = Number(a?.id || 0);
+            const idB = Number(b?.id || 0);
+            if (Number.isFinite(idA) && Number.isFinite(idB) && idA !== idB) {
+                return idA - idB;
+            }
+            const nameA = String(a?.name || '');
+            const nameB = String(b?.name || '');
+            return nameA.localeCompare(nameB, 'pt-BR');
+        })[0] || null;
     }
 
     isKeywordFlowWithIntentTriggerFirstMessageMenu(flow = null) {
         const triggerType = String(flow?.trigger_type || '').trim().toLowerCase();
         if (triggerType !== 'keyword') return false;
+        if (!this.isMenuFlowBuilderMode(flow)) return false;
 
         const triggerNode = this.resolveFlowTriggerStartNode(flow);
         if (!this.isIntentTriggerNode(triggerNode)) {
@@ -1982,6 +2494,10 @@ class FlowService extends EventEmitter {
             return true;
         }
 
+        if (nodeType === 'end') {
+            return true;
+        }
+
         if (nodeType === 'trigger' && (nodeSubtype === 'keyword' || nodeSubtype === 'intent')) {
             return true;
         }
@@ -2143,7 +2659,8 @@ class FlowService extends EventEmitter {
         const conversationSessionId = this.normalizeFlowSessionScope(conversation?.session_id);
         const ownerScopeUserId = await resolveOwnerScopeUserIdFromAssignee(
             conversation?.assigned_to,
-            lead?.assigned_to
+            lead?.assigned_to,
+            lead?.owner_user_id
         );
         const flowScopeOptions = ownerScopeUserId
             ? { owner_user_id: ownerScopeUserId, session_id: conversationSessionId || undefined }
@@ -2154,8 +2671,18 @@ class FlowService extends EventEmitter {
                 return activeKeywordFlowsCache;
             }
 
-            activeKeywordFlowsCache = (await Flow.findActiveKeywordFlows(flowScopeOptions))
+            const scopedFlows = (await Flow.findActiveKeywordFlows(flowScopeOptions))
                 .filter((item) => this.flowMatchesConversationSession(item, conversationSessionId));
+
+            const inconsistentFlows = scopedFlows.filter((item) => this.hasInconsistentMenuMode(item));
+            if (inconsistentFlows.length > 0) {
+                console.warn(
+                    `[flow-intent] Ignorando ${inconsistentFlows.length} fluxo(s) com modo inconsistente `
+                    + `(humanized + no de menu): ${inconsistentFlows.map((item) => item?.id).join(', ')}`
+                );
+            }
+
+            activeKeywordFlowsCache = scopedFlows.filter((item) => !this.hasInconsistentMenuMode(item));
 
             return activeKeywordFlowsCache;
         };
@@ -2239,7 +2766,24 @@ class FlowService extends EventEmitter {
             }
         }
         
-        // Se não encontrou por keyword, verificar se é novo contato
+        // Se não encontrou por keyword, tenta fallback para menu interativo
+        // mesmo em conversas já existentes (sem execução ativa).
+        if (!flow) {
+            const activeKeywordFlows = await loadActiveKeywordFlows();
+            const menuFallbackFlow = this.pickKeywordFlowByIntentTriggerFirstMessageMenu(
+                activeKeywordFlows,
+                conversationSessionId
+            );
+
+            if (menuFallbackFlow) {
+                flow = menuFallbackFlow;
+                console.info(
+                    `[flow-intent] Fallback de menu selecionou fluxo ${flow.id} `
+                    + `(${flow.name || 'sem-nome'}) para conversa sem execucao ativa.`
+                );
+            }
+        }
+
         if (!flow && conversation?.created) {
             flow = await Flow.findByTrigger('new_contact', null, flowScopeOptions);
             if (flow && !this.flowMatchesConversationSession(flow, conversationSessionId)) {
@@ -2343,7 +2887,7 @@ class FlowService extends EventEmitter {
         if (isIntentNode) {
             await this.maybeSendTriggerWelcomeMessage(execution, currentNode);
             this.ensureExecutionVariables(execution).last_response = messageText;
-            const intentMenuEnabled = this.isIntentMenuEnabled(currentNode);
+            const intentMenuEnabled = this.isIntentMenuEnabledForExecution(execution, currentNode);
             let selectedHandle = intentMenuEnabled
                 ? this.resolveIntentMenuHandleFromInboundMessage(execution, currentNode, message, messageText)
                 : '';
@@ -2396,9 +2940,24 @@ class FlowService extends EventEmitter {
                 const minAttemptsBeforeDefault = this.resolveIntentDefaultMinAttempts(currentNode);
                 const shouldWaitForMoreInput = hasSpecificRoutes
                     && (!hasDefaultRoute || noMatchCount < minAttemptsBeforeDefault);
+                const normalizedMessageText = normalizeIntentText(messageText);
+                const normalizedTriggerMessage = normalizeIntentText(
+                    execution?.triggerMessageText
+                    || execution?.variables?.trigger_message
+                    || ''
+                );
+                const isInitialTriggerReplay = Boolean(
+                    noMatchCount === 1
+                    && normalizedMessageText
+                    && normalizedTriggerMessage
+                    && normalizedMessageText === normalizedTriggerMessage
+                );
 
                 // Sem match: mantem aguardando novas mensagens antes de cair no padrao.
                 if (shouldWaitForMoreInput) {
+                    if (intentMenuEnabled && !isInitialTriggerReplay) {
+                        await this.maybeSendIntentNodeMenu(execution, currentNode);
+                    }
                     await this.persistExecutionVariables(execution);
 
                     console.info(
@@ -2444,6 +3003,53 @@ class FlowService extends EventEmitter {
                 await this.endFlow(execution, 'completed');
             }
 
+            return execution;
+        }
+
+        if (currentNode.type === 'end') {
+            execution.variables.last_response = messageText;
+            const endSelection = this.resolveEndNodeSelectionFromInboundMessage(
+                execution,
+                currentNode,
+                message,
+                messageText
+            );
+
+            if (!endSelection) {
+                if (this.hasEndNodeRouteOptions(execution, currentNode)) {
+                    await this.maybeSendEndNodeMenu(execution, currentNode);
+                    await this.persistExecutionVariables(execution);
+                } else {
+                    await this.maybeSendEndNodeFinalMessage(execution, currentNode);
+                    await this.endFlow(execution, 'completed');
+                }
+                return execution;
+            }
+
+            if (endSelection.action === 'finalize') {
+                await this.maybeSendEndNodeFinalMessage(execution, currentNode);
+                await this.endFlow(execution, 'completed');
+                return execution;
+            }
+
+            const selectedHandle = this.normalizeFlowHandle(endSelection.handle);
+            const endOutgoingEdges = (execution?.flow?.edges || []).filter(
+                (edge) => String(edge?.source || '').trim() === String(currentNode?.id || '').trim()
+            );
+
+            // Compatibilidade: quando o no de fim oferece "voltar ao menu" sem aresta
+            // de saida configurada, reinicia no no inicial para evitar exigir dupla resposta.
+            if (endOutgoingEdges.length === 0 && selectedHandle === 'default') {
+                const restartNodeId = this.resolveStartNodeId(execution?.flow);
+                if (restartNodeId && restartNodeId !== currentNode.id) {
+                    this.setNodeEntryHandle(execution, restartNodeId, 'default');
+                    await this.executeNode(execution, restartNodeId, 'default');
+                    return execution;
+                }
+            }
+
+            this.setNodeEntryHandle(execution, currentNode.id, selectedHandle);
+            await this.goToNextNode(execution, currentNode);
             return execution;
         }
 
@@ -2609,7 +3215,7 @@ class FlowService extends EventEmitter {
                         break;
                     }
 
-                    if (this.isIntentMenuEnabled(node)) {
+                    if (this.isIntentMenuEnabledForExecution(execution, node)) {
                         const pendingBeforeIntent = this.readPendingIncomingMessages(execution);
                         if (pendingBeforeIntent.length === 0) {
                             await this.maybeSendIntentNodeMenu(execution, node);
@@ -2690,7 +3296,13 @@ class FlowService extends EventEmitter {
                 }
                     
                 case 'end':
-                    await this.endFlow(execution, 'completed');
+                    if (this.sendFunction && this.hasEndNodeRouteOptions(execution, node)) {
+                        await this.maybeSendEndNodeMenu(execution, node);
+                        await this.drainPendingIncomingMessages(execution);
+                    } else {
+                        await this.maybeSendEndNodeFinalMessage(execution, node);
+                        await this.endFlow(execution, 'completed');
+                    }
                     break;
                     
                 default:
@@ -2938,7 +3550,7 @@ class FlowService extends EventEmitter {
 
     async maybeSendTriggerWelcomeMessage(execution, node = null) {
         if (!this.isIntentTriggerNode(node)) return false;
-        if (this.isIntentMenuEnabled(node)) return false;
+        if (this.isIntentMenuEnabledForExecution(execution, node)) return false;
         if (!this.sendFunction) return false;
 
         const config = this.resolveTriggerWelcomeConfig(node);
@@ -2994,7 +3606,7 @@ class FlowService extends EventEmitter {
             return;
         }
 
-        if (this.isIntentMenuEnabled(node)) {
+        if (this.isIntentMenuEnabledForExecution(execution, node)) {
             delete execution.variables.trigger_intent_handle;
             this.clearIntentNoMatchCounter(execution, node?.id);
             this.clearIntentHistory(execution, node?.id);
@@ -3397,9 +4009,12 @@ class FlowService extends EventEmitter {
         const normalizedText = normalizeIntentText(responseText);
         const edges = (flow?.edges || []).filter((edge) => edge.source === node?.id);
         if (edges.length === 0) return null;
+        const awaitingInputMenuEnabled = this.isAwaitingInputMenuEnabled(node);
 
         const normalizedPreferredHandle = this.normalizeFlowHandle(preferredSourceHandle);
-        const explicitHandle = this.resolveFlowHandleFromInboundMessage(message, responseText);
+        const explicitHandle = awaitingInputMenuEnabled
+            ? this.resolveAwaitingInputMenuHandleFromInboundMessage(flow, node, message, responseText)
+            : this.resolveFlowHandleFromInboundMessage(message, responseText);
         if (explicitHandle) {
             const explicitEdge = edges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === explicitHandle);
             if (explicitEdge) {
@@ -3477,9 +4092,20 @@ class FlowService extends EventEmitter {
         const defaultEdge = unlabeledEdges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === 'default');
         if (defaultEdge) return defaultEdge;
 
-        if (unlabeledEdges.length > 0) return unlabeledEdges[0];
+        if (unlabeledEdges.length > 0) {
+            if (!awaitingInputMenuEnabled || unlabeledEdges.length === 1) {
+                return unlabeledEdges[0];
+            }
+        }
         const preferredAnyEdge = edges.find((edge) => this.normalizeFlowHandle(edge?.sourceHandle) === normalizedPreferredHandle);
         if (preferredAnyEdge) return preferredAnyEdge;
+
+        // Em nos de menu, sem correspondencia explicita, manter aguardando resposta
+        // evita roteamento para uma opcao arbitraria.
+        if (awaitingInputMenuEnabled) {
+            return null;
+        }
+
         return edges[0] || null;
     }
 

@@ -77,7 +77,11 @@ const openAiFlowDraftService = require('./services/openAiFlowDraftService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
+const { createOpsMonitoringService } = require('./services/opsMonitoringService');
+const { createFlowMenuTextService } = require('./services/flowMenuTextService');
+const { createInboundMessagePipelineService } = require('./services/inboundMessagePipelineService');
 const stripeCheckoutService = require('./services/stripeCheckoutService');
+const pagarmeCheckoutService = require('./services/pagarmeCheckoutService');
 const planLimitsService = require('./services/planLimitsService');
 const {
     DEFAULT_APP_NAME,
@@ -139,6 +143,14 @@ const {
 
 const { authenticate, requestLogger, verifyToken, rateLimit: authRateLimit } = require('./middleware/auth');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const {
+    sanitizeInput,
+    validateLogin,
+    validateApiSendRequest,
+    validateQueueBulkRequest,
+    validateStripeWebhook,
+    validatePagarmeWebhook
+} = require('./middleware/validator');
 
 
 
@@ -177,7 +189,23 @@ const RECONNECT_DELAY = parseInt(process.env.RECONNECT_DELAY) || 3000;
 
 const QR_TIMEOUT = parseInt(process.env.QR_TIMEOUT) || 60000;
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'self-protecao-veicular-key-2024';
+const INSECURE_ENCRYPTION_KEYS = new Set([
+    'self-protecao-veicular-master-key-2024',
+    'self-protecao-veicular-key-2024',
+    'chave-de-criptografia-32-caracteres',
+    'changeme',
+    'change-me',
+    'default',
+    'encryption-key'
+]);
+const INSECURE_JWT_SECRETS = new Set([
+    'self-protecao-jwt-secret-2024',
+    'sua-chave-secreta-super-segura-aqui-min-32-chars',
+    'changeme',
+    'change-me',
+    'default',
+    'jwt-secret'
+]);
 const APP_BRAND_NAME = 'ZapVender';
 const WHATSAPP_BROWSER_VERSION = '120.0.0';
 const WHATSAPP_BROWSER_NAME_MAX_LENGTH = 40;
@@ -206,6 +234,127 @@ const WHATSAPP_SESSION_RATE_LIMIT_MAX_PER_MINUTE = parsePositiveIntInRange(
 );
 const METRICS_ENABLED = parseBooleanEnv(process.env.METRICS_ENABLED, false);
 const METRICS_BEARER_TOKEN = String(process.env.METRICS_BEARER_TOKEN || '').trim();
+const OPS_ALERTS_ENABLED = parseBooleanEnv(
+    process.env.OPS_ALERTS_ENABLED,
+    process.env.NODE_ENV === 'production'
+);
+const OPS_ALERTS_POLL_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERTS_POLL_MS,
+    60000,
+    5000,
+    60 * 60 * 1000
+);
+const OPS_ALERTS_COOLDOWN_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERTS_COOLDOWN_MS,
+    5 * 60 * 1000,
+    10000,
+    24 * 60 * 60 * 1000
+);
+const OPS_ALERT_QUEUE_PENDING_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_QUEUE_PENDING_WARN,
+    3000,
+    1,
+    100000000
+);
+const OPS_ALERT_QUEUE_FAILED_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_QUEUE_FAILED_WARN,
+    200,
+    1,
+    100000000
+);
+const OPS_ALERT_FLOW_RUNNING_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_FLOW_RUNNING_WARN,
+    300,
+    1,
+    100000000
+);
+const OPS_ALERT_NOTIFY_WEBHOOK_URL = String(process.env.OPS_ALERT_NOTIFY_WEBHOOK_URL || '').trim();
+const OPS_ALERT_NOTIFY_BEARER_TOKEN = String(process.env.OPS_ALERT_NOTIFY_BEARER_TOKEN || '').trim();
+const OPS_ALERT_NOTIFY_ENABLED = parseBooleanEnv(
+    process.env.OPS_ALERT_NOTIFY_ENABLED,
+    Boolean(OPS_ALERT_NOTIFY_WEBHOOK_URL)
+);
+const OPS_ALERT_NOTIFY_TIMEOUT_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERT_NOTIFY_TIMEOUT_MS,
+    5000,
+    500,
+    120000
+);
+const OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT = parseBooleanEnv(
+    process.env.OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT,
+    true
+);
+const APP_LOG_LEVEL = parseLogLevel(
+    process.env.LOG_LEVEL,
+    process.env.NODE_ENV === 'production' ? 'info' : 'debug'
+);
+const WHATSAPP_LOG_LEVEL = parseLogLevel(process.env.WHATSAPP_LOG_LEVEL, 'warn');
+const FLOW_INBOUND_TELEMETRY_ENABLED = parseBooleanEnv(process.env.FLOW_INBOUND_TELEMETRY_ENABLED, false);
+const FLOW_INBOUND_TELEMETRY_SLOW_MS = parsePositiveIntInRange(
+    process.env.FLOW_INBOUND_TELEMETRY_SLOW_MS,
+    1500,
+    100,
+    120000
+);
+const INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS,
+    10 * 60 * 1000,
+    1000,
+    24 * 60 * 60 * 1000
+);
+const INCOMING_MESSAGE_LOCK_STALE_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_LOCK_STALE_MS,
+    120000,
+    1000,
+    30 * 60 * 1000
+);
+const FLOW_INBOUND_POSTGRES_LOCK_ENABLED = USE_POSTGRES && parseBooleanEnv(
+    process.env.FLOW_INBOUND_POSTGRES_LOCK_ENABLED,
+    true
+);
+const FLOW_INBOUND_POSTGRES_LOCK_NAMESPACE = parsePositiveIntInRange(
+    process.env.FLOW_INBOUND_POSTGRES_LOCK_NAMESPACE,
+    74121,
+    1,
+    2147483647
+);
+const INCOMING_MESSAGE_RECEIPT_LEASE_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_RECEIPT_LEASE_MS,
+    120000,
+    1000,
+    30 * 60 * 1000
+);
+const INCOMING_MESSAGE_RECEIPTS_RETENTION_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_RECEIPTS_RETENTION_MS,
+    7 * 24 * 60 * 60 * 1000,
+    60 * 1000,
+    90 * 24 * 60 * 60 * 1000
+);
+const INCOMING_MESSAGE_RECEIPTS_CLEANUP_INTERVAL_MS = parsePositiveIntInRange(
+    process.env.INCOMING_MESSAGE_RECEIPTS_CLEANUP_INTERVAL_MS,
+    10 * 60 * 1000,
+    60 * 1000,
+    24 * 60 * 60 * 1000
+);
+const CSP_MODE = String(
+    process.env.CSP_MODE
+    || (process.env.NODE_ENV === 'production' ? 'report-only' : 'off')
+).trim().toLowerCase();
+const CSP_REPORT_URI = String(process.env.CSP_REPORT_URI || '/api/security/csp/report').trim()
+    || '/api/security/csp/report';
+const CSP_REPORT_ROUTE_PATH = resolveCspReportRoutePath(CSP_REPORT_URI);
+const CSP_REPORT_LOG_COOLDOWN_MS = parsePositiveIntInRange(
+    process.env.CSP_REPORT_LOG_COOLDOWN_MS,
+    10 * 60 * 1000,
+    1000,
+    24 * 60 * 60 * 1000
+);
+const CSP_REPORT_TRACKER_LIMIT = parsePositiveIntInRange(
+    process.env.CSP_REPORT_TRACKER_LIMIT,
+    4000,
+    100,
+    50000
+);
 const DANGEROUS_UPLOAD_EXTENSIONS = new Set([
     '.html', '.htm', '.svg', '.xml', '.xhtml', '.js', '.mjs', '.css'
 ]);
@@ -300,6 +449,13 @@ function parseBooleanEnv(value, fallback = false) {
     return fallback;
 }
 
+function parseLogLevel(value, fallback = 'info') {
+    const normalized = String(value || '').trim().toLowerCase();
+    const validLevels = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']);
+    if (validLevels.has(normalized)) return normalized;
+    return fallback;
+}
+
 function parsePositiveIntEnv(value, fallback) {
     const parsed = parseInt(String(value ?? ''), 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -326,6 +482,147 @@ function parsePositiveIntInRange(value, fallback, min = 1, max = Number.POSITIVE
     return Math.min(normalizedMax, Math.max(normalizedMin, parsed));
 }
 
+function normalizeCspMode(value = '') {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'enforce' || normalized === 'report-only' || normalized === 'off') {
+        return normalized;
+    }
+    return 'off';
+}
+
+function resolveCspReportRoutePath(value = '') {
+    const raw = String(value || '').trim();
+    if (!raw) return '/api/security/csp/report';
+
+    if (/^https?:\/\//i.test(raw)) {
+        try {
+            const parsed = new URL(raw);
+            return parsed.pathname || '/api/security/csp/report';
+        } catch (_) {
+            return '/api/security/csp/report';
+        }
+    }
+
+    return raw.startsWith('/') ? raw : `/${raw}`;
+}
+
+function buildHelmetCspConfig() {
+    const mode = normalizeCspMode(CSP_MODE);
+    if (mode === 'off') return false;
+
+    const directives = {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'self'"],
+        objectSrc: ["'none'"],
+        formAction: ["'self'"],
+        scriptSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://cdn.socket.io',
+            'https://cdn.jsdelivr.net'
+        ],
+        styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://fonts.googleapis.com'
+        ],
+        fontSrc: [
+            "'self'",
+            'data:',
+            'https://fonts.gstatic.com'
+        ],
+        imgSrc: [
+            "'self'",
+            'data:',
+            'blob:',
+            'https:'
+        ],
+        connectSrc: [
+            "'self'",
+            'ws:',
+            'wss:',
+            'https://api.pagar.me'
+        ],
+        mediaSrc: [
+            "'self'",
+            'data:',
+            'blob:',
+            'https:'
+        ],
+        workerSrc: [
+            "'self'",
+            'blob:'
+        ]
+    };
+
+    if (CSP_REPORT_URI) {
+        directives.reportUri = [CSP_REPORT_URI];
+    }
+
+    return {
+        directives,
+        reportOnly: mode === 'report-only'
+    };
+}
+
+function normalizeCspReportsPayload(payload) {
+    if (!payload) return [];
+
+    const candidates = Array.isArray(payload) ? payload : [payload];
+    const normalized = [];
+
+    for (const item of candidates) {
+        if (!item || typeof item !== 'object') continue;
+
+        const cspReport = item['csp-report'];
+        if (cspReport && typeof cspReport === 'object') {
+            normalized.push(cspReport);
+            continue;
+        }
+
+        const reportBody = item.body;
+        if (reportBody && typeof reportBody === 'object') {
+            normalized.push(reportBody);
+            continue;
+        }
+
+        normalized.push(item);
+    }
+
+    return normalized;
+}
+
+function buildCspReportFingerprint(report = {}) {
+    const blockedUri = String(report['blocked-uri'] || report.blockedURL || '').trim().slice(0, 200);
+    const effectiveDirective = String(report['effective-directive'] || report.effectiveDirective || '').trim().slice(0, 120);
+    const sourceFile = String(report['source-file'] || report.sourceFile || '').trim().slice(0, 200);
+    const disposition = String(report.disposition || '').trim().slice(0, 50);
+    return `${effectiveDirective}|${blockedUri}|${sourceFile}|${disposition}`;
+}
+
+function shouldLogCspReportFingerprint(fingerprint, now = Date.now()) {
+    if (!fingerprint) return false;
+
+    const lastLoggedAt = Number(cspReportLogTracker.get(fingerprint) || 0);
+    if (lastLoggedAt > 0 && (now - lastLoggedAt) < CSP_REPORT_LOG_COOLDOWN_MS) {
+        return false;
+    }
+
+    cspReportLogTracker.set(fingerprint, now);
+
+    if (cspReportLogTracker.size > CSP_REPORT_TRACKER_LIMIT) {
+        const cutoff = now - CSP_REPORT_LOG_COOLDOWN_MS;
+        for (const [key, timestamp] of cspReportLogTracker.entries()) {
+            if (Number(timestamp || 0) < cutoff) {
+                cspReportLogTracker.delete(key);
+            }
+        }
+    }
+
+    return true;
+}
+
 const POSTGRES_WORKER_LEADER_LOCK_ENABLED = USE_POSTGRES && parseBooleanEnv(
     process.env.POSTGRES_WORKER_LEADER_LOCK_ENABLED,
     process.env.NODE_ENV === 'production'
@@ -340,6 +637,10 @@ const QUEUE_WORKER_ENABLED = parseBooleanEnv(
 );
 const FLOW_MESSAGE_QUEUE_ENABLED = parseBooleanEnv(
     process.env.FLOW_MESSAGE_QUEUE_ENABLED,
+    true
+);
+const FLOW_REALTIME_DIRECT_SEND_ENABLED = parseBooleanEnv(
+    process.env.FLOW_REALTIME_DIRECT_SEND_ENABLED,
     true
 );
 const FLOW_MESSAGE_QUEUE_PRIORITY = parsePositiveIntInRange(
@@ -940,6 +1241,217 @@ async function upsertCheckoutRegistrationFromStripePayload(req, payload, options
     }
 }
 
+function getCheckoutRegistrationProvider(registration, fallback = 'stripe') {
+    const metadata = registration?.metadata && typeof registration.metadata === 'object'
+        ? registration.metadata
+        : {};
+    const provider = String(
+        metadata.provider
+        || metadata.checkoutProvider
+        || metadata.paymentProvider
+        || ''
+    ).trim().toLowerCase();
+
+    if (provider === 'pagarme') return 'pagarme';
+    if (provider === 'stripe') return 'stripe';
+    return String(fallback || 'stripe').trim().toLowerCase() || 'stripe';
+}
+
+function buildPagarmePlanMessage(status, planName = 'plano') {
+    const normalizedStatus = pagarmeCheckoutService.normalizePlanStatus(status);
+    const normalizedPlanName = String(planName || 'plano').trim() || 'plano';
+
+    if (normalizedStatus === 'trialing') {
+        return `Assinatura ${normalizedPlanName} em periodo de teste via Pagar.me.`;
+    }
+    if (normalizedStatus === 'past_due') {
+        return `Pagamento pendente para o plano ${normalizedPlanName} no Pagar.me.`;
+    }
+    if (normalizedStatus === 'canceled') {
+        return `Assinatura ${normalizedPlanName} cancelada no Pagar.me.`;
+    }
+    if (normalizedStatus === 'suspended') {
+        return `Assinatura ${normalizedPlanName} suspensa no Pagar.me.`;
+    }
+    if (normalizedStatus === 'expired') {
+        return `Assinatura ${normalizedPlanName} expirada no Pagar.me.`;
+    }
+    return `Assinatura ${normalizedPlanName} ativa e sincronizada via Pagar.me.`;
+}
+
+function resolvePagarmePlanStatusFromRegistration(registration, fallback = 'active') {
+    const metadata = registration?.metadata && typeof registration.metadata === 'object'
+        ? registration.metadata
+        : {};
+    return pagarmeCheckoutService.normalizePlanStatus(
+        metadata.subscriptionStatus
+        || metadata.pagarmeSubscriptionStatus
+        || metadata.planStatus
+        || fallback
+    );
+}
+
+function resolveCheckoutRegistrationPlanStatus(registration, fallback = 'active') {
+    const provider = getCheckoutRegistrationProvider(registration, 'stripe');
+    if (provider === 'pagarme') {
+        return resolvePagarmePlanStatusFromRegistration(registration, fallback);
+    }
+    return resolveStripePlanStatusFromRegistration(registration, fallback);
+}
+
+async function applyPagarmePlanSettingsToOwner(ownerUserId, plan = {}) {
+    const normalizedOwnerUserId = normalizeOwnerUserId(ownerUserId);
+    if (!normalizedOwnerUserId) return;
+
+    const planName = String(plan?.name || 'Plano').trim() || 'Plano';
+    const planCode = String(plan?.code || '').trim();
+    const planStatus = pagarmeCheckoutService.normalizePlanStatus(plan?.status);
+    const renewalDate = normalizeOptionalIsoDate(plan?.renewalDate || null);
+    const externalReference = String(
+        plan?.externalReference
+        || plan?.subscriptionId
+        || plan?.checkoutSessionId
+        || ''
+    ).trim();
+    const message = String(plan?.message || buildPagarmePlanMessage(planStatus, planName)).trim();
+    const nowIso = new Date().toISOString();
+
+    await Promise.all([
+        Settings.set(buildScopedSettingsKey('plan_name', normalizedOwnerUserId), planName, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_code', normalizedOwnerUserId), planCode, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_status', normalizedOwnerUserId), planStatus, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_provider', normalizedOwnerUserId), 'pagarme', 'string'),
+        Settings.set(buildScopedSettingsKey('plan_message', normalizedOwnerUserId), message, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_renewal_date', normalizedOwnerUserId), renewalDate || '', 'string'),
+        Settings.set(buildScopedSettingsKey('plan_last_verified_at', normalizedOwnerUserId), nowIso, 'string'),
+        Settings.set(buildScopedSettingsKey('plan_external_reference', normalizedOwnerUserId), externalReference, 'string')
+    ]);
+}
+
+function buildPagarmePlanSnapshot(payload = {}) {
+    return {
+        name: String(payload?.planName || 'Plano').trim() || 'Plano',
+        code: String(payload?.planCode || payload?.planKey || '').trim(),
+        status: pagarmeCheckoutService.normalizePlanStatus(payload?.subscriptionStatus || payload?.status),
+        renewalDate: payload?.renewalDate || null,
+        externalReference: String(payload?.subscriptionId || payload?.sessionId || '').trim(),
+        checkoutSessionId: String(payload?.sessionId || '').trim(),
+        subscriptionId: String(payload?.subscriptionId || '').trim()
+    };
+}
+
+async function upsertCheckoutRegistrationFromPagarmePayload(req, payload, options = {}) {
+    const email = String(payload?.customerEmail || '').trim().toLowerCase();
+    if (!email) {
+        throw new Error('Checkout concluido sem email do cliente');
+    }
+
+    let existing = null;
+    if (payload?.sessionId) {
+        existing = await CheckoutRegistration.findBySessionId(payload.sessionId);
+    }
+    if (!existing && payload?.subscriptionId) {
+        existing = await CheckoutRegistration.findByStripeSubscriptionId(payload.subscriptionId);
+    }
+    if (!existing && payload?.customerId) {
+        existing = await CheckoutRegistration.findByStripeCustomerId(payload.customerId);
+    }
+    if (!existing) {
+        existing = await CheckoutRegistration.findLatestByEmail(email, { onlyIncomplete: true });
+    }
+
+    const sessionId = String(
+        payload?.sessionId
+        || existing?.stripe_checkout_session_id
+        || payload?.subscriptionId
+        || ''
+    ).trim();
+    if (!sessionId) {
+        throw new Error('Checkout do Pagar.me sem identificador persistivel');
+    }
+
+    const existingUser = await User.findActiveByEmail(email);
+    const metadata = {
+        ...(existing?.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
+        ...(payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+        provider: 'pagarme',
+        subscriptionStatus: pagarmeCheckoutService.normalizePlanStatus(payload?.subscriptionStatus),
+        pagarmeSubscriptionStatus: String(payload?.metadata?.pagarmeSubscriptionStatus || payload?.subscriptionStatus || '').trim() || null,
+        renewalDate: payload?.renewalDate || null
+    };
+
+    if (existingUser && isEmailConfirmed(existingUser)) {
+        const ownerUserId = normalizeOwnerUserId(existingUser.owner_user_id) || Number(existingUser.id || 0) || null;
+        if (ownerUserId) {
+            await applyPagarmePlanSettingsToOwner(ownerUserId, buildPagarmePlanSnapshot(payload));
+        }
+
+        return CheckoutRegistration.upsertBySession({
+            email,
+            stripe_checkout_session_id: sessionId,
+            stripe_customer_id: payload.customerId,
+            stripe_subscription_id: payload.subscriptionId,
+            stripe_price_id: payload.priceId,
+            stripe_plan_key: payload.planKey,
+            stripe_plan_code: payload.planCode,
+            stripe_plan_name: payload.planName,
+            status: 'linked_existing_account',
+            email_confirmed: 1,
+            email_confirmed_at: existingUser.email_confirmed_at || new Date().toISOString(),
+            email_confirmation_token_hash: null,
+            email_confirmation_expires_at: null,
+            linked_user_id: existingUser.id,
+            owner_user_id: ownerUserId,
+            metadata,
+            completed_at: existing?.completed_at || new Date().toISOString(),
+            last_email_sent_at: existing?.last_email_sent_at || null
+        });
+    }
+
+    const shouldGenerateNewToken =
+        !existing?.email_confirmation_token_hash
+        || (!Number(existing?.email_confirmed) && isCheckoutRegistrationExpired(existing))
+        || normalizeCheckoutRegistrationStatusValue(existing?.status) === 'email_delivery_failed';
+    const confirmationTokenPayload = shouldGenerateNewToken ? createEmailConfirmationTokenPayload() : null;
+    const registration = await CheckoutRegistration.upsertBySession({
+        email,
+        stripe_checkout_session_id: sessionId,
+        stripe_customer_id: payload.customerId,
+        stripe_subscription_id: payload.subscriptionId,
+        stripe_price_id: payload.priceId,
+        stripe_plan_key: payload.planKey,
+        stripe_plan_code: payload.planCode,
+        stripe_plan_name: payload.planName,
+        status: Number(existing?.email_confirmed) > 0 ? 'email_confirmed' : 'pending_email_confirmation',
+        email_confirmed: Number(existing?.email_confirmed) > 0 ? 1 : 0,
+        email_confirmed_at: existing?.email_confirmed_at || null,
+        email_confirmation_token_hash: confirmationTokenPayload?.tokenHash || existing?.email_confirmation_token_hash || null,
+        email_confirmation_expires_at: confirmationTokenPayload?.expiresAt || existing?.email_confirmation_expires_at || null,
+        linked_user_id: existing?.linked_user_id || null,
+        owner_user_id: existing?.owner_user_id || null,
+        metadata,
+        completed_at: existing?.completed_at || null,
+        last_email_sent_at: existing?.last_email_sent_at || null
+    });
+
+    if (options?.sendEmail === false || !confirmationTokenPayload?.token) {
+        return registration;
+    }
+
+    try {
+        await sendCheckoutRegistrationConfirmationEmail(req, registration, confirmationTokenPayload);
+        return await CheckoutRegistration.update(registration.id, {
+            last_email_sent_at: new Date().toISOString(),
+            status: Number(registration?.email_confirmed) > 0 ? 'email_confirmed' : 'pending_email_confirmation'
+        });
+    } catch (error) {
+        await CheckoutRegistration.update(registration.id, {
+            status: 'email_delivery_failed'
+        });
+        throw error;
+    }
+}
+
 function getSocketRequesterUserId(socket) {
     const userId = Number(socket?.user?.id || 0);
     return Number.isInteger(userId) && userId > 0 ? userId : 0;
@@ -966,20 +1478,30 @@ async function resolveSocketOwnerUserId(socket) {
 
 
 
-// Avisar se chaves de seguranÃ§a nÃ£o foram configuradas (nÃ£o bloqueia startup para deploy funcionar)
+// Validar segredos de seguranca obrigatorios em producao
 
 if (process.env.NODE_ENV === 'production') {
+    const encryptionKey = String(process.env.ENCRYPTION_KEY || '').trim();
+    const jwtSecret = String(process.env.JWT_SECRET || '').trim();
 
-    if (!process.env.ENCRYPTION_KEY || ENCRYPTION_KEY === 'self-protecao-veicular-key-2024') {
-
-        console.warn('??  AVISO: Configure ENCRYPTION_KEY nas variÃ¡veis de ambiente para produÃ§Ã£o.');
-
+    if (!encryptionKey) {
+        throw new Error('ENCRYPTION_KEY is required in production');
+    }
+    if (INSECURE_ENCRYPTION_KEYS.has(encryptionKey)) {
+        throw new Error('ENCRYPTION_KEY insecure value is not allowed in production');
+    }
+    if (encryptionKey.length < 32) {
+        throw new Error('ENCRYPTION_KEY must be at least 32 characters in production');
     }
 
-    if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'self-protecao-jwt-secret-2024') {
-
-        console.warn('??  AVISO: Configure JWT_SECRET nas variÃ¡veis de ambiente para produÃ§Ã£o.');
-
+    if (!jwtSecret) {
+        throw new Error('JWT_SECRET is required in production');
+    }
+    if (INSECURE_JWT_SECRETS.has(jwtSecret)) {
+        throw new Error('JWT_SECRET insecure value is not allowed in production');
+    }
+    if (jwtSecret.length < 32) {
+        throw new Error('JWT_SECRET must be at least 32 characters in production');
     }
 
 }
@@ -1054,13 +1576,20 @@ const bootstrapPromise = bootstrapDatabase();
 
 // SeguranÃ§a
 
+const helmetCspConfig = buildHelmetCspConfig();
 app.use(helmet({
-
-    contentSecurityPolicy: false,
-
+    contentSecurityPolicy: helmetCspConfig || false,
     crossOriginEmbedderPolicy: false
-
 }));
+
+if (helmetCspConfig) {
+    console.log(
+        `[Security] CSP ativo em modo ${helmetCspConfig.reportOnly ? 'report-only' : 'enforce'} `
+        + `(report-uri: ${CSP_REPORT_URI})`
+    );
+} else {
+    console.log('[Security] CSP desativado');
+}
 
 
 
@@ -1174,6 +1703,39 @@ const corsOptionsDelegate = (req, callback) => {
 
 app.use(cors(corsOptionsDelegate));
 
+const opsMonitoringService = createOpsMonitoringService({
+    queryOne,
+    getSessionsMap: () => whatsappService.sessions,
+    getProcessUptimeSeconds: () => Math.floor(process.uptime()),
+    opsAlertsEnabled: OPS_ALERTS_ENABLED,
+    opsAlertsPollMs: OPS_ALERTS_POLL_MS,
+    opsAlertsCooldownMs: OPS_ALERTS_COOLDOWN_MS,
+    queuePendingWarn: OPS_ALERT_QUEUE_PENDING_WARN,
+    queueFailedWarn: OPS_ALERT_QUEUE_FAILED_WARN,
+    flowRunningWarn: OPS_ALERT_FLOW_RUNNING_WARN,
+    notifyEnabled: OPS_ALERT_NOTIFY_ENABLED,
+    notifyWebhookUrl: OPS_ALERT_NOTIFY_WEBHOOK_URL,
+    notifyBearerToken: OPS_ALERT_NOTIFY_BEARER_TOKEN,
+    notifyTimeoutMs: OPS_ALERT_NOTIFY_TIMEOUT_MS,
+    notifyIncludeSnapshot: OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT,
+    appBrandName: APP_BRAND_NAME,
+    nodeEnv: process.env.NODE_ENV,
+    logStructured,
+    normalizeErrorForLog
+});
+
+async function getOpsRuntimeSnapshot() {
+    return await opsMonitoringService.getRuntimeSnapshot();
+}
+
+function buildOpsThresholdState(snapshot = {}) {
+    return opsMonitoringService.buildThresholdState(snapshot);
+}
+
+function buildOpsMetricsLines(snapshot = {}, thresholdState = {}) {
+    return opsMonitoringService.buildMetricsLines(snapshot, thresholdState);
+}
+
 
 
 app.get('/metrics', async (req, res) => {
@@ -1197,54 +1759,9 @@ app.get('/metrics', async (req, res) => {
     }
 
     try {
-        const connectedSessions = Array.from(sessions.values()).filter((session) => session?.isConnected === true).length;
-        const totalSessions = sessions.size;
-        const queueStatsRow = await queryOne(`
-            SELECT
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-                SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
-                SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-            FROM message_queue
-        `);
-        const runningFlowsRow = await queryOne(`
-            SELECT COUNT(*)::int AS total
-            FROM flow_executions
-            WHERE status = 'running'
-        `);
-
-        const queuePending = Number(queueStatsRow?.pending || 0) || 0;
-        const queueProcessing = Number(queueStatsRow?.processing || 0) || 0;
-        const queueSent = Number(queueStatsRow?.sent || 0) || 0;
-        const queueFailed = Number(queueStatsRow?.failed || 0) || 0;
-        const flowRunning = Number(runningFlowsRow?.total || 0) || 0;
-
-        const metricsLines = [
-            '# HELP zapvender_process_uptime_seconds Node process uptime in seconds',
-            '# TYPE zapvender_process_uptime_seconds gauge',
-            `zapvender_process_uptime_seconds ${Math.floor(process.uptime())}`,
-            '# HELP zapvender_whatsapp_sessions_total Total WhatsApp sessions loaded in runtime',
-            '# TYPE zapvender_whatsapp_sessions_total gauge',
-            `zapvender_whatsapp_sessions_total ${totalSessions}`,
-            '# HELP zapvender_whatsapp_sessions_connected Connected WhatsApp sessions in runtime',
-            '# TYPE zapvender_whatsapp_sessions_connected gauge',
-            `zapvender_whatsapp_sessions_connected ${connectedSessions}`,
-            '# HELP zapvender_queue_pending_messages Pending messages in queue',
-            '# TYPE zapvender_queue_pending_messages gauge',
-            `zapvender_queue_pending_messages ${queuePending}`,
-            '# HELP zapvender_queue_processing_messages Processing messages in queue',
-            '# TYPE zapvender_queue_processing_messages gauge',
-            `zapvender_queue_processing_messages ${queueProcessing}`,
-            '# HELP zapvender_queue_sent_messages Sent messages in queue table',
-            '# TYPE zapvender_queue_sent_messages gauge',
-            `zapvender_queue_sent_messages ${queueSent}`,
-            '# HELP zapvender_queue_failed_messages Failed messages in queue table',
-            '# TYPE zapvender_queue_failed_messages gauge',
-            `zapvender_queue_failed_messages ${queueFailed}`,
-            '# HELP zapvender_flow_executions_running Running flow executions',
-            '# TYPE zapvender_flow_executions_running gauge',
-            `zapvender_flow_executions_running ${flowRunning}`
-        ];
+        const snapshot = await getOpsRuntimeSnapshot();
+        const thresholdState = buildOpsThresholdState(snapshot);
+        const metricsLines = buildOpsMetricsLines(snapshot, thresholdState);
 
         res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
         return res.send(`${metricsLines.join('\n')}\n`);
@@ -1263,7 +1780,52 @@ if (process.env.NODE_ENV !== 'production') {
 
 }
 
-app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+const cspReportBodyParser = express.json({
+    type: [
+        'application/csp-report',
+        'application/reports+json',
+        'application/json'
+    ],
+    limit: '256kb'
+});
+
+app.post(CSP_REPORT_ROUTE_PATH, cspReportBodyParser, (req, res) => {
+    try {
+        if (normalizeCspMode(CSP_MODE) === 'off') {
+            return res.status(204).end();
+        }
+
+        const reports = normalizeCspReportsPayload(req.body);
+        if (!Array.isArray(reports) || reports.length === 0) {
+            return res.status(204).end();
+        }
+
+        const now = Date.now();
+        for (const report of reports) {
+            const fingerprint = buildCspReportFingerprint(report);
+            if (!shouldLogCspReportFingerprint(fingerprint, now)) continue;
+
+            const event = {
+                documentUri: String(report['document-uri'] || report.documentURL || '').trim().slice(0, 240),
+                blockedUri: String(report['blocked-uri'] || report.blockedURL || '').trim().slice(0, 240),
+                violatedDirective: String(report['violated-directive'] || report.violatedDirective || '').trim().slice(0, 140),
+                effectiveDirective: String(report['effective-directive'] || report.effectiveDirective || '').trim().slice(0, 140),
+                sourceFile: String(report['source-file'] || report.sourceFile || '').trim().slice(0, 240),
+                lineNumber: Number(report['line-number'] || report.lineNumber || 0) || null,
+                disposition: String(report.disposition || '').trim().slice(0, 80),
+                userAgent: String(req.headers['user-agent'] || '').trim().slice(0, 180)
+            };
+
+            console.warn(`[Security][CSP][report] ${JSON.stringify(event)}`);
+        }
+    } catch (error) {
+        console.warn('[Security][CSP][report] Falha ao processar payload:', error.message);
+    }
+
+    return res.status(204).end();
+});
+
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), validateStripeWebhook, async (req, res) => {
     try {
         const signature = String(req.headers['stripe-signature'] || '').trim();
         const event = await stripeCheckoutService.constructWebhookEvent(req.body, signature);
@@ -1271,6 +1833,17 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
         return res.json({ received: true });
     } catch (error) {
         console.error('[stripe/webhook] Falha ao processar evento:', error.message);
+        return res.status(400).send(`Webhook Error: ${String(error?.message || 'invalid_event')}`);
+    }
+});
+
+app.post('/pagarme/webhook', express.json({ type: 'application/json' }), validatePagarmeWebhook, async (req, res) => {
+    try {
+        const event = await pagarmeCheckoutService.constructWebhookEvent(req.body);
+        await handlePagarmeWebhookEvent(req, event);
+        return res.json({ received: true });
+    } catch (error) {
+        console.error('[pagarme/webhook] Falha ao processar evento:', error.message);
         return res.status(400).send(`Webhook Error: ${String(error?.message || 'invalid_event')}`);
     }
 });
@@ -1292,6 +1865,7 @@ app.use('/api', (req, res, next) => {
     const path = req.path || '';
 
     if (
+        path.startsWith('/public/billing/checkout/') ||
         path.startsWith('/auth/login') ||
         path.startsWith('/auth/refresh') ||
         path.startsWith('/auth/register') ||
@@ -1634,7 +2208,8 @@ const reconnectAttempts = whatsappService.reconnectAttempts;
 
 const qrTimeouts = whatsappService.qrTimeouts;
 
-const logger = pino({ level: 'silent' });
+const opsLogger = pino({ level: APP_LOG_LEVEL });
+const waLogger = pino({ level: WHATSAPP_LOG_LEVEL || APP_LOG_LEVEL });
 
 const typingStatus = new Map();
 
@@ -1644,6 +2219,12 @@ const sessionInitLockTimestamps = new Map();
 const pendingCiphertextRecoveries = new Map();
 const pendingLidResolutionRecoveries = new Map();
 const recoveredFlowMessageIds = new Map();
+const processedIncomingMessageKeys = new Map();
+const incomingMessageProcessingLocks = new Map();
+const inboundAutomationProcessingChains = new Map();
+const cspReportLogTracker = new Map();
+let incomingMessageReceiptsCleanupInFlight = false;
+let incomingMessageReceiptsLastCleanupAtMs = 0;
 const sessionReconnectCatchupTimers = new Map();
 const sessionReconnectCatchupInFlight = new Set();
 const sessionHistorySyncQueues = new Map();
@@ -1689,6 +2270,38 @@ const WHATSAPP_MANUAL_RECONNECT_CATCHUP_MAX_CONVERSATIONS = parsePositiveIntEnv(
     process.env.WHATSAPP_MANUAL_RECONNECT_CATCHUP_MAX_CONVERSATIONS,
     Math.max(200, WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS)
 );
+
+function normalizeErrorForLog(error, fallback = 'unknown') {
+    const message = String(error?.message || error || '').trim();
+    return message ? message.slice(0, 400) : fallback;
+}
+
+function normalizeEventName(value, fallback = 'app.event') {
+    const event = String(value || '').trim().toLowerCase();
+    return event ? event.slice(0, 120) : fallback;
+}
+
+function logStructured(level, event, fields = {}, message = '') {
+    const normalizedLevel = String(level || '').trim().toLowerCase();
+    const method = typeof opsLogger?.[normalizedLevel] === 'function' ? normalizedLevel : 'info';
+    const payload = {
+        event: normalizeEventName(event)
+    };
+
+    if (fields && typeof fields === 'object') {
+        for (const [key, value] of Object.entries(fields)) {
+            if (value === undefined) continue;
+            payload[key] = value;
+        }
+    }
+
+    if (message) {
+        opsLogger[method](payload, String(message).slice(0, 300));
+        return;
+    }
+
+    opsLogger[method](payload);
+}
 
 function setSessionStartupError(sessionId, payload = {}) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
@@ -1927,11 +2540,14 @@ async function resetSessionRuntimeAndAuth(sessionId, options = {}) {
     if (!normalizedSessionId) return;
 
     const runtimeSession = sessions.get(normalizedSessionId);
+    const shouldLogoutSocket = options?.logoutSocket === true;
     clearSessionReconnectCatchupTimer(normalizedSessionId);
     if (qrTimeouts.has(normalizedSessionId)) {
         clearTimeout(qrTimeouts.get(normalizedSessionId));
         qrTimeouts.delete(normalizedSessionId);
     }
+    clearPendingSessionRecoveryEntries(normalizedSessionId, pendingCiphertextRecoveries);
+    clearPendingSessionRecoveryEntries(normalizedSessionId, pendingLidResolutionRecoveries);
 
     if (runtimeSession) {
         clearRuntimeSessionReconnectTimer(runtimeSession);
@@ -1944,7 +2560,9 @@ async function resetSessionRuntimeAndAuth(sessionId, options = {}) {
             // ignore listener cleanup failure
         }
         try {
-            if (typeof runtimeSession.socket?.end === 'function') {
+            if (shouldLogoutSocket && typeof runtimeSession.socket?.logout === 'function') {
+                await runtimeSession.socket.logout();
+            } else if (typeof runtimeSession.socket?.end === 'function') {
                 await runtimeSession.socket.end(new Error('force_fresh_qr'));
             }
         } catch (_) {
@@ -1957,6 +2575,10 @@ async function resetSessionRuntimeAndAuth(sessionId, options = {}) {
     reconnectInFlight.delete(normalizedSessionId);
     sessionInitLocks.delete(normalizedSessionId);
     sessionInitLockTimestamps.delete(normalizedSessionId);
+    sessionReconnectCatchupInFlight.delete(normalizedSessionId);
+    sessionHistorySyncQueues.delete(normalizedSessionId);
+    sessionSendRateStateBySessionId.delete(normalizedSessionId);
+    sessionStartupErrors.delete(normalizedSessionId);
 
     const sessionPath = path.join(SESSIONS_DIR, normalizedSessionId);
     if (fs.existsSync(sessionPath)) {
@@ -1981,6 +2603,129 @@ async function resetSessionRuntimeAndAuth(sessionId, options = {}) {
         eventTimestamp: new Date().toISOString(),
         ownerUserId
     });
+}
+
+function clearPendingSessionRecoveryEntries(sessionId, recoveryMap) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId || !recoveryMap || typeof recoveryMap.entries !== 'function') {
+        return;
+    }
+
+    const recoveryKeyPrefix = `${normalizedSessionId}:`;
+    for (const [recoveryKey, recoveryState] of recoveryMap.entries()) {
+        if (!String(recoveryKey || '').startsWith(recoveryKeyPrefix)) continue;
+        if (recoveryState?.timer) {
+            clearTimeout(recoveryState.timer);
+        }
+        recoveryMap.delete(recoveryKey);
+    }
+}
+
+async function removeSessionCompletely(sessionId, options = {}) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) {
+        throw new Error('sessionId invalido');
+    }
+
+    const explicitOwnerUserId = normalizeOwnerUserId(options.ownerUserId);
+    const explicitCreatedBy = normalizeOwnerUserId(options.createdBy);
+    const runtimeSession = sessions.get(normalizedSessionId);
+    const resolvedOwnerUserId = explicitOwnerUserId
+        || normalizeOwnerUserId(runtimeSession?.ownerUserId)
+        || await resolveSessionOwnerUserId(normalizedSessionId);
+
+    clearSessionReconnectCatchupTimer(normalizedSessionId);
+    if (qrTimeouts.has(normalizedSessionId)) {
+        clearTimeout(qrTimeouts.get(normalizedSessionId));
+        qrTimeouts.delete(normalizedSessionId);
+    }
+    clearPendingSessionRecoveryEntries(normalizedSessionId, pendingCiphertextRecoveries);
+    clearPendingSessionRecoveryEntries(normalizedSessionId, pendingLidResolutionRecoveries);
+
+    if (runtimeSession) {
+        clearRuntimeSessionReconnectTimer(runtimeSession);
+        stopSessionHealthMonitor(runtimeSession);
+        try {
+            if (typeof runtimeSession.socket?.ev?.removeAllListeners === 'function') {
+                runtimeSession.socket.ev.removeAllListeners();
+            }
+        } catch (_) {
+            // ignore listener cleanup failure
+        }
+        try {
+            if (typeof runtimeSession.socket?.logout === 'function') {
+                await runtimeSession.socket.logout();
+            }
+        } catch (_) {
+            // ignore logout failure during explicit removal
+        }
+    }
+
+    sessions.delete(normalizedSessionId);
+    reconnectAttempts.delete(normalizedSessionId);
+    reconnectInFlight.delete(normalizedSessionId);
+    sessionInitLocks.delete(normalizedSessionId);
+    sessionInitLockTimestamps.delete(normalizedSessionId);
+    sessionReconnectCatchupInFlight.delete(normalizedSessionId);
+    sessionHistorySyncQueues.delete(normalizedSessionId);
+    sessionSendRateStateBySessionId.delete(normalizedSessionId);
+    sessionStartupErrors.delete(normalizedSessionId);
+
+    const sessionPath = path.join(SESSIONS_DIR, normalizedSessionId);
+    if (fs.existsSync(sessionPath)) {
+        try {
+            fs.rmSync(sessionPath, { recursive: true, force: true });
+        } catch (error) {
+            console.warn(`[${normalizedSessionId}] Falha ao limpar pasta da sessao removida:`, error.message);
+        }
+    }
+
+    try {
+        await clearPersistedBaileysAuthState(normalizedSessionId);
+    } catch (error) {
+        console.warn(`[${normalizedSessionId}] Falha ao limpar auth state persistido da sessao removida:`, error.message);
+    }
+
+    const deletion = await WhatsAppSession.deleteBySessionId(normalizedSessionId, {
+        owner_user_id: explicitOwnerUserId || undefined,
+        created_by: explicitCreatedBy || undefined
+    });
+
+    invalidateBusinessHoursSettingsCache();
+    emitToOwnerScope(resolvedOwnerUserId || null, 'whatsapp-status', {
+        sessionId: normalizedSessionId,
+        status: 'disconnected'
+    });
+
+    return {
+        sessionId: normalizedSessionId,
+        ownerUserId: resolvedOwnerUserId || null,
+        deletion
+    };
+}
+
+async function disconnectSessionPreservingRecord(sessionId, options = {}) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) {
+        throw new Error('sessionId invalido');
+    }
+
+    const explicitOwnerUserId = normalizeOwnerUserId(options.ownerUserId);
+    await resetSessionRuntimeAndAuth(normalizedSessionId, {
+        ownerUserId: explicitOwnerUserId || undefined,
+        logoutSocket: options.logoutSocket !== false
+    });
+
+    const resolvedOwnerUserId = explicitOwnerUserId || await resolveSessionOwnerUserId(normalizedSessionId);
+    emitToOwnerScope(resolvedOwnerUserId || null, 'whatsapp-status', {
+        sessionId: normalizedSessionId,
+        status: 'disconnected'
+    });
+
+    return {
+        sessionId: normalizedSessionId,
+        ownerUserId: resolvedOwnerUserId || null
+    };
 }
 
 function getSessionDispatchState(sessionId) {
@@ -2857,14 +3602,28 @@ function extractInteractiveSelectionFromMessageContent(content) {
     const paramsJson = content?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson;
     if (paramsJson) {
         try {
-            const parsed = typeof paramsJson === 'string' ? JSON.parse(paramsJson) : paramsJson;
+            let parsed = paramsJson;
+            if (typeof parsed === 'string') {
+                const raw = parsed.trim();
+                if (raw) {
+                    try {
+                        parsed = JSON.parse(raw);
+                    } catch (_) {
+                        parsed = JSON.parse(decodeURIComponent(raw));
+                    }
+                }
+            }
             const id = normalizeText(
                 parsed?.id
                 || parsed?.selectedId
                 || parsed?.selected_id
                 || parsed?.selectedRowId
                 || parsed?.selected_row_id
+                || parsed?.rowId
+                || parsed?.row_id
                 || parsed?.optionId
+                || parsed?.option_id
+                || parsed?.value
                 || ''
             );
             const text = normalizeText(
@@ -2872,6 +3631,9 @@ function extractInteractiveSelectionFromMessageContent(content) {
                 || parsed?.title
                 || parsed?.display_text
                 || parsed?.selectedDisplayText
+                || parsed?.displayText
+                || parsed?.label
+                || parsed?.optionLabel
                 || ''
             );
             const description = normalizeText(parsed?.description || '');
@@ -2883,7 +3645,48 @@ function extractInteractiveSelectionFromMessageContent(content) {
         }
     }
 
+    const interactiveBodyText = normalizeText(
+        content?.interactiveResponseMessage?.body?.text
+        || content?.interactiveResponseMessage?.body?.title
+        || ''
+    );
+    if (interactiveBodyText) {
+        return { id: '', text: interactiveBodyText, description: '', source: 'interactive_body' };
+    }
+
     return null;
+}
+
+function normalizeInteractiveSelectionForMetadata(selection = null) {
+    if (!selection || typeof selection !== 'object') return null;
+
+    const id = normalizeText(
+        selection?.id
+        || selection?.selectionId
+        || selection?.selectedId
+        || selection?.selectedRowId
+        || ''
+    );
+    const text = normalizeText(
+        selection?.text
+        || selection?.selectionText
+        || selection?.selectedDisplayText
+        || selection?.title
+        || ''
+    );
+    const description = normalizeText(selection?.description || '');
+    const source = normalizeText(selection?.source || '');
+
+    if (!id && !text && !description) {
+        return null;
+    }
+
+    const normalized = {};
+    if (id) normalized.id = id;
+    if (text) normalized.text = text;
+    if (description) normalized.description = description;
+    if (source) normalized.source = source;
+    return normalized;
 }
 
 function detectMediaTypeFromMessageContent(content) {
@@ -3996,6 +4799,24 @@ function decryptMessage(encrypted) {
 
 }
 
+function resolveMessageContentWithFallback(messageRow = {}) {
+
+    if (!messageRow || typeof messageRow !== 'object') return '';
+
+    const encryptedContent = messageRow.content_encrypted;
+    const fallbackContent = messageRow.content;
+
+    if (!encryptedContent) return fallbackContent || '';
+
+    const decryptedContent = decryptMessage(encryptedContent);
+    if (decryptedContent && String(decryptedContent).trim()) {
+        return decryptedContent;
+    }
+
+    return fallbackContent || '';
+
+}
+
 
 
 const formatJid = whatsappService.formatJid;
@@ -4442,7 +5263,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
             ...(Array.isArray(socketVersion) ? { version: socketVersion } : {}),
 
-            logger,
+            waLogger,
 
 // printQRInTerminal: true, // Depreciado no Baileys
 
@@ -4450,7 +5271,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 creds: state.creds,
 
-                keys: makeCacheableSignalKeyStore(state.keys, logger)
+                keys: makeCacheableSignalKeyStore(state.keys, waLogger)
 
             },
 
@@ -4476,11 +5297,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 if (msg) {
 
-                    const content = msg.content_encrypted 
-
-                        ? decryptMessage(msg.content_encrypted) 
-
-                        : msg.content;
+                    const content = resolveMessageContentWithFallback(msg);
 
                     return { conversation: content };
 
@@ -5460,6 +6277,11 @@ function applyAutomationTemplate(template = '', variables = {}) {
 
 
 
+const flowMenuTextService = createFlowMenuTextService({
+    normalizeText,
+    applyLeadTemplate
+});
+
 const SUPPORTED_AUTOMATION_TRIGGER_TYPES = new Set([
     'new_lead',
     'status_change',
@@ -5474,6 +6296,21 @@ const AUTOMATION_EVENT_TYPES = {
     SCHEDULE: 'schedule',
     INACTIVITY: 'inactivity'
 };
+const inboundMessagePipelineService = createInboundMessagePipelineService({
+    runInboundAutomationSerialized,
+    runWithConversationPostgresLock,
+    getBusinessHoursSettings,
+    isWithinBusinessHours,
+    shouldSendOutsideHoursAutoReply,
+    sendMessage,
+    markOutsideHoursAutoReplySent,
+    flowService,
+    scheduleAutomations,
+    automationEventTypes: AUTOMATION_EVENT_TYPES,
+    flowInboundTelemetryEnabled: FLOW_INBOUND_TELEMETRY_ENABLED,
+    flowInboundTelemetrySlowMs: FLOW_INBOUND_TELEMETRY_SLOW_MS,
+    logStructured
+});
 const DEFAULT_AUTOMATION_SESSION_ID = DEFAULT_WHATSAPP_SESSION_ID;
 const AUTOMATION_SCHEDULE_POLL_MS = 30000;
 const LEGACY_CAMPAIGN_TRIGGER_MODE = 'legacy_campaign_trigger';
@@ -6549,6 +7386,75 @@ function extractLastMessageFromChat(chat) {
 
 }
 
+function parseConversationMetadataValue(value) {
+    if (!value) return {};
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return { ...value };
+    }
+
+    if (typeof value !== 'string') return {};
+
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return { ...parsed };
+        }
+    } catch (_) {
+        return {};
+    }
+
+    return {};
+}
+
+function resolveConversationLastReadAtMs(metadataValue) {
+    const metadata = parseConversationMetadataValue(metadataValue);
+    const system = metadata?.__system && typeof metadata.__system === 'object' && !Array.isArray(metadata.__system)
+        ? metadata.__system
+        : {};
+    const rawLastReadAt = String(system?.last_read_at || system?.lastReadAt || '').trim();
+    if (!rawLastReadAt) return 0;
+
+    const parsedMs = Date.parse(rawLastReadAt);
+    return Number.isFinite(parsedMs) ? parsedMs : 0;
+}
+
+function buildConversationMetadataWithReadMark(metadataValue, readAtIso = '') {
+    const metadata = parseConversationMetadataValue(metadataValue);
+    const currentSystem = metadata?.__system && typeof metadata.__system === 'object' && !Array.isArray(metadata.__system)
+        ? metadata.__system
+        : {};
+    const effectiveReadAt = String(readAtIso || new Date().toISOString()).trim() || new Date().toISOString();
+
+    return {
+        ...metadata,
+        __system: {
+            ...currentSystem,
+            last_read_at: effectiveReadAt
+        }
+    };
+}
+
+async function markConversationAsReadWithMetadata(conversation, readAtIso = '') {
+    const resolvedConversation = conversation && typeof conversation === 'object'
+        ? conversation
+        : await Conversation.findById(Number(conversation || 0));
+
+    if (!resolvedConversation?.id) return false;
+
+    const metadata = buildConversationMetadataWithReadMark(
+        resolvedConversation.metadata,
+        readAtIso
+    );
+
+    await Conversation.update(resolvedConversation.id, {
+        unread_count: 0,
+        metadata
+    });
+
+    return true;
+}
+
 
 
 async function syncChatsToDatabase(sessionId, payload) {
@@ -6682,40 +7588,38 @@ async function syncChatsToDatabase(sessionId, payload) {
 
 
         const updates = {};
+        const chatConversationTimestampMs = parseMessageTimestampMs(
+            chat?.conversationTimestamp || chat?.lastMessage?.messageTimestamp || chat?.lastMessageTimestamp
+        );
+        const currentUnreadCount = Math.max(0, Number(conversation?.unread_count || 0));
+        let metadata = parseConversationMetadataValue(conversation?.metadata);
+        const lastReadAtMs = resolveConversationLastReadAtMs(metadata);
 
         if (Number.isFinite(unreadCount)) {
-            updates.unread_count = Math.max(0, unreadCount);
+            const normalizedUnreadCount = Math.max(0, unreadCount);
+            const staleUnreadAfterRead = (
+                normalizedUnreadCount > 0
+                && currentUnreadCount === 0
+                && lastReadAtMs > 0
+                && chatConversationTimestampMs > 0
+                && lastReadAtMs >= chatConversationTimestampMs
+            );
 
+            if (!staleUnreadAfterRead) {
+                updates.unread_count = normalizedUnreadCount;
+            }
         }
-
-
 
         const lastMessage = extractLastMessageFromChat(chat);
 
         if (lastMessage) {
-
-            let metadata = {};
-
-            try {
-
-                metadata = conversation?.metadata ? JSON.parse(conversation.metadata) : {};
-
-            } catch (e) {
-
-                metadata = {};
-
-            }
-
             metadata.last_message = lastMessage;
 
-            if (chat?.conversationTimestamp) {
-
-                metadata.last_message_at = new Date(Number(chat.conversationTimestamp) * 1000).toISOString();
-
+            if (chatConversationTimestampMs > 0) {
+                metadata.last_message_at = new Date(chatConversationTimestampMs).toISOString();
             }
 
             updates.metadata = metadata;
-
         }
 
 
@@ -7140,6 +8044,8 @@ async function backfillConversationMessagesFromStore(options = {}) {
     let hydratedMedia = 0;
     let latestSavedMessageId = null;
     let latestSentAt = '';
+    let latestMessageTimestampMs = 0;
+    let latestMessageFromMe = false;
     let unreadFromLead = 0;
 
     for (const waMsg of orderedMessages) {
@@ -7149,6 +8055,8 @@ async function backfillConversationMessagesFromStore(options = {}) {
         if (!messageId) continue;
 
         const content = unwrapMessageContent(waMsg.message);
+        const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
+        const interactiveSelectionMetadata = normalizeInteractiveSelectionForMetadata(interactiveSelection);
         let text = extractTextFromMessageContent(content);
         const mediaType = detectMediaTypeFromMessageContent(content);
         const existingMessage = await Message.findByMessageId(messageId);
@@ -7198,7 +8106,8 @@ async function backfillConversationMessagesFromStore(options = {}) {
 
         const isFromMe = Boolean(waMsg?.key?.fromMe);
         const messageTimestampMs = parseMessageTimestampMs(waMsg?.messageTimestamp);
-        const sentAtIso = messageTimestampMs > 0 ? new Date(messageTimestampMs).toISOString() : new Date().toISOString();
+        const effectiveMessageTimestampMs = messageTimestampMs > 0 ? messageTimestampMs : Date.now();
+        const sentAtIso = new Date(effectiveMessageTimestampMs).toISOString();
         const normalizedStatus = isFromMe ? 'sent' : 'delivered';
 
         const savedMessage = await Message.create({
@@ -7215,19 +8124,30 @@ async function backfillConversationMessagesFromStore(options = {}) {
             status: normalizedStatus,
             is_from_me: isFromMe,
             sent_at: sentAtIso,
-            metadata: { source: 'store_backfill' }
+            metadata: {
+                source: 'store_backfill',
+                ...(interactiveSelectionMetadata ? { interactiveSelection: interactiveSelectionMetadata } : {})
+            }
         });
 
         inserted += 1;
-        latestSavedMessageId = savedMessage?.id || latestSavedMessageId;
-        latestSentAt = sentAtIso || latestSentAt;
+        if (!latestMessageTimestampMs || effectiveMessageTimestampMs >= latestMessageTimestampMs) {
+            latestMessageTimestampMs = effectiveMessageTimestampMs;
+            latestSavedMessageId = savedMessage?.id || latestSavedMessageId;
+            latestSentAt = sentAtIso || latestSentAt;
+            latestMessageFromMe = isFromMe;
+        }
         if (!isFromMe) unreadFromLead += 1;
     }
 
     if (!inserted && !hydratedMedia) return createStoreBackfillResult();
 
     if (inserted > 0) {
-        await Conversation.touch(conversation.id, latestSavedMessageId, latestSentAt || null);
+        if (latestMessageFromMe) {
+            await Conversation.touchAndMarkAsRead(conversation.id, latestSavedMessageId, latestSentAt || null);
+        } else {
+            await Conversation.touch(conversation.id, latestSavedMessageId, latestSentAt || null);
+        }
     }
 
     if (inserted > 0 && lead?.id && latestSentAt) {
@@ -7645,6 +8565,10 @@ function isFlowNodeAwaitingInput(flow, nodeId) {
         return true;
     }
 
+    if (nodeType === 'end') {
+        return true;
+    }
+
     if (nodeType === 'trigger' && (nodeSubtype === 'keyword' || nodeSubtype === 'intent')) {
         return true;
     }
@@ -7653,9 +8577,7 @@ function isFlowNodeAwaitingInput(flow, nodeId) {
 }
 
 function resolveStoredMessageTextForFlow(messageRow = {}) {
-    let text = messageRow?.content_encrypted
-        ? decryptMessage(messageRow.content_encrypted)
-        : messageRow?.content;
+    let text = resolveMessageContentWithFallback(messageRow);
 
     if ((!text || !String(text).trim()) && messageRow?.media_type && messageRow.media_type !== 'text') {
         text = previewForMedia(messageRow.media_type);
@@ -7733,8 +8655,10 @@ async function processRecoveredStoreBackfillMessages(options = {}) {
         const messageId = String(candidate?.message_id || '').trim();
         if (!messageId || hasRecoveredFlowMessage(messageId)) continue;
 
+        const metadata = parseJsonSafe(candidate?.metadata, {});
+        const recoveredSelection = normalizeInteractiveSelectionForMetadata(metadata?.interactiveSelection);
+
         if (requireStoreBackfillSource) {
-            const metadata = parseJsonSafe(candidate?.metadata, {});
             if (String(metadata?.source || '').trim() !== 'store_backfill') continue;
         }
 
@@ -7754,7 +8678,12 @@ async function processRecoveredStoreBackfillMessages(options = {}) {
 
         const refreshedConversation = await Conversation.findById(conversation.id) || conversation;
         await flowService.processIncomingMessage(
-            { text, mediaType: candidate.media_type || 'text' },
+            {
+                text,
+                mediaType: candidate.media_type || 'text',
+                selectionId: recoveredSelection?.id || '',
+                selectionText: recoveredSelection?.text || recoveredSelection?.description || ''
+            },
             lead,
             refreshedConversation
         );
@@ -8011,6 +8940,18 @@ function stopFlowAwaitingInputRecoveryWorker() {
     }
 }
 
+async function runOpsAlertsCycle(options = {}) {
+    return await opsMonitoringService.runCycle(options);
+}
+
+function startOpsAlertsWorker() {
+    opsMonitoringService.startWorker();
+}
+
+function stopOpsAlertsWorker() {
+    opsMonitoringService.stopWorker();
+}
+
 function normalizeHistorySyncMessageBatch(messages, limit = WHATSAPP_HISTORY_SYNC_MESSAGES_LIMIT) {
     if (!Array.isArray(messages) || messages.length === 0) return [];
 
@@ -8171,6 +9112,385 @@ function rememberRecoveredFlowMessage(messageId) {
                 recoveredFlowMessageIds.delete(itemKey);
             }
         }
+    }
+}
+
+function buildIncomingMessageIdempotencyKey(sessionId, messageId) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    const normalizedMessageId = String(messageId || '').trim();
+    if (!normalizedSessionId || !normalizedMessageId) return '';
+    return `${normalizedSessionId}::${normalizedMessageId}`;
+}
+
+function pruneProcessedIncomingMessageKeys(now = Date.now()) {
+    if (processedIncomingMessageKeys.size === 0) return;
+
+    for (const [key, processedAt] of processedIncomingMessageKeys.entries()) {
+        if ((now - Number(processedAt || 0)) > INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS) {
+            processedIncomingMessageKeys.delete(key);
+        }
+    }
+}
+
+function hasRecentlyProcessedIncomingMessageKey(idempotencyKey, now = Date.now()) {
+    if (!idempotencyKey) return false;
+    pruneProcessedIncomingMessageKeys(now);
+    const processedAt = Number(processedIncomingMessageKeys.get(idempotencyKey) || 0);
+    if (processedAt <= 0) return false;
+    return (now - processedAt) <= INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS;
+}
+
+function rememberProcessedIncomingMessageKey(idempotencyKey, now = Date.now()) {
+    if (!idempotencyKey) return;
+    processedIncomingMessageKeys.set(idempotencyKey, now);
+    if (processedIncomingMessageKeys.size > FLOW_RECOVERY_TRACKER_LIMIT * 4) {
+        pruneProcessedIncomingMessageKeys(now);
+    }
+}
+
+function normalizeConversationProcessingKey(conversationId) {
+    const asNumber = Number(conversationId || 0);
+    if (Number.isInteger(asNumber) && asNumber > 0) {
+        return String(asNumber);
+    }
+    const fallback = String(conversationId || '').trim();
+    return fallback || '';
+}
+
+function runInboundAutomationSerialized(conversationId, task) {
+    if (typeof task !== 'function') {
+        return Promise.resolve(null);
+    }
+
+    const key = normalizeConversationProcessingKey(conversationId);
+    if (!key) {
+        return Promise.resolve().then(() => task());
+    }
+
+    const previousChain = inboundAutomationProcessingChains.get(key) || Promise.resolve();
+    const currentChain = previousChain
+        .catch(() => null)
+        .then(() => task());
+
+    const trackedChain = currentChain.finally(() => {
+        if (inboundAutomationProcessingChains.get(key) === trackedChain) {
+            inboundAutomationProcessingChains.delete(key);
+        }
+    });
+
+    inboundAutomationProcessingChains.set(key, trackedChain);
+    return trackedChain;
+}
+
+function normalizeIncomingMessageReceiptSource(value = '') {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized || 'live';
+}
+
+function resolveConversationAdvisoryLockKeyPart(conversationId) {
+    const asNumber = Number(conversationId || 0);
+    if (Number.isInteger(asNumber) && asNumber > 0) {
+        return Math.min(asNumber, 2147483647);
+    }
+
+    const fallback = String(conversationId || '').trim();
+    if (!fallback) return 0;
+
+    const hash = crypto.createHash('sha1').update(fallback).digest();
+    const value = Math.abs(hash.readInt32BE(0));
+    return value > 0 ? value : 1;
+}
+
+async function runWithConversationPostgresLock(conversationId, task) {
+    if (typeof task !== 'function') {
+        return null;
+    }
+
+    if (!FLOW_INBOUND_POSTGRES_LOCK_ENABLED || !USE_POSTGRES) {
+        return await task({ lockWaitMs: 0, mode: 'disabled' });
+    }
+
+    const lockKeyPart = resolveConversationAdvisoryLockKeyPart(conversationId);
+    if (!lockKeyPart) {
+        return await task({ lockWaitMs: 0, mode: 'invalid_key' });
+    }
+
+    let client = null;
+    let lockAcquired = false;
+    let lockMode = 'fallback';
+    let lockWaitMs = 0;
+    const lockStartedAtMs = Date.now();
+
+    try {
+        try {
+            const database = getDatabase();
+            client = await database.connect();
+            await client.query('SELECT pg_advisory_lock($1, $2)', [
+                FLOW_INBOUND_POSTGRES_LOCK_NAMESPACE,
+                lockKeyPart
+            ]);
+            lockAcquired = true;
+            lockMode = 'postgres';
+            lockWaitMs = Date.now() - lockStartedAtMs;
+        } catch (lockError) {
+            lockWaitMs = Date.now() - lockStartedAtMs;
+            logStructured(
+                'warn',
+                'flow.lock.postgres_acquire_failed',
+                {
+                    conversationId: Number(conversationId || 0) || null,
+                    lockWaitMs,
+                    error: normalizeErrorForLog(lockError)
+                },
+                'Falha ao adquirir lock Postgres da conversa; seguindo com lock local'
+            );
+        }
+
+        return await task({
+            lockWaitMs,
+            mode: lockMode
+        });
+    } catch (error) {
+        throw error;
+    } finally {
+        if (client) {
+            if (lockAcquired) {
+                try {
+                    await client.query('SELECT pg_advisory_unlock($1, $2)', [
+                        FLOW_INBOUND_POSTGRES_LOCK_NAMESPACE,
+                        lockKeyPart
+                    ]);
+                } catch (unlockError) {
+                    logStructured(
+                        'error',
+                        'flow.lock.postgres_release_failed',
+                        {
+                            conversationId: Number(conversationId || 0) || null,
+                            error: normalizeErrorForLog(unlockError)
+                        },
+                        'Falha ao liberar lock Postgres da conversa'
+                    );
+                }
+            }
+            client.release();
+        }
+    }
+}
+
+async function claimIncomingMessageReceipt(options = {}) {
+    const normalizedSessionId = sanitizeSessionId(options.sessionId);
+    const normalizedMessageId = String(options.messageId || '').trim();
+    const normalizedSource = normalizeIncomingMessageReceiptSource(options.source);
+    const conversationId = Number(options.conversationId || 0) || null;
+
+    if (!normalizedSessionId || !normalizedMessageId || !USE_POSTGRES) {
+        return { acquired: true, token: '', reason: 'skipped' };
+    }
+
+    const lockToken = crypto.randomBytes(12).toString('hex');
+    const lockedUntilIso = new Date(Date.now() + INCOMING_MESSAGE_RECEIPT_LEASE_MS).toISOString();
+
+    try {
+        const receipt = await queryOne(`
+            INSERT INTO incoming_message_receipts (
+                session_id,
+                message_id,
+                source,
+                status,
+                lock_token,
+                locked_until,
+                conversation_id,
+                updated_at
+            )
+            VALUES (?, ?, ?, 'processing', ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT (session_id, message_id) DO UPDATE
+            SET
+                source = COALESCE(EXCLUDED.source, incoming_message_receipts.source),
+                conversation_id = COALESCE(EXCLUDED.conversation_id, incoming_message_receipts.conversation_id),
+                updated_at = CURRENT_TIMESTAMP,
+                status = CASE
+                    WHEN incoming_message_receipts.status = 'processed' THEN 'processed'
+                    WHEN incoming_message_receipts.locked_until IS NULL THEN 'processing'
+                    WHEN incoming_message_receipts.locked_until <= CURRENT_TIMESTAMP THEN 'processing'
+                    ELSE incoming_message_receipts.status
+                END,
+                lock_token = CASE
+                    WHEN incoming_message_receipts.status = 'processed' THEN incoming_message_receipts.lock_token
+                    WHEN incoming_message_receipts.locked_until IS NULL THEN EXCLUDED.lock_token
+                    WHEN incoming_message_receipts.locked_until <= CURRENT_TIMESTAMP THEN EXCLUDED.lock_token
+                    ELSE incoming_message_receipts.lock_token
+                END,
+                locked_until = CASE
+                    WHEN incoming_message_receipts.status = 'processed' THEN incoming_message_receipts.locked_until
+                    WHEN incoming_message_receipts.locked_until IS NULL THEN EXCLUDED.locked_until
+                    WHEN incoming_message_receipts.locked_until <= CURRENT_TIMESTAMP THEN EXCLUDED.locked_until
+                    ELSE incoming_message_receipts.locked_until
+                END
+            RETURNING id, status, lock_token, processed_at
+        `, [
+            normalizedSessionId,
+            normalizedMessageId,
+            normalizedSource,
+            lockToken,
+            lockedUntilIso,
+            conversationId
+        ]);
+
+        const status = String(receipt?.status || '').trim().toLowerCase();
+        const receiptToken = String(receipt?.lock_token || '').trim();
+
+        if (status === 'processed') {
+            return { acquired: false, token: '', reason: 'already_processed' };
+        }
+        if (receiptToken !== lockToken) {
+            return { acquired: false, token: '', reason: 'in_progress' };
+        }
+
+        return { acquired: true, token: lockToken, reason: 'claimed' };
+    } catch (error) {
+        logStructured(
+            'warn',
+            'flow.idempotency.receipt_claim_failed',
+            {
+                sessionId: normalizedSessionId,
+                messageId: normalizedMessageId,
+                source: normalizedSource,
+                error: normalizeErrorForLog(error)
+            },
+            'Falha ao registrar receipt; seguindo em modo local'
+        );
+        return { acquired: true, token: '', reason: 'fallback_local' };
+    }
+}
+
+async function completeIncomingMessageReceipt(options = {}) {
+    const normalizedSessionId = sanitizeSessionId(options.sessionId);
+    const normalizedMessageId = String(options.messageId || '').trim();
+    const lockToken = String(options.lockToken || '').trim();
+    const conversationId = Number(options.conversationId || 0) || null;
+
+    if (!normalizedSessionId || !normalizedMessageId || !lockToken || !USE_POSTGRES) return;
+
+    await run(`
+        UPDATE incoming_message_receipts
+        SET
+            status = 'processed',
+            processed_at = COALESCE(processed_at, CURRENT_TIMESTAMP),
+            lock_token = NULL,
+            locked_until = NULL,
+            error_message = NULL,
+            conversation_id = COALESCE(?, conversation_id),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE session_id = ?
+          AND message_id = ?
+          AND lock_token = ?
+    `, [conversationId, normalizedSessionId, normalizedMessageId, lockToken]);
+}
+
+async function releaseIncomingMessageReceipt(options = {}) {
+    const normalizedSessionId = sanitizeSessionId(options.sessionId);
+    const normalizedMessageId = String(options.messageId || '').trim();
+    const lockToken = String(options.lockToken || '').trim();
+    const reason = String(options.reason || '').trim().slice(0, 500) || null;
+
+    if (!normalizedSessionId || !normalizedMessageId || !lockToken || !USE_POSTGRES) return;
+
+    await run(`
+        UPDATE incoming_message_receipts
+        SET
+            status = 'pending',
+            lock_token = NULL,
+            locked_until = NULL,
+            processed_at = NULL,
+            error_message = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE session_id = ?
+          AND message_id = ?
+          AND lock_token = ?
+          AND status <> 'processed'
+    `, [reason, normalizedSessionId, normalizedMessageId, lockToken]);
+}
+
+async function cleanupIncomingMessageReceipts(options = {}) {
+    if (!USE_POSTGRES) return { deleted: 0, skipped: 'not_postgres' };
+    if (incomingMessageReceiptsCleanupInFlight) return { deleted: 0, skipped: 'in_flight' };
+
+    const force = options.force === true;
+    const now = Date.now();
+    if (!force && (now - incomingMessageReceiptsLastCleanupAtMs) < INCOMING_MESSAGE_RECEIPTS_CLEANUP_INTERVAL_MS) {
+        return { deleted: 0, skipped: 'interval' };
+    }
+
+    incomingMessageReceiptsCleanupInFlight = true;
+    incomingMessageReceiptsLastCleanupAtMs = now;
+    const cutoffIso = new Date(now - INCOMING_MESSAGE_RECEIPTS_RETENTION_MS).toISOString();
+
+    try {
+        const result = await run(`
+            DELETE FROM incoming_message_receipts
+            WHERE (
+                status = 'processed'
+                AND processed_at IS NOT NULL
+                AND processed_at < ?
+            )
+            OR (
+                status <> 'processed'
+                AND updated_at < ?
+            )
+        `, [cutoffIso, cutoffIso]);
+
+        const deleted = Number(result?.changes || 0) || 0;
+        if (deleted > 0) {
+            logStructured(
+                'info',
+                'flow.idempotency.receipt_cleanup',
+                {
+                    deleted,
+                    retentionMs: INCOMING_MESSAGE_RECEIPTS_RETENTION_MS
+                },
+                'Cleanup de incoming_message_receipts executado'
+            );
+        }
+        return { deleted };
+    } catch (error) {
+        logStructured(
+            'warn',
+            'flow.idempotency.receipt_cleanup_failed',
+            { error: normalizeErrorForLog(error) },
+            'Falha ao limpar incoming_message_receipts'
+        );
+        return { deleted: 0, skipped: 'error' };
+    } finally {
+        incomingMessageReceiptsCleanupInFlight = false;
+    }
+}
+
+function logFlowInboundTelemetry(payload = {}) {
+    const totalMs = Math.max(0, Math.round(Number(payload.totalMs || 0) || 0));
+    if (!FLOW_INBOUND_TELEMETRY_ENABLED && totalMs < FLOW_INBOUND_TELEMETRY_SLOW_MS) {
+        return;
+    }
+
+    const flowMs = Math.max(0, Math.round(Number(payload.flowMs || 0) || 0));
+    const automationsMs = Math.max(0, Math.round(Number(payload.automationsMs || 0) || 0));
+    const lockWaitMs = Math.max(0, Math.round(Number(payload.lockWaitMs || 0) || 0));
+    const fields = {
+        sessionId: sanitizeSessionId(payload.sessionId) || 'n/a',
+        conversationId: Number(payload.conversationId || 0) || null,
+        messageId: String(payload.messageId || '').trim() || 'n/a',
+        source: String(payload.source || 'live').trim().toLowerCase() || 'live',
+        fromMe: payload.isFromMe === true,
+        outsideHours: payload.outsideHours === true,
+        totalMs,
+        flowMs,
+        automationsMs,
+        lockWaitMs
+    };
+
+    if (totalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
+        logStructured('warn', 'flow.inbound.telemetry_slow', fields, 'Inbound flow lento');
+    } else {
+        logStructured('info', 'flow.inbound.telemetry', fields);
     }
 }
 
@@ -8588,17 +9908,95 @@ async function getBusinessHoursSettings(ownerUserId = null, forceRefresh = false
 
 async function processIncomingMessage(sessionId, msg, options = {}) {
 
+    const incomingMessageId = String(msg?.key?.id || '').trim();
+    let messageSource = String(options?.source || 'live').trim().toLowerCase();
+    if (!messageSource) messageSource = 'live';
+    let flowProcessingDurationMs = 0;
+    let automationsSchedulingDurationMs = 0;
+    let outsideBusinessHoursBypass = false;
+    let inboundTelemetryConversationId = 0;
+    let inboundTelemetryIsFromMe = Boolean(msg?.key?.fromMe);
+    let inboundLockWaitMs = 0;
+
     if (isGroupMessage(msg)) return;
     if (!msg?.message) return;
-    const messageSource = String(options?.source || 'live').trim().toLowerCase();
-    const preserveUnreadCount = options?.preserveUnreadCount === true;
-    const skipInboundAutomation = options?.skipInboundAutomation === true;
-    const skipWebhook = options?.skipWebhook === true;
-    const skipRealtimeEmit = options?.skipRealtimeEmit === true;
-    const sessionDisplayName = getSessionDisplayName(sessionId);
-    const sessionPhone = getSessionPhone(sessionId);
-    const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
-    registerMessageJidAliases(msg, sessionPhone);
+    const inboundStartedAtMs = Date.now();
+    const idempotencyKey = buildIncomingMessageIdempotencyKey(sessionId, incomingMessageId);
+    let shouldRememberProcessedMessage = false;
+    let releaseIncomingMessageLock = null;
+    let incomingReceiptLockToken = '';
+    let incomingReceiptClaimed = false;
+    let processingFailed = false;
+    let processingErrorMessage = '';
+
+    if (idempotencyKey) {
+        const now = Date.now();
+        if (hasRecentlyProcessedIncomingMessageKey(idempotencyKey, now)) {
+            return;
+        }
+
+        const existingLock = incomingMessageProcessingLocks.get(idempotencyKey);
+        if (existingLock) {
+            const lockAgeMs = now - Number(existingLock.startedAt || now);
+            if (lockAgeMs <= INCOMING_MESSAGE_LOCK_STALE_MS) {
+                const waitStartedAtMs = Date.now();
+                await existingLock.promise.catch(() => null);
+                inboundLockWaitMs = Date.now() - waitStartedAtMs;
+                if (hasRecentlyProcessedIncomingMessageKey(idempotencyKey)) {
+                    return;
+                }
+            } else {
+                incomingMessageProcessingLocks.delete(idempotencyKey);
+            }
+        }
+
+        let lockReleased = false;
+        let resolveLock = null;
+        const lockPromise = new Promise((resolve) => {
+            resolveLock = resolve;
+        });
+        incomingMessageProcessingLocks.set(idempotencyKey, {
+            promise: lockPromise,
+            startedAt: Date.now(),
+            createdByMessageId: incomingMessageId
+        });
+        releaseIncomingMessageLock = () => {
+            if (lockReleased) return;
+            lockReleased = true;
+            incomingMessageProcessingLocks.delete(idempotencyKey);
+            if (typeof resolveLock === 'function') {
+                resolveLock();
+            }
+        };
+    }
+
+    try {
+        const preserveUnreadCount = options?.preserveUnreadCount === true;
+        const skipInboundAutomation = options?.skipInboundAutomation === true;
+        const skipWebhook = options?.skipWebhook === true;
+        const skipRealtimeEmit = options?.skipRealtimeEmit === true;
+        const sessionDisplayName = getSessionDisplayName(sessionId);
+        const sessionPhone = getSessionPhone(sessionId);
+        const sessionOwnerUserId = await resolveSessionOwnerUserId(sessionId);
+        registerMessageJidAliases(msg, sessionPhone);
+
+        if (idempotencyKey) {
+            const receiptClaim = await claimIncomingMessageReceipt({
+                sessionId,
+                messageId: incomingMessageId,
+                source: messageSource
+            });
+
+            if (!receiptClaim.acquired) {
+                if (receiptClaim.reason === 'already_processed') {
+                    shouldRememberProcessedMessage = true;
+                }
+                return;
+            }
+
+            incomingReceiptLockToken = String(receiptClaim.token || '').trim();
+            incomingReceiptClaimed = Boolean(incomingReceiptLockToken);
+        }
 
     const fromRaw = msg.key.remoteJid;
     const fromRawNormalized = normalizeUserJidCandidate(fromRaw) || fromRaw;
@@ -8728,11 +10126,26 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         }
     }
 
+    inboundTelemetryIsFromMe = isFromMe;
     const content = contentForRouting;
     const interactiveSelection = extractInteractiveSelectionFromMessageContent(content);
+    const interactiveSelectionMetadata = normalizeInteractiveSelectionForMetadata(interactiveSelection);
     let text = extractTextFromMessageContent(content);
     let mediaType = detectMediaTypeFromMessageContent(content);
     let persistedMedia = null;
+
+    // Em respostas interativas, alguns clientes preenchem somente id/descricao.
+    if (!text && mediaType === 'text') {
+        const fallbackSelectionText = normalizeText(
+            interactiveSelection?.text
+            || interactiveSelection?.id
+            || interactiveSelection?.description
+            || ''
+        );
+        if (fallbackSelectionText) {
+            text = fallbackSelectionText;
+        }
+    }
 
     // Ignora upserts de controle/protocolo sem conteudo renderizavel.
     if (!text && mediaType === 'text') return;
@@ -8877,6 +10290,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         assigned_to: sessionOwnerUserId || undefined
 
     });
+    inboundTelemetryConversationId = Number(conversation?.id || 0) || 0;
 
 
 
@@ -8884,6 +10298,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 
     if (existingMessage) {
 
+        shouldRememberProcessedMessage = true;
         return;
 
     }
@@ -8901,6 +10316,13 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
     // Salvar mensagem
 
     const normalizedStatus = isFromMe ? 'sent' : 'delivered';
+    const messageMetadata = {};
+    if (messageSource !== 'live') {
+        messageMetadata.source = messageSource;
+    }
+    if (interactiveSelectionMetadata) {
+        messageMetadata.interactiveSelection = interactiveSelectionMetadata;
+    }
 
     const messageData = {
 
@@ -8926,15 +10348,34 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         is_from_me: isFromMe,
 
         sent_at: msg.messageTimestamp ? new Date(Number(msg.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
-        metadata: messageSource !== 'live'
-            ? { source: messageSource }
+        metadata: Object.keys(messageMetadata).length > 0
+            ? messageMetadata
             : undefined
 
     };
 
     
 
-    const savedMessage = await Message.create(messageData);
+    let savedMessage;
+    try {
+        savedMessage = await Message.create(messageData);
+        shouldRememberProcessedMessage = true;
+    } catch (error) {
+        const duplicateErrorMessage = String(error?.message || '').toLowerCase();
+        const isDuplicateMessageIdError = (
+            duplicateErrorMessage.includes('message_id')
+            && (
+                duplicateErrorMessage.includes('unique')
+                || duplicateErrorMessage.includes('duplicate')
+                || duplicateErrorMessage.includes('already exists')
+            )
+        );
+        if (isDuplicateMessageIdError) {
+            shouldRememberProcessedMessage = true;
+            return;
+        }
+        throw error;
+    }
 
     const messageTimestampIso = messageData.sent_at || new Date().toISOString();
 
@@ -8954,7 +10395,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 
     } else {
 
-        await Conversation.touch(conversation.id, savedMessage.id, messageTimestampIso);
+        await Conversation.touchAndMarkAsRead(conversation.id, savedMessage.id, messageTimestampIso);
 
     }
 
@@ -9021,56 +10462,86 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         }
 
         if (!skipInboundAutomation) {
-            console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
-
-            const businessHoursSettings = await getBusinessHoursSettings(sessionOwnerUserId || null, false, sessionId);
-            const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
-
-            if (isOutsideBusinessHours && !isSelfChat) {
-                const autoReplyText = String(businessHoursSettings.autoReplyMessage || '').trim();
-
-                if (autoReplyText && shouldSendOutsideHoursAutoReply(conversation.id)) {
-                    try {
-                        await sendMessage(sessionId, phone, autoReplyText, 'text', {
-                            conversationId: conversation.id
-                        });
-                        markOutsideHoursAutoReplySent(conversation.id);
-                    } catch (autoReplyError) {
-                        console.error(`[${sessionId}] Erro ao enviar resposta fora do horario:`, autoReplyError.message);
-                    }
-                }
-
-                return;
-            }
-
-            // Processar fluxo de automacao
-            if (conversation.is_bot_active) {
-                conversation.created = convCreated;
-
-                await flowService.processIncomingMessage(
-                    {
-                        text,
-                        mediaType,
-                        selectionId: interactiveSelection?.id || '',
-                        selectionText: interactiveSelection?.text || ''
-                    },
-                    lead,
-                    conversation
-                );
-            }
-
-            await scheduleAutomations({
-                event: AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED,
+            const pipelineMetrics = await inboundMessagePipelineService.runInboundLeadAutomationStage({
                 sessionId,
+                incomingMessageId,
+                sessionOwnerUserId,
                 text,
                 mediaType,
+                interactiveSelection,
                 lead,
                 conversation,
-                messageTimestampMs: Date.parse(messageTimestampIso) || Date.now(),
-                leadCreated,
-                conversationCreated: convCreated
+                convCreated,
+                phone,
+                isSelfChat,
+                messageTimestampIso,
+                leadCreated
             });
+            outsideBusinessHoursBypass = outsideBusinessHoursBypass || pipelineMetrics?.outsideBusinessHoursBypass === true;
+            flowProcessingDurationMs += Math.max(0, Number(pipelineMetrics?.flowProcessingDurationMs || 0) || 0);
+            automationsSchedulingDurationMs += Math.max(0, Number(pipelineMetrics?.automationsSchedulingDurationMs || 0) || 0);
+            inboundLockWaitMs += Math.max(0, Number(pipelineMetrics?.lockWaitMs || 0) || 0);
         }
+    }
+    } catch (error) {
+        processingFailed = true;
+        processingErrorMessage = String(error?.message || error || '').trim();
+        throw error;
+    } finally {
+        if (incomingReceiptClaimed && incomingReceiptLockToken) {
+            try {
+                if (shouldRememberProcessedMessage) {
+                    await completeIncomingMessageReceipt({
+                        sessionId,
+                        messageId: incomingMessageId,
+                        lockToken: incomingReceiptLockToken,
+                        conversationId: inboundTelemetryConversationId || null
+                    });
+                    cleanupIncomingMessageReceipts().catch(() => null);
+                } else {
+                    await releaseIncomingMessageReceipt({
+                        sessionId,
+                        messageId: incomingMessageId,
+                        lockToken: incomingReceiptLockToken,
+                        reason: processingFailed
+                            ? (processingErrorMessage || 'process_failed')
+                            : 'not_persisted'
+                    });
+                }
+            } catch (receiptFinalizeError) {
+                logStructured(
+                    'warn',
+                    'flow.idempotency.receipt_finalize_failed',
+                    {
+                        sessionId: sanitizeSessionId(sessionId),
+                        messageId: String(incomingMessageId || '').trim() || 'n/a',
+                        error: normalizeErrorForLog(receiptFinalizeError)
+                    },
+                    'Falha ao finalizar incoming message receipt'
+                );
+            }
+        }
+
+        if (idempotencyKey && shouldRememberProcessedMessage) {
+            rememberProcessedIncomingMessageKey(idempotencyKey);
+        }
+        if (typeof releaseIncomingMessageLock === 'function') {
+            releaseIncomingMessageLock();
+        }
+
+        const inboundTotalDurationMs = Date.now() - inboundStartedAtMs;
+        logFlowInboundTelemetry({
+            sessionId,
+            conversationId: inboundTelemetryConversationId,
+            messageId: incomingMessageId,
+            source: messageSource,
+            isFromMe: inboundTelemetryIsFromMe,
+            outsideHours: outsideBusinessHoursBypass,
+            totalMs: inboundTotalDurationMs,
+            flowMs: flowProcessingDurationMs,
+            automationsMs: automationsSchedulingDurationMs,
+            lockWaitMs: inboundLockWaitMs
+        });
     }
 
 }
@@ -9082,74 +10553,15 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
  * Normalizar seções de menu/lista para envio WhatsApp
  */
 function normalizeListSectionsForSend(rawSections, lead, messageText = '') {
-    const sourceSections = Array.isArray(rawSections) ? rawSections : [];
-    if (sourceSections.length === 0) return [];
-
-    const normalizedSections = [];
-    let totalRows = 0;
-
-    for (const section of sourceSections) {
-        if (totalRows >= 10) break;
-
-        const rawRows = Array.isArray(section?.rows) ? section.rows : [];
-        const rows = [];
-
-        for (const row of rawRows) {
-            if (totalRows >= 10) break;
-
-            const rowId = normalizeText(row?.rowId || row?.id || '');
-            const rawTitle = String(row?.title || row?.text || '').trim();
-            if (!rawTitle) continue;
-
-            const title = normalizeText(applyLeadTemplate(rawTitle, lead, { mensagem: messageText || rawTitle }));
-            if (!title) continue;
-
-            const rawDescription = String(row?.description || '').trim();
-            const description = rawDescription
-                ? normalizeText(applyLeadTemplate(rawDescription, lead, { mensagem: rawDescription }))
-                : '';
-
-            rows.push({
-                rowId: rowId || `option-${totalRows + 1}`,
-                title,
-                description: description || undefined
-            });
-            totalRows += 1;
-        }
-
-        if (rows.length === 0) continue;
-
-        const rawSectionTitle = String(section?.title || '').trim();
-        const sectionTitle = rawSectionTitle
-            ? normalizeText(applyLeadTemplate(rawSectionTitle, lead, { mensagem: messageText || rawSectionTitle }))
-            : '';
-
-        normalizedSections.push({
-            title: sectionTitle || `Opcoes ${normalizedSections.length + 1}`,
-            rows
-        });
-    }
-
-    return normalizedSections;
+    return flowMenuTextService.normalizeListSectionsForSend(rawSections, lead, messageText);
 }
 
 function normalizeButtonUrlForSend(value) {
-    const raw = normalizeText(String(value || '').trim());
-    if (!raw) return '';
+    return flowMenuTextService.normalizeButtonUrlForSend(value);
+}
 
-    const normalized = /^https?:\/\//i.test(raw)
-        ? raw
-        : `https://${raw}`;
-
-    try {
-        const parsed = new URL(normalized);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            return '';
-        }
-        return parsed.toString();
-    } catch (_) {
-        return '';
-    }
+function buildInlineListFallbackText(description = '', sections = []) {
+    return flowMenuTextService.buildInlineListFallbackText(description, sections);
 }
 
 /**
@@ -9257,6 +10669,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
     const renderedTextMessage = isTextLikeMessage
         ? applyLeadTemplate(message, lead, { mensagem: message || '' })
         : message;
+    let persistedTextMessage = renderedTextMessage;
     const renderedCaption = !isTextLikeMessage && String(options.caption || '').trim()
         ? applyLeadTemplate(options.caption || '', lead, { mensagem: options.caption || '' })
         : (options.caption || '');
@@ -9277,26 +10690,12 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
                 throw new Error('Mensagem de menu sem opcoes validas');
             }
 
-            const listButtonTextRaw = String(options.listButtonText || options.buttonText || '').trim();
-            const listButtonText = listButtonTextRaw
-                ? applyLeadTemplate(listButtonTextRaw, lead, { mensagem: listButtonTextRaw })
-                : 'Ver Menu';
-            const listTitleRaw = String(options.listTitle || options.title || '').trim();
-            const listFooterRaw = String(options.listFooter || options.footer || '').trim();
-            const listTitle = listTitleRaw
-                ? applyLeadTemplate(listTitleRaw, lead, { mensagem: renderedTextMessage || listTitleRaw })
-                : '';
-            const listFooter = listFooterRaw
-                ? applyLeadTemplate(listFooterRaw, lead, { mensagem: renderedTextMessage || listFooterRaw })
-                : '';
-
-            result = await session.socket.sendMessage(jid, {
-                text: renderedTextMessage || 'Selecione uma opcao:',
-                title: listTitle || undefined,
-                footer: listFooter || undefined,
-                buttonText: listButtonText,
+            const fallbackText = buildInlineListFallbackText(
+                renderedTextMessage || 'Selecione uma opcao:',
                 sections
-            });
+            );
+            result = await session.socket.sendMessage(jid, { text: fallbackText });
+            persistedTextMessage = fallbackText;
 
         } else if (normalizedType === 'button_url') {
             const buttonTextRaw = String(options.buttonText || options.listButtonText || '').trim();
@@ -9466,9 +10865,9 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
             sender_type: 'agent',
 
-            content: isTextLikeMessage ? renderedTextMessage : (renderedCaption || ''),
+            content: isTextLikeMessage ? persistedTextMessage : (renderedCaption || ''),
 
-            content_encrypted: encryptMessage(isTextLikeMessage ? renderedTextMessage : (renderedCaption || '')),
+            content_encrypted: encryptMessage(isTextLikeMessage ? persistedTextMessage : (renderedCaption || '')),
 
             media_type: persistedMediaType,
 
@@ -9503,7 +10902,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
     
 
-    await Conversation.touch(conversation.id, savedMessage?.id || null, sentAtIso);
+    await Conversation.touchAndMarkAsRead(conversation.id, savedMessage?.id || null, sentAtIso);
     if (options.campaignId) {
         await Campaign.refreshMetrics(options.campaignId);
     }
@@ -9516,7 +10915,7 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
 
         to,
 
-        content: isTextLikeMessage ? renderedTextMessage : (renderedCaption || ''),
+        content: isTextLikeMessage ? persistedTextMessage : (renderedCaption || ''),
 
         type: normalizedType
 
@@ -9638,10 +11037,10 @@ function sessionExists(sessionId) {
             normalizedLeadId = Number(conversationRow?.lead_id || 0);
         }
 
-        const mediaType = String(options?.mediaType || options?.media_type || 'text').trim().toLowerCase() || 'text';
-        const content = String(options?.content || '');
+        let mediaType = String(options?.mediaType || options?.media_type || 'text').trim().toLowerCase() || 'text';
+        let content = String(options?.content || '');
         const mediaUrl = options?.mediaUrl || options?.url || null;
-        const listSections = Array.isArray(options?.listSections)
+        let listSections = Array.isArray(options?.listSections)
             ? options.listSections
             : (Array.isArray(options?.sections) ? options.sections : []);
         const listButtonText = String(options?.listButtonText || options?.buttonText || '').trim();
@@ -9650,7 +11049,25 @@ function sessionExists(sessionId) {
         const buttonUrl = String(options?.buttonUrl || options?.url || '').trim();
         const buttonTitle = String(options?.buttonTitle || options?.title || '').trim();
         const buttonFooter = String(options?.buttonFooter || options?.footer || '').trim();
+
+        if (mediaType === 'list') {
+            content = buildInlineListFallbackText(
+                content || 'Escolha uma opcao no menu abaixo:',
+                listSections
+            );
+            mediaType = 'text';
+            listSections = [];
+        }
+
         const isInteractiveDirectMessage = mediaType === 'list' || mediaType === 'button_url';
+        const normalizedFlowId = Number(options?.flowId || options?.flow_id || 0);
+        const shouldBypassQueueForFlow = Boolean(
+            FLOW_REALTIME_DIRECT_SEND_ENABLED
+            && Number.isFinite(normalizedFlowId)
+            && normalizedFlowId > 0
+            && Number.isInteger(normalizedConversationId)
+            && normalizedConversationId > 0
+        );
 
         if (
             FLOW_MESSAGE_QUEUE_ENABLED
@@ -9658,6 +11075,7 @@ function sessionExists(sessionId) {
             && Number.isInteger(normalizedLeadId)
             && normalizedLeadId > 0
             && !isInteractiveDirectMessage
+            && !shouldBypassQueueForFlow
         ) {
             let queuedSessionId = requestedSessionId || resolvedSessionId;
             if (queuedSessionId) {
@@ -9747,6 +11165,7 @@ function sessionExists(sessionId) {
     startTenantIntegrityAuditWorker();
     startInboxReconciliationWorker();
     startFlowAwaitingInputRecoveryWorker();
+    startOpsAlertsWorker();
     if (BACKUP_AUTO_ENABLED) {
         try {
             scheduleBackup(BACKUP_INTERVAL_HOURS);
@@ -10274,7 +11693,7 @@ io.on('connection', (socket) => {
 
         // Descriptografar mensagens
         messages = messages.map(m => {
-            const raw = m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content;
+            const raw = resolveMessageContentWithFallback(m);
             let text = raw;
             if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
                 text = previewForMedia(m.media_type);
@@ -10408,7 +11827,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            await Conversation.markAsRead(normalizedConversationId);
+            await markConversationAsReadWithMetadata(conversation);
 
         } else if (normalizedContactJid && normalizedSessionId) {
 
@@ -10419,7 +11838,7 @@ io.on('connection', (socket) => {
 
                 const conv = await Conversation.findByLeadId(lead.id, normalizedSessionId);
 
-                if (conv) await Conversation.markAsRead(conv.id);
+                if (conv) await markConversationAsReadWithMetadata(conv);
 
             }
 
@@ -10518,75 +11937,37 @@ io.on('connection', (socket) => {
     
 
     socket.on('logout', async ({ sessionId }) => {
-
-        const normalizedSessionId = sanitizeSessionId(sessionId);
-        if (!normalizedSessionId) {
-            socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
-            return;
-        }
-
-        const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
-        if (!planAccess.allowed) return;
-        const ownerScopeUserId = planAccess.ownerScopeUserId;
-        const socketReq = buildSocketRequestLike(socket);
-        if (ownerScopeUserId) {
-            const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
-            if (!canAccessSession) {
-                socket.emit('error', { message: 'Sem permissao para remover esta conta', code: 'SESSION_FORBIDDEN' });
+        try {
+            const normalizedSessionId = sanitizeSessionId(sessionId);
+            if (!normalizedSessionId) {
+                socket.emit('error', { message: 'sessionId e obrigatorio', code: 'SESSION_ID_REQUIRED' });
                 return;
             }
-        }
 
-        const session = sessions.get(normalizedSessionId);
-
-        
-
-        if (qrTimeouts.has(normalizedSessionId)) {
-
-            clearTimeout(qrTimeouts.get(normalizedSessionId));
-
-            qrTimeouts.delete(normalizedSessionId);
-
-        }
-
-        
-
-        if (session) {
-            stopSessionHealthMonitor(session);
-
-            try {
-                if (typeof session.socket?.ev?.removeAllListeners === 'function') {
-                    session.socket.ev.removeAllListeners();
+            const planAccess = await ensureSocketActiveWhatsAppPlan(socket, normalizedSessionId);
+            if (!planAccess.allowed) return;
+            const ownerScopeUserId = planAccess.ownerScopeUserId;
+            const socketReq = buildSocketRequestLike(socket);
+            if (ownerScopeUserId) {
+                const canAccessSession = await canAccessSessionRecordInOwnerScope(socketReq, normalizedSessionId, ownerScopeUserId);
+                if (!canAccessSession) {
+                    socket.emit('error', { message: 'Sem permissao para desconectar esta conta', code: 'SESSION_FORBIDDEN' });
+                    return;
                 }
-                await session.socket.logout();
-
-            } catch (e) {}
-
-            
-
-            sessions.delete(normalizedSessionId);
-            reconnectAttempts.delete(normalizedSessionId);
-            reconnectInFlight.delete(normalizedSessionId);
-
-            
-
-            const sessionPath = path.join(SESSIONS_DIR, normalizedSessionId);
-
-            if (fs.existsSync(sessionPath)) {
-
-                fs.rmSync(sessionPath, { recursive: true, force: true });
-
             }
+
+            await disconnectSessionPreservingRecord(normalizedSessionId, {
+                ownerUserId: ownerScopeUserId || undefined,
+                logoutSocket: true
+            });
+
+            socket.emit('disconnected', { sessionId: normalizedSessionId });
+        } catch (error) {
+            socket.emit('error', {
+                message: error?.message || 'Nao foi possivel desconectar a conta',
+                code: 'SESSION_DISCONNECT_FAILED'
+            });
         }
-
-        await clearPersistedBaileysAuthState(normalizedSessionId);
-
-        
-
-        socket.emit('disconnected', { sessionId: normalizedSessionId });
-
-        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId: normalizedSessionId, status: 'disconnected' });
-
     });
 
     
@@ -10780,6 +12161,290 @@ async function handleStripeWebhookEvent(req, event) {
     }
 }
 
+async function syncPagarmePlanFromRegistration(registration, overrides = {}) {
+    const normalizedRegistration = registration && typeof registration === 'object' ? registration : null;
+    if (!normalizedRegistration) return null;
+
+    const ownerUserId = normalizeOwnerUserId(
+        overrides.ownerUserId
+        || normalizedRegistration.owner_user_id
+    );
+    if (!ownerUserId) return null;
+
+    const metadata = normalizedRegistration.metadata && typeof normalizedRegistration.metadata === 'object'
+        ? normalizedRegistration.metadata
+        : {};
+    const planName = String(
+        overrides.planName
+        || normalizedRegistration.stripe_plan_name
+        || metadata.planName
+        || 'Plano'
+    ).trim() || 'Plano';
+    const planCode = String(
+        overrides.planCode
+        || normalizedRegistration.stripe_plan_code
+        || normalizedRegistration.stripe_plan_key
+        || metadata.planCode
+        || ''
+    ).trim();
+    const planStatus = pagarmeCheckoutService.normalizePlanStatus(
+        overrides.subscriptionStatus
+        || overrides.status
+        || resolvePagarmePlanStatusFromRegistration(normalizedRegistration, 'active')
+    );
+    const renewalDate = overrides.renewalDate || metadata.renewalDate || null;
+    const externalReference = String(
+        overrides.subscriptionId
+        || normalizedRegistration.stripe_subscription_id
+        || overrides.sessionId
+        || normalizedRegistration.stripe_checkout_session_id
+        || ''
+    ).trim();
+
+    await applyPagarmePlanSettingsToOwner(ownerUserId, {
+        name: planName,
+        code: planCode,
+        status: planStatus,
+        renewalDate,
+        externalReference,
+        subscriptionId: String(overrides.subscriptionId || normalizedRegistration.stripe_subscription_id || '').trim(),
+        checkoutSessionId: String(overrides.sessionId || normalizedRegistration.stripe_checkout_session_id || '').trim()
+    });
+
+    return {
+        ownerUserId,
+        planName,
+        planCode,
+        planStatus,
+        renewalDate,
+        externalReference
+    };
+}
+
+async function syncPagarmePlanStatusByIdentifiers(payload = {}) {
+    const subscriptionId = String(payload?.subscriptionId || '').trim();
+    const customerId = String(payload?.customerId || '').trim();
+    const customerEmail = String(payload?.customerEmail || '').trim().toLowerCase();
+    let registration = subscriptionId
+        ? await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
+        : null;
+
+    if (!registration && customerId) {
+        registration = await CheckoutRegistration.findByStripeCustomerId(customerId);
+    }
+    if (!registration && customerEmail) {
+        registration = await CheckoutRegistration.findLatestByEmail(customerEmail);
+    }
+    if (!registration) return null;
+
+    const metadata = {
+        ...(registration?.metadata && typeof registration.metadata === 'object' ? registration.metadata : {}),
+        ...(payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+        provider: 'pagarme',
+        renewalDate: payload?.renewalDate || registration?.metadata?.renewalDate || null,
+        subscriptionStatus: pagarmeCheckoutService.normalizePlanStatus(
+            payload?.subscriptionStatus
+            || payload?.status
+            || registration?.metadata?.subscriptionStatus
+            || 'active'
+        ),
+        pagarmeSubscriptionStatus: String(
+            payload?.metadata?.pagarmeSubscriptionStatus
+            || payload?.subscriptionStatus
+            || registration?.metadata?.pagarmeSubscriptionStatus
+            || ''
+        ).trim() || null
+    };
+    const updatedRegistration = await CheckoutRegistration.update(registration.id, {
+        stripe_customer_id: customerId || registration.stripe_customer_id,
+        stripe_subscription_id: subscriptionId || registration.stripe_subscription_id,
+        stripe_price_id: String(payload?.priceId || registration.stripe_price_id || '').trim() || null,
+        stripe_plan_key: String(payload?.planKey || registration.stripe_plan_key || '').trim() || null,
+        stripe_plan_code: String(payload?.planCode || registration.stripe_plan_code || '').trim() || null,
+        stripe_plan_name: String(payload?.planName || registration.stripe_plan_name || '').trim() || null,
+        metadata
+    });
+
+    if (normalizeOwnerUserId(updatedRegistration?.owner_user_id)) {
+        await syncPagarmePlanFromRegistration(updatedRegistration, {
+            subscriptionId: subscriptionId || updatedRegistration?.stripe_subscription_id || '',
+            sessionId: payload?.sessionId || updatedRegistration?.stripe_checkout_session_id || '',
+            subscriptionStatus: metadata.subscriptionStatus,
+            renewalDate: metadata.renewalDate || null,
+            planName: payload?.planName || updatedRegistration?.stripe_plan_name || '',
+            planCode: payload?.planCode || updatedRegistration?.stripe_plan_code || ''
+        });
+    }
+
+    return updatedRegistration;
+}
+
+function extractPagarmeWebhookType(event = {}) {
+    return String(event?.type || event?.event || event?.name || '').trim();
+}
+
+function extractPagarmeWebhookObject(event = {}) {
+    if (event?.data?.object && typeof event.data.object === 'object') {
+        return event.data.object;
+    }
+    if (event?.data && typeof event.data === 'object') {
+        return event.data;
+    }
+    return {};
+}
+
+function extractPagarmeWebhookCustomerEmail(payload = {}) {
+    return String(
+        payload?.customer?.email
+        || payload?.order?.customer?.email
+        || payload?.charge?.customer?.email
+        || payload?.charges?.[0]?.customer?.email
+        || ''
+    ).trim().toLowerCase();
+}
+
+function extractPagarmeWebhookCustomerId(payload = {}) {
+    return String(
+        payload?.customer?.id
+        || payload?.order?.customer?.id
+        || payload?.charge?.customer?.id
+        || payload?.charges?.[0]?.customer?.id
+        || ''
+    ).trim();
+}
+
+function extractPagarmeWebhookSubscriptionId(payload = {}) {
+    return String(
+        payload?.subscription?.id
+        || payload?.subscription_id
+        || payload?.charge?.last_transaction?.subscription_id
+        || payload?.charges?.[0]?.last_transaction?.subscription_id
+        || payload?.charges?.[0]?.subscription_id
+        || payload?.invoice?.subscription_id
+        || ''
+    ).trim();
+}
+
+function extractPagarmeWebhookPlanId(payload = {}) {
+    return String(
+        payload?.plan?.id
+        || payload?.subscription?.plan?.id
+        || payload?.metadata?.plan_id
+        || ''
+    ).trim();
+}
+
+async function handlePagarmeWebhookEvent(req, event) {
+    const eventType = extractPagarmeWebhookType(event);
+    if (!eventType) return;
+
+    const payloadObject = extractPagarmeWebhookObject(event);
+
+    if (
+        eventType === 'subscription.created'
+        || eventType === 'subscription.updated'
+        || eventType === 'subscription.canceled'
+    ) {
+        const resolvedPayload = await pagarmeCheckoutService.resolveSubscriptionPayload(payloadObject);
+        const latestByEmail = resolvedPayload.customerEmail
+            ? await CheckoutRegistration.findLatestByEmail(resolvedPayload.customerEmail)
+            : null;
+        const normalizedPayload = {
+            ...resolvedPayload,
+            sessionId: String(
+                resolvedPayload?.sessionId
+                || latestByEmail?.stripe_checkout_session_id
+                || ''
+            ).trim(),
+            metadata: {
+                ...(resolvedPayload?.metadata && typeof resolvedPayload.metadata === 'object' ? resolvedPayload.metadata : {}),
+                provider: 'pagarme',
+                planStatus: resolvedPayload.subscriptionStatus
+            }
+        };
+
+        await upsertCheckoutRegistrationFromPagarmePayload(req, normalizedPayload, {
+            sendEmail: eventType !== 'subscription.canceled'
+        });
+        await syncPagarmePlanStatusByIdentifiers(normalizedPayload);
+        console.log('[pagarme/webhook] assinatura sincronizada', JSON.stringify({
+            type: eventType,
+            subscriptionId: normalizedPayload.subscriptionId,
+            email: normalizedPayload.customerEmail || null,
+            planCode: normalizedPayload.planCode || null
+        }));
+        return;
+    }
+
+    if (
+        eventType === 'invoice.paid'
+        || eventType === 'invoice.payment_failed'
+        || eventType === 'order.paid'
+        || eventType === 'order.payment_failed'
+    ) {
+        const customerEmail = extractPagarmeWebhookCustomerEmail(payloadObject);
+        const customerId = extractPagarmeWebhookCustomerId(payloadObject);
+        const subscriptionId = extractPagarmeWebhookSubscriptionId(payloadObject);
+        const existingRegistration = subscriptionId
+            ? await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
+            : (customerId
+                ? await CheckoutRegistration.findByStripeCustomerId(customerId)
+                : (customerEmail ? await CheckoutRegistration.findLatestByEmail(customerEmail) : null));
+
+        let resolvedSubscriptionPayload = null;
+        if (subscriptionId && eventType !== 'order.paid') {
+            try {
+                resolvedSubscriptionPayload = await pagarmeCheckoutService.resolveSubscriptionPayload(subscriptionId);
+            } catch (error) {
+                console.warn('[pagarme/webhook] Falha ao hidratar assinatura a partir de evento financeiro:', error.message);
+            }
+        }
+
+        const normalizedStatus = eventType.endsWith('payment_failed') ? 'past_due' : 'active';
+        const planId = extractPagarmeWebhookPlanId(payloadObject);
+        const inferredPlan = pagarmeCheckoutService.inferPlanByPriceId(planId);
+        const normalizedPayload = {
+            provider: 'pagarme',
+            providerLabel: 'Pagar.me',
+            sessionId: String(existingRegistration?.stripe_checkout_session_id || '').trim(),
+            customerId: String(resolvedSubscriptionPayload?.customerId || customerId || '').trim(),
+            customerEmail: String(resolvedSubscriptionPayload?.customerEmail || customerEmail || '').trim().toLowerCase(),
+            subscriptionId: String(resolvedSubscriptionPayload?.subscriptionId || subscriptionId || '').trim(),
+            subscriptionStatus: normalizedStatus,
+            priceId: String(resolvedSubscriptionPayload?.priceId || planId || existingRegistration?.stripe_price_id || '').trim(),
+            planKey: String(
+                resolvedSubscriptionPayload?.planKey
+                || existingRegistration?.stripe_plan_key
+                || inferredPlan?.key
+                || ''
+            ).trim(),
+            planCode: String(
+                resolvedSubscriptionPayload?.planCode
+                || existingRegistration?.stripe_plan_code
+                || inferredPlan?.code
+                || ''
+            ).trim(),
+            planName: String(
+                resolvedSubscriptionPayload?.planName
+                || existingRegistration?.stripe_plan_name
+                || inferredPlan?.name
+                || 'Plano'
+            ).trim(),
+            renewalDate: resolvedSubscriptionPayload?.renewalDate || existingRegistration?.metadata?.renewalDate || null,
+            metadata: {
+                provider: 'pagarme',
+                planStatus: normalizedStatus
+            }
+        };
+
+        if (eventType === 'order.paid' && normalizedPayload.customerEmail) {
+            await upsertCheckoutRegistrationFromPagarmePayload(req, normalizedPayload);
+        }
+
+        await syncPagarmePlanStatusByIdentifiers(normalizedPayload);
+    }
+}
+
 // ============================================
 
 // ROTAS API REST
@@ -10820,6 +12485,57 @@ function normalizePreCheckoutObjective(value) {
         : 'outro';
 }
 
+function normalizeCheckoutDocumentType(value) {
+    const normalized = normalizePreCheckoutText(value, 10).toLowerCase();
+    return normalized === 'cnpj' ? 'cnpj' : 'cpf';
+}
+
+function normalizeCheckoutDocumentNumber(value, documentType = 'cpf') {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    return normalizeCheckoutDocumentType(documentType) === 'cnpj'
+        ? digits.slice(0, 14)
+        : digits.slice(0, 11);
+}
+
+function isValidCheckoutDocument(documentNumber, documentType = 'cpf') {
+    const normalized = normalizeCheckoutDocumentNumber(documentNumber, documentType);
+    if (!normalized) return false;
+    if (normalizeCheckoutDocumentType(documentType) === 'cnpj') {
+        return normalized.length === 14;
+    }
+    return normalized.length === 11;
+}
+
+function buildCustomCheckoutRouteUrl(planKey, params = null) {
+    const normalizedPlanKey = normalizePreCheckoutText(planKey, 40).toLowerCase() || 'premium';
+    const queryString = params instanceof URLSearchParams ? params.toString() : '';
+    return `/#/checkout/${encodeURIComponent(normalizedPlanKey)}${queryString ? `?${queryString}` : ''}`;
+}
+
+function buildBillingSuccessRouteUrl(sessionId, planKey, extraParams = {}) {
+    const params = new URLSearchParams();
+    params.set('session_id', String(sessionId || '').trim());
+    params.set('plan', normalizePreCheckoutText(planKey, 40).toLowerCase() || 'premium');
+    for (const [key, value] of Object.entries(extraParams)) {
+        const normalizedValue = String(value || '').trim();
+        if (!normalizedValue) continue;
+        params.set(key, normalizedValue);
+    }
+    return `/#/checkout/sucesso?${params.toString()}`;
+}
+
+function buildCheckoutSubscriptionIdempotencyKey({ planKey, email, leadCaptureId, documentNumber }) {
+    const seed = [
+        normalizePreCheckoutText(planKey, 40).toLowerCase(),
+        normalizePreCheckoutEmail(email),
+        String(parsePositiveIntInRange(leadCaptureId, 0, 0, 2147483647) || 0),
+        normalizeCheckoutDocumentNumber(documentNumber),
+        new Date().toISOString().slice(0, 10)
+    ].join('|');
+    return crypto.createHash('sha256').update(seed, 'utf8').digest('hex').slice(0, 64);
+}
+
 function parsePreCheckoutUtmPayload(body = {}, req = null) {
     const sourceBody = body && typeof body === 'object' ? body : {};
     const sourceUtm = sourceBody?.utm && typeof sourceBody.utm === 'object' ? sourceBody.utm : {};
@@ -10841,7 +12557,7 @@ app.post('/api/pre-checkout/capture', async (req, res) => {
             body.planKey || body.plan_key || body.plan || 'premium',
             40
         ).toLowerCase() || 'premium';
-        const plan = stripeCheckoutService.getPlanConfig(requestedPlanKey);
+        const plan = pagarmeCheckoutService.getPlanConfig(requestedPlanKey);
         if (!plan) {
             return res.status(400).json({ success: false, error: 'Plano invalido para pre-checkout' });
         }
@@ -10919,7 +12635,7 @@ app.post('/api/pre-checkout/capture', async (req, res) => {
 
 app.get('/billing/checkout/:planKey', async (req, res) => {
     try {
-        const plan = stripeCheckoutService.getPlanConfig(req.params.planKey);
+        const plan = pagarmeCheckoutService.getPlanConfig(req.params.planKey);
         if (!plan) {
             return res.status(404).send('Plano de checkout nao encontrado');
         }
@@ -10936,81 +12652,197 @@ app.get('/billing/checkout/:planKey', async (req, res) => {
             2147483647
         );
 
-        const appBaseUrl = buildPublicAppBaseUrl(req);
-        if (!appBaseUrl) {
-            return res.status(500).send('Nao foi possivel resolver a URL publica da aplicacao');
-        }
+        const redirectParams = new URLSearchParams();
+        if (leadCaptureId > 0) redirectParams.set('lead_capture_id', String(leadCaptureId));
+        if (prefillName) redirectParams.set('prefill_name', prefillName);
+        if (prefillEmail) redirectParams.set('prefill_email', prefillEmail);
+        if (prefillWhatsApp) redirectParams.set('prefill_whatsapp', prefillWhatsApp);
+        if (prefillCompanyName) redirectParams.set('prefill_company_name', prefillCompanyName);
+        if (prefillObjective) redirectParams.set('prefill_objective', prefillObjective);
 
-        const successUrl = `${appBaseUrl}/#/checkout/sucesso?session_id={CHECKOUT_SESSION_ID}&plan=${encodeURIComponent(plan.code)}`;
-        const cancelUrl = `${appBaseUrl}/#/planos?checkout=cancelado&plan=${encodeURIComponent(plan.code)}`;
-        const checkoutMetadata = {
-            pre_checkout_name: prefillName || '',
-            pre_checkout_whatsapp: prefillWhatsApp || '',
-            pre_checkout_company: prefillCompanyName || '',
-            pre_checkout_objective: prefillObjective || '',
-            pre_checkout_lead_id: leadCaptureId > 0 ? String(leadCaptureId) : ''
-        };
-        const checkoutSession = await stripeCheckoutService.createCheckoutSession({
-            plan,
-            successUrl,
-            cancelUrl,
-            customer: {
-                email: prefillEmail,
-                name: prefillName,
-                phone: prefillWhatsApp,
-                companyName: prefillCompanyName,
-                objective: prefillObjective
-            },
-            metadata: checkoutMetadata
-        });
-
-        if (!checkoutSession?.url) {
-            throw new Error('Checkout da Stripe nao retornou URL');
-        }
-
-        if (prefillEmail && isValidEmailAddress(prefillEmail) && checkoutSession?.id) {
-            try {
-                await CheckoutRegistration.upsertBySession({
-                    email: prefillEmail,
-                    stripe_checkout_session_id: checkoutSession.id,
-                    stripe_plan_key: plan.key,
-                    stripe_plan_code: plan.code,
-                    stripe_plan_name: plan.name,
-                    status: 'pending_email_confirmation',
-                    metadata: {
-                        pre_checkout: {
-                            name: prefillName || null,
-                            whatsapp: prefillWhatsApp || null,
-                            company_name: prefillCompanyName || null,
-                            objective: prefillObjective || null,
-                            lead_capture_id: leadCaptureId > 0 ? leadCaptureId : null,
-                            captured_at: new Date().toISOString()
-                        }
-                    }
-                });
-            } catch (registrationError) {
-                console.warn('[billing/checkout] Falha ao registrar pre-checkout na sessao:', registrationError.message);
-            }
-        }
-
-        if (leadCaptureId > 0 && checkoutSession?.id) {
-            try {
-                await PreCheckoutLead.markCheckoutStarted(leadCaptureId, {
-                    stripe_checkout_session_id: checkoutSession.id,
-                    metadata: {
-                        checkout_url: checkoutSession.url,
-                        checkout_started_at: new Date().toISOString()
-                    }
-                });
-            } catch (leadUpdateError) {
-                console.warn('[billing/checkout] Falha ao atualizar status do pre-checkout lead:', leadUpdateError.message);
-            }
-        }
-
-        return res.redirect(303, checkoutSession.url);
+        return res.redirect(303, buildCustomCheckoutRouteUrl(plan.code, redirectParams));
     } catch (error) {
         console.error('[billing/checkout] Falha ao iniciar checkout:', error.message);
         return res.status(500).send('Nao foi possivel iniciar o checkout agora');
+    }
+});
+
+app.get('/api/public/billing/checkout/:planKey/config', async (req, res) => {
+    try {
+        const plan = pagarmeCheckoutService.getPlanConfig(req.params.planKey);
+        if (!plan) {
+            return res.status(404).json({ success: false, error: 'Plano nao encontrado' });
+        }
+
+        const publicKey = pagarmeCheckoutService.getPagarmePublicKey();
+        return res.json({
+            success: true,
+            plan: {
+                key: plan.key,
+                code: plan.code,
+                name: plan.name,
+                amount_cents: Number(plan.amountCents || 0),
+                trial_days: Number(plan.trialDays || 0)
+            },
+            pagarme: {
+                public_key_configured: Boolean(publicKey),
+                public_key: publicKey || ''
+            }
+        });
+    } catch (error) {
+        console.error('[billing/checkout/config] Falha ao carregar configuracao:', error.message);
+        return res.status(500).json({ success: false, error: 'Nao foi possivel carregar o checkout agora' });
+    }
+});
+
+app.post('/api/public/billing/checkout/:planKey/subscribe', async (req, res) => {
+    try {
+        const plan = pagarmeCheckoutService.getPlanConfig(req.params.planKey);
+        if (!plan) {
+            return res.status(404).json({ success: false, error: 'Plano nao encontrado' });
+        }
+
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const fullName = normalizePreCheckoutText(body.fullName || body.full_name || body.name, 120);
+        const email = normalizePreCheckoutEmail(body.email);
+        const whatsapp = normalizePreCheckoutPhone(body.whatsapp || body.phone);
+        const companyName = normalizePreCheckoutText(body.companyName || body.company_name, 120);
+        const primaryObjective = normalizePreCheckoutObjective(
+            body.primaryObjective || body.primary_objective || body.objective
+        );
+        const documentType = normalizeCheckoutDocumentType(body.documentType || body.document_type);
+        const documentNumber = normalizeCheckoutDocumentNumber(body.documentNumber || body.document_number || body.document, documentType);
+        const cardToken = normalizePreCheckoutText(body.cardToken || body.card_token, 200);
+        const cardHolderName = normalizePreCheckoutText(body.cardHolderName || body.card_holder_name, 120);
+        const cardNumber = String(body.cardNumber || body.card_number || '').replace(/\D+/g, '').slice(0, 19);
+        const cardExpiryMonth = String(body.cardExpMonth || body.card_exp_month || '').replace(/\D+/g, '').slice(0, 2);
+        const cardExpiryYear = String(body.cardExpYear || body.card_exp_year || '').replace(/\D+/g, '').slice(-4);
+        const cardCvv = String(body.cardCvv || body.card_cvv || '').replace(/\D+/g, '').slice(0, 4);
+        const leadCaptureId = parsePositiveIntInRange(
+            body.leadCaptureId || body.lead_capture_id,
+            0,
+            0,
+            2147483647
+        );
+
+        if (!fullName) {
+            return res.status(400).json({ success: false, error: 'Nome completo e obrigatorio' });
+        }
+        if (!isValidEmailAddress(email)) {
+            return res.status(400).json({ success: false, error: 'E-mail invalido' });
+        }
+        if (whatsapp.length < 10) {
+            return res.status(400).json({ success: false, error: 'WhatsApp invalido' });
+        }
+        if (!isValidCheckoutDocument(documentNumber, documentType)) {
+            return res.status(400).json({ success: false, error: 'Documento invalido' });
+        }
+        if (!cardToken) {
+            if (!cardHolderName || cardHolderName.length < 3) {
+                return res.status(400).json({ success: false, error: 'Nome do cartao invalido' });
+            }
+            if (cardNumber.length < 13) {
+                return res.status(400).json({ success: false, error: 'Numero do cartao invalido' });
+            }
+            const expiryMonth = Number(cardExpiryMonth);
+            const expiryYear = Number(cardExpiryYear);
+            if (
+                !Number.isInteger(expiryMonth)
+                || expiryMonth < 1
+                || expiryMonth > 12
+                || !Number.isInteger(expiryYear)
+                || cardExpiryYear.length !== 4
+            ) {
+                return res.status(400).json({ success: false, error: 'Validade do cartao invalida' });
+            }
+            if (cardCvv.length < 3) {
+                return res.status(400).json({ success: false, error: 'CVV invalido' });
+            }
+        }
+
+        const checkoutMetadata = {
+            pre_checkout_name: fullName || '',
+            pre_checkout_whatsapp: whatsapp || '',
+            pre_checkout_company: companyName || '',
+            pre_checkout_objective: primaryObjective || '',
+            pre_checkout_lead_id: leadCaptureId > 0 ? String(leadCaptureId) : '',
+            custom_checkout: '1'
+        };
+
+        const idempotencyKey = buildCheckoutSubscriptionIdempotencyKey({
+            planKey: plan.key,
+            email,
+            leadCaptureId,
+            documentNumber
+        });
+
+        const subscription = await pagarmeCheckoutService.createPlanSubscription({
+            plan,
+            customer: {
+                email,
+                name: fullName,
+                phone: whatsapp,
+                companyName,
+                objective: primaryObjective,
+                documentType,
+                documentNumber,
+                ...(cardToken ? {} : {
+                    card: {
+                        holder_name: cardHolderName,
+                        number: cardNumber,
+                        exp_month: cardExpiryMonth,
+                        exp_year: cardExpiryYear,
+                        cvv: cardCvv
+                    }
+                })
+            },
+            cardToken,
+            metadata: checkoutMetadata,
+            idempotencyKey
+        });
+
+        const subscriptionPayload = subscription?.payload || null;
+        if (!subscriptionPayload?.subscriptionId) {
+            throw new Error('Assinatura criada sem identificador retornado pelo Pagar.me');
+        }
+
+        const registration = await upsertCheckoutRegistrationFromPagarmePayload(req, subscriptionPayload, {
+            sendEmail: true
+        });
+
+        if (leadCaptureId > 0) {
+            try {
+                await PreCheckoutLead.markCheckoutStarted(leadCaptureId, {
+                    stripe_checkout_session_id: registration?.stripe_checkout_session_id || subscriptionPayload.sessionId || subscriptionPayload.subscriptionId,
+                    metadata: {
+                        checkout_provider: 'pagarme_custom',
+                        subscription_id: subscriptionPayload.subscriptionId,
+                        checkout_completed_at: new Date().toISOString()
+                    }
+                });
+            } catch (leadUpdateError) {
+                console.warn('[billing/checkout/subscribe] Falha ao atualizar pre-checkout lead:', leadUpdateError.message);
+            }
+        }
+
+        return res.status(201).json({
+            success: true,
+            session_id: registration?.stripe_checkout_session_id || subscriptionPayload.sessionId || subscriptionPayload.subscriptionId,
+            subscription_id: subscriptionPayload.subscriptionId,
+            redirect_url: buildBillingSuccessRouteUrl(
+                registration?.stripe_checkout_session_id || subscriptionPayload.sessionId || subscriptionPayload.subscriptionId,
+                plan.key,
+                {
+                    status: registration?.status || ''
+                }
+            )
+        });
+    } catch (error) {
+        console.error('[billing/checkout/subscribe] Falha ao criar assinatura:', error.message);
+        return res.status(Number(error?.statusCode) || 500).json({
+            success: false,
+            error: error.message || 'Nao foi possivel iniciar a assinatura agora'
+        });
     }
 });
 
@@ -11261,14 +13093,10 @@ app.delete('/api/whatsapp/sessions/:sessionId', authenticate, requireActiveWhats
             }
         }
 
-        await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
-        await clearPersistedBaileysAuthState(sessionId);
-        await WhatsAppSession.deleteBySessionId(sessionId, {
-            owner_user_id: ownerScopeUserId || undefined,
-            created_by: ownerScopeUserId || undefined
+        await removeSessionCompletely(sessionId, {
+            ownerUserId: ownerScopeUserId || undefined,
+            createdBy: ownerScopeUserId || undefined
         });
-
-        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId, status: 'disconnected' });
         res.json({ success: true, session_id: sessionId });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -11292,12 +13120,12 @@ app.post('/api/whatsapp/disconnect', authenticate, requireActiveWhatsAppPlan, as
             }
         }
 
-        await whatsappService.logoutSession(sessionId, SESSIONS_DIR);
-        await clearPersistedBaileysAuthState(sessionId);
+        await disconnectSessionPreservingRecord(sessionId, {
+            ownerUserId: ownerScopeUserId || undefined,
+            logoutSocket: true
+        });
 
-        emitToOwnerScope(ownerScopeUserId || null, 'whatsapp-status', { sessionId, status: 'disconnected' });
-
-        res.json({ success: true });
+        res.json({ success: true, session_id: sessionId });
 
     } catch (error) {
 
@@ -11345,19 +13173,11 @@ app.get('/api/status', authenticate, async (req, res) => {
 
 
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', sanitizeInput, validateLogin, async (req, res) => {
 
     try {
 
-        const { email, password } = req.body;
-
-        
-
-        if (!email || !password) {
-
-            return res.status(400).json({ error: 'Email e senha sÃ£o obrigatÃ³rios' });
-
-        }
+        const { email, password } = req.validatedData || req.body;
 
         
 
@@ -11637,12 +13457,26 @@ app.post('/api/auth/resend-confirmation', async (req, res) => {
 
         if (!checkoutRegistration && sessionId) {
             try {
+                const checkoutPayload = await pagarmeCheckoutService.resolveCheckoutSessionPayload(sessionId);
+                checkoutRegistration = await upsertCheckoutRegistrationFromPagarmePayload(req, checkoutPayload, {
+                    sendEmail: false
+                });
+            } catch (error) {
+                console.warn('[auth/resend-confirmation] Nao foi possivel hidratar checkout Pagar.me por sessionId', JSON.stringify({
+                    sessionId,
+                    message: String(error?.message || 'erro_desconhecido')
+                }));
+            }
+        }
+
+        if (!checkoutRegistration && sessionId) {
+            try {
                 const checkoutPayload = await stripeCheckoutService.resolveCheckoutSessionPayload(sessionId);
                 checkoutRegistration = await upsertCheckoutRegistrationFromStripePayload(req, checkoutPayload, {
                     sendEmail: false
                 });
             } catch (error) {
-                console.warn('[auth/resend-confirmation] Nao foi possivel hidratar checkout por sessionId', JSON.stringify({
+                console.warn('[auth/resend-confirmation] Nao foi possivel hidratar checkout Stripe por sessionId', JSON.stringify({
                     sessionId,
                     message: String(error?.message || 'erro_desconhecido')
                 }));
@@ -11790,7 +13624,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
 
         if (checkoutRegistration) {
             const registrationStatus = normalizeCheckoutRegistrationStatusValue(checkoutRegistration.status);
-            const registrationPlanStatus = resolveStripePlanStatusFromRegistration(checkoutRegistration, 'active');
+            const registrationPlanStatus = resolveCheckoutRegistrationPlanStatus(checkoutRegistration, 'active');
 
             if (
                 Number(checkoutRegistration?.linked_user_id) > 0
@@ -11847,7 +13681,7 @@ app.get('/api/auth/confirm-email', async (req, res) => {
                     plan: {
                         code: confirmedRegistration.stripe_plan_code || confirmedRegistration.stripe_plan_key || '',
                         name: confirmedRegistration.stripe_plan_name || 'Plano',
-                        status: resolveStripePlanStatusFromRegistration(confirmedRegistration, 'active')
+                        status: resolveCheckoutRegistrationPlanStatus(confirmedRegistration, 'active')
                     }
                 }
             });
@@ -12068,10 +13902,13 @@ app.post('/api/auth/complete-registration', async (req, res) => {
                 'string'
             );
 
-            await applyStripePlanSettingsToOwner(ownerUserId, {
+            const applyPlanSettings = getCheckoutRegistrationProvider(checkoutRegistration) === 'pagarme'
+                ? applyPagarmePlanSettingsToOwner
+                : applyStripePlanSettingsToOwner;
+            await applyPlanSettings(ownerUserId, {
                 name: checkoutRegistration.stripe_plan_name || 'Plano',
                 code: checkoutRegistration.stripe_plan_code || checkoutRegistration.stripe_plan_key || '',
-                status: resolveStripePlanStatusFromRegistration(checkoutRegistration, 'active'),
+                status: resolveCheckoutRegistrationPlanStatus(checkoutRegistration, 'active'),
                 renewalDate: checkoutRegistration?.metadata?.renewalDate || null,
                 externalReference: checkoutRegistration.stripe_subscription_id || checkoutRegistration.stripe_checkout_session_id || '',
                 subscriptionId: checkoutRegistration.stripe_subscription_id || '',
@@ -13708,11 +15545,19 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
 
         if (normalizedRows.length > 0) {
             const uniquePhones = Array.from(new Set(normalizedRows.map((row) => row.phone)));
+            const uniqueJids = Array.from(new Set(
+                normalizedRows
+                    .map((row) => String(row.jid || '').trim())
+                    .filter(Boolean)
+            ));
             const existingRows = ownerScopeUserId
                 ? await query(`
-                    SELECT id, phone, name, email, tags, custom_fields
+                    SELECT id, phone, jid, name, email, tags, custom_fields
                     FROM leads
-                    WHERE phone = ANY(?::text[])
+                    WHERE (
+                        phone = ANY(?::text[])
+                        OR (? = TRUE AND jid = ANY(?::text[]))
+                    )
                       AND (
                           owner_user_id = ?
                           OR (
@@ -13725,10 +15570,24 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                               )
                           )
                       )
-                `, [uniquePhones, ownerScopeUserId, ownerScopeUserId, ownerScopeUserId])
+                `, [
+                    uniquePhones,
+                    uniqueJids.length > 0,
+                    uniqueJids,
+                    ownerScopeUserId,
+                    ownerScopeUserId,
+                    ownerScopeUserId
+                ])
                 : await query(
-                    'SELECT id, phone, name, email, tags, custom_fields FROM leads WHERE phone = ANY(?::text[])',
-                    [uniquePhones]
+                    `
+                        SELECT id, phone, jid, name, email, tags, custom_fields
+                        FROM leads
+                        WHERE (
+                            phone = ANY(?::text[])
+                            OR (? = TRUE AND jid = ANY(?::text[]))
+                        )
+                    `,
+                    [uniquePhones, uniqueJids.length > 0, uniqueJids]
                 );
 
             if (ownerScopeUserId) {
@@ -13737,23 +15596,57 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                         .map((row) => String(row?.phone || '').trim())
                         .filter(Boolean)
                 );
-                const requestedNewContacts = uniquePhones.filter((phone) => !existingPhones.has(phone)).length;
+                const existingJids = new Set(
+                    (existingRows || [])
+                        .map((row) => String(row?.jid || '').trim())
+                        .filter(Boolean)
+                );
+                const seenImportKeys = new Set();
+                let requestedNewContacts = 0;
+
+                for (const row of normalizedRows) {
+                    const rowPhone = String(row?.phone || '').trim();
+                    const rowJid = String(row?.jid || '').trim();
+                    const dedupKey = rowJid ? `jid:${rowJid}` : `phone:${rowPhone}`;
+                    if (!rowPhone || seenImportKeys.has(dedupKey)) {
+                        continue;
+                    }
+                    seenImportKeys.add(dedupKey);
+
+                    const existsByPhone = existingPhones.has(rowPhone);
+                    const existsByJid = rowJid ? existingJids.has(rowJid) : false;
+                    if (!existsByPhone && !existsByJid) {
+                        requestedNewContacts += 1;
+                    }
+                }
+
                 await planLimitsService.assertOwnerCanCreateLead(ownerScopeUserId, requestedNewContacts);
             }
 
             const stateByPhone = new Map();
+            const stateByJid = new Map();
             for (const row of existingRows || []) {
                 const phone = String(row?.phone || '').trim();
-                if (!phone) continue;
-                stateByPhone.set(phone, {
+                const jid = String(row?.jid || '').trim();
+                if (!phone && !jid) continue;
+
+                const state = {
                     existsInDb: true,
                     id: Number(row.id),
                     phone,
+                    jid,
                     name: String(row.name || ''),
                     email: String(row.email || '').trim(),
                     tags: parseLeadTagsForMerge(row.tags),
                     custom_fields: parseLeadCustomFields(row.custom_fields)
-                });
+                };
+
+                if (phone) {
+                    stateByPhone.set(phone, state);
+                }
+                if (jid) {
+                    stateByJid.set(jid, state);
+                }
             }
 
             const stagedInsertsByPhone = new Map();
@@ -13762,7 +15655,12 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
             let updatedExistingEvents = 0;
 
             for (const row of normalizedRows) {
-                let state = stateByPhone.get(row.phone);
+                const rowPhone = String(row?.phone || '').trim();
+                const rowJid = String(row?.jid || '').trim();
+                let state = stateByPhone.get(rowPhone);
+                if (!state && rowJid) {
+                    state = stateByJid.get(rowJid);
+                }
 
                 if (!state) {
                     state = {
@@ -13772,8 +15670,11 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                         tags: parseLeadTagsForMerge(row.tags),
                         custom_fields: parseLeadCustomFields(row.custom_fields)
                     };
-                    stateByPhone.set(row.phone, state);
-                    stagedInsertsByPhone.set(row.phone, state);
+                    stateByPhone.set(rowPhone, state);
+                    if (rowJid) {
+                        stateByJid.set(rowJid, state);
+                    }
+                    stagedInsertsByPhone.set(rowPhone, state);
                     continue;
                 }
 
@@ -13818,7 +15719,13 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                     state.custom_fields = updates.custom_fields;
                 }
 
-                stateByPhone.set(row.phone, state);
+                stateByPhone.set(rowPhone, state);
+                if (rowJid) {
+                    stateByJid.set(rowJid, state);
+                }
+                if (String(state.jid || '').trim()) {
+                    stateByJid.set(String(state.jid).trim(), state);
+                }
 
                 if (state.existsInDb) {
                     updatedExistingEvents += 1;
@@ -13905,7 +15812,7 @@ app.post('/api/leads/bulk', authenticate, async (req, res) => {
                         assigned_to integer,
                         owner_user_id integer
                     )
-                    ON CONFLICT (owner_user_id, phone) WHERE owner_user_id IS NOT NULL DO NOTHING
+                    ON CONFLICT DO NOTHING
                     RETURNING phone
                 `, [JSON.stringify(insertPayload)]);
 
@@ -14691,9 +16598,7 @@ app.get('/api/conversations', authenticate, async (req, res) => {
 
     const normalized = conversations.map((c) => {
         const lastMessage = lastMessageByConversationId.get(Number(c.id)) || null;
-        const decrypted = lastMessage?.content_encrypted
-            ? decryptMessage(lastMessage.content_encrypted)
-            : lastMessage?.content;
+        const decrypted = resolveMessageContentWithFallback(lastMessage);
 
         let metadata = {};
         try {
@@ -14703,12 +16608,14 @@ app.get('/api/conversations', authenticate, async (req, res) => {
         }
         const metadataLastMessage = normalizeText(metadata?.last_message || '');
         const metadataLastMessageAt = normalizeText(metadata?.last_message_at || '');
+        const lastMessageWasFromMe = Boolean(lastMessage?.is_from_me);
+        const unreadCount = lastMessageWasFromMe ? 0 : Math.max(0, Number(c?.unread_count || 0));
 
         const lastMessageText =
             (decrypted || '').trim() ||
             (lastMessage ? previewForMedia(lastMessage.media_type) : '') ||
             metadataLastMessage ||
-            (Number(c?.unread_count || 0) > 0 ? '[mensagem recebida]' : '');
+            (unreadCount > 0 ? '[mensagem recebida]' : '');
 
         const lastMessageAt =
             lastMessage?.sent_at ||
@@ -14734,7 +16641,7 @@ app.get('/api/conversations', authenticate, async (req, res) => {
 
         return {
             ...c,
-            unread: c.unread_count || 0,
+            unread: unreadCount,
             lastMessage: normalizeText(lastMessageText),
             lastMessageAt,
             name,
@@ -14799,7 +16706,7 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
             return res.status(404).json({ error: 'Conversa nao encontrada' });
         }
 
-        await Conversation.markAsRead(conversationId);
+        await markConversationAsReadWithMetadata(conversation);
 
         res.json({ success: true });
 
@@ -14811,9 +16718,14 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
 
 });
 
-app.post('/api/send', authenticate, async (req, res) => {
+app.post('/api/send', authenticate, validateApiSendRequest, async (req, res) => {
 
-    const { sessionId, to, message, type, options } = req.body;
+    const validatedPayload = req.validatedData || {};
+    const sessionId = String(validatedPayload.sessionId || req.body?.sessionId || '').trim();
+    const to = validatedPayload.to || req.body?.to;
+    const message = validatedPayload.message || req.body?.message;
+    const type = validatedPayload.type || req.body?.type;
+    const options = req.body?.options;
     const scopedUserId = getScopedUserId(req);
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
@@ -15027,7 +16939,7 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     }
 
     const decrypted = messages.map(m => {
-        const raw = m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content;
+        const raw = resolveMessageContentWithFallback(m);
         let text = raw;
         if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
             text = previewForMedia(m.media_type);
@@ -15262,11 +17174,16 @@ app.post('/api/queue/add', authenticate, async (req, res) => {
 
 
 
-app.post('/api/queue/bulk', authenticate, async (req, res) => {
+app.post('/api/queue/bulk', authenticate, validateQueueBulkRequest, async (req, res) => {
     try {
-        const { leadIds, content } = req.body || {};
-        const options = (req.body && typeof req.body.options === 'object' && req.body.options !== null)
-            ? { ...req.body.options }
+        const payload = req.validatedData || {};
+        const leadIds = Array.isArray(payload.leadIds) ? payload.leadIds : (Array.isArray(req.body?.leadIds) ? req.body.leadIds : []);
+        const content = typeof payload.content === 'string' ? payload.content : String(req.body?.content || '');
+        const optionsSource = (payload.options && typeof payload.options === 'object')
+            ? payload.options
+            : req.body?.options;
+        const options = (optionsSource && typeof optionsSource === 'object' && !Array.isArray(optionsSource))
+            ? { ...optionsSource }
             : {};
 
         const parseNonNegative = (value) => {
@@ -15588,6 +17505,22 @@ function pickRandomCampaignMessagePoolEntry(pool = [], fallback = '') {
 
 const CAMPAIGN_SEND_WINDOW_DEFAULT_START = '08:00';
 const CAMPAIGN_SEND_WINDOW_DEFAULT_END = '18:00';
+const CAMPAIGN_SEND_WINDOW_TIMEZONE = String(
+    process.env.CAMPAIGN_SEND_WINDOW_TIMEZONE
+    || process.env.APP_TIMEZONE
+    || process.env.TZ
+    || 'America/Sao_Paulo'
+).trim() || 'America/Sao_Paulo';
+const campaignSendWindowDateTimeFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CAMPAIGN_SEND_WINDOW_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+});
 
 function normalizeCampaignSendWindowTime(value, fallback = null) {
     const raw = String(value || '').trim();
@@ -15860,10 +17793,97 @@ function randomIntBetween(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function getCampaignSendWindowDateParts(date = new Date()) {
+    try {
+        const parts = campaignSendWindowDateTimeFormatter.formatToParts(date);
+        const values = {};
+        for (const part of parts) {
+            if (part?.type === 'literal') continue;
+            values[part.type] = Number(part.value);
+        }
+
+        if (
+            Number.isInteger(values.year)
+            && Number.isInteger(values.month)
+            && Number.isInteger(values.day)
+            && Number.isInteger(values.hour)
+            && Number.isInteger(values.minute)
+        ) {
+            return {
+                year: values.year,
+                month: values.month,
+                day: values.day,
+                hour: values.hour,
+                minute: values.minute,
+                second: Number.isInteger(values.second) ? values.second : 0
+            };
+        }
+    } catch (_) {
+        // fallback local abaixo
+    }
+
+    return {
+        year: date.getFullYear(),
+        month: date.getMonth() + 1,
+        day: date.getDate(),
+        hour: date.getHours(),
+        minute: date.getMinutes(),
+        second: date.getSeconds()
+    };
+}
+
+function shiftCampaignSendWindowDateParts(parts, dayDelta = 0) {
+    const utcAnchor = Date.UTC(
+        Number(parts?.year || 1970),
+        Math.max(0, Number(parts?.month || 1) - 1),
+        Number(parts?.day || 1) + Number(dayDelta || 0),
+        12,
+        0,
+        0,
+        0
+    );
+    return getCampaignSendWindowDateParts(new Date(utcAnchor));
+}
+
+function buildUtcTimestampForCampaignSendWindow(parts, minutesOfDay = 0) {
+    const safeMinutes = Number.isFinite(Number(minutesOfDay)) ? Math.max(0, Math.floor(Number(minutesOfDay))) : 0;
+    const hour = Math.floor(safeMinutes / 60);
+    const minute = safeMinutes % 60;
+    const desiredUtcEquivalent = Date.UTC(
+        Number(parts?.year || 1970),
+        Math.max(0, Number(parts?.month || 1) - 1),
+        Number(parts?.day || 1),
+        hour,
+        minute,
+        0,
+        0
+    );
+
+    let guess = desiredUtcEquivalent;
+    for (let i = 0; i < 3; i++) {
+        const resolved = getCampaignSendWindowDateParts(new Date(guess));
+        const resolvedUtcEquivalent = Date.UTC(
+            resolved.year,
+            Math.max(0, resolved.month - 1),
+            resolved.day,
+            resolved.hour,
+            resolved.minute,
+            0,
+            0
+        );
+        const diffMs = desiredUtcEquivalent - resolvedUtcEquivalent;
+        if (diffMs === 0) break;
+        guess += diffMs;
+    }
+
+    return guess;
+}
+
 function isWithinCampaignSendWindow(sendWindowConfig, date = new Date()) {
     if (!sendWindowConfig?.enabled) return true;
 
-    const nowMinutes = (date.getHours() * 60) + date.getMinutes();
+    const parts = getCampaignSendWindowDateParts(date);
+    const nowMinutes = (parts.hour * 60) + parts.minute;
     const start = Number(sendWindowConfig.startMinutes);
     const end = Number(sendWindowConfig.endMinutes);
 
@@ -15897,23 +17917,21 @@ function alignCampaignScheduleToSendWindow(timestampMs, sendWindowConfig = null)
     }
 
     const baseDate = new Date(numericTimestamp);
-    const nowMinutes = (baseDate.getHours() * 60) + baseDate.getMinutes();
-    const startHour = Math.floor(start / 60);
-    const startMinute = start % 60;
+    const zonedParts = getCampaignSendWindowDateParts(baseDate);
+    const nowMinutes = (zonedParts.hour * 60) + zonedParts.minute;
 
     if (start < end) {
         if (nowMinutes < start) {
-            baseDate.setHours(startHour, startMinute, 0, 0);
-            return baseDate.getTime();
+            return buildUtcTimestampForCampaignSendWindow(zonedParts, start);
         }
 
-        baseDate.setDate(baseDate.getDate() + 1);
-        baseDate.setHours(startHour, startMinute, 0, 0);
-        return baseDate.getTime();
+        return buildUtcTimestampForCampaignSendWindow(
+            shiftCampaignSendWindowDateParts(zonedParts, 1),
+            start
+        );
     }
 
-    baseDate.setHours(startHour, startMinute, 0, 0);
-    return baseDate.getTime();
+    return buildUtcTimestampForCampaignSendWindow(zonedParts, start);
 }
 
 function addCampaignDelayRespectingSendWindow(currentMs, delayMs, sendWindowConfig = null) {
@@ -17376,6 +19394,7 @@ app.post('/api/flows', authenticate, async (req, res) => {
     const payload = {
         ...req.body,
         created_by: req.user?.id,
+        owner_user_id: ownerScopeUserId || undefined,
         session_id: flowSessionScope.provided ? flowSessionScope.sessionId : null
     };
     delete payload.sessionId;
@@ -17391,7 +19410,13 @@ app.post('/api/flows', authenticate, async (req, res) => {
         owner_user_id: ownerScopeUserId || undefined
     });
 
-    res.json({ success: true, flow });
+    res.json({
+        success: true,
+        flow,
+        meta: {
+            deactivated_flow_ids: Array.isArray(result?.deactivated_flow_ids) ? result.deactivated_flow_ids : []
+        }
+    });
 
 });
 
@@ -17417,6 +19442,7 @@ app.put('/api/flows/:id', authenticate, async (req, res) => {
     const payload = {
         ...req.body
     };
+    payload.owner_user_id = ownerScopeUserId || undefined;
     if (flowSessionScope.provided) {
         payload.session_id = flowSessionScope.sessionId;
     }
@@ -17430,13 +19456,19 @@ app.put('/api/flows/:id', authenticate, async (req, res) => {
         }
     }
 
-    await Flow.update(req.params.id, payload);
+    const updateResult = await Flow.update(req.params.id, payload);
 
     const flow = await Flow.findById(req.params.id, {
         owner_user_id: ownerScopeUserId || undefined
     });
 
-    res.json({ success: true, flow });
+    res.json({
+        success: true,
+        flow,
+        meta: {
+            deactivated_flow_ids: Array.isArray(updateResult?.deactivated_flow_ids) ? updateResult.deactivated_flow_ids : []
+        }
+    });
 
 });
 
@@ -19157,9 +21189,8 @@ function normalizeOptionalIsoDate(value) {
 
 function buildPlanLimitSnapshot(current, max, label) {
     const normalizedCurrent = Math.max(0, Number(current || 0) || 0);
-    const normalizedMax = Number.isInteger(Number(max)) && Number(max) >= 0
-        ? Math.floor(Number(max))
-        : null;
+    const hasFiniteMax = max !== null && typeof max !== 'undefined' && Number.isInteger(Number(max)) && Number(max) >= 0;
+    const normalizedMax = hasFiniteMax ? Math.floor(Number(max)) : null;
 
     return {
         label: String(label || '').trim() || 'recurso',
@@ -19297,6 +21328,40 @@ app.post('/api/plan/status/refresh', authenticate, async (req, res) => {
                     renewalDate: Number(subscription?.current_period_end || 0) > 0
                         ? new Date(Number(subscription.current_period_end) * 1000).toISOString()
                         : null
+                });
+                plan = await buildOwnerPlanStatus(ownerScopeUserId);
+            } else {
+                await Settings.set(
+                    buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
+                    nowIso,
+                    'string'
+                );
+                plan = await buildOwnerPlanStatus(ownerScopeUserId);
+            }
+        } else if (String(plan?.provider || '').trim().toLowerCase() === 'pagarme') {
+            const subscriptionId = String(plan?.external_reference || '').trim();
+            if (subscriptionId) {
+                const subscription = await pagarmeCheckoutService.retrieveSubscription(subscriptionId);
+                const subscriptionPayload = await pagarmeCheckoutService.resolveSubscriptionPayload(subscription);
+                const registration = await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
+                    || await CheckoutRegistration.findByStripeCustomerId(subscriptionPayload?.customerId || '');
+
+                await syncPagarmePlanStatusByIdentifiers({
+                    subscriptionId,
+                    customerId: String(subscriptionPayload?.customerId || '').trim(),
+                    customerEmail: String(subscriptionPayload?.customerEmail || '').trim().toLowerCase(),
+                    priceId: String(subscriptionPayload?.priceId || '').trim(),
+                    planKey: subscriptionPayload?.planKey || registration?.stripe_plan_key || '',
+                    planCode: subscriptionPayload?.planCode || registration?.stripe_plan_code || '',
+                    planName: subscriptionPayload?.planName || registration?.stripe_plan_name || '',
+                    subscriptionStatus: subscriptionPayload?.subscriptionStatus || 'active',
+                    renewalDate: subscriptionPayload?.renewalDate || null,
+                    metadata: {
+                        ...(subscriptionPayload?.metadata && typeof subscriptionPayload.metadata === 'object'
+                            ? subscriptionPayload.metadata
+                            : {}),
+                        provider: 'pagarme'
+                    }
                 });
                 plan = await buildOwnerPlanStatus(ownerScopeUserId);
             } else {
@@ -19608,6 +21673,7 @@ process.on('uncaughtException', (error) => {
         queueService.stopProcessing();
         stopInboxReconciliationWorker();
         stopFlowAwaitingInputRecoveryWorker();
+        stopOpsAlertsWorker();
         await webhookQueueService.shutdown();
 
         for (const [sessionId] of sessions.entries()) {
@@ -19639,6 +21705,7 @@ process.on('uncaughtException', (error) => {
         queueService.stopProcessing();
         stopInboxReconciliationWorker();
         stopFlowAwaitingInputRecoveryWorker();
+        stopOpsAlertsWorker();
         await webhookQueueService.shutdown();
 
         for (const [sessionId] of sessions.entries()) {

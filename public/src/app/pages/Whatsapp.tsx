@@ -6,6 +6,7 @@ type WhatsappGlobals = {
   initWhatsapp?: () => void;
   startConnection?: () => void;
   disconnect?: () => void;
+  removeSession?: () => void;
   changeSession?: (sessionId: string, options?: { revealReconnectUi?: boolean }) => void;
   createSessionPrompt?: () => void;
   toggleSidebar?: () => void;
@@ -361,6 +362,116 @@ export default function Whatsapp() {
             padding: 28px;
         }
 
+        .whatsapp-react .whatsapp-plan-usage-shell {
+            margin-bottom: 18px;
+        }
+
+        .whatsapp-react .whatsapp-plan-panel {
+            position: relative;
+            overflow: hidden;
+            display: grid;
+            gap: 8px;
+            padding: 18px 20px;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                radial-gradient(circle at top right, var(--plan-glow, rgba(255, 255, 255, 0.12)), transparent 48%),
+                linear-gradient(135deg, rgba(17, 32, 53, 0.94) 0%, rgba(10, 22, 38, 0.98) 100%);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+
+        .whatsapp-react .whatsapp-plan-panel::after {
+            content: '';
+            position: absolute;
+            inset: auto -20% -55% auto;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: var(--plan-orb, rgba(255, 255, 255, 0.12));
+            filter: blur(60px);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .whatsapp-react .whatsapp-plan-panel--starter {
+            --plan-glow: rgba(34, 197, 94, 0.22);
+            --plan-orb: rgba(34, 197, 94, 0.18);
+        }
+
+        .whatsapp-react .whatsapp-plan-panel--premium {
+            --plan-glow: rgba(226, 232, 240, 0.2);
+            --plan-orb: rgba(148, 163, 184, 0.18);
+        }
+
+        .whatsapp-react .whatsapp-plan-panel--advanced {
+            --plan-glow: rgba(245, 158, 11, 0.22);
+            --plan-orb: rgba(251, 191, 36, 0.18);
+        }
+
+        .whatsapp-react .whatsapp-plan-panel--monster {
+            --plan-glow: rgba(96, 165, 250, 0.24);
+            --plan-orb: rgba(34, 211, 238, 0.18);
+        }
+
+        .whatsapp-react .whatsapp-plan-label {
+            position: relative;
+            z-index: 1;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(191, 212, 233, 0.7);
+        }
+
+        .whatsapp-react .whatsapp-plan-name {
+            position: relative;
+            z-index: 1;
+            display: block;
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 800;
+            line-height: 0.95;
+            letter-spacing: -0.05em;
+            color: transparent;
+            background: linear-gradient(120deg, #f8fafc 0%, #dbeafe 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+        }
+
+        .whatsapp-react .whatsapp-plan-panel--starter .whatsapp-plan-name {
+            background-image: linear-gradient(120deg, #d1fae5 0%, #4ade80 50%, #15803d 100%);
+        }
+
+        .whatsapp-react .whatsapp-plan-panel--premium .whatsapp-plan-name {
+            background-image: linear-gradient(120deg, #ffffff 0%, #dce3eb 40%, #94a3b8 100%);
+        }
+
+        .whatsapp-react .whatsapp-plan-panel--advanced .whatsapp-plan-name {
+            background-image: linear-gradient(120deg, #fef3c7 0%, #fbbf24 45%, #b45309 100%);
+        }
+
+        .whatsapp-react .whatsapp-plan-panel--monster .whatsapp-plan-name {
+            background-image: linear-gradient(120deg, #e0f2fe 0%, #7dd3fc 28%, #60a5fa 58%, #22d3ee 100%);
+        }
+
+        .whatsapp-react .whatsapp-plan-copy,
+        .whatsapp-react .whatsapp-plan-hint {
+            position: relative;
+            z-index: 1;
+            display: block;
+        }
+
+        .whatsapp-react .whatsapp-plan-copy {
+            color: var(--dark);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .whatsapp-react .whatsapp-plan-hint {
+            color: rgba(191, 212, 233, 0.82);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
         .whatsapp-react .qr-container {
             text-align: center;
             padding: 30px;
@@ -505,6 +616,17 @@ export default function Whatsapp() {
             font-size: 14px;
         }
 
+        .whatsapp-react .connected-actions {
+            display: grid;
+            gap: 12px;
+        }
+
+        .whatsapp-react .connected-actions-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
         .whatsapp-react .btn {
             padding: 16px 28px;
             border: none;
@@ -547,6 +669,20 @@ export default function Whatsapp() {
         .whatsapp-react .btn-danger:hover {
             transform: translateY(-1px);
             box-shadow: 0 8px 18px rgba(239, 68, 68, 0.25);
+        }
+
+        .whatsapp-react .btn-secondary {
+            background: rgba(71, 85, 105, 0.18);
+            border: 1px solid rgba(148, 163, 184, 0.24);
+            color: #dbeafe;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
+        }
+
+        .whatsapp-react .btn-secondary:hover {
+            transform: translateY(-1px);
+            border-color: rgba(148, 163, 184, 0.42);
+            background: rgba(71, 85, 105, 0.28);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.24);
         }
 
         .whatsapp-react .btn-outline {
@@ -760,6 +896,10 @@ export default function Whatsapp() {
                 flex-shrink: 0;
             }
 
+            .whatsapp-react .connected-actions-row {
+                grid-template-columns: 1fr;
+            }
+
             .whatsapp-react .session-list {
                 grid-template-columns: 1fr;
             }
@@ -934,14 +1074,7 @@ export default function Whatsapp() {
                       <div className="card-body">
                           <div
                               id="whatsapp-plan-usage"
-                              style={{
-                                marginBottom: '16px',
-                                padding: '12px 14px',
-                                borderRadius: '12px',
-                                border: '1px solid rgba(255,255,255,0.08)',
-                                background: 'rgba(255,255,255,0.03)',
-                                color: 'var(--gray-400)'
-                              }}
+                              className="whatsapp-plan-usage-shell"
                           >
                               Carregando limite do plano...
                           </div>
@@ -1012,9 +1145,12 @@ export default function Whatsapp() {
                                       </div>
                                   </div>
                                   
-                                  <div style={{ display: 'flex', gap: '15px', flexDirection: 'column' }}>
+                                  <div className="connected-actions">
                                       <Link to="/inbox" className="btn btn-primary">Ir para Conversas</Link>
-                                      <button className="btn btn-danger" onClick={() => globals.disconnect?.()}>Desconectar</button>
+                                      <div className="connected-actions-row">
+                                          <button className="btn btn-secondary" onClick={() => globals.disconnect?.()}>Desconectar</button>
+                                          <button className="btn btn-danger" onClick={() => globals.removeSession?.()}>Remover conta</button>
+                                      </div>
                                   </div>
                               </div>
                           </div>

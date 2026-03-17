@@ -277,6 +277,22 @@ CREATE TABLE IF NOT EXISTS api_rate_limits (
     updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
 );
 
+CREATE TABLE IF NOT EXISTS incoming_message_receipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    source TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'processed')),
+    lock_token TEXT,
+    locked_until TEXT,
+    conversation_id INTEGER REFERENCES conversations(id),
+    processed_at TEXT,
+    error_message TEXT,
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    UNIQUE (session_id, message_id)
+);
+
 -- Tabela de Webhooks
 CREATE TABLE IF NOT EXISTS webhooks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -493,6 +509,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS leads_owner_jid_unique ON leads(owner_user_id,
 CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
 CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_conversations_updated_id_desc ON conversations(updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_assigned_updated_id_desc ON conversations(assigned_to, updated_at DESC, id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS conv_lead_session_unique ON conversations(lead_id, session_id);
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
@@ -501,9 +519,14 @@ CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_campaign ON messages(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_sent_coalesce_desc ON messages(conversation_id, COALESCE(sent_at, created_at) DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_lead_sent_coalesce_desc ON messages(lead_id, COALESCE(sent_at, created_at) DESC, id DESC);
 
 CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
 CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_status_id_desc ON flow_executions(status, id DESC);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_flow_status ON flow_executions(flow_id, status);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_lead ON flow_executions(lead_id);
 CREATE INDEX IF NOT EXISTS idx_automation_lead_runs_lead ON automation_lead_runs(lead_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_automation_migrations_automation ON campaign_automation_migrations(automation_id);
 CREATE INDEX IF NOT EXISTS idx_custom_events_active ON custom_events(is_active);
@@ -519,6 +542,11 @@ CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority DESC);
 CREATE INDEX IF NOT EXISTS idx_queue_campaign ON message_queue(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_queue_session ON message_queue(session_id);
 CREATE INDEX IF NOT EXISTS idx_api_rate_limits_reset ON api_rate_limits(reset_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_status ON incoming_message_receipts(status);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_locked_until ON incoming_message_receipts(locked_until);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_processed_at ON incoming_message_receipts(processed_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_updated_at ON incoming_message_receipts(updated_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_conversation ON incoming_message_receipts(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_status ON webhook_delivery_queue(status);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_next_attempt ON webhook_delivery_queue(next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_webhook ON webhook_delivery_queue(webhook_id);
@@ -574,4 +602,3 @@ INSERT OR IGNORE INTO settings (key, value, type, description) VALUES
     ('working_hours_end', '18:00', 'string', 'Fim do horário de atendimento'),
     ('away_message', 'Olá! No momento estamos fora do horário de atendimento. Retornaremos em breve!', 'string', 'Mensagem de ausência'),
     ('welcome_message', 'Olá! Bem-vindo à SELF Proteção Veicular! Como posso ajudar?', 'string', 'Mensagem de boas-vindas');
-

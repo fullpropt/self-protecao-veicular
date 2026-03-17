@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS flows (
     trigger_type TEXT NOT NULL CHECK(trigger_type IN ('keyword', 'new_contact', 'webhook', 'schedule', 'manual')),
     trigger_value TEXT,
     session_id TEXT,
+    flow_builder_mode TEXT DEFAULT 'humanized' CHECK(flow_builder_mode IN ('humanized', 'menu')),
     nodes TEXT NOT NULL,
     edges TEXT,
     is_active INTEGER DEFAULT 1,
@@ -262,6 +263,22 @@ CREATE TABLE IF NOT EXISTS api_rate_limits (
     count INTEGER NOT NULL DEFAULT 0,
     reset_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS incoming_message_receipts (
+    id SERIAL PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    source TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'processed')),
+    lock_token TEXT,
+    locked_until TIMESTAMPTZ,
+    conversation_id INTEGER REFERENCES conversations(id),
+    processed_at TIMESTAMPTZ,
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (session_id, message_id)
 );
 
 CREATE TABLE IF NOT EXISTS webhooks (
@@ -487,6 +504,7 @@ ALTER TABLE message_queue ADD COLUMN campaign_id INTEGER;
 ALTER TABLE message_queue ADD COLUMN IF NOT EXISTS session_id TEXT;
 ALTER TABLE message_queue ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE flows ADD COLUMN IF NOT EXISTS session_id TEXT;
+ALTER TABLE flows ADD COLUMN IF NOT EXISTS flow_builder_mode TEXT DEFAULT 'humanized';
 ALTER TABLE message_queue ADD COLUMN IF NOT EXISTS is_first_contact INTEGER DEFAULT 1;
 ALTER TABLE message_queue ADD COLUMN IF NOT EXISTS assignment_meta TEXT;
 ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS delay_min INTEGER;
@@ -576,6 +594,8 @@ CREATE INDEX IF NOT EXISTS idx_conversations_lead_updated ON conversations(lead_
 CREATE INDEX IF NOT EXISTS idx_conversations_session_lead ON conversations(session_id, lead_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
 CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_conversations_updated_id_desc ON conversations(updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_assigned_updated_id_desc ON conversations(assigned_to, updated_at DESC, id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS conv_lead_session_unique ON conversations(lead_id, session_id);
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
@@ -584,9 +604,14 @@ CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_campaign ON messages(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_sent_coalesce_desc ON messages(conversation_id, COALESCE(sent_at, created_at) DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_lead_sent_coalesce_desc ON messages(lead_id, COALESCE(sent_at, created_at) DESC, id DESC);
 
 CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
 CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_status_id_desc ON flow_executions(status, id DESC);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_flow_status ON flow_executions(flow_id, status);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_lead ON flow_executions(lead_id);
 CREATE INDEX IF NOT EXISTS idx_automation_lead_runs_lead ON automation_lead_runs(lead_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_automation_migrations_automation ON campaign_automation_migrations(automation_id);
 CREATE INDEX IF NOT EXISTS idx_custom_events_active ON custom_events(is_active);
@@ -602,6 +627,11 @@ CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority DESC);
 CREATE INDEX IF NOT EXISTS idx_queue_campaign ON message_queue(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_queue_session ON message_queue(session_id);
 CREATE INDEX IF NOT EXISTS idx_api_rate_limits_reset ON api_rate_limits(reset_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_status ON incoming_message_receipts(status);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_locked_until ON incoming_message_receipts(locked_until);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_processed_at ON incoming_message_receipts(processed_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_updated_at ON incoming_message_receipts(updated_at);
+CREATE INDEX IF NOT EXISTS idx_incoming_message_receipts_conversation ON incoming_message_receipts(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_status ON webhook_delivery_queue(status);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_next_attempt ON webhook_delivery_queue(next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_delivery_queue_webhook ON webhook_delivery_queue(webhook_id);

@@ -155,6 +155,90 @@ describe('FlowService intent routing compatibility', () => {
         expect(edge.target).toBe('human-node');
     });
 
+    test('evaluateConditionEdge em menu nao escolhe saida arbitraria sem match explicito', () => {
+        const service = new FlowService();
+        const flow = {
+            nodes: [],
+            edges: [
+                { source: 'wait-menu', target: 'buy-node', sourceHandle: 'path-2', label: 'Comprar' },
+                { source: 'wait-menu', target: 'human-node', sourceHandle: 'path-3', label: 'Falar com humano' }
+            ]
+        };
+        const node = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                outputEntryLabels: {
+                    'path-2': 'Comprar',
+                    'path-3': 'Falar com humano'
+                }
+            }
+        };
+
+        const edge = service.evaluateConditionEdge(
+            flow,
+            node,
+            'mensagem sem opcao',
+            'default',
+            {}
+        );
+
+        expect(edge).toBeNull();
+    });
+
+    test('evaluateConditionEdge em menu sem default mapeia numero pela ordem exibida', () => {
+        const service = new FlowService();
+        const flow = {
+            nodes: [],
+            edges: [
+                { source: 'wait-menu', target: 'buy-node', sourceHandle: 'path-2', label: 'Comprar' },
+                { source: 'wait-menu', target: 'human-node', sourceHandle: 'path-3', label: 'Falar com humano' }
+            ]
+        };
+        const node = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                outputEntryLabels: {
+                    'path-2': 'Comprar',
+                    'path-3': 'Falar com humano'
+                }
+            }
+        };
+
+        const firstEdge = service.evaluateConditionEdge(
+            flow,
+            node,
+            '1',
+            'default',
+            { text: '1' }
+        );
+        expect(firstEdge).toBeTruthy();
+        expect(firstEdge.target).toBe('buy-node');
+
+        const secondEdge = service.evaluateConditionEdge(
+            flow,
+            node,
+            '2',
+            'default',
+            { text: '2' }
+        );
+        expect(secondEdge).toBeTruthy();
+        expect(secondEdge.target).toBe('human-node');
+
+        const secondEdgeByHint = service.evaluateConditionEdge(
+            flow,
+            node,
+            'opcao 2',
+            'default',
+            { text: 'opcao 2' }
+        );
+        expect(secondEdgeByHint).toBeTruthy();
+        expect(secondEdgeByHint.target).toBe('human-node');
+    });
+
     test('buildIntentNodeMenuPayload monta menu com rotas de intencao', () => {
         const service = new FlowService();
         const intentNode = {
@@ -307,6 +391,120 @@ describe('FlowService intent routing compatibility', () => {
 
         pickSpy.mockRestore();
         goToNextSpy.mockRestore();
+    });
+
+    test('resolveIntentMenuHandleFromInboundMessage aceita texto com opcao numerica', () => {
+        const service = new FlowService();
+        const intentNode = {
+            id: 'intent-menu',
+            type: 'intent',
+            data: {
+                responseMode: 'menu',
+                intentRoutes: [
+                    { id: 'route-store', label: 'Loja Fisica', phrases: '' },
+                    { id: 'route-models', label: 'Modelos', phrases: '' }
+                ]
+            }
+        };
+
+        const execution = {
+            flow: {
+                nodes: [intentNode],
+                edges: [
+                    { source: 'intent-menu', target: 'store-node', sourceHandle: 'route-store' },
+                    { source: 'intent-menu', target: 'models-node', sourceHandle: 'route-models' }
+                ]
+            },
+            variables: {}
+        };
+
+        const selected = service.resolveIntentMenuHandleFromInboundMessage(
+            execution,
+            intentNode,
+            { text: 'opcao 1' },
+            'opcao 1'
+        );
+
+        expect(selected).toBe('route-store');
+    });
+
+    test('resolveEndNodeSelectionFromInboundMessage aceita texto com opcao numerica', () => {
+        const service = new FlowService();
+        const node = {
+            id: 'end-menu',
+            type: 'end',
+            data: {
+                endOptions: ['Voltar ao menu principal']
+            }
+        };
+
+        const execution = { variables: {} };
+
+        const routeSelection = service.resolveEndNodeSelectionFromInboundMessage(
+            execution,
+            node,
+            { text: 'opcao 1' },
+            'opcao 1'
+        );
+        expect(routeSelection).toEqual({ action: 'route', handle: 'default' });
+
+        const finalizeSelection = service.resolveEndNodeSelectionFromInboundMessage(
+            execution,
+            node,
+            { text: 'opcao 2' },
+            'opcao 2'
+        );
+        expect(finalizeSelection).toEqual({ action: 'finalize', handle: 'finalizar' });
+    });
+
+    test('continueFlow em no end reinicia no menu principal quando nao ha aresta de saida para voltar', async () => {
+        const service = new FlowService();
+        const triggerNode = {
+            id: 'trigger-menu',
+            type: 'trigger',
+            subtype: 'keyword',
+            data: {
+                responseMode: 'menu',
+                menuPrompt: 'Menu principal'
+            }
+        };
+        const endNode = {
+            id: 'end-node',
+            type: 'end',
+            data: {
+                endOptions: ['Voltar ao menu principal']
+            }
+        };
+
+        const execution = {
+            id: 77,
+            flow: {
+                id: 19,
+                nodes: [triggerNode, endNode],
+                edges: [
+                    { source: 'trigger-menu', target: 'end-node', sourceHandle: 'default', targetHandle: 'default' }
+                ]
+            },
+            lead: { id: 26, phone: '5527996459659' },
+            conversation: { id: 331, session_id: 'momnt' },
+            currentNode: 'end-node',
+            variables: {}
+        };
+
+        const executeNodeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue(undefined);
+        const goToNextNodeSpy = jest.spyOn(service, 'goToNextNode').mockResolvedValue(undefined);
+        const endFlowSpy = jest.spyOn(service, 'endFlow').mockResolvedValue(undefined);
+
+        const result = await service.continueFlow(execution, { text: '1' });
+
+        expect(executeNodeSpy).toHaveBeenCalledWith(execution, 'trigger-menu', 'default');
+        expect(goToNextNodeSpy).not.toHaveBeenCalled();
+        expect(endFlowSpy).not.toHaveBeenCalled();
+        expect(result).toBe(execution);
+
+        executeNodeSpy.mockRestore();
+        goToNextNodeSpy.mockRestore();
+        endFlowSpy.mockRestore();
     });
 
     test('maybeSendIntentNodeMenu envia menu para no trigger em modo menu', async () => {
@@ -977,6 +1175,58 @@ describe('FlowService intent routing compatibility', () => {
         executeSpy.mockRestore();
     });
 
+    test('continueFlow on wait menu keeps execution waiting when no option matches', async () => {
+        const service = new FlowService();
+        const waitNode = {
+            id: 'wait-menu',
+            type: 'wait',
+            data: {
+                responseMode: 'menu',
+                outputEntryLabels: {
+                    'path-2': 'Comprar',
+                    'path-3': 'Falar com humano'
+                }
+            }
+        };
+        const nextNode = {
+            id: 'next-mid',
+            type: 'message',
+            data: {}
+        };
+
+        const execution = {
+            id: 124,
+            currentNode: 'wait-menu',
+            flow: {
+                id: 56,
+                nodes: [waitNode, nextNode],
+                edges: [
+                    { source: 'wait-menu', target: 'next-mid', sourceHandle: 'path-2', targetHandle: 'default', label: 'Comprar' },
+                    { source: 'wait-menu', target: 'next-mid', sourceHandle: 'path-3', targetHandle: 'default', label: 'Falar com humano' }
+                ]
+            },
+            conversation: { id: 46 },
+            variables: {}
+        };
+
+        const persistSpy = jest.spyOn(service, 'persistExecutionVariables').mockResolvedValue();
+        const outputActionsSpy = jest.spyOn(service, 'executeOutputActions').mockResolvedValue();
+        const executeSpy = jest.spyOn(service, 'executeNode').mockResolvedValue();
+        const endSpy = jest.spyOn(service, 'endFlow').mockResolvedValue();
+
+        await service.continueFlow(execution, { text: 'texto livre sem opcao valida' });
+
+        expect(persistSpy).toHaveBeenCalledTimes(1);
+        expect(outputActionsSpy).not.toHaveBeenCalled();
+        expect(executeSpy).not.toHaveBeenCalled();
+        expect(endSpy).not.toHaveBeenCalled();
+
+        persistSpy.mockRestore();
+        outputActionsSpy.mockRestore();
+        executeSpy.mockRestore();
+        endSpy.mockRestore();
+    });
+
     test('goToNextNode marks trigger default -> message_once edge as intent reentry bridge', async () => {
         const service = new FlowService();
         const currentNode = {
@@ -1344,7 +1594,7 @@ describe('FlowService intent routing compatibility', () => {
         startFlowSpy.mockRestore();
     });
 
-    test('processIncomingMessage does not auto-start menu flow after first message', async () => {
+    test('processIncomingMessage auto-starts menu flow in existing conversation without active execution', async () => {
         const service = new FlowService();
         intentClassifier.classifyKeywordFlowIntent.mockReset();
         const menuFlow = {
@@ -1380,10 +1630,223 @@ describe('FlowService intent routing compatibility', () => {
             { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
         );
 
-        expect(startFlowSpy).not.toHaveBeenCalled();
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            menuFlow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'oi de novo' })
+        );
         expect(keywordSpy).toHaveBeenCalled();
         expect(newContactSpy).not.toHaveBeenCalled();
+        expect(result).toEqual({ id: 902 });
+
+        resolveExecutionSpy.mockRestore();
+        keywordSpy.mockRestore();
+        activeSpy.mockRestore();
+        newContactSpy.mockRestore();
+        startFlowSpy.mockRestore();
+    });
+
+    test('resolveActiveExecution cancels cached execution when flow becomes inactive', async () => {
+        const service = new FlowService();
+        const cachedExecution = {
+            id: 991,
+            flow: { id: 20, is_active: 1, flow_builder_mode: 'menu', nodes: [], edges: [] },
+            lead: { id: 26, phone: '5527996459659' },
+            conversation: { id: 331, session_id: 'momnt' }
+        };
+
+        const getCachedSpy = jest.spyOn(service, 'getActiveExecution').mockReturnValue(cachedExecution);
+        const persistedExecutionSpy = jest.spyOn(service, 'fetchExecutionStatusRow').mockResolvedValue({
+            status: 'running',
+            current_node: ''
+        });
+        const flowByIdSpy = jest.spyOn(Flow, 'findById').mockResolvedValue({
+            id: 20,
+            is_active: 0,
+            flow_builder_mode: 'menu',
+            nodes: [],
+            edges: []
+        });
+        const endFlowSpy = jest.spyOn(service, 'endFlow').mockResolvedValue(undefined);
+
+        const result = await service.resolveActiveExecution(
+            { id: 331, session_id: 'momnt' },
+            { id: 26, phone: '5527996459659' }
+        );
+
+        expect(flowByIdSpy).toHaveBeenCalledWith(20);
+        expect(endFlowSpy).toHaveBeenCalledWith(
+            cachedExecution,
+            'cancelled',
+            'Execucao cancelada automaticamente: fluxo inativo.'
+        );
         expect(result).toBeNull();
+
+        getCachedSpy.mockRestore();
+        persistedExecutionSpy.mockRestore();
+        flowByIdSpy.mockRestore();
+        endFlowSpy.mockRestore();
+    });
+
+    test('resolveActiveExecution keeps cached execution when refreshed flow remains active', async () => {
+        const service = new FlowService();
+        const cachedExecution = {
+            id: 992,
+            flow: { id: 19, is_active: 1, flow_builder_mode: 'menu', nodes: [], edges: [] },
+            lead: { id: 26, phone: '5527996459659' },
+            conversation: { id: 331, session_id: 'momnt' }
+        };
+
+        const refreshedFlow = {
+            id: 19,
+            is_active: 1,
+            flow_builder_mode: 'menu',
+            session_id: 'momnt',
+            nodes: [],
+            edges: []
+        };
+
+        const getCachedSpy = jest.spyOn(service, 'getActiveExecution').mockReturnValue(cachedExecution);
+        const persistedExecutionSpy = jest.spyOn(service, 'fetchExecutionStatusRow').mockResolvedValue({
+            status: 'running',
+            current_node: 'intent-node'
+        });
+        const flowByIdSpy = jest.spyOn(Flow, 'findById').mockResolvedValue(refreshedFlow);
+        const endFlowSpy = jest.spyOn(service, 'endFlow').mockResolvedValue(undefined);
+
+        const result = await service.resolveActiveExecution(
+            { id: 331, session_id: 'momnt' },
+            { id: 26, phone: '5527996459659' }
+        );
+
+        expect(flowByIdSpy).toHaveBeenCalledWith(19);
+        expect(endFlowSpy).not.toHaveBeenCalled();
+        expect(result).toBe(cachedExecution);
+        expect(cachedExecution.flow).toEqual(refreshedFlow);
+        expect(cachedExecution.currentNode).toBe('intent-node');
+
+        getCachedSpy.mockRestore();
+        persistedExecutionSpy.mockRestore();
+        flowByIdSpy.mockRestore();
+        endFlowSpy.mockRestore();
+    });
+
+    test('resolveActiveExecution discards stale cached execution when persisted status is not running', async () => {
+        const service = new FlowService();
+        const cachedExecution = {
+            id: 993,
+            flow: { id: 19, is_active: 1, flow_builder_mode: 'menu', nodes: [], edges: [] },
+            lead: { id: 26, phone: '5527996459659' },
+            conversation: { id: 331, session_id: 'momnt' },
+            currentNode: 'end-node'
+        };
+
+        const restoredExecution = null;
+        const getCachedSpy = jest.spyOn(service, 'getActiveExecution').mockReturnValue(cachedExecution);
+        const persistedExecutionSpy = jest.spyOn(service, 'fetchExecutionStatusRow').mockResolvedValue({
+            status: 'cancelled',
+            current_node: 'end-node'
+        });
+        const removeSpy = jest.spyOn(service, 'removeActiveExecution').mockImplementation(() => {});
+        const restoreSpy = jest.spyOn(service, 'restoreExecutionFromStorage').mockResolvedValue(restoredExecution);
+        const flowByIdSpy = jest.spyOn(Flow, 'findById').mockResolvedValue({
+            id: 19,
+            is_active: 1,
+            flow_builder_mode: 'menu',
+            session_id: 'momnt',
+            nodes: [],
+            edges: []
+        });
+
+        const result = await service.resolveActiveExecution(
+            { id: 331, session_id: 'momnt' },
+            { id: 26, phone: '5527996459659' }
+        );
+
+        expect(persistedExecutionSpy).toHaveBeenCalledWith(993);
+        expect(removeSpy).toHaveBeenCalledWith(331);
+        expect(restoreSpy).toHaveBeenCalled();
+        expect(flowByIdSpy).not.toHaveBeenCalled();
+        expect(result).toBe(restoredExecution);
+
+        getCachedSpy.mockRestore();
+        persistedExecutionSpy.mockRestore();
+        removeSpy.mockRestore();
+        restoreSpy.mockRestore();
+        flowByIdSpy.mockRestore();
+    });
+
+    test('processIncomingMessage ignores active flow with inconsistent menu mode', async () => {
+        const service = new FlowService();
+        intentClassifier.classifyKeywordFlowIntent.mockReset();
+
+        const inconsistentMenuFlow = {
+            id: 15,
+            name: 'Menu Inconsistente',
+            trigger_type: 'keyword',
+            flow_builder_mode: 'humanized',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [
+                {
+                    id: 'trigger-menu-inconsistente',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opcao'
+                    }
+                }
+            ],
+            edges: []
+        };
+        const validMenuFlow = {
+            id: 304,
+            name: 'Menu Valido',
+            trigger_type: 'keyword',
+            flow_builder_mode: 'menu',
+            session_id: 'momnt',
+            priority: 0,
+            nodes: [
+                {
+                    id: 'trigger-menu-valido',
+                    type: 'trigger',
+                    subtype: 'keyword',
+                    data: {
+                        responseMode: 'menu',
+                        menuPrompt: 'Escolha uma opcao'
+                    }
+                }
+            ],
+            edges: []
+        };
+
+        const resolveExecutionSpy = jest.spyOn(service, 'resolveActiveExecution').mockResolvedValue(null);
+        const keywordSpy = jest.spyOn(Flow, 'findKeywordMatches').mockResolvedValue([]);
+        const activeSpy = jest.spyOn(Flow, 'findActiveKeywordFlows').mockResolvedValue([
+            inconsistentMenuFlow,
+            validMenuFlow
+        ]);
+        const newContactSpy = jest.spyOn(Flow, 'findByTrigger').mockResolvedValue(null);
+        const startFlowSpy = jest.spyOn(service, 'startFlow').mockResolvedValue({ id: 903 });
+        intentClassifier.classifyKeywordFlowIntent.mockResolvedValue({ status: 'no_match' });
+
+        const result = await service.processIncomingMessage(
+            { text: 'oi novamente' },
+            { id: 26, phone: '5527996459659', assigned_to: null },
+            { id: 331, session_id: 'momnt', is_bot_active: 1, assigned_to: null, created: false }
+        );
+
+        expect(startFlowSpy).toHaveBeenCalledWith(
+            validMenuFlow,
+            expect.objectContaining({ id: 26 }),
+            expect.objectContaining({ id: 331 }),
+            expect.objectContaining({ text: 'oi novamente' })
+        );
+        expect(keywordSpy).toHaveBeenCalled();
+        expect(newContactSpy).not.toHaveBeenCalled();
+        expect(result).toEqual({ id: 903 });
 
         resolveExecutionSpy.mockRestore();
         keywordSpy.mockRestore();

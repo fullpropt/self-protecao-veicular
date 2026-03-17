@@ -5,6 +5,7 @@ import { brandLogoUrl, brandName } from '../lib/brand';
 type ContatosGlobals = {
   initContacts?: () => void;
   loadContacts?: (options?: { forceRefresh?: boolean; silent?: boolean; bypassMinRevalidate?: boolean }) => void;
+  openImportContactsModal?: () => void;
   changeContactsSessionFilter?: (sessionId: string) => void;
   exportContacts?: () => void;
   openModal?: (id: string) => void;
@@ -360,7 +361,10 @@ export default function Contatos() {
             <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.loadContacts?.({ forceRefresh: true })}>
               <span className="icon icon-refresh icon-sm"></span> Atualizar
             </button>
-            <button className="btn btn-outline btn-import-contacts" onClick={() => globals.openModal?.('importModal')}>
+            <button
+              className="btn btn-outline btn-import-contacts"
+              onClick={() => globals.openImportContactsModal?.() ?? globals.openModal?.('importModal')}
+            >
               <span className="icon icon-import icon-sm"></span> Importar
             </button>
             <button className="btn btn-success btn-export-contacts" onClick={() => globals.exportContacts?.()}>

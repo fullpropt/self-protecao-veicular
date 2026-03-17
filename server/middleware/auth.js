@@ -11,8 +11,25 @@ const { queryOne, run } = require('../database/connection');
 
 const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
 const JWT_SECRET_DEV = String(process.env.JWT_SECRET_DEV || '').trim();
-if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET is required in production');
+const INSECURE_JWT_SECRETS = new Set([
+    'self-protecao-jwt-secret-2024',
+    'sua-chave-secreta-super-segura-aqui-min-32-chars',
+    'changeme',
+    'change-me',
+    'default',
+    'jwt-secret'
+]);
+
+if (process.env.NODE_ENV === 'production') {
+    if (!JWT_SECRET) {
+        throw new Error('JWT_SECRET is required in production');
+    }
+    if (INSECURE_JWT_SECRETS.has(JWT_SECRET)) {
+        throw new Error('JWT_SECRET insecure value is not allowed in production');
+    }
+    if (JWT_SECRET.length < 32) {
+        throw new Error('JWT_SECRET must be at least 32 characters in production');
+    }
 }
 const JWT_SECRET_EFFECTIVE = JWT_SECRET || JWT_SECRET_DEV || crypto.randomBytes(32).toString('hex');
 if (!JWT_SECRET && process.env.NODE_ENV !== 'production' && !JWT_SECRET_DEV) {

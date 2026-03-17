@@ -203,6 +203,119 @@ function normalizeFlowSessionScope(value) {
     return normalized || null;
 }
 
+function normalizeFlowBuilderMode(value) {
+    return String(value || '').trim().toLowerCase() === 'menu' ? 'menu' : 'humanized';
+}
+
+function parseFlowGraphList(value) {
+    if (Array.isArray(value)) return [...value];
+
+    if (typeof value === 'string') {
+        const rawValue = value.trim();
+        if (!rawValue) return [];
+        try {
+            const parsed = JSON.parse(rawValue);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    return [];
+}
+
+function isIntentRoutingFlowNode(node) {
+    const nodeType = String(node?.type || '').trim().toLowerCase();
+    if (nodeType === 'intent') return true;
+    if (nodeType !== 'trigger') return false;
+
+    const subtype = String(node?.subtype || '').trim().toLowerCase();
+    return subtype === 'keyword' || subtype === 'intent';
+}
+
+function inferFlowBuilderModeFromNodes(nodeList = []) {
+    const nodes = parseFlowGraphList(nodeList);
+    const hasMenuIntentNode = nodes.some((node) => {
+        if (!isIntentRoutingFlowNode(node)) return false;
+        return String(node?.data?.responseMode || '').trim().toLowerCase() === 'menu';
+    });
+
+    return hasMenuIntentNode ? 'menu' : 'humanized';
+}
+
+function resolvePersistedFlowBuilderMode(value, nodeList = []) {
+    const rawValue = String(value || '').trim();
+    if (rawValue) {
+        return normalizeFlowBuilderMode(rawValue);
+    }
+
+    return inferFlowBuilderModeFromNodes(nodeList);
+}
+
+function hydrateFlowRecord(flow) {
+    if (!flow) return null;
+
+    const nodes = parseFlowGraphList(flow.nodes);
+    const edges = parseFlowGraphList(flow.edges);
+
+    return {
+        ...flow,
+        nodes,
+        edges,
+        flow_builder_mode: resolvePersistedFlowBuilderMode(
+            flow.flow_builder_mode || flow.flowBuilderMode,
+            nodes
+        )
+    };
+}
+
+function normalizeSessionScopeList(value) {
+    let parsed = value;
+
+    if (typeof parsed === 'string') {
+        const rawValue = parsed.trim();
+        if (!rawValue) return [];
+        try {
+            parsed = JSON.parse(rawValue);
+        } catch (_) {
+            parsed = rawValue.split(',');
+        }
+    }
+
+    if (!Array.isArray(parsed)) return [];
+
+    const normalized = [];
+    const seen = new Set();
+    for (const item of parsed) {
+        const sessionId = String(item || '').trim();
+        if (!sessionId || seen.has(sessionId)) continue;
+        seen.add(sessionId);
+        normalized.push(sessionId);
+    }
+
+    return normalized;
+}
+
+function parsePlainObject(value) {
+    let parsed = value;
+
+    if (typeof parsed === 'string') {
+        const rawValue = parsed.trim();
+        if (!rawValue) return {};
+        try {
+            parsed = JSON.parse(rawValue);
+        } catch (_) {
+            return {};
+        }
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return {};
+    }
+
+    return { ...parsed };
+}
+
 function buildCustomEventKey(name) {
     const fromName = normalizeCustomEventKey(name);
     if (fromName) return fromName;
@@ -952,80 +1065,130 @@ const Conversation = {
         params.push(id);
         return await run(`UPDATE conversations SET ${updates.join(', ')} WHERE id = ?`, params);
     },
-    
+
+    async touchAndMarkAsRead(id, lastMessageId = null, sentAt = null) {
+        const updates = ['unread_count = 0'];
+        const params = [];
+
+        if (lastMessageId) {
+            updates.push('last_message_id = ?');
+            params.push(lastMessageId);
+        }
+
+        if (sentAt) {
+            updates.push('updated_at = ?');
+            params.push(sentAt);
+        } else {
+            updates.push('updated_at = CURRENT_TIMESTAMP');
+        }
+
+        params.push(id);
+        return await run(`UPDATE conversations SET ${updates.join(', ')} WHERE id = ?`, params);
+    },
+
     async markAsRead(id) {
         return await run("UPDATE conversations SET unread_count = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [id]);
     },
     
     async list(options = {}) {
-        let sql = `
-            SELECT c.*, l.name as lead_name, l.phone, l.vehicle, l.custom_fields as lead_custom_fields, u.name as agent_name
-            FROM conversations c
-            LEFT JOIN leads l ON c.lead_id = l.id
-            LEFT JOIN users u ON c.assigned_to = u.id
-            WHERE 1=1
-        `;
         const params = [];
-        
+        const whereClauses = [];
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+
+        const ctes = [];
+        if (ownerUserId) {
+            ctes.push(`
+                owner_scope_users AS (
+                    SELECT id
+                    FROM users
+                    WHERE id = ? OR owner_user_id = ?
+                )
+            `);
+            ctes.push(`
+                owner_scope_conversations AS (
+                    SELECT c.id
+                    FROM leads l
+                    JOIN conversations c ON c.lead_id = l.id
+                    WHERE l.owner_user_id = ?
+
+                    UNION
+
+                    SELECT c.id
+                    FROM conversations c
+                    WHERE c.assigned_to IN (SELECT id FROM owner_scope_users)
+
+                    UNION
+
+                    SELECT c.id
+                    FROM leads l
+                    JOIN conversations c ON c.lead_id = l.id
+                    WHERE c.assigned_to IS NULL
+                      AND l.assigned_to IN (SELECT id FROM owner_scope_users)
+
+                    UNION
+
+                    SELECT c.id
+                    FROM conversations c
+                    JOIN whatsapp_sessions ws ON ws.session_id = c.session_id
+                    WHERE ws.created_by IN (SELECT id FROM owner_scope_users)
+                )
+            `);
+            params.push(ownerUserId, ownerUserId, ownerUserId);
+            whereClauses.push('c.id IN (SELECT id FROM owner_scope_conversations)');
+        }
+
         if (options.status) {
-            sql += ' AND c.status = ?';
+            whereClauses.push('c.status = ?');
             params.push(options.status);
         }
         
         if (options.assigned_to) {
-            sql += ' AND c.assigned_to = ?';
+            whereClauses.push('c.assigned_to = ?');
             params.push(options.assigned_to);
-        }
-
-        if (options.owner_user_id) {
-            const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
-            if (ownerUserId) {
-                sql += `
-                    AND (
-                        l.owner_user_id = ?
-                        OR
-                        EXISTS (
-                            SELECT 1
-                            FROM users owner_scope
-                            WHERE owner_scope.id = COALESCE(c.assigned_to, l.assigned_to)
-                              AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
-                        )
-                        OR EXISTS (
-                            SELECT 1
-                            FROM whatsapp_sessions ws
-                            WHERE ws.session_id = c.session_id
-                              AND (
-                                  ws.created_by = ?
-                                  OR EXISTS (
-                                      SELECT 1
-                                      FROM users ws_owner
-                                      WHERE ws_owner.id = ws.created_by
-                                        AND (ws_owner.owner_user_id = ? OR ws_owner.id = ?)
-                                  )
-                              )
-                        )
-                    )
-                `;
-                params.push(ownerUserId, ownerUserId, ownerUserId, ownerUserId, ownerUserId, ownerUserId);
-            }
         }
         
         if (options.session_id) {
-            sql += ' AND c.session_id = ?';
+            whereClauses.push('c.session_id = ?');
             params.push(options.session_id);
         }
-        
-        sql += ' ORDER BY c.updated_at DESC';
-        
+
+        let filteredConversationsSql = `
+            SELECT c.*
+            FROM conversations c
+            ${whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''}
+            ORDER BY c.updated_at DESC
+        `;
+
         if (options.limit) {
-            sql += ' LIMIT ?';
+            filteredConversationsSql += ' LIMIT ?';
             params.push(options.limit);
         }
 
         if (options.offset) {
-            sql += ' OFFSET ?';
+            filteredConversationsSql += ' OFFSET ?';
             params.push(options.offset);
         }
+
+        ctes.push(`
+            filtered_conversations AS (
+                ${filteredConversationsSql}
+            )
+        `);
+
+        const sql = `
+            WITH ${ctes.join(',\n')}
+            SELECT
+                fc.*,
+                l.name as lead_name,
+                l.phone,
+                l.vehicle,
+                l.custom_fields as lead_custom_fields,
+                u.name as agent_name
+            FROM filtered_conversations fc
+            JOIN leads l ON fc.lead_id = l.id
+            LEFT JOIN users u ON fc.assigned_to = u.id
+            ORDER BY fc.updated_at DESC
+        `;
         
         return await query(sql, params);
     }
@@ -1806,25 +1969,87 @@ const WhatsAppSession = {
 
         const requesterOwnerUserId = parsePositiveInteger(options.owner_user_id);
         const requesterCreatedBy = parsePositiveInteger(options.created_by);
-        if (requesterOwnerUserId) {
-            const existing = await this.findBySessionId(normalizedSessionId, {
+        const existing = await this.findBySessionId(normalizedSessionId);
+
+        if (requesterOwnerUserId && existing) {
+            const ownedSession = await this.findBySessionId(normalizedSessionId, {
                 owner_user_id: requesterOwnerUserId
             });
-            if (!existing) {
+            if (!ownedSession) {
                 throw new Error('Sem permissao para remover esta sessao');
             }
-        } else if (requesterCreatedBy) {
-            const existing = await this.findBySessionId(normalizedSessionId, {
+        } else if (requesterCreatedBy && existing) {
+            const ownedSession = await this.findBySessionId(normalizedSessionId, {
                 created_by: requesterCreatedBy
             });
-            if (!existing) {
+            if (!ownedSession) {
                 throw new Error('Sem permissao para remover esta sessao');
             }
         }
 
-        await run('DELETE FROM whatsapp_sessions WHERE session_id = ?', [normalizedSessionId]);
-        await run('DELETE FROM campaign_sender_accounts WHERE session_id = ?', [normalizedSessionId]);
-        return { session_id: normalizedSessionId };
+        const campaignCleanup = await run('DELETE FROM campaign_sender_accounts WHERE session_id = ?', [normalizedSessionId]);
+        const flowCleanup = await run(`
+            UPDATE flows
+            SET session_id = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE session_id = ?
+        `, [normalizedSessionId]);
+
+        let automationCleanupCount = 0;
+        const automationRows = await query(`
+            SELECT id, session_scope
+            FROM automations
+            WHERE session_scope IS NOT NULL
+              AND TRIM(session_scope) <> ''
+              AND session_scope LIKE ?
+        `, [`%${normalizedSessionId}%`]);
+        for (const automation of automationRows) {
+            const sessionScope = normalizeSessionScopeList(automation?.session_scope);
+            if (!sessionScope.includes(normalizedSessionId)) continue;
+
+            const nextSessionScope = sessionScope.filter((sessionId) => sessionId !== normalizedSessionId);
+            const result = await Automation.update(automation.id, {
+                session_scope: nextSessionScope.length ? JSON.stringify(nextSessionScope) : null
+            });
+            automationCleanupCount += Number(result?.changes || 0) || 0;
+        }
+
+        let businessHoursCleanupCount = 0;
+        const businessHoursSettingRows = await query(`
+            SELECT key
+            FROM settings
+            WHERE key = ?
+               OR key LIKE ?
+        `, ['business_hours_by_session', 'user:%:business_hours_by_session']);
+        for (const settingRow of businessHoursSettingRows) {
+            const settingsKey = String(settingRow?.key || '').trim();
+            if (!settingsKey) continue;
+
+            const currentValue = parsePlainObject(await Settings.get(settingsKey));
+            if (!Object.prototype.hasOwnProperty.call(currentValue, normalizedSessionId)) {
+                continue;
+            }
+
+            delete currentValue[normalizedSessionId];
+            if (Object.keys(currentValue).length > 0) {
+                await Settings.set(settingsKey, currentValue, 'json');
+            } else {
+                await run('DELETE FROM settings WHERE key = ?', [settingsKey]);
+            }
+            businessHoursCleanupCount += 1;
+        }
+
+        const sessionCleanup = await run('DELETE FROM whatsapp_sessions WHERE session_id = ?', [normalizedSessionId]);
+        return {
+            session_id: normalizedSessionId,
+            removed: Number(sessionCleanup?.changes || 0) > 0,
+            cleanup: {
+                campaign_sender_accounts: Number(campaignCleanup?.changes || 0) || 0,
+                flows: Number(flowCleanup?.changes || 0) || 0,
+                automations: automationCleanupCount,
+                business_hours_settings: businessHoursCleanupCount
+            }
+        };
     }
 };
 
@@ -1986,10 +2211,14 @@ const Flow = {
     async create(data) {
         const uuid = generateUUID();
         const sessionScope = normalizeFlowSessionScope(data.session_id ?? data.sessionId);
+        const flowBuilderMode = resolvePersistedFlowBuilderMode(
+            data.flow_builder_mode ?? data.flowBuilderMode,
+            data.nodes
+        );
         
         const result = await run(`
-            INSERT INTO flows (uuid, name, description, trigger_type, trigger_value, nodes, edges, is_active, priority, created_by, session_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO flows (uuid, name, description, trigger_type, trigger_value, nodes, edges, is_active, priority, flow_builder_mode, created_by, session_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             uuid,
             data.name,
@@ -2000,11 +2229,77 @@ const Flow = {
             JSON.stringify(data.edges || []),
             data.is_active !== undefined ? data.is_active : 1,
             data.priority || 0,
+            flowBuilderMode,
             data.created_by,
             sessionScope
         ]);
+
+        const deactivatedFlowIds = Number(data.is_active !== undefined ? data.is_active : 1) > 0 && flowBuilderMode === 'menu'
+            ? await this.deactivateOtherActiveMenuFlows({
+                exclude_id: result.lastInsertRowid,
+                session_id: sessionScope,
+                owner_user_id: data.owner_user_id,
+                created_by: data.created_by
+            })
+            : [];
         
-        return { id: result.lastInsertRowid, uuid };
+        return {
+            id: result.lastInsertRowid,
+            uuid,
+            deactivated_flow_ids: deactivatedFlowIds
+        };
+    },
+
+    async deactivateOtherActiveMenuFlows(options = {}) {
+        const excludeId = parsePositiveInteger(options.exclude_id ?? options.excludeId);
+        const scopedSessionId = normalizeFlowSessionScope(options.session_id ?? options.sessionId);
+        const ownerUserId = parsePositiveInteger(options.owner_user_id);
+        const createdBy = parsePositiveInteger(options.created_by);
+        const params = [];
+        let sql = 'SELECT * FROM flows WHERE is_active = 1';
+
+        if (excludeId) {
+            sql += ' AND id <> ?';
+            params.push(excludeId);
+        }
+
+        if (scopedSessionId) {
+            sql += ' AND session_id = ?';
+            params.push(scopedSessionId);
+        } else {
+            sql += " AND (session_id IS NULL OR TRIM(session_id) = '')";
+        }
+
+        if (ownerUserId) {
+            sql += `
+                AND (
+                    flows.created_by = ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM users u
+                        WHERE u.id = flows.created_by
+                          AND (u.owner_user_id = ? OR u.id = ?)
+                    )
+                )
+            `;
+            params.push(ownerUserId, ownerUserId, ownerUserId);
+        } else if (createdBy) {
+            sql += ' AND flows.created_by = ?';
+            params.push(createdBy);
+        }
+
+        const rows = await query(sql, params);
+        const deactivatedFlowIds = [];
+
+        for (const row of rows) {
+            const hydrated = hydrateFlowRecord(row);
+            if (!hydrated || hydrated.flow_builder_mode !== 'menu') continue;
+
+            await run('UPDATE flows SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [hydrated.id]);
+            deactivatedFlowIds.push(Number(hydrated.id));
+        }
+
+        return deactivatedFlowIds;
     },
     
     async findById(id, options = {}) {
@@ -2036,11 +2331,7 @@ const Flow = {
             WHERE flows.id = ?
             ${ownerFilter}
         `, params);
-        if (flow) {
-            flow.nodes = JSON.parse(flow.nodes || '[]');
-            flow.edges = JSON.parse(flow.edges || '[]');
-        }
-        return flow;
+        return hydrateFlowRecord(flow);
     },
     
     async findByTrigger(triggerType, triggerValue = null, options = {}) {
@@ -2082,11 +2373,7 @@ const Flow = {
         sql += ' ORDER BY priority DESC LIMIT 1';
         
         const flow = await queryOne(sql, params);
-        if (flow) {
-            flow.nodes = JSON.parse(flow.nodes || '[]');
-            flow.edges = JSON.parse(flow.edges || '[]');
-        }
-        return flow;
+        return hydrateFlowRecord(flow);
     },
 
     async findActiveKeywordFlows(options = {}) {
@@ -2124,11 +2411,7 @@ const Flow = {
             ORDER BY priority DESC, id ASC
         `, params);
 
-        return rows.map((flow) => ({
-            ...flow,
-            nodes: JSON.parse(flow.nodes || '[]'),
-            edges: JSON.parse(flow.edges || '[]')
-        }));
+        return rows.map((flow) => hydrateFlowRecord(flow)).filter(Boolean);
     },
     
     async findKeywordMatches(messageText, options = {}) {
@@ -2171,7 +2454,10 @@ const Flow = {
 
         const matches = [];
 
-        for (const flow of flows) {
+        for (const rawFlow of flows) {
+            const flow = hydrateFlowRecord(rawFlow);
+            if (!flow) continue;
+
             const keywords = extractFlowKeywords(flow.trigger_value || '');
             if (keywords.length === 0) continue;
 
@@ -2190,8 +2476,6 @@ const Flow = {
 
         return matches.map(({ flow, score, matchedKeywords }) => ({
             ...flow,
-            nodes: JSON.parse(flow.nodes || '[]'),
-            edges: JSON.parse(flow.edges || '[]'),
             _keywordMatch: {
                 ...score,
                 matchedKeywords
@@ -2244,24 +2528,35 @@ const Flow = {
         sql += ' ORDER BY priority DESC, name ASC';
         
         const rows = await query(sql, params);
-        return rows.map(flow => ({
-            ...flow,
-            nodes: JSON.parse(flow.nodes || '[]'),
-            edges: JSON.parse(flow.edges || '[]')
-        }));
+        return rows.map((flow) => hydrateFlowRecord(flow)).filter(Boolean);
     },
     
     async update(id, data) {
         const fields = [];
         const values = [];
+        const payload = {
+            ...data
+        };
+
+        if (Object.prototype.hasOwnProperty.call(payload, 'flowBuilderMode')
+            && !Object.prototype.hasOwnProperty.call(payload, 'flow_builder_mode')) {
+            payload.flow_builder_mode = payload.flowBuilderMode;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, 'nodes')
+            && !Object.prototype.hasOwnProperty.call(payload, 'flow_builder_mode')) {
+            payload.flow_builder_mode = resolvePersistedFlowBuilderMode('', payload.nodes);
+        }
         
-        const allowedFields = ['name', 'description', 'trigger_type', 'trigger_value', 'nodes', 'edges', 'is_active', 'priority', 'session_id'];
+        const allowedFields = ['name', 'description', 'trigger_type', 'trigger_value', 'nodes', 'edges', 'is_active', 'priority', 'session_id', 'flow_builder_mode'];
         
-        for (const [key, value] of Object.entries(data)) {
+        for (const [key, value] of Object.entries(payload)) {
             if (allowedFields.includes(key)) {
                 fields.push(`${key} = ?`);
                 if (key === 'session_id') {
                     values.push(normalizeFlowSessionScope(value));
+                } else if (key === 'flow_builder_mode') {
+                    values.push(resolvePersistedFlowBuilderMode(value, payload.nodes));
                 } else {
                     values.push(typeof value === 'object' ? JSON.stringify(value) : value);
                 }
@@ -2273,10 +2568,55 @@ const Flow = {
         fields.push("updated_at = CURRENT_TIMESTAMP");
         values.push(id);
         
-        return await run(`UPDATE flows SET ${fields.join(', ')} WHERE id = ?`, values);
+        const result = await run(`UPDATE flows SET ${fields.join(', ')} WHERE id = ?`, values);
+        const finalFlow = await this.findById(id, {
+            owner_user_id: data.owner_user_id,
+            created_by: data.created_by
+        });
+
+        if (finalFlow && Number(finalFlow.is_active || 0) !== 1) {
+            await run(`
+                UPDATE flow_executions
+                SET status = 'cancelled',
+                    completed_at = CURRENT_TIMESTAMP,
+                    error_message = CASE
+                        WHEN error_message IS NULL OR TRIM(error_message) = ''
+                            THEN 'Execucao cancelada automaticamente: fluxo desativado.'
+                        ELSE error_message
+                    END
+                WHERE flow_id = ? AND status = 'running'
+            `, [id]);
+        }
+
+        const deactivatedFlowIds = finalFlow
+            && Number(finalFlow.is_active) > 0
+            && resolvePersistedFlowBuilderMode(finalFlow.flow_builder_mode, finalFlow.nodes) === 'menu'
+            ? await this.deactivateOtherActiveMenuFlows({
+                exclude_id: id,
+                session_id: finalFlow.session_id,
+                owner_user_id: data.owner_user_id,
+                created_by: data.created_by || finalFlow.created_by
+            })
+            : [];
+
+        return {
+            result,
+            deactivated_flow_ids: deactivatedFlowIds
+        };
     },
     
     async delete(id) {
+        await run(`
+            UPDATE flow_executions
+            SET status = 'cancelled',
+                completed_at = CURRENT_TIMESTAMP,
+                error_message = CASE
+                    WHEN error_message IS NULL OR TRIM(error_message) = ''
+                        THEN 'Execucao cancelada automaticamente: fluxo removido.'
+                    ELSE error_message
+                END
+            WHERE flow_id = ? AND status = 'running'
+        `, [id]);
         return await run('DELETE FROM flows WHERE id = ?', [id]);
     }
 };

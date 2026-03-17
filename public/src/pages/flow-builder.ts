@@ -50,6 +50,7 @@ type NodeData = {
     menuTitle?: string;
     menuFooter?: string;
     menuSectionTitle?: string;
+    endOptions?: string[];
     conditions?: Array<{ value: string; next?: string }>;
     seconds?: number;
     message?: string;
@@ -115,6 +116,8 @@ type FlowSummary = {
     nodes?: FlowNode[];
     is_active?: boolean;
     session_id?: string | null;
+    flow_builder_mode?: FlowBuilderMode;
+    flowBuilderMode?: FlowBuilderMode;
 };
 
 type ContactField = {
@@ -159,6 +162,8 @@ let pendingNodeDraftId: string | null = null;
 let intentPropertySectionExpandedState: Record<string, boolean> = {};
 let flowsCache: FlowSummary[] = [];
 let pendingFlowListSessionScopes: Record<number, string> = {};
+let flowsListRequiredSessionId = '';
+let flowsListModeFilter: FlowBuilderMode = 'humanized';
 let renamingFlowId: number | null = null;
 let renamingFlowDraft = '';
 let zoom = 1;
@@ -231,6 +236,8 @@ const OUTPUT_ACTION_TYPE_LABELS: Record<OutputActionType, string> = {
     tag: 'Adicionar Tag',
     webhook: 'Webhook'
 };
+const END_NODE_MAX_CUSTOM_OPTIONS = 9;
+const END_NODE_FIXED_OPTION_LABEL = 'Finalizar';
 
 let activeFlowDialogDismiss: (() => void) | null = null;
 let flowAiAssistantOpen = false;
@@ -794,6 +801,31 @@ function inferFlowBuilderModeFromNodes(nodeList: FlowNode[] = nodes) {
     return hasMenuIntentNode ? 'menu' : 'humanized';
 }
 
+function getFlowBuilderModeLabel(mode: unknown) {
+    return normalizeFlowBuilderMode(mode) === 'menu' ? 'Menu interativo' : 'Humanizado';
+}
+
+function buildExclusiveMenuFlowNotice(deactivatedCount: number) {
+    const total = Number.isFinite(deactivatedCount) ? Math.max(0, Math.trunc(deactivatedCount)) : 0;
+    if (total <= 0) return '';
+    if (total === 1) {
+        return 'Outro fluxo de menu interativo da mesma conta foi desativado automaticamente.';
+    }
+    return `${total} outros fluxos de menu interativo da mesma conta foram desativados automaticamente.`;
+}
+
+function resolveFlowSummaryBuilderMode(flow?: FlowSummary | null): FlowBuilderMode {
+    if (flow && typeof flow === 'object') {
+        const rawExplicitMode = String(flow.flow_builder_mode || flow.flowBuilderMode || '').trim();
+        if (rawExplicitMode) {
+            return normalizeFlowBuilderMode(rawExplicitMode);
+        }
+    }
+
+    const flowNodes = Array.isArray(flow?.nodes) ? flow.nodes : [];
+    return inferFlowBuilderModeFromNodes(flowNodes);
+}
+
 function getCurrentFlowBuilderMode() {
     return normalizeFlowBuilderMode(currentFlowBuilderMode);
 }
@@ -812,7 +844,7 @@ function getIntentMenuButtonUrl(node?: FlowNode | null) {
 
 function isProtectedFlowBoundaryNode(node?: FlowNode | null) {
     if (!node) return false;
-    return node.type === 'trigger' || node.type === 'end';
+    return node.type === 'trigger';
 }
 
 function clearOutputEntryLabelsForNode(node?: FlowNode | null) {
@@ -871,6 +903,28 @@ function parsePhraseList(value: string) {
         .split(',')
         .map((item) => item.trim())
         .filter(Boolean);
+}
+
+function parseEndOptionList(value: string) {
+    return String(value || '')
+        .split(/[\n,;|]+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, END_NODE_MAX_CUSTOM_OPTIONS);
+}
+
+function coerceEndOptionListForEditor(value: unknown) {
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => String(item ?? '').trim())
+            .filter(Boolean)
+            .slice(0, END_NODE_MAX_CUSTOM_OPTIONS);
+    }
+    return parseEndOptionList(String(value || ''));
+}
+
+function getEndNodeCustomOptions(node?: FlowNode | null) {
+    return coerceEndOptionListForEditor((node?.data as any)?.endOptions || []);
 }
 
 function coerceIntentMessageListForEditor(value: unknown, fallbackValue: unknown = '') {
@@ -1006,7 +1060,15 @@ function getIncomingEdgeLabels(node: FlowNode, targetHandle: string) {
 }
 
 function getInputHandles(node: FlowNode) {
-    if (node.type === 'trigger') return [];
+    if (node.type === 'trigger') {
+        return [{
+            handle: DEFAULT_HANDLE,
+            label: '',
+            isConnected: true,
+            isExtra: false,
+            incomingLabels: getIncomingEdgeLabels(node, DEFAULT_HANDLE)
+        }];
+    }
     if (node.type === 'intent' || node.type === 'end') {
         return [{
             handle: DEFAULT_HANDLE,
@@ -1056,7 +1118,12 @@ function getPassThroughOutputHandles(node: FlowNode) {
 }
 
 function getOutputHandles(node: FlowNode) {
-    if (node.type === 'end') return [];
+    if (node.type === 'end') {
+        return getEndNodeCustomOptions(node).map((option, index) => ({
+            handle: pathHandleFromIndex(index + 1),
+            label: option || `Opção ${index + 1}`
+        }));
+    }
 
     if (isPathPassThroughNode(node)) {
         return getPassThroughOutputHandles(node);
@@ -1492,7 +1559,7 @@ function getFlowWhatsappSessionStatusLabel(session?: FlowWhatsappSessionOption |
 function getFlowSessionScopeLabel(sessionId?: string | null, options: { includeStatus?: boolean } = {}) {
     const normalizedSessionId = normalizeFlowSessionId(sessionId);
     if (!normalizedSessionId) {
-        return 'Todas as contas WhatsApp';
+        return 'Conta não definida';
     }
 
     const session = flowWhatsappSessionsCache.find((item) => normalizeFlowSessionId(item.session_id) === normalizedSessionId);
@@ -1517,16 +1584,20 @@ function getFlowSessionScopeOptionLabel(session: FlowWhatsappSessionOption) {
         : `${name} - ${sessionId} - ${status}`;
 }
 
-function buildFlowSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
-    const options = [...flowWhatsappSessionsCache]
+function getAvailableFlowSessionOptions() {
+    return [...flowWhatsappSessionsCache]
         .filter((item) => normalizeFlowSessionId(item.session_id))
         .sort((a, b) => getFlowWhatsappSessionDisplayName(a).localeCompare(getFlowWhatsappSessionDisplayName(b), 'pt-BR'));
+}
+
+function buildFlowSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
+    const options = getAvailableFlowSessionOptions();
     const knownIds = new Set(options.map((item) => normalizeFlowSessionId(item.session_id)));
     const normalizedSelectedSessionId = normalizeFlowSessionId(selectedSessionId);
-    const isAllSessionsSelected = !normalizedSelectedSessionId;
+    const hasSelectedSession = Boolean(normalizedSelectedSessionId);
 
     const entries = [
-        `<option value="${FLOW_ALL_SESSIONS_VALUE}"${isAllSessionsSelected ? ' selected' : ''}>Todas as contas WhatsApp</option>`,
+        `<option value="${FLOW_ALL_SESSIONS_VALUE}"${!hasSelectedSession ? ' selected' : ''}>Escolha uma conta WhatsApp</option>`,
         ...options.map((item) => {
             const sessionId = normalizeFlowSessionId(item.session_id);
             return `<option value="${escapeHtml(sessionId)}"${sessionId === normalizedSelectedSessionId ? ' selected' : ''}>${escapeHtml(getFlowSessionScopeOptionLabel(item))}</option>`;
@@ -1538,6 +1609,91 @@ function buildFlowSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
     }
 
     return entries.join('');
+}
+
+function buildFlowListSessionScopeOptionsMarkup(selectedSessionId?: string | null) {
+    const options = getAvailableFlowSessionOptions();
+    const normalizedSelectedSessionId = normalizeFlowSessionId(selectedSessionId);
+    const knownIds = new Set(options.map((item) => normalizeFlowSessionId(item.session_id)));
+
+    if (options.length === 0) {
+        return `<option value="${FLOW_ALL_SESSIONS_VALUE}" selected>Nenhuma conta WhatsApp encontrada</option>`;
+    }
+
+    const entries = [
+        `<option value="${FLOW_ALL_SESSIONS_VALUE}"${!normalizedSelectedSessionId ? ' selected' : ''}>Escolha uma conta WhatsApp</option>`,
+        ...options.map((item) => {
+            const sessionId = normalizeFlowSessionId(item.session_id);
+            return `<option value="${escapeHtml(sessionId)}"${sessionId === normalizedSelectedSessionId ? ' selected' : ''}>${escapeHtml(getFlowSessionScopeOptionLabel(item))}</option>`;
+        })
+    ];
+
+    if (normalizedSelectedSessionId && !knownIds.has(normalizedSelectedSessionId)) {
+        entries.push(`<option value="${escapeHtml(normalizedSelectedSessionId)}" selected>Conta indisponível (${escapeHtml(normalizedSelectedSessionId)})</option>`);
+    }
+
+    return entries.join('');
+}
+
+function renderFlowsListSessionSelectionGate(message?: string) {
+    const container = document.getElementById('flowsList') as HTMLElement | null;
+    if (!container) return;
+
+    const fallbackMessage = flowWhatsappSessionsCache.length > 0
+        ? 'Selecione uma conta WhatsApp para visualizar os fluxos desta conta.'
+        : 'Nenhuma conta WhatsApp disponível. Conecte uma conta para continuar.';
+    const nextMessage = String(message || fallbackMessage).trim();
+    container.innerHTML = `<p class="flow-list-empty flow-list-empty-hint">${escapeHtml(nextMessage)}</p>`;
+}
+
+function renderFlowListSessionScopeControls() {
+    const select = document.getElementById('flowListSessionScope') as HTMLSelectElement | null;
+    const modeFilterWrap = document.getElementById('flowListModeFilterWrap') as HTMLElement | null;
+    const modeSelect = document.getElementById('flowListModeFilter') as HTMLSelectElement | null;
+    const createBtn = document.getElementById('flowSelectorCreateBtn') as HTMLButtonElement | null;
+    const options = getAvailableFlowSessionOptions();
+    const currentSelection = normalizeFlowSessionId(flowsListRequiredSessionId);
+    const hasCurrentSelection = options.some((item) => normalizeFlowSessionId(item.session_id) === currentSelection);
+
+    if (currentSelection && !hasCurrentSelection) {
+        flowsListRequiredSessionId = '';
+        pendingFlowListSessionScopes = {};
+        flowsCache = [];
+    }
+
+    let resolvedSessionId = normalizeFlowSessionId(flowsListRequiredSessionId);
+    if (select) {
+        select.innerHTML = buildFlowListSessionScopeOptionsMarkup(flowsListRequiredSessionId);
+        const nextValue = normalizeFlowSessionId(flowsListRequiredSessionId) || FLOW_ALL_SESSIONS_VALUE;
+        if (Array.from(select.options).some((option) => option.value === nextValue)) {
+            select.value = nextValue;
+        }
+        select.disabled = options.length === 0;
+        const selectedValue = normalizeFlowSessionId(select.value);
+        if (selectedValue !== normalizeFlowSessionId(flowsListRequiredSessionId)) {
+            flowsListRequiredSessionId = selectedValue;
+        }
+        resolvedSessionId = normalizeFlowSessionId(flowsListRequiredSessionId);
+    }
+
+    const hasSelectedSession = Boolean(resolvedSessionId);
+    if (modeFilterWrap) {
+        modeFilterWrap.toggleAttribute('hidden', !hasSelectedSession);
+    }
+
+    if (modeSelect) {
+        modeSelect.value = normalizeFlowBuilderMode(flowsListModeFilter);
+        modeSelect.disabled = !hasSelectedSession;
+    }
+
+    if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.classList.toggle('is-disabled', !hasSelectedSession);
+        createBtn.setAttribute('aria-disabled', String(!hasSelectedSession));
+        createBtn.title = hasSelectedSession
+            ? 'Criar fluxo para a conta WhatsApp selecionada'
+            : 'Selecione uma conta WhatsApp para criar fluxo';
+    }
 }
 
 function renderFlowSessionScopeControls() {
@@ -1574,7 +1730,10 @@ async function loadFlowWhatsappSessions(options: { silent?: boolean } = {}) {
                 .map((item) => normalizeFlowWhatsappSessionOption(item))
                 .filter((item): item is FlowWhatsappSessionOption => Boolean(item));
             renderFlowSessionScopeControls();
-            if (flowsCache.length > 0) {
+            renderFlowListSessionScopeControls();
+            if (!normalizeFlowSessionId(flowsListRequiredSessionId)) {
+                renderFlowsListSessionSelectionGate();
+            } else if (flowsCache.length > 0) {
                 renderFlowsList(flowsCache);
             }
             return;
@@ -1584,10 +1743,12 @@ async function loadFlowWhatsappSessions(options: { silent?: boolean } = {}) {
     }
 
     flowWhatsappSessionsCache = [];
+    flowsListRequiredSessionId = '';
+    flowsCache = [];
+    pendingFlowListSessionScopes = {};
     renderFlowSessionScopeControls();
-    if (flowsCache.length > 0) {
-        renderFlowsList(flowsCache);
-    }
+    renderFlowListSessionScopeControls();
+    renderFlowsListSessionSelectionGate();
     if (!options.silent) {
         notify('warning', 'Fluxos', 'Não foi possível carregar as contas WhatsApp.');
     }
@@ -2036,14 +2197,20 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
         status: { label: 'Alterar Status', collapsed: false, status: 2 },
         webhook: { label: 'Webhook', collapsed: false, url: '' },
         event: { label: 'Registrar Evento', collapsed: false, eventId: null, eventKey: '', eventName: '' },
-        end: { label: 'Fim', collapsed: false }
+        end: {
+            label: 'Fim',
+            collapsed: false,
+            content: '',
+            menuPrompt: 'Se desejar, escolha uma opcao no menu abaixo:',
+            menuButtonText: 'Ver Menu',
+            menuSectionTitle: 'Finalizacao',
+            endOptions: ['Voltar ao menu principal']
+        }
     };
     return defaults[type] || { label: type };
 }
 
 function getNodeOutputPortsMarkup(node: FlowNode) {
-    if (node.type === 'end') return '<div></div>';
-
     const handles = getOutputHandles(node);
     return `
         <div class="node-output-ports">
@@ -2076,7 +2243,6 @@ function getNodeOutputPortsMarkup(node: FlowNode) {
 }
 
 function getNodeInputPortsMarkup(node: FlowNode) {
-    if (node.type === 'trigger') return '<div></div>';
     const handles = getInputHandles(node);
 
     return `
@@ -2115,7 +2281,10 @@ function renderNode(node: FlowNode) {
     const isEventCircle = node.type === 'event';
     const previewText = String(getNodePreview(node) || '').trim();
     const hasPreview = previewText.length > 0;
-    const canDuplicateOrDelete = !isProtectedFlowBoundaryNode(node);
+    const isProtectedNode = isProtectedFlowBoundaryNode(node);
+    const endNodesCount = nodes.filter((item) => item.type === 'end').length;
+    const canDuplicate = !isProtectedNode && node.type !== 'end';
+    const canDelete = !isProtectedNode && (node.type !== 'end' || endNodesCount > 1);
     const showNodeKind = !isIntentTrigger(node);
     const eventDisplayName = node.type === 'event'
         ? String(node.data.eventName || node.data.eventKey || '').trim()
@@ -2151,10 +2320,12 @@ function renderNode(node: FlowNode) {
                 ${eventDisplayName ? `<span class="node-subtitle" title="${escapeHtml(eventDisplayName)}">${escapeHtml(truncateLabel(eventDisplayName, 22))}</span>` : ''}
             </div>
             <div class="node-header-actions">
-                ${canDuplicateOrDelete ? `
+                ${canDuplicate ? `
                     <button class="node-header-btn duplicate-btn" title="Duplicar bloco" aria-label="Duplicar bloco" onclick="duplicateNode('${node.id}', event)">
                         <span class="icon icon-templates icon-sm"></span>
                     </button>
+                ` : ''}
+                ${canDelete ? `
                     <button class="node-header-btn delete-btn" title="Excluir bloco" aria-label="Excluir bloco" onclick="deleteNode('${node.id}')">
                         <span class="icon icon-delete icon-sm"></span>
                     </button>
@@ -2908,6 +3079,14 @@ function deselectNode() {
 function deleteNode(id: string) {
     if (isFlowReadOnlyMode()) return;
     const node = nodes.find((item) => item.id === id);
+    if (!node) return;
+    if (node.type === 'end') {
+        const endNodesCount = nodes.filter((item) => item.type === 'end').length;
+        if (endNodesCount <= 1) {
+            notify('warning', 'Bloco obrigatório', 'Mantenha pelo menos um bloco de finalização no fluxo.');
+            return;
+        }
+    }
     if (isProtectedFlowBoundaryNode(node)) return;
     if (connectionStart?.nodeId === id) {
         cancelConnection();
@@ -2940,6 +3119,7 @@ function duplicateNode(id: string, event?: Event) {
 
     const sourceNode = nodes.find((node) => node.id === id);
     if (!sourceNode) return;
+    if (sourceNode.type === 'end') return;
     if (isProtectedFlowBoundaryNode(sourceNode)) return;
 
     const duplicate: FlowNode = {
@@ -3135,9 +3315,66 @@ function renderProperties() {
     `;
 
     if (selectedNode.type === 'end') {
+        const endMessage = String(getNodePropValue('content', selectedNode.data.content || ''));
+        const endMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Se desejar, escolha uma opcao no menu abaixo:'));
+        const endMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
+        const endMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Finalizacao'));
+        const endOptions = coerceEndOptionListForEditor(
+            getNodePropValue('endOptions', (selectedNode.data as any).endOptions || [])
+        );
+
         html += `
-            <div class="output-actions-empty">
-                Este bloco apenas finaliza o fluxo. Nenhuma configuração é necessária.
+            <div class="property-group">
+                <label>Mensagem de finalizacao</label>
+                <textarea oninput="updateNodeProperty('content', this.value)" placeholder="Obrigado pelo contato!">${escapeHtml(endMessage)}</textarea>
+            </div>
+            <div class="property-group">
+                <label>Mensagem das opcoes</label>
+                <textarea oninput="updateNodeProperty('menuPrompt', this.value)" placeholder="Se desejar, escolha uma opcao no menu abaixo:">${escapeHtml(endMenuPrompt)}</textarea>
+            </div>
+            <div class="property-group">
+                <label>Texto do botao</label>
+                <input type="text" value="${escapeHtml(endMenuButtonText)}" oninput="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
+            </div>
+            <div class="property-group">
+                <label>Titulo da secao de opcoes</label>
+                <input type="text" value="${escapeHtml(endMenuSectionTitle)}" oninput="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Finalizacao">
+            </div>
+            <div class="property-group">
+                <label>Opcoes finais</label>
+                <div class="intent-routes-editor">
+                    ${endOptions.map((option, index) => `
+                        <div class="intent-menu-option-row">
+                            <input
+                                class="intent-route-name-input"
+                                type="text"
+                                value="${escapeHtml(String(option || ''))}"
+                                title="${escapeHtml(String(option || '').trim() || ('Opcao ' + (index + 1)))}"
+                                placeholder="Ex.: Voltar ao menu principal"
+                                oninput="updateEndNodeOption(${index}, this.value)"
+                            >
+                            <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opcao" onclick="removeEndNodeOption(${index})">×</button>
+                        </div>
+                    `).join('')}
+                    <div class="intent-menu-option-row">
+                        <input
+                            class="intent-route-name-input"
+                            type="text"
+                            value="${escapeHtml(END_NODE_FIXED_OPTION_LABEL)}"
+                            readonly
+                            disabled
+                            title="Opcao fixa"
+                        >
+                        <span class="property-helper-text" style="margin:0; white-space:nowrap;">Fixa</span>
+                    </div>
+                    <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addEndNodeOption()">+ Adicionar opcao</button>
+                </div>
+                <small style="display:block; margin-top:6px; color:#7b8aa3;">A opcao "${END_NODE_FIXED_OPTION_LABEL}" sempre encerra o fluxo. As demais opcoes podem seguir para outros blocos.</small>
+            </div>
+            <div class="property-group">
+                <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
+                    Confirmar alteracoes
+                </button>
             </div>
         `;
         container.innerHTML = html;
@@ -3664,7 +3901,7 @@ function openOutputActionEditor(nodeId: string, encodedHandle: string, encodedLa
     event?.stopPropagation();
 
     const node = nodes.find((item) => item.id === nodeId);
-    if (!node || node.type === 'end') return;
+    if (!node) return;
 
     selectNode(nodeId);
     selectedOutputActionContext = {
@@ -3766,6 +4003,57 @@ function updateNodeProperty(key: keyof NodeData, value: any) {
     }
 
     renderWhatsappPreview();
+}
+
+function getEditableEndNodeOptionsDraft() {
+    if (!selectedNode || selectedNode.type !== 'end') return [];
+    return coerceEndOptionListForEditor(
+        getNodePropValue('endOptions', (selectedNode.data as any).endOptions || [])
+    );
+}
+
+function commitEndNodeOptionsDraft(options: string[]) {
+    updateNodeProperty('endOptions', coerceEndOptionListForEditor(options));
+}
+
+function addEndNodeOption() {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode || selectedNode.type !== 'end') return;
+
+    const options = getEditableEndNodeOptionsDraft();
+    if (options.length >= END_NODE_MAX_CUSTOM_OPTIONS) {
+        notify('warning', 'Limite atingido', `O bloco final aceita no máximo ${END_NODE_MAX_CUSTOM_OPTIONS} opções personalizadas.`);
+        return;
+    }
+
+    options.push(`Opcao ${options.length + 1}`);
+    commitEndNodeOptionsDraft(options);
+    renderProperties();
+}
+
+function updateEndNodeOption(index: number, value: string) {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode || selectedNode.type !== 'end') return;
+
+    const options = getEditableEndNodeOptionsDraft();
+    if (!options[index]) return;
+    options[index] = String(value || '');
+    commitEndNodeOptionsDraft(options);
+}
+
+function removeEndNodeOption(index: number) {
+    if (isFlowReadOnlyMode()) return;
+    if (!selectedNode || selectedNode.type !== 'end') return;
+
+    const options = getEditableEndNodeOptionsDraft();
+    if (!options[index]) return;
+    options.splice(index, 1);
+    commitEndNodeOptionsDraft(options);
+    renderProperties();
+}
+
+function updateEndNodeOptions(value: string) {
+    updateNodeProperty('endOptions', coerceEndOptionListForEditor(value));
 }
 
 function confirmNodePropertyChanges() {
@@ -3980,7 +4268,6 @@ function cleanupInvalidEdgesForNode(nodeId: string) {
         }
 
         if (edge.target === nodeId) {
-            if (node.type === 'trigger') return false;
             return validTargetHandles.has(edgeHandle(edge.targetHandle));
         }
 
@@ -4576,8 +4863,10 @@ function buildTriggerPayload(trigger?: FlowNode) {
     };
 }
 
-function normalizeLoadedFlowData() {
-    currentFlowBuilderMode = inferFlowBuilderModeFromNodes(nodes);
+function normalizeLoadedFlowData(options: { flowBuilderMode?: FlowBuilderMode } = {}) {
+    currentFlowBuilderMode = options.flowBuilderMode
+        ? normalizeFlowBuilderMode(options.flowBuilderMode)
+        : inferFlowBuilderModeFromNodes(nodes);
 
     nodes = nodes.map((node) => {
         node.data.collapsed = false;
@@ -4621,6 +4910,14 @@ function normalizeLoadedFlowData() {
             node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Opções';
             node.data.menuTitle = String((node.data as any)?.menuTitle || '').trim();
             node.data.menuFooter = String((node.data as any)?.menuFooter || '').trim();
+        }
+
+        if (node.type === 'end') {
+            node.data.content = String((node.data as any)?.content || '').trim();
+            node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Se desejar, escolha uma opcao no menu abaixo:';
+            node.data.menuButtonText = String((node.data as any)?.menuButtonText || '').trim() || 'Ver Menu';
+            node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Finalizacao';
+            node.data.endOptions = coerceEndOptionListForEditor((node.data as any)?.endOptions);
         }
 
         if (node.type === 'event') {
@@ -4752,6 +5049,7 @@ async function saveFlow() {
         description: '',
         trigger_type: triggerPayload.triggerType,
         trigger_value: triggerPayload.triggerValue,
+        flow_builder_mode: getCurrentFlowBuilderMode(),
         session_id: currentFlowSessionId || null,
         nodes,
         edges,
@@ -4781,6 +5079,12 @@ async function saveFlow() {
             renderCurrentFlowName();
             setFlowDirtyState(false);
             notify('success', 'Sucesso', 'Fluxo salvo com sucesso!');
+            const exclusiveNotice = buildExclusiveMenuFlowNotice(
+                Array.isArray(result.meta?.deactivated_flow_ids) ? result.meta.deactivated_flow_ids.length : 0
+            );
+            if (exclusiveNotice) {
+                notify('info', 'Menu interativo exclusivo', exclusiveNotice);
+            }
         } else {
             await showFlowAlertDialog('Erro ao salvar: ' + result.error, 'Salvar fluxo');
         }
@@ -4791,19 +5095,33 @@ async function saveFlow() {
 
 // Carregar fluxos
 async function loadFlows() {
+    const selectedSessionId = normalizeFlowSessionId(flowsListRequiredSessionId);
+    if (!selectedSessionId) {
+        flowsCache = [];
+        pendingFlowListSessionScopes = {};
+        renderFlowsListSessionSelectionGate();
+        return;
+    }
+
+    const selectedMode = normalizeFlowBuilderMode(flowsListModeFilter);
+    const selectedModeLabel = getFlowBuilderModeLabel(selectedMode);
+    const sessionLabel = getFlowSessionScopeLabel(selectedSessionId);
     const container = document.getElementById('flowsList') as HTMLElement | null;
     if (container) {
-        container.innerHTML = '<p style="text-align: center; color: var(--gray);">Carregando fluxos...</p>';
+        container.innerHTML = `<p style="text-align: center; color: var(--gray);">Carregando fluxos ${escapeHtml(selectedModeLabel)} da conta ${escapeHtml(sessionLabel)}...</p>`;
     }
 
     try {
-        const response = await fetch(buildFlowApiUrl('/api/flows'), {
+        const query = new URLSearchParams({ session_id: selectedSessionId }).toString();
+        const response = await fetch(buildFlowApiUrl(`/api/flows?${query}`), {
             headers: buildAuthHeaders(false)
         });
         const result = await readFlowJsonResponse<any>(response, {});
 
         if (result.success) {
-            renderFlowsList(result.flows as FlowSummary[]);
+            const allFlows = Array.isArray(result.flows) ? (result.flows as FlowSummary[]) : [];
+            const filteredFlows = allFlows.filter((flow) => resolveFlowSummaryBuilderMode(flow) === selectedMode);
+            renderFlowsList(filteredFlows);
         } else {
             renderFlowsError(result.error || 'Não foi possível carregar os fluxos.');
         }
@@ -4873,9 +5191,11 @@ function renderFlowsList(flows: FlowSummary[]) {
     }
 
     if (flows.length === 0) {
+        const selectedModeLabel = getFlowBuilderModeLabel(flowsListModeFilter).toLowerCase();
+        const selectedSessionLabel = getFlowSessionScopeLabel(flowsListRequiredSessionId);
         container.innerHTML = mobileListMode
-            ? '<p class="flow-list-empty">Nenhum fluxo disponível no momento.</p>'
-            : '<p class="flow-list-empty">Nenhum fluxo criado ainda. Crie um novo para começar.</p>';
+            ? `<p class="flow-list-empty">Nenhum fluxo ${escapeHtml(selectedModeLabel)} disponível para ${escapeHtml(selectedSessionLabel)}.</p>`
+            : `<p class="flow-list-empty">Nenhum fluxo ${escapeHtml(selectedModeLabel)} criado para ${escapeHtml(selectedSessionLabel)} ainda. Crie um novo para começar.</p>`;
         return;
     }
 
@@ -4894,9 +5214,9 @@ function renderFlowsList(flows: FlowSummary[]) {
         const escapedFlowName = escapeHtml(flowName);
         const encodedName = encodeURIComponent(flowName);
         const inputValue = escapeHtml(renamingFlowDraft);
-        const selectedSessionId = getFlowListSessionScopeValue(flow);
-        const hasPendingSessionScopeChange = hasPendingFlowListSessionScopeChange(flow);
-        const sessionOptions = buildFlowSessionScopeOptionsMarkup(selectedSessionId);
+        const selectedSessionLabel = getFlowSessionScopeLabel(flowsListRequiredSessionId);
+        const flowMode = resolveFlowSummaryBuilderMode(flow);
+        const flowModeLabel = getFlowBuilderModeLabel(flowMode);
         const itemClasses = [
             'flow-list-item',
             isCurrent ? 'is-current' : '',
@@ -4938,7 +5258,7 @@ function renderFlowsList(flows: FlowSummary[]) {
                         </div>
                     `
                 }
-                <div class="meta">Gatilho: ${getTriggerLabel(flow.trigger_type)} | Conta: ${escapeHtml(getFlowListSessionScopeLabel(flow))} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
+                <div class="meta">Tipo: ${escapeHtml(flowModeLabel)} | Gatilho: ${getTriggerLabel(flow.trigger_type)} | Conta: ${escapeHtml(selectedSessionLabel)} | ${flow.nodes?.length || 0} blocos | ${isActive ? 'Ativo' : 'Inativo'}</div>
             </div>
             <div
                 class="flow-list-actions"
@@ -4947,28 +5267,6 @@ function renderFlowsList(flows: FlowSummary[]) {
                 onmouseup="event.stopPropagation()"
                 onpointerdown="event.stopPropagation()"
             >
-                <select
-                    class="flow-list-scope-select"
-                    title="Conta do fluxo"
-                    onclick="event.stopPropagation()"
-                    onmousedown="event.stopPropagation()"
-                    onmouseup="event.stopPropagation()"
-                    onpointerdown="event.stopPropagation()"
-                    onkeydown="event.stopPropagation()"
-                    oninput="updateFlowListSessionScope(${flow.id}, this.value, event)"
-                    onchange="updateFlowListSessionScope(${flow.id}, this.value, event)"
-                >
-                    ${sessionOptions}
-                </select>
-                ${hasPendingSessionScopeChange ? `
-                    <button
-                        class="flow-list-btn flow-list-scope-confirm is-pending"
-                        title="Confirmar conta selecionada"
-                        onclick="confirmFlowListSessionScope(${flow.id}, event)"
-                    >
-                        Confirmar
-                    </button>
-                ` : ''}
                 <button class="flow-list-btn flow-list-toggle ${isActive ? 'is-active' : 'is-inactive'}" title="${isActive ? 'Desativar fluxo' : 'Ativar fluxo'}" onclick="toggleFlowActivation(${flow.id}, event)">
                     ${isActive ? 'Desativar' : 'Ativar'}
                 </button>
@@ -5107,7 +5405,6 @@ async function editFlowFromList(id: number, currentName = '', event?: Event) {
         .filter((item) => normalizeFlowSessionId(item.session_id))
         .sort((a, b) => getFlowWhatsappSessionDisplayName(a).localeCompare(getFlowWhatsappSessionDisplayName(b), 'pt-BR'));
     const options: FlowDialogSelectOption[] = [
-        { value: FLOW_ALL_SESSIONS_VALUE, label: 'Todas as contas WhatsApp' },
         ...availableSessions.map((item) => {
             const sessionId = normalizeFlowSessionId(item.session_id);
             const status = String(item.connected ? 'Conectada' : (item.status || 'Desconectada')).trim();
@@ -5118,6 +5415,10 @@ async function editFlowFromList(id: number, currentName = '', event?: Event) {
             return { value: sessionId, label };
         })
     ];
+    if (options.length === 0) {
+        await showFlowAlertDialog('Nenhuma conta WhatsApp disponível para vincular o fluxo.', 'Editar fluxo');
+        return;
+    }
     const hasCurrentSession = options.some((option) => normalizeFlowSessionId(option.value) === currentSessionId);
     if (currentSessionId && !hasCurrentSession) {
         options.push({
@@ -5129,7 +5430,7 @@ async function editFlowFromList(id: number, currentName = '', event?: Event) {
     const editPayload = await showFlowPromptSelectDialog('Edite o nome do fluxo e escolha a conta WhatsApp:', {
         title: 'Editar fluxo',
         defaultValue: fallbackName,
-        defaultSelectValue: currentSessionId || FLOW_ALL_SESSIONS_VALUE,
+        defaultSelectValue: currentSessionId || String(options[0]?.value || ''),
         placeholder: 'Ex.: Captação de leads',
         selectOptions: options,
         confirmLabel: 'Salvar'
@@ -5143,6 +5444,10 @@ async function editFlowFromList(id: number, currentName = '', event?: Event) {
     }
 
     const nextSessionId = normalizeFlowSessionId(editPayload?.selectValue);
+    if (!nextSessionId) {
+        await showFlowAlertDialog('Selecione uma conta WhatsApp para o fluxo.', 'Editar fluxo');
+        return;
+    }
     if (nextName === fallbackName && nextSessionId === currentSessionId) return;
 
     try {
@@ -5151,7 +5456,7 @@ async function editFlowFromList(id: number, currentName = '', event?: Event) {
             headers: buildAuthHeaders(true),
             body: JSON.stringify({
                 name: nextName,
-                session_id: nextSessionId || null
+                session_id: nextSessionId
             })
         });
         const result = await readFlowJsonResponse<any>(response, {});
@@ -5210,6 +5515,13 @@ async function toggleFlowActivation(id: number, event?: Event) {
             return;
         }
 
+        const exclusiveNotice = buildExclusiveMenuFlowNotice(
+            Array.isArray(result.meta?.deactivated_flow_ids) ? result.meta.deactivated_flow_ids.length : 0
+        );
+        if (exclusiveNotice) {
+            notify('info', 'Menu interativo exclusivo', exclusiveNotice);
+        }
+
         if (currentFlowId === id) {
             setCurrentFlowActive(nextActive);
         }
@@ -5218,6 +5530,50 @@ async function toggleFlowActivation(id: number, event?: Event) {
     } catch (error) {
         await showFlowAlertDialog('Erro ao atualizar status: ' + (error instanceof Error ? error.message : 'Falha inesperada'), 'Status do fluxo');
     }
+}
+
+async function updateFlowListRequiredSessionFromSelect() {
+    const select = document.getElementById('flowListSessionScope') as HTMLSelectElement | null;
+    if (!select) return;
+
+    const nextSessionId = normalizeFlowSessionId(select.value);
+    if (nextSessionId === normalizeFlowSessionId(flowsListRequiredSessionId)) return;
+
+    flowsListRequiredSessionId = nextSessionId;
+    renamingFlowId = null;
+    renamingFlowDraft = '';
+    pendingFlowListSessionScopes = {};
+    flowsCache = [];
+    renderFlowListSessionScopeControls();
+
+    if (!flowsListRequiredSessionId) {
+        renderFlowsListSessionSelectionGate();
+        return;
+    }
+
+    await loadFlows();
+}
+
+async function updateFlowListModeFilterFromSelect() {
+    const select = document.getElementById('flowListModeFilter') as HTMLSelectElement | null;
+    if (!select) return;
+
+    const nextMode = normalizeFlowBuilderMode(select.value);
+    if (nextMode === normalizeFlowBuilderMode(flowsListModeFilter)) return;
+
+    flowsListModeFilter = nextMode;
+    renamingFlowId = null;
+    renamingFlowDraft = '';
+    pendingFlowListSessionScopes = {};
+    flowsCache = [];
+    renderFlowListSessionScopeControls();
+
+    if (!normalizeFlowSessionId(flowsListRequiredSessionId)) {
+        renderFlowsListSessionSelectionGate();
+        return;
+    }
+
+    await loadFlows();
 }
 
 function updateFlowListSessionScope(id: number, value: string, event?: Event) {
@@ -5307,7 +5663,7 @@ async function duplicateFlow(id: number, event?: Event) {
         const flow = result.flow || {};
         nodes = flow.nodes || [];
         edges = flow.edges || [];
-        normalizeLoadedFlowData();
+        normalizeLoadedFlowData({ flowBuilderMode: resolveFlowSummaryBuilderMode(flow) });
         currentFlowId = null;
         currentFlowName = `${flow.name || 'Fluxo'} (copia)`;
         setCurrentFlowSessionScope(flow?.session_id || '');
@@ -5384,7 +5740,7 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
             persistLastOpenFlowId(currentFlowId);
             nodes = result.flow.nodes || [];
             edges = result.flow.edges || [];
-            normalizeLoadedFlowData();
+            normalizeLoadedFlowData({ flowBuilderMode: resolveFlowSummaryBuilderMode(result.flow) });
             await loadCustomEventsCatalog({ silent: true });
             setCurrentFlowActive(result.flow?.is_active);
             renderCurrentFlowName();
@@ -5415,37 +5771,61 @@ async function loadFlow(id: number, options: LoadFlowOptions = {}): Promise<bool
 
 // Criar novo fluxo
 async function createNewFlow() {
-    const draft = await showFlowPromptSelectDialog('Escolha um nome e o formato do novo fluxo:', {
-        title: 'Novo fluxo',
-        defaultSelectValue: 'humanized',
-        placeholder: 'Ex.: Captacao de leads - Plano Premium',
-        confirmLabel: 'Criar fluxo',
-        selectOptions: [
-            { value: 'humanized', label: 'Humanizado' },
-            { value: 'menu', label: 'Menu interativo' }
-        ]
-    });
+    try {
+        const scopeSelect = document.getElementById('flowListSessionScope') as HTMLSelectElement | null;
+        const selectedSessionId = normalizeFlowSessionId(
+            flowsListRequiredSessionId || scopeSelect?.value || ''
+        );
+        if (selectedSessionId !== normalizeFlowSessionId(flowsListRequiredSessionId)) {
+            flowsListRequiredSessionId = selectedSessionId;
+            renderFlowListSessionScopeControls();
+        }
+        if (!selectedSessionId) {
+            await showFlowAlertDialog('Selecione uma conta WhatsApp para criar um novo fluxo.', 'Conta WhatsApp');
+            return;
+        }
 
-    if (draft === null) return;
+        const draft = await showFlowPromptSelectDialog('Escolha um nome e o formato do novo fluxo:', {
+            title: 'Novo fluxo',
+            defaultSelectValue: normalizeFlowBuilderMode(flowsListModeFilter),
+            placeholder: 'Ex.: Captacao de leads - Plano Premium',
+            confirmLabel: 'Criar fluxo',
+            selectOptions: [
+                { value: 'humanized', label: 'Humanizado' },
+                { value: 'menu', label: 'Menu interativo' }
+            ]
+        });
 
-    const nextName = String(draft.inputValue || '').trim();
-    const nextFlowBuilderMode = normalizeFlowBuilderMode(draft.selectValue || 'humanized');
-    if (!nextName) {
-        await showFlowAlertDialog('Informe um nome para criar o novo fluxo.', 'Novo fluxo');
-        return;
+        if (draft === null) return;
+
+        const nextName = String(draft.inputValue || '').trim();
+        const nextFlowBuilderMode = normalizeFlowBuilderMode(draft.selectValue || 'humanized');
+        if (!nextName) {
+            await showFlowAlertDialog('Informe um nome para criar o novo fluxo.', 'Novo fluxo');
+            return;
+        }
+
+        resetEditorState();
+        closeFlowsModal({ force: true });
+        persistLastOpenFlowId(null);
+        currentFlowName = nextName;
+        setCurrentFlowSessionScope(selectedSessionId);
+        currentFlowBuilderMode = nextFlowBuilderMode;
+        flowsListModeFilter = nextFlowBuilderMode;
+        renderFlowListSessionScopeControls();
+        renderCurrentFlowName();
+        initializeDefaultIntentFlowSkeleton({
+            selectTrigger: true,
+            markDirty: true,
+            flowBuilderMode: nextFlowBuilderMode
+        });
+    } catch (error) {
+        console.error('[flow-builder] createNewFlow failed', error);
+        await showFlowAlertDialog(
+            'Não foi possível iniciar a criação do fluxo. Tente atualizar a tela e tentar novamente.',
+            'Novo fluxo'
+        );
     }
-
-    resetEditorState();
-    closeFlowsModal({ force: true });
-    persistLastOpenFlowId(null);
-    currentFlowName = nextName;
-    currentFlowBuilderMode = nextFlowBuilderMode;
-    renderCurrentFlowName();
-    initializeDefaultIntentFlowSkeleton({
-        selectTrigger: true,
-        markDirty: true,
-        flowBuilderMode: nextFlowBuilderMode
-    });
 }
 
 function applyAiDraftToEditor(draft: AiGeneratedFlowDraft) {
@@ -5554,13 +5934,23 @@ function openFlowsModal() {
     renamingFlowId = null;
     renamingFlowDraft = '';
     pendingFlowListSessionScopes = {};
-    void loadFlowWhatsappSessions({ silent: true });
-    loadFlows();
+    renderFlowListSessionScopeControls();
+    if (normalizeFlowSessionId(flowsListRequiredSessionId)) {
+        void loadFlows();
+    } else {
+        renderFlowsListSessionSelectionGate();
+    }
+    void (async () => {
+        await loadFlowWhatsappSessions({ silent: true });
+        if (normalizeFlowSessionId(flowsListRequiredSessionId)) {
+            await loadFlows();
+        }
+    })();
     const screenTitle = document.getElementById('flowsScreenTitle') as HTMLElement | null;
     if (screenTitle) {
         screenTitle.textContent = currentFlowId
-            ? 'Selecione um Fluxo'
-            : 'Selecione um Fluxo para começar';
+            ? 'Escolha uma conta WhatsApp para listar os fluxos'
+            : 'Escolha uma conta WhatsApp para começar';
     }
     setFlowBuilderScreen('selector');
 }
@@ -5572,9 +5962,21 @@ function closeFlowsModal(options: { force?: boolean } = {}) {
     setFlowBuilderScreen('builder');
 }
 
+function resetFlowSelectorScopeState() {
+    flowsListRequiredSessionId = '';
+    flowsListModeFilter = 'humanized';
+    flowsCache = [];
+    pendingFlowListSessionScopes = {};
+    renamingFlowId = null;
+    renamingFlowDraft = '';
+    renderFlowListSessionScopeControls();
+    renderFlowsListSessionSelectionGate();
+}
+
 const windowAny = window as Window & {
     initFlowBuilder?: () => void;
     openFlowsModal?: () => void;
+    resetFlowSelectorScopeState?: () => void;
     createNewFlow?: () => Promise<void>;
     addIntentBlock?: () => void;
     clearCanvas?: () => void;
@@ -5592,6 +5994,10 @@ const windowAny = window as Window & {
     resetZoom?: () => void;
     insertVariable?: (variable: string) => void;
     updateNodeProperty?: (key: keyof NodeData, value: any) => void;
+    updateEndNodeOptions?: (value: string) => void;
+    addEndNodeOption?: () => void;
+    updateEndNodeOption?: (index: number, value: string) => void;
+    removeEndNodeOption?: (index: number) => void;
     confirmNodePropertyChanges?: () => void;
     updateEventNodeSelection?: (value: string) => void;
     openOutputActionEditor?: (nodeId: string, encodedHandle: string, encodedLabel?: string, event?: Event) => void;
@@ -5628,6 +6034,8 @@ const windowAny = window as Window & {
     saveFlowRenameInline?: (id: number, event?: Event) => Promise<void>;
     editFlowFromList?: (id: number, currentName?: string, event?: Event) => Promise<void>;
     toggleFlowActivation?: (id: number, event?: Event) => Promise<void>;
+    updateFlowListRequiredSessionFromSelect?: () => Promise<void>;
+    updateFlowListModeFilterFromSelect?: () => Promise<void>;
     updateFlowListSessionScope?: (id: number, value: string, event?: Event) => void;
     confirmFlowListSessionScope?: (id: number, event?: Event) => Promise<void>;
     duplicateFlow?: (id: number, event?: Event) => Promise<void>;
@@ -5636,6 +6044,7 @@ const windowAny = window as Window & {
 };
 windowAny.initFlowBuilder = initFlowBuilder;
 windowAny.openFlowsModal = openFlowsModal;
+windowAny.resetFlowSelectorScopeState = resetFlowSelectorScopeState;
 windowAny.createNewFlow = createNewFlow;
 windowAny.addIntentBlock = addIntentBlock;
 windowAny.clearCanvas = clearCanvas;
@@ -5653,6 +6062,10 @@ windowAny.zoomOut = zoomOut;
 windowAny.resetZoom = resetZoom;
 windowAny.insertVariable = insertVariable;
 windowAny.updateNodeProperty = updateNodeProperty;
+windowAny.updateEndNodeOptions = updateEndNodeOptions;
+windowAny.addEndNodeOption = addEndNodeOption;
+windowAny.updateEndNodeOption = updateEndNodeOption;
+windowAny.removeEndNodeOption = removeEndNodeOption;
 windowAny.confirmNodePropertyChanges = confirmNodePropertyChanges;
 windowAny.updateEventNodeSelection = updateEventNodeSelection;
 windowAny.openOutputActionEditor = openOutputActionEditor;
@@ -5689,6 +6102,8 @@ windowAny.handleRenameFlowKeydown = handleRenameFlowKeydown;
 windowAny.saveFlowRenameInline = saveFlowRenameInline;
 windowAny.editFlowFromList = editFlowFromList;
 windowAny.toggleFlowActivation = toggleFlowActivation;
+windowAny.updateFlowListRequiredSessionFromSelect = updateFlowListRequiredSessionFromSelect;
+windowAny.updateFlowListModeFilterFromSelect = updateFlowListModeFilterFromSelect;
 windowAny.updateFlowListSessionScope = updateFlowListSessionScope;
 windowAny.confirmFlowListSessionScope = confirmFlowListSessionScope;
 windowAny.duplicateFlow = duplicateFlow;

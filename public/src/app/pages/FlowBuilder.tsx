@@ -5,6 +5,7 @@ import { brandLogoUrl, brandName } from '../lib/brand';
 type FlowBuilderGlobals = {
   initFlowBuilder?: () => void;
   openFlowsModal?: () => void;
+  resetFlowSelectorScopeState?: () => void;
   createNewFlow?: () => Promise<void>;
   addIntentBlock?: () => void;
   clearCanvas?: () => void;
@@ -18,6 +19,8 @@ type FlowBuilderGlobals = {
   toggleFlowActive?: () => void;
   updateFlowStatusFromSelect?: () => void;
   reloadFlowSessionOptions?: () => void;
+  updateFlowListRequiredSessionFromSelect?: () => void | Promise<void>;
+  updateFlowListModeFilterFromSelect?: () => void | Promise<void>;
   zoomIn?: () => void;
   zoomOut?: () => void;
   resetZoom?: () => void;
@@ -48,6 +51,8 @@ export default function FlowBuilder() {
 
     return () => {
       cancelled = true;
+      const win = window as Window & FlowBuilderGlobals;
+      win.resetFlowSelectorScopeState?.();
     };
   }, []);
 
@@ -151,6 +156,10 @@ export default function FlowBuilder() {
         }
 
         .flow-builder-react #flowBuilderBackBtn[hidden] {
+            display: none !important;
+        }
+
+        .flow-builder-react #flowListModeFilterWrap[hidden] {
             display: none !important;
         }
 
@@ -769,6 +778,10 @@ export default function FlowBuilder() {
 
         .flow-side-panel {
             position: relative;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 0;
             min-width: 0;
         }
         
@@ -1344,43 +1357,53 @@ export default function FlowBuilder() {
             border-left: 1px solid var(--border);
             padding: 18px;
             overflow-y: auto;
+            flex: 1 1 auto;
+            min-height: 0;
             min-width: 0;
             height: 100%;
         }
 
         .flow-preview-toggle {
             position: absolute;
-            top: 26px;
-            right: -14px;
+            top: 22px;
+            right: 10px;
             z-index: 6;
-            width: 28px;
-            height: 44px;
-            border: 1px solid rgba(148, 163, 184, 0.3);
+            width: 36px;
+            height: 54px;
+            border: 1px solid rgba(148, 163, 184, 0.6);
             border-radius: 999px;
-            background: rgba(15, 23, 42, 0.86);
-            color: #d7e2f0;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.96));
+            color: #f8fbff;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
+            box-shadow:
+                0 0 0 1px rgba(255, 255, 255, 0.1),
+                0 12px 24px rgba(15, 23, 42, 0.34),
+                0 0 20px rgba(var(--primary-rgb), 0.26);
             transition: all 0.2s ease;
         }
 
         .flow-preview-toggle:hover {
-            border-color: rgba(var(--primary-rgb), 0.5);
-            background: rgba(8, 19, 34, 0.95);
+            border-color: rgba(var(--primary-rgb), 0.7);
+            background: linear-gradient(180deg, rgba(8, 19, 34, 0.98), rgba(13, 28, 49, 0.98));
             color: #f8fffb;
+            transform: translateX(1px);
         }
 
         .flow-preview-toggle.is-open {
-            background: rgba(var(--primary-rgb), 0.15);
-            border-color: rgba(var(--primary-rgb), 0.4);
-            color: #0f5132;
+            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.24), rgba(var(--primary-rgb), 0.16));
+            border-color: rgba(var(--primary-rgb), 0.76);
+            color: #082316;
+            box-shadow:
+                0 0 0 1px rgba(var(--primary-rgb), 0.34),
+                0 12px 24px rgba(7, 35, 24, 0.34),
+                0 0 24px rgba(var(--primary-rgb), 0.36);
         }
 
         .flow-preview-toggle-label {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 700;
             line-height: 1;
             margin-top: -1px;
@@ -2567,8 +2590,17 @@ export default function FlowBuilder() {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
+            gap: 16px;
             padding: 20px;
             border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .flow-selector-header-main {
+            min-width: 0;
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
         }
 
         .flow-selector-header .table-title {
@@ -2578,11 +2610,73 @@ export default function FlowBuilder() {
         }
 
         .flow-selector-header-copy {
-            max-width: 520px;
+            max-width: none;
             font-size: 13px;
             line-height: 1.5;
             color: #9fb0c8;
-            text-align: right;
+            text-align: left;
+        }
+
+        .flow-selector-filters {
+            min-width: 320px;
+            max-width: 460px;
+            flex: 0 1 420px;
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .flow-selector-filter {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .flow-selector-filter-account {
+            min-width: 260px;
+            max-width: 420px;
+            flex: 1 1 360px;
+        }
+
+        .flow-selector-body-top {
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .flow-selector-filter-mode {
+            min-width: 170px;
+            max-width: 220px;
+            flex: 0 0 220px;
+        }
+
+        .flow-selector-filter-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #9fb0c8;
+        }
+
+        .flow-selector-filter .flow-list-scope-select {
+            min-width: 0;
+            max-width: none;
+            width: 100%;
+            height: 36px;
+        }
+
+        .flow-selector-create-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .flow-selector-create-btn.is-disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            box-shadow: none;
         }
 
         .flow-selector-body {
@@ -3099,6 +3193,10 @@ export default function FlowBuilder() {
             border-radius: 12px;
             padding: 18px 14px;
         }
+
+        .flow-list-empty.flow-list-empty-hint {
+            padding: 28px 18px;
+        }
         
         @media (max-width: 1200px) {
             .flow-container {
@@ -3214,12 +3312,34 @@ export default function FlowBuilder() {
             }
             .flow-selector-header {
                 padding: 16px 14px;
+                gap: 10px;
+                flex-direction: column;
+            }
+            .flow-selector-header-main {
+                width: 100%;
             }
             .flow-selector-header-copy {
                 max-width: none;
                 width: 100%;
                 text-align: left;
                 font-size: 12px;
+            }
+            .flow-selector-filters {
+                width: 100%;
+                max-width: none;
+                min-width: 0;
+                justify-content: flex-start;
+            }
+            .flow-selector-filter {
+                width: 100%;
+                max-width: none;
+                min-width: 0;
+            }
+            .flow-selector-body-top {
+                margin-bottom: 10px;
+            }
+            .flow-selector-filter-mode {
+                flex: 1 1 auto;
             }
             .flow-selector-body {
                 padding: 12px;
@@ -3557,7 +3677,7 @@ export default function FlowBuilder() {
                               <span className="flow-name-highlight-status draft" id="currentFlowStatusDisplay">Não salvo</span>
                               <div className="flow-name-highlight-scope">
                                   <div className="flow-scope-label">Conta do fluxo</div>
-                                  <div className="flow-scope-value" id="currentFlowSessionScopeDisplay">Todas as contas WhatsApp</div>
+                                  <div className="flow-scope-value" id="currentFlowSessionScopeDisplay">Conta não definida</div>
                               </div>
                           </div>
                       </div>
@@ -3567,17 +3687,51 @@ export default function FlowBuilder() {
               <section className="flow-selector-screen" id="flowSelectorScreen">
                   <div className="flow-selector-card table-container">
                       <div className="flow-selector-header table-header">
-                          <div className="table-title">
-                              <span className="icon icon-flows icon-sm"></span>
-                              Lista de Fluxos
+                          <div className="flow-selector-header-main">
+                              <div className="table-title">
+                                  <span className="icon icon-flows icon-sm"></span>
+                                  Lista de Fluxos
+                              </div>
+                              <div className="flow-selector-header-copy" id="flowsScreenTitle">Escolha uma conta WhatsApp para começar</div>
                           </div>
-                          <div className="flow-selector-header-copy" id="flowsScreenTitle">Selecione um fluxo para começar</div>
+                          <div className="flow-selector-filters">
+                              <div className="flow-selector-filter flow-selector-filter-account">
+                                  <label htmlFor="flowListSessionScope" className="flow-selector-filter-label">Conta WhatsApp</label>
+                                  <select
+                                      id="flowListSessionScope"
+                                      className="flow-list-scope-select flow-list-scope-filter"
+                                      defaultValue=""
+                                      onChange={() => globals.updateFlowListRequiredSessionFromSelect?.()}
+                                  >
+                                      <option value="">Escolha uma conta WhatsApp</option>
+                                  </select>
+                              </div>
+                          </div>
                       </div>
                       <div className="flow-selector-body">
+                          <div className="flow-selector-body-top">
+                              <div className="flow-selector-filter flow-selector-filter-mode" id="flowListModeFilterWrap" hidden>
+                                  <label htmlFor="flowListModeFilter" className="flow-selector-filter-label">Tipo de fluxo</label>
+                                  <select
+                                      id="flowListModeFilter"
+                                      className="flow-list-scope-select flow-list-scope-filter"
+                                      defaultValue="humanized"
+                                      onChange={() => globals.updateFlowListModeFilterFromSelect?.()}
+                                  >
+                                      <option value="humanized">Humanizado</option>
+                                      <option value="menu">Menu interativo</option>
+                                  </select>
+                              </div>
+                          </div>
                           <div id="flowsList"></div>
                       </div>
                       <div className="flow-selector-footer card-footer">
-                          <button className="btn btn-primary flow-selector-create-btn" onClick={() => globals.createNewFlow?.()}>
+                          <button
+                              id="flowSelectorCreateBtn"
+                              className="btn btn-primary flow-selector-create-btn"
+                              type="button"
+                              onClick={() => globals.createNewFlow?.()}
+                          >
                               <span className="icon icon-add icon-sm"></span> Criar Novo Fluxo
                           </button>
                       </div>

@@ -1,4 +1,4 @@
-// WhatsApp page logic migrated to module
+﻿// WhatsApp page logic migrated to module
 
 declare const io:
     | undefined
@@ -13,6 +13,8 @@ declare const api:
     | undefined
     | {
           get: (endpoint: string) => Promise<any>;
+          post?: (endpoint: string, body?: any) => Promise<any>;
+          delete?: (endpoint: string) => Promise<any>;
       };
 
 type WhatsappSessionItem = {
@@ -39,7 +41,7 @@ type PlanStatusApiPayload = {
     };
 };
 
-// Configurações
+// ConfiguraÃ§Ãµes
 const CONFIG = {
     SOCKET_URL: window.location.origin,
     DEFAULT_SESSION_ID: 'default_whatsapp_session',
@@ -78,7 +80,7 @@ let whatsappPlanUsageState = {
     unlimited: true
 };
 
-function appConfirm(message: string, title = 'Confirmacao') {
+function appConfirm(message: string, title = 'Confirmação') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
     if (typeof win.showAppConfirm === 'function') {
         return win.showAppConfirm(message, title);
@@ -126,8 +128,21 @@ function renderWhatsappPlanUsage() {
     }
 
     const planName = String(whatsappPlanUsageState.planName || 'Plano').trim() || 'Plano';
+    const normalizedPlanToken = planName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    const planTone = normalizedPlanToken.includes('monster')
+        ? 'monster'
+        : normalizedPlanToken.includes('avancad') || normalizedPlanToken.includes('advanced')
+            ? 'advanced'
+            : normalizedPlanToken.includes('premium')
+                ? 'premium'
+                : normalizedPlanToken.includes('starter')
+                    ? 'starter'
+                    : 'default';
     const usageText = whatsappPlanUsageState.unlimited || whatsappPlanUsageState.max === null
-        ? `${numberFormatter.format(whatsappPlanUsageState.current)} conexões em uso • sem limite`
+        ? `${numberFormatter.format(whatsappPlanUsageState.current)} conexões em uso - sem limite`
         : `${numberFormatter.format(whatsappPlanUsageState.current)} de ${numberFormatter.format(whatsappPlanUsageState.max)} conexões em uso`;
     const remainingText = whatsappPlanUsageState.unlimited || whatsappPlanUsageState.max === null
         ? 'Você pode adicionar novas contas sem restrição de plano.'
@@ -136,8 +151,12 @@ function renderWhatsappPlanUsage() {
             : `Restam ${numberFormatter.format(Math.max(whatsappPlanUsageState.max - whatsappPlanUsageState.current, 0))} conexões disponíveis.`;
 
     container.innerHTML = `
-        <strong style="display: block; margin-bottom: 4px; color: var(--white);">${escapeHtml(planName)}</strong>
-        <span>${escapeHtml(usageText)}. ${escapeHtml(remainingText)}</span>
+        <div class="whatsapp-plan-panel whatsapp-plan-panel--${escapeHtml(planTone)}">
+            <span class="whatsapp-plan-label">Plano atual</span>
+            <strong class="whatsapp-plan-name">${escapeHtml(planName)}</strong>
+            <span class="whatsapp-plan-copy">${escapeHtml(usageText)}</span>
+            <span class="whatsapp-plan-hint">${escapeHtml(remainingText)}</span>
+        </div>
     `;
 }
 
@@ -148,15 +167,16 @@ function updateWhatsappPlanUsageCurrent(current: number) {
 
 async function loadWhatsappPlanUsage() {
     try {
-        if (!api?.get) throw new Error('API indisponivel');
+        if (!api?.get) throw new Error('API indisponível');
         const response = await api.get('/api/plan/status') as PlanStatusApiPayload;
         const metric = response?.plan?.limits?.whatsapp_sessions;
         const rawMax = metric?.max;
+        const hasFiniteMax = rawMax !== null && typeof rawMax !== 'undefined' && Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0;
         whatsappPlanUsageState = {
             loaded: true,
             planName: String(response?.plan?.name || 'Plano').trim() || 'Plano',
             current: Math.max(0, Number(metric?.current || whatsappPlanUsageState.current || 0) || 0),
-            max: Number.isInteger(Number(rawMax)) && Number(rawMax) >= 0 ? Math.floor(Number(rawMax)) : null,
+            max: hasFiniteMax ? Math.floor(Number(rawMax)) : null,
             unlimited: metric?.unlimited === true || rawMax === null || typeof rawMax === 'undefined'
         };
     } catch (_) {
@@ -165,7 +185,7 @@ async function loadWhatsappPlanUsage() {
     renderWhatsappPlanUsage();
 }
 
-// Inicialização
+// InicializaÃ§Ã£o
 function onReady(callback: () => void) {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', callback);
@@ -258,7 +278,7 @@ async function resolvePreferredDefaultSessionId() {
     const ownerUserId = getOwnerUserIdFromSessionToken();
     preferredDefaultSessionId = buildOwnerFallbackSessionId(ownerUserId, CONFIG.DEFAULT_SESSION_ID);
     try {
-        if (!api?.get) throw new Error('API indisponivel');
+        if (!api?.get) throw new Error('API indisponível');
         const response = await api.get('/api/settings');
         preferredDefaultSessionId = buildCompanyDefaultSessionId(response?.settings?.company_name, ownerUserId);
     } catch (_) {
@@ -402,7 +422,7 @@ function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
     if (!list) return;
 
     if (!Array.isArray(sessions) || sessions.length === 0) {
-        list.innerHTML = '<div class="whatsapp-session-list-empty">Nenhuma conta disponivel.</div>';
+        list.innerHTML = '<div class="whatsapp-session-list-empty">Nenhuma conta disponível.</div>';
         return;
     }
 
@@ -427,7 +447,7 @@ function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
                     <span class="whatsapp-session-list-name">${escapeHtml(displayName)}</span>
                     <span class="whatsapp-session-list-meta">
                         <span class="whatsapp-session-list-status ${statusClass}">${escapeHtml(statusLabel)}</span>
-                        <span class="whatsapp-session-list-arrow${isExpanded ? ' is-expanded' : ''}" aria-hidden="true">▾</span>
+                        <span class="whatsapp-session-list-arrow${isExpanded ? ' is-expanded' : ''}" aria-hidden="true">&#9662;</span>
                     </span>
                 </span>
                 <span class="whatsapp-session-list-detail">${escapeHtml(detail)}</span>
@@ -479,16 +499,6 @@ function renderSessionOptions() {
         });
     }
 
-    const defaultSessionId = getDefaultSessionId();
-    if (!seenSessionIds.has(defaultSessionId)) {
-        seenSessionIds.add(defaultSessionId);
-        uniqueSessions.push({
-            session_id: defaultSessionId,
-            status: 'disconnected',
-            connected: false
-        });
-    }
-
     uniqueSessions.sort((a, b) => {
         const byConnected = Number(isConnectedSession(b)) - Number(isConnectedSession(a));
         if (byConnected !== 0) return byConnected;
@@ -529,7 +539,7 @@ function renderSessionOptions() {
 async function loadSessionOptions(preferredSessionId?: string) {
     const fallbackSessionId = sanitizeSessionId(preferredSessionId, getCurrentSessionId());
     try {
-        if (!api?.get) throw new Error('API indisponivel');
+        if (!api?.get) throw new Error('API indisponível');
         const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
         availableSessions = Array.isArray(response?.sessions) ? response.sessions : [];
         updateWhatsappPlanUsageCurrent(availableSessions.length);
@@ -585,7 +595,7 @@ function resetConnectionUi() {
     if (qrTimerEl) qrTimerEl.style.display = 'none';
 
     if (shouldShowReconnectUiForSession(getCurrentSessionId())) {
-        showQRLoading('Aguardando conexao...');
+        showQRLoading('Aguardando conexão...');
     }
     syncConnectionSectionVisibility();
 }
@@ -623,7 +633,7 @@ async function createSessionPrompt() {
         .replace(/^-|-$/g, '');
 
     if (!normalized) {
-        showToast('warning', 'Identificador da conta invalido');
+        showToast('warning', 'Identificador da conta inválido');
         return;
     }
 
@@ -690,7 +700,7 @@ function initSocket() {
     if (sharedSocket && sharedSupportsPolling) {
         socket = sharedSocket;
     }
-    console.log('🔌 Conectando ao servidor:', CONFIG.SOCKET_URL);
+    console.log('ðŸ”Œ Conectando ao servidor:', CONFIG.SOCKET_URL);
 
     const token = sessionStorage.getItem('selfDashboardToken');
     const socketOptions: {
@@ -718,7 +728,7 @@ function initSocket() {
     }
     if (!socket) {
         if (!io) {
-            console.warn('Socket.IO nao carregado');
+            console.warn('Socket.IO não carregado');
             return;
         }
         socket = io(CONFIG.SOCKET_URL, socketOptions);
@@ -731,21 +741,21 @@ function initSocket() {
     socketBound = true;
 
     socket.on('connect', function() {
-        console.log('✅ Socket conectado');
+        console.log('âœ… Socket conectado');
         showToast('success', 'Conectado ao servidor');
         
-        // Verificar sessão existente
+        // Verificar sessÃ£o existente
         socket.emit('check-session', { sessionId: getCurrentSessionId() });
         void loadSessionOptions(getCurrentSessionId());
     });
     
     socket.on('disconnect', function() {
-        console.log('❌ Socket desconectado');
-        showToast('warning', 'Conexão com servidor perdida');
+        console.log('âŒ Socket desconectado');
+        showToast('warning', 'ConexÃ£o com servidor perdida');
     });
     
     socket.on('connect_error', function(error) {
-        console.error('❌ Erro de conexão:', error);
+        console.error('âŒ Erro de conexÃ£o:', error);
         showToast('error', 'Erro ao conectar com servidor');
         if (isConnecting) {
             resetPendingConnection('Falha ao conectar com servidor. Tente novamente.');
@@ -755,7 +765,7 @@ function initSocket() {
     // Eventos do WhatsApp
     socket.on('session-status', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
-        console.log('📱 Status da sessão:', data);
+        console.log('ðŸ“± Status da sessÃ£o:', data);
         const normalizedStatus = String(data?.status || '').trim().toLowerCase();
         if (normalizedStatus === 'connected') {
             handleConnected(data.user);
@@ -767,7 +777,7 @@ function initSocket() {
             updateStatus('connecting', normalizedStatus === 'reconnecting' ? 'Reconectando...' : 'Conectando...');
             updateConnectButton(true);
             if (!pairingCodeVisible) {
-                showQRLoading(normalizedStatus === 'reconnecting' ? 'Reconectando sessao...' : 'Gerando QR Code...');
+                showQRLoading(normalizedStatus === 'reconnecting' ? 'Reconectando sessão...' : 'Gerando QR Code...');
             }
             return;
         }
@@ -776,11 +786,11 @@ function initSocket() {
     
     socket.on('qr', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
-        console.log('📷 QR Code recebido');
+        console.log('ðŸ“· QR Code recebido');
         clearQrGenerationWatchdog();
         displayQRCode(data.qr);
         startQRTimer();
-        // Garantir que o botão de conectar suma e o timer apareça
+        // Garantir que o botÃ£o de conectar suma e o timer apareÃ§a
         const connectBtn = document.getElementById('connect-btn') as HTMLElement | null;
         const qrTimerEl = document.getElementById('qr-timer') as HTMLElement | null;
         if (connectBtn) connectBtn.style.display = 'none';
@@ -801,7 +811,7 @@ function initSocket() {
     
     socket.on('connecting', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
-        console.log('🔄 Conectando...');
+        console.log('ðŸ”„ Conectando...');
         updateStatus('connecting', 'Conectando...');
         showQRLoading('Conectando ao WhatsApp...');
     });
@@ -809,12 +819,12 @@ function initSocket() {
     socket.on('reconnecting', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
         updateStatus('connecting', 'Reconectando...');
-        showQRLoading('Reconectando sessao...');
+        showQRLoading('Reconectando sessão...');
     });
     
     socket.on('connected', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
-        console.log('✅ WhatsApp conectado:', data);
+        console.log('âœ… WhatsApp conectado:', data);
         clearQrGenerationWatchdog();
         void loadSessionOptions(getCurrentSessionId());
         handleConnected(data.user);
@@ -822,7 +832,7 @@ function initSocket() {
     
     socket.on('disconnected', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
-        console.log('❌ WhatsApp desconectado');
+        console.log('âŒ WhatsApp desconectado');
         clearQrGenerationWatchdog();
         void loadSessionOptions(getCurrentSessionId());
         handleDisconnected();
@@ -836,9 +846,9 @@ function initSocket() {
     });
     
     socket.on('error', function(data) {
-        console.error('❌ Erro:', data);
+        console.error('âŒ Erro:', data);
         clearQrGenerationWatchdog();
-        showToast('error', data.message || 'Erro na operação');
+        showToast('error', data.message || 'Erro na operaÃ§Ã£o');
         
         if (isConnecting) {
             isConnecting = false;
@@ -850,14 +860,14 @@ function initSocket() {
     
     socket.on('auth-failure', function(data) {
         if (!isPayloadForCurrentSession(data)) return;
-        console.error('❌ Falha na autenticação');
-        showToast('error', 'Falha na autenticação. Tente novamente.');
+        console.error('âŒ Falha na autenticaÃ§Ã£o');
+        showToast('error', 'Falha na autenticaÃ§Ã£o. Tente novamente.');
         handleDisconnected();
     });
     socket.emit('check-session', { sessionId: getCurrentSessionId() });
 }
 
-// Iniciar conexão
+// Iniciar conexÃ£o
 function startConnection() {
     if (isConnecting) return;
     const sessionId = syncCurrentSessionFromSelect();
@@ -868,7 +878,7 @@ function startConnection() {
     }
     const runtimeSocket = socket;
     if (!runtimeSocket) {
-        showToast('error', 'Conexao com servidor indisponivel. Recarregue a pagina.');
+        showToast('error', 'Conexão com o servidor indisponível. Recarregue a página.');
         return;
     }
     if (runtimeSocket.connected !== true && typeof runtimeSocket.connect === 'function') {
@@ -881,7 +891,7 @@ function startConnection() {
     hidePairingCode();
     showQRLoading('Gerando QR Code...');
     
-    console.log('🚀 Iniciando conexão...');
+    console.log('ðŸš€ Iniciando conexÃ£o...');
     runtimeSocket.emit('start-session', { sessionId, forceNewQr: true });
     clearQrGenerationWatchdog();
     qrGenerationWatchdog = window.setTimeout(() => {
@@ -905,7 +915,7 @@ function requestPairingCode() {
     }
     const runtimeSocket = socket;
     if (!runtimeSocket) {
-        showToast('error', 'Conexao com servidor indisponivel. Recarregue a pagina.');
+        showToast('error', 'Conexão com o servidor indisponível. Recarregue a página.');
         return;
     }
     if (runtimeSocket.connected !== true && typeof runtimeSocket.connect === 'function') {
@@ -935,25 +945,77 @@ function requestPairingCode() {
     });
 }
 
-// Desconectar
-async function disconnect() {
+// Desconectar sem remover a conta
+async function disconnectSession() {
     const sessionId = syncCurrentSessionFromSelect();
-    if (await appConfirm(`Tem certeza que deseja desconectar a conta ${sessionId}?`, 'Desconectar conta')) {
-        socket?.emit('logout', { sessionId });
-        handleDisconnected();
-        void loadSessionOptions(sessionId);
-        showToast('info', `Conta desconectada: ${sessionId}`);
+    if (!sessionId) {
+        showToast('warning', 'Nenhuma conta selecionada.');
+        return;
+    }
+
+    if (await appConfirm(`Tem certeza que deseja desconectar a conta ${sessionId}? Ela permanecera cadastrada para reconectar depois.`, 'Desconectar conta WhatsApp')) {
+        try {
+            if (typeof api?.post !== 'function') {
+                throw new Error('API indisponivel');
+            }
+
+            markReconnectUiRequested(sessionId);
+            await api.post('/api/whatsapp/disconnect', { sessionId });
+            handleDisconnected();
+            await loadSessionOptions(sessionId);
+            socket?.emit('check-session', { sessionId });
+            showToast('info', `Conta desconectada: ${sessionId}`);
+        } catch (error) {
+            unmarkReconnectUiRequested(sessionId);
+            const message = error instanceof Error ? error.message : 'Nao foi possivel desconectar a conta.';
+            showToast('error', message);
+        }
+    }
+}
+
+// Remover a conta
+async function removeSession() {
+    const sessionId = syncCurrentSessionFromSelect();
+    if (!sessionId) {
+        showToast('warning', 'Nenhuma conta selecionada.');
+        return;
+    }
+
+    if (await appConfirm(`Tem certeza de que deseja remover a conta ${sessionId}? Essa ação desconecta e exclui a sessão.`, 'Remover conta WhatsApp')) {
+        try {
+            if (typeof api?.delete !== 'function') {
+                throw new Error('API indisponível');
+            }
+
+            await api.delete(`/api/whatsapp/sessions/${encodeURIComponent(sessionId)}`);
+            unmarkReconnectUiRequested(sessionId);
+
+            const activeSessionId = sanitizeSessionId(localStorage.getItem('zapvender_active_whatsapp_session'));
+            if (activeSessionId === sessionId) {
+                localStorage.removeItem('zapvender_active_whatsapp_session');
+                currentSessionId = getDefaultSessionId();
+                syncGlobalAppSessionId(currentSessionId);
+            }
+
+            handleDisconnected();
+            await loadSessionOptions();
+            socket?.emit('check-session', { sessionId: getCurrentSessionId() });
+            showToast('success', `Conta removida: ${sessionId}`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Não foi possível remover a conta.';
+            showToast('error', message);
+        }
     }
 }
 
 // Exibir QR Code
 function displayQRCode(qrData: string) {
-    console.log('🖼️ Renderizando QR Code...');
+    console.log('ðŸ–¼ï¸ Renderizando QR Code...');
     clearQrGenerationWatchdog();
     const qrContainer = document.getElementById('qr-code') as HTMLElement | null;
     
     if (!qrData) {
-        console.error('❌ Dados do QR Code vazios');
+        console.error('âŒ Dados do QR Code vazios');
         return;
     }
     if (!qrContainer) return;
@@ -979,7 +1041,7 @@ function isIdleQrLoadingMessage(message: string) {
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
         .trim();
-    return normalized.startsWith('aguardando conexao');
+    return normalized.startsWith('aguardando conex');
 }
 
 // Mostrar loading do QR
@@ -1029,7 +1091,7 @@ function displayPairingCode(code: string, phoneNumber: string) {
     pairingValue.textContent = code || '-';
     pairingValue.title = 'Toque para copiar';
     if (pairingMeta) {
-        pairingMeta.textContent = phoneNumber ? `Numero: +${phoneNumber}` : '';
+        pairingMeta.textContent = phoneNumber ? `Número: +${phoneNumber}` : '';
     }
 
     if (pairingCodeHideTimer) clearTimeout(pairingCodeHideTimer);
@@ -1086,7 +1148,7 @@ function startQRTimer() {
     }, 1000);
 }
 
-// Handle conexão estabelecida
+// Handle conexÃ£o estabelecida
 function handleConnected(user: { name?: string; phone?: string } | undefined) {
     const wasConnected = isConnected;
     isConnected = true;
@@ -1101,7 +1163,7 @@ function handleConnected(user: { name?: string; phone?: string } | undefined) {
     updateStatus('connected', 'Conectado');
     syncConnectionSectionVisibility();
     
-    // Atualizar informações do usuário
+    // Atualizar informaÃ§Ãµes do usuÃ¡rio
     if (user) {
         const userName = document.getElementById('user-name') as HTMLElement | null;
         const userPhone = document.getElementById('user-phone') as HTMLElement | null;
@@ -1114,7 +1176,7 @@ function handleConnected(user: { name?: string; phone?: string } | undefined) {
     }
 }
 
-// Handle desconexão
+// Handle desconexÃ£o
 function handleDisconnected() {
     isConnected = false;
     isConnecting = false;
@@ -1133,7 +1195,7 @@ function handleDisconnected() {
     if (qrTimerEl) qrTimerEl.style.display = 'none';
 
     if (shouldShowReconnectUiForSession(getCurrentSessionId())) {
-        showQRLoading('Aguardando conexão...');
+        showQRLoading('Aguardando conexao...');
     }
     syncConnectionSectionVisibility();
 }
@@ -1144,7 +1206,7 @@ function updateStatus(status: 'connected' | 'disconnected' | 'connecting' | 'qr'
     document.body.setAttribute('data-whatsapp-connection-label', text);
 }
 
-// Atualizar botão de conexão
+// Atualizar botÃ£o de conexÃ£o
 function updateConnectButton(loading: boolean) {
     const btn = document.getElementById('connect-btn') as HTMLButtonElement | null;
     if (!btn) return;
@@ -1249,7 +1311,7 @@ async function copyPairingCode() {
         showToast('success', 'Codigo copiado');
         return;
     }
-    showToast('warning', 'Nao foi possivel copiar automaticamente');
+    showToast('warning', 'Não foi possível copiar automaticamente');
 }
 
 function bindPairingCodeCopy() {
@@ -1304,6 +1366,7 @@ const windowAny = window as Window & {
     startConnection?: () => void;
     requestPairingCode?: () => void;
     disconnect?: () => Promise<void>;
+    removeSession?: () => Promise<void>;
     changeSession?: (sessionId: string, options?: { revealReconnectUi?: boolean }) => void;
     createSessionPrompt?: () => void;
     toggleSidebar?: () => void;
@@ -1312,7 +1375,8 @@ const windowAny = window as Window & {
 windowAny.initWhatsapp = initWhatsapp;
 windowAny.startConnection = startConnection;
 windowAny.requestPairingCode = requestPairingCode;
-windowAny.disconnect = disconnect;
+windowAny.disconnect = disconnectSession;
+windowAny.removeSession = removeSession;
 windowAny.changeSession = changeSession;
 windowAny.createSessionPrompt = createSessionPrompt;
 windowAny.toggleSidebar = toggleSidebar;
