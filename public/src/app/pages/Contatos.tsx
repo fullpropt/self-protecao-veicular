@@ -75,6 +75,180 @@ export default function Contatos() {
   return (
     <div className="contatos-react">
       <style>{`
+        .contatos-react .page-title h1 {
+          color: #f5fbf8;
+          letter-spacing: -0.03em;
+        }
+        .contatos-react .page-title p {
+          color: rgba(214, 228, 239, 0.68);
+        }
+        .contatos-react .page-actions .btn {
+          min-height: 40px;
+        }
+        .contatos-react .stats-grid .stat-card {
+          position: relative;
+          overflow: hidden;
+          border-color: rgba(var(--primary-rgb), 0.16);
+          background: transparent !important;
+          box-shadow:
+            0 0 0 1px rgba(var(--primary-rgb), 0.08),
+            0 0 16px rgba(var(--primary-rgb), 0.08);
+        }
+        .contatos-react .stats-grid .stat-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.72) 0%, rgba(var(--primary-rgb), 0.24) 38%, rgba(255, 255, 255, 0.18) 100%);
+          opacity: 0.72;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
+        .contatos-react .stats-grid .stat-card:hover {
+          box-shadow:
+            0 0 0 1px rgba(var(--primary-rgb), 0.12),
+            0 0 18px rgba(var(--primary-rgb), 0.12);
+        }
+        .contatos-react .stats-grid .stat-icon {
+          position: relative;
+          width: 48px;
+          height: 48px;
+          border-radius: 15px;
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          background: rgba(255, 255, 255, 0.03);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 12px 24px rgba(1, 3, 7, 0.22);
+          color: rgba(235, 241, 245, 0.9);
+        }
+        .contatos-react .stats-grid .stat-icon::after {
+          content: '';
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 4px;
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(var(--primary-rgb), 0.42);
+          box-shadow: 0 0 10px rgba(var(--primary-rgb), 0.16);
+        }
+        .contatos-react .stats-grid .stat-icon .icon {
+          width: 20px;
+          height: 20px;
+        }
+        .contatos-react .stats-grid .stat-icon.primary,
+        .contatos-react .stats-grid .stat-icon.success,
+        .contatos-react .stats-grid .stat-icon.warning,
+        .contatos-react .stats-grid .stat-icon.info {
+          background: rgba(255, 255, 255, 0.03);
+          color: rgba(235, 241, 245, 0.9);
+        }
+        .contatos-react .stats-grid .stat-icon.primary::after,
+        .contatos-react .stats-grid .stat-icon.success::after {
+          background: rgba(var(--primary-rgb), 0.42);
+        }
+        .contatos-react .stats-grid .stat-icon.warning::after {
+          background: rgba(226, 232, 240, 0.3);
+        }
+        .contatos-react .stats-grid .stat-icon.info::after {
+          background: rgba(129, 140, 248, 0.24);
+        }
+        .contatos-react .stats-grid .stat-content,
+        .contatos-react .stats-grid .stat-icon {
+          position: relative;
+          z-index: 1;
+        }
+        .contatos-react .stats-grid .stat-value {
+          color: #f3fbff;
+          letter-spacing: -0.03em;
+        }
+        .contatos-react .stats-grid .stat-label {
+          color: rgba(214, 228, 239, 0.62);
+        }
+        .contatos-react #bulkActions,
+        .contatos-react .table-container {
+          position: relative;
+          overflow: hidden;
+          border-color: rgba(var(--primary-rgb), 0.18);
+          background: linear-gradient(180deg, rgba(18, 36, 58, 0.98) 0%, rgba(14, 29, 47, 0.98) 100%);
+          box-shadow:
+            0 22px 48px rgba(2, 8, 20, 0.24),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.12),
+            0 0 18px rgba(var(--primary-rgb), 0.06);
+        }
+        .contatos-react #bulkActions::before,
+        .contatos-react .table-container::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.05), transparent 22%);
+          pointer-events: none;
+        }
+        .contatos-react .table-header,
+        .contatos-react #bulkActions .card-body,
+        .contatos-react .table-wrapper,
+        .contatos-react .card-footer {
+          position: relative;
+          z-index: 1;
+        }
+        .contatos-react .table-header {
+          border-bottom-color: rgba(var(--primary-rgb), 0.18);
+        }
+        .contatos-react .table-title {
+          color: #f5fbf8;
+        }
+        .contatos-react .contacts-table-filters .search-box input,
+        .contatos-react .contacts-table-filters .form-select,
+        .contatos-react .contact-tag-filter-toggle {
+          border-color: rgba(var(--primary-rgb), 0.14);
+          background: rgba(16, 31, 51, 0.92);
+          color: #e6f1f8;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+        .contatos-react .contacts-table-filters .search-box input::placeholder {
+          color: rgba(214, 228, 239, 0.42);
+        }
+        .contatos-react .contacts-table-filters .search-icon,
+        .contatos-react .contact-tag-filter-toggle::after {
+          color: rgba(214, 228, 239, 0.42);
+        }
+        .contatos-react th {
+          background: rgba(7, 17, 29, 0.88);
+          color: rgba(214, 228, 239, 0.56);
+          border-bottom-color: rgba(var(--primary-rgb), 0.14);
+        }
+        .contatos-react td {
+          color: rgba(231, 243, 249, 0.9);
+          border-bottom-color: rgba(148, 163, 184, 0.12);
+        }
+        .contatos-react tr:hover td {
+          background: rgba(var(--primary-rgb), 0.08);
+        }
+        .contatos-react .contacts-main-name {
+          color: #f5fbf8;
+        }
+        .contatos-react .contacts-main-email,
+        .contatos-react .table-empty,
+        .contatos-react #paginationInfo,
+        .contatos-react #bulkActions span {
+          color: rgba(214, 228, 239, 0.64);
+        }
+        .contatos-react #selectedCount {
+          color: #f5fbf8;
+        }
+        .contatos-react .card-footer {
+          border-top-color: rgba(var(--primary-rgb), 0.14);
+          background: rgba(8, 19, 33, 0.62);
+        }
+        .contatos-react #bulkActions .card-body {
+          gap: 10px !important;
+        }
         @media (max-width: 640px) {
           .contatos-react .stats-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -373,12 +547,6 @@ export default function Contatos() {
             <button className="btn btn-primary" onClick={() => globals.openAddContactModal?.() || globals.openModal?.('addContactModal')}>
               <span className="icon icon-add icon-sm"></span> Novo Contato
             </button>
-          </div>
-        </div>
-
-        <div className="card mb-4" id="contactsPlanUsageCard">
-          <div className="card-body">
-            <p style={{ color: 'var(--gray-500)', margin: 0 }}>Carregando limite do plano...</p>
           </div>
         </div>
 
