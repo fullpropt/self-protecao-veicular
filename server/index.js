@@ -79,6 +79,7 @@ const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditServ
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
 const { createOpsMonitoringService } = require('./services/opsMonitoringService');
 const { createFlowMenuTextService } = require('./services/flowMenuTextService');
+const { createInboundMessagePipelineService } = require('./services/inboundMessagePipelineService');
 const stripeCheckoutService = require('./services/stripeCheckoutService');
 const pagarmeCheckoutService = require('./services/pagarmeCheckoutService');
 const planLimitsService = require('./services/planLimitsService');
@@ -6295,6 +6296,21 @@ const AUTOMATION_EVENT_TYPES = {
     SCHEDULE: 'schedule',
     INACTIVITY: 'inactivity'
 };
+const inboundMessagePipelineService = createInboundMessagePipelineService({
+    runInboundAutomationSerialized,
+    runWithConversationPostgresLock,
+    getBusinessHoursSettings,
+    isWithinBusinessHours,
+    shouldSendOutsideHoursAutoReply,
+    sendMessage,
+    markOutsideHoursAutoReplySent,
+    flowService,
+    scheduleAutomations,
+    automationEventTypes: AUTOMATION_EVENT_TYPES,
+    flowInboundTelemetryEnabled: FLOW_INBOUND_TELEMETRY_ENABLED,
+    flowInboundTelemetrySlowMs: FLOW_INBOUND_TELEMETRY_SLOW_MS,
+    logStructured
+});
 const DEFAULT_AUTOMATION_SESSION_ID = DEFAULT_WHATSAPP_SESSION_ID;
 const AUTOMATION_SCHEDULE_POLL_MS = 30000;
 const LEGACY_CAMPAIGN_TRIGGER_MODE = 'legacy_campaign_trigger';
@@ -10446,80 +10462,25 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         }
 
         if (!skipInboundAutomation) {
-            await runInboundAutomationSerialized(conversation.id, async () => {
-                await runWithConversationPostgresLock(conversation.id, async (lockContext = {}) => {
-                    inboundLockWaitMs += Math.max(0, Number(lockContext?.lockWaitMs || 0) || 0);
-                    const automationStartedAtMs = Date.now();
-                    console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
-
-                    const businessHoursSettings = await getBusinessHoursSettings(sessionOwnerUserId || null, false, sessionId);
-                    const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
-
-                    if (isOutsideBusinessHours && !isSelfChat) {
-                        outsideBusinessHoursBypass = true;
-                        const autoReplyText = String(businessHoursSettings.autoReplyMessage || '').trim();
-
-                        if (autoReplyText && shouldSendOutsideHoursAutoReply(conversation.id)) {
-                            try {
-                                await sendMessage(sessionId, phone, autoReplyText, 'text', {
-                                    conversationId: conversation.id
-                                });
-                                markOutsideHoursAutoReplySent(conversation.id);
-                            } catch (autoReplyError) {
-                                console.error(`[${sessionId}] Erro ao enviar resposta fora do horario:`, autoReplyError.message);
-                            }
-                        }
-
-                        return;
-                    }
-
-                    // Processar fluxo de automacao
-                    if (conversation.is_bot_active) {
-                        const flowStartedAtMs = Date.now();
-                        conversation.created = convCreated;
-
-                        await flowService.processIncomingMessage(
-                            {
-                                text,
-                                mediaType,
-                                selectionId: interactiveSelection?.id || '',
-                                selectionText: interactiveSelection?.text || ''
-                            },
-                            lead,
-                            conversation
-                        );
-                        flowProcessingDurationMs += Date.now() - flowStartedAtMs;
-                    }
-
-                    const automationsStartedAtMs = Date.now();
-                    await scheduleAutomations({
-                        event: AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED,
-                        sessionId,
-                        text,
-                        mediaType,
-                        lead,
-                        conversation,
-                        messageTimestampMs: Date.parse(messageTimestampIso) || Date.now(),
-                        leadCreated,
-                        conversationCreated: convCreated
-                    });
-                    automationsSchedulingDurationMs += Date.now() - automationsStartedAtMs;
-                    const automationTotalMs = Date.now() - automationStartedAtMs;
-                    if (!FLOW_INBOUND_TELEMETRY_ENABLED && automationTotalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
-                        logStructured(
-                            'warn',
-                            'flow.inbound.automation_slow',
-                            {
-                                sessionId,
-                                conversationId: Number(conversation.id || 0) || null,
-                                messageId: String(incomingMessageId || '').trim() || 'n/a',
-                                totalMs: automationTotalMs
-                            },
-                            'Automacao do inbound acima do limite de latencia'
-                        );
-                    }
-                });
+            const pipelineMetrics = await inboundMessagePipelineService.runInboundLeadAutomationStage({
+                sessionId,
+                incomingMessageId,
+                sessionOwnerUserId,
+                text,
+                mediaType,
+                interactiveSelection,
+                lead,
+                conversation,
+                convCreated,
+                phone,
+                isSelfChat,
+                messageTimestampIso,
+                leadCreated
             });
+            outsideBusinessHoursBypass = outsideBusinessHoursBypass || pipelineMetrics?.outsideBusinessHoursBypass === true;
+            flowProcessingDurationMs += Math.max(0, Number(pipelineMetrics?.flowProcessingDurationMs || 0) || 0);
+            automationsSchedulingDurationMs += Math.max(0, Number(pipelineMetrics?.automationsSchedulingDurationMs || 0) || 0);
+            inboundLockWaitMs += Math.max(0, Number(pipelineMetrics?.lockWaitMs || 0) || 0);
         }
     }
     } catch (error) {

@@ -75,7 +75,7 @@ Status do bloco: [x] Concluido
 ## P1 - Refatoracao incremental
 
 - [~] Quebra de `server/index.js` por dominio iniciada.
-  Evidencia: extraidos blocos de observabilidade/alertas para `server/services/opsMonitoringService.js` e de menu textual para `server/services/flowMenuTextService.js`, com `server/index.js` usando wrappers.
+  Evidencia: extraidos blocos de observabilidade/alertas para `server/services/opsMonitoringService.js`, de menu textual para `server/services/flowMenuTextService.js` e o pipeline de automacao inbound para `server/services/inboundMessagePipelineService.js`, com `server/index.js` usando wrappers.
 - [ ] Quebra de `server/database/models.js` por modulo de dominio.
 
 Evidencia atual:
