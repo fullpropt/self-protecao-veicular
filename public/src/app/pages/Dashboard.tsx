@@ -1,9 +1,11 @@
 ﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useRef } from 'react';
 import { brandLogoUrl, brandName } from '../lib/brand';
 
 type DashboardGlobals = {
   initDashboard?: () => void;
+  initOnboardingCard?: () => void;
   loadDashboardData?: () => void;
   loadCustomEvents?: (options?: { silent?: boolean }) => void;
   toggleOnboardingStep?: (stepId: string, checked?: boolean) => void;
@@ -981,6 +983,11 @@ function DashboardStyles() {
           align-items: center;
           gap: 8px;
         }
+        .onboarding-restore-wrap {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 14px;
+        }
         .onboarding-toggle-btn {
           width: 30px;
           height: 30px;
@@ -1000,7 +1007,50 @@ function DashboardStyles() {
           border-color: rgba(143, 255, 225, 0.42);
           background: rgba(0, 240, 255, 0.12);
         }
+        .onboarding-dismiss-btn,
+        .onboarding-restore-btn {
+          width: 30px;
+          height: 30px;
+          border: 1px solid rgba(0, 240, 255, 0.22);
+          border-radius: 999px;
+          background: rgba(4, 14, 29, 0.82);
+          color: rgba(231, 248, 242, 0.88);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          line-height: 1;
+          padding: 0;
+          transition:
+            background 0.18s ease,
+            border-color 0.18s ease,
+            box-shadow 0.18s ease,
+            color 0.18s ease;
+        }
+        .onboarding-dismiss-btn {
+          font-size: 16px;
+        }
+        .onboarding-restore-btn {
+          font-size: 17px;
+          box-shadow:
+            0 0 0 1px rgba(0, 240, 255, 0.04),
+            0 0 18px rgba(0, 240, 255, 0.08);
+        }
+        .onboarding-dismiss-btn:hover,
+        .onboarding-restore-btn:hover {
+          border-color: rgba(143, 255, 225, 0.42);
+          background: rgba(0, 240, 255, 0.12);
+          color: #f4fffd;
+          box-shadow:
+            0 0 0 1px rgba(0, 240, 255, 0.06),
+            0 0 20px rgba(0, 240, 255, 0.14);
+        }
         .onboarding-toggle-btn:focus-visible {
+          outline: 2px solid rgba(0, 240, 255, 0.34);
+          outline-offset: 2px;
+        }
+        .onboarding-dismiss-btn:focus-visible,
+        .onboarding-restore-btn:focus-visible {
           outline: 2px solid rgba(0, 240, 255, 0.34);
           outline-offset: 2px;
         }
@@ -1456,26 +1506,91 @@ function buildOnboardingCollapseStorageKey() {
   return `zapvender_dashboard_onboarding_collapsed_v1:token:${suffix}`;
 }
 
+function buildOnboardingDismissedStorageKey() {
+  const userId = String(sessionStorage.getItem('selfDashboardUserId') || '').trim();
+  if (userId) return `zapvender_dashboard_onboarding_dismissed_v1:user:${userId}`;
+
+  const email = String(sessionStorage.getItem('selfDashboardUserEmail') || '').trim().toLowerCase();
+  if (email) return `zapvender_dashboard_onboarding_dismissed_v1:email:${email}`;
+
+  const token = String(sessionStorage.getItem('selfDashboardToken') || '').trim();
+  const suffix = token ? token.slice(-14) : 'anon';
+  return `zapvender_dashboard_onboarding_dismissed_v1:token:${suffix}`;
+}
+
+function readStoredOnboardingFlag(storageKey: string) {
+  try {
+    return localStorage.getItem(storageKey) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
 function OnboardingCard() {
   const globals = window as Window & DashboardGlobals;
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const collapseStorageKey = buildOnboardingCollapseStorageKey();
+  const dismissStorageKey = buildOnboardingDismissedStorageKey();
+  const [isCollapsed, setIsCollapsed] = useState(() => readStoredOnboardingFlag(collapseStorageKey));
+  const [isDismissed, setIsDismissed] = useState(() => readStoredOnboardingFlag(dismissStorageKey));
+  const wasDismissedRef = useRef(isDismissed);
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(buildOnboardingCollapseStorageKey());
-      setIsCollapsed(saved === '1');
-    } catch (_) {
-      setIsCollapsed(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(buildOnboardingCollapseStorageKey(), isCollapsed ? '1' : '0');
+      localStorage.setItem(collapseStorageKey, isCollapsed ? '1' : '0');
     } catch (_) {
       // ignore storage failures
     }
-  }, [isCollapsed]);
+  }, [collapseStorageKey, isCollapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(dismissStorageKey, isDismissed ? '1' : '0');
+    } catch (_) {
+      // ignore storage failures
+    }
+  }, [dismissStorageKey, isDismissed]);
+
+  useEffect(() => {
+    if (wasDismissedRef.current && !isDismissed) {
+      const rehydrateOnboarding = () => {
+        globals.initOnboardingCard?.();
+      };
+
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(rehydrateOnboarding);
+      } else {
+        window.setTimeout(rehydrateOnboarding, 0);
+      }
+    }
+
+    wasDismissedRef.current = isDismissed;
+  }, [globals, isDismissed]);
+
+  const handleDismiss = () => {
+    setIsCollapsed(false);
+    setIsDismissed(true);
+  };
+
+  const handleRestore = () => {
+    setIsCollapsed(false);
+    setIsDismissed(false);
+  };
+
+  if (isDismissed) {
+    return (
+      <div className="onboarding-restore-wrap">
+        <button
+          type="button"
+          className="onboarding-restore-btn"
+          onClick={handleRestore}
+          title="Reativar primeiros passos"
+          aria-label="Reativar primeiros passos"
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <section className={`onboarding-card${isCollapsed ? ' is-collapsed' : ''}`} id="dashboardOnboardingCard">
@@ -1497,6 +1612,15 @@ function OnboardingCard() {
             aria-expanded={!isCollapsed}
           >
             <span aria-hidden="true">{isCollapsed ? '\u25B8' : '\u25BE'}</span>
+          </button>
+          <button
+            type="button"
+            className="onboarding-dismiss-btn"
+            onClick={handleDismiss}
+            title="Fechar primeiros passos"
+            aria-label="Fechar primeiros passos"
+          >
+            <span aria-hidden="true">&times;</span>
           </button>
         </div>
       </div>

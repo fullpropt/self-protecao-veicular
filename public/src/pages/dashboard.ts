@@ -1852,6 +1852,7 @@ async function confirmReset() {
 
 const windowAny = window as Window & {
     initDashboard?: () => void;
+    initOnboardingCard?: () => void;
     loadDashboardData?: () => Promise<void>;
     loadCustomEvents?: (options?: { silent?: boolean }) => Promise<void>;
     toggleOnboardingStep?: (stepId: string, checked?: boolean) => void;
@@ -1876,6 +1877,7 @@ const windowAny = window as Window & {
     confirmReset?: () => Promise<void>;
 };
 windowAny.initDashboard = initDashboard;
+windowAny.initOnboardingCard = initOnboardingCard;
 windowAny.loadDashboardData = loadDashboardData;
 windowAny.loadCustomEvents = loadCustomEvents;
 windowAny.toggleOnboardingStep = toggleOnboardingStep;
