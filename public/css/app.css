@@ -125,7 +125,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: visible;
 }
 
 .sidebar-header {
@@ -215,38 +215,35 @@ body {
 .nav-link.active {
     position: relative;
     z-index: 2;
-    margin-right: -10px;
-    padding-right: 24px;
-    background: rgba(8, 16, 27, 0.98);
+    margin-right: -12px;
+    padding-right: 26px;
+    background: linear-gradient(180deg, rgba(9, 18, 32, 0.98) 0%, rgba(11, 22, 38, 0.98) 100%);
     color: #f0fdf4;
-    border-radius: var(--border-radius-full) 0 0 var(--border-radius-full);
+    border-radius: var(--border-radius-full) 18px 18px var(--border-radius-full);
     border: 1px solid rgba(var(--primary-rgb), 0.18);
-    border-right-color: transparent;
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.04),
         inset 0 0 0 1px rgba(var(--primary-rgb), 0.08),
-        0 8px 18px rgba(3, 10, 23, 0.18);
+        0 10px 20px rgba(3, 10, 23, 0.18),
+        0 0 14px rgba(var(--primary-rgb), 0.04);
 }
 
-.nav-link.active::before,
 .nav-link.active::after {
     content: "";
     position: absolute;
-    right: -1px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
+    top: -1px;
+    bottom: -1px;
+    right: -14px;
+    width: 20px;
+    background: linear-gradient(180deg, rgba(9, 18, 32, 0.98) 0%, rgba(11, 22, 38, 0.98) 100%);
+    border-top: 1px solid rgba(var(--primary-rgb), 0.18);
+    border-right: 1px solid rgba(var(--primary-rgb), 0.14);
+    border-bottom: 1px solid rgba(var(--primary-rgb), 0.18);
+    border-left: none;
+    border-top-right-radius: 18px;
+    border-bottom-right-radius: 18px;
+    box-shadow: 8px 0 14px rgba(var(--primary-rgb), 0.03);
     pointer-events: none;
-}
-
-.nav-link.active::before {
-    top: -18px;
-    box-shadow: 10px 10px 0 0 rgba(8, 16, 27, 0.98);
-}
-
-.nav-link.active::after {
-    bottom: -18px;
-    box-shadow: 10px -10px 0 0 rgba(8, 16, 27, 0.98);
 }
 
 /* Hide sidebar WhatsApp menu entry only on mobile */
