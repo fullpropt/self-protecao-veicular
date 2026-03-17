@@ -53,6 +53,7 @@ const {
     Flow,
     CustomEvent,
     Tag,
+    Webhook,
     IncomingWebhookCredential,
     Settings,
     User,
@@ -154,6 +155,7 @@ const {
 const { createAutomationRoutes } = require('./routes/automationRoutes');
 const { createFlowRoutes } = require('./routes/flowRoutes');
 const { createTemplateRoutes } = require('./routes/templateRoutes');
+const { createWebhookRoutes } = require('./routes/webhookRoutes');
 
 
 
@@ -19033,87 +19035,13 @@ app.use(createFlowRoutes({
 
 // ============================================
 
-
-
-app.get('/api/webhooks', authenticate, async (req, res) => {
-
-    const { Webhook } = require('./database/models');
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const scopedUserId = getScopedUserId(req);
-    const webhooks = await Webhook.list({
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    res.json({ success: true, webhooks });
-
-});
-
-
-
-app.post('/api/webhooks', authenticate, async (req, res) => {
-
-    const { Webhook } = require('./database/models');
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const scopedUserId = getScopedUserId(req);
-    const requesterUserId = getRequesterUserId(req);
-    const result = await Webhook.create({
-        ...(req.body && typeof req.body === 'object' ? req.body : {}),
-        created_by: requesterUserId || undefined
-    });
-
-    const webhook = await Webhook.findById(result.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    res.json({ success: true, webhook });
-
-});
-
-
-
-app.put('/api/webhooks/:id', authenticate, async (req, res) => {
-
-    const { Webhook } = require('./database/models');
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const scopedUserId = getScopedUserId(req);
-    const webhook = await Webhook.update(req.params.id, req.body, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    if (!webhook) {
-        return res.status(404).json({ error: 'Webhook nao encontrado' });
-    }
-
-    res.json({ success: true, webhook });
-
-});
-
-
-
-app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
-
-    const { Webhook } = require('./database/models');
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const scopedUserId = getScopedUserId(req);
-    const deleted = await Webhook.delete(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    if (!deleted) {
-        return res.status(404).json({ error: 'Webhook nao encontrado' });
-    }
-
-    res.json({ success: true });
-
-});
+app.use(createWebhookRoutes({
+    authenticate,
+    Webhook,
+    resolveRequesterOwnerUserId,
+    getScopedUserId,
+    getRequesterUserId
+}));
 
 
 
