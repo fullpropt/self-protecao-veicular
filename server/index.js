@@ -153,6 +153,7 @@ const {
     validateStripeWebhook,
     validatePagarmeWebhook
 } = require('./middleware/validator');
+const { createAdminAuditRoutes } = require('./routes/adminAuditRoutes');
 const { createAutomationRoutes } = require('./routes/automationRoutes');
 const { createFlowRoutes } = require('./routes/flowRoutes');
 const { createMessageRoutes } = require('./routes/messageRoutes');
@@ -19299,122 +19300,17 @@ app.delete('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (re
 
 // ============================================
 
-app.get('/api/admin/audits/tenant-integrity', authenticate, async (req, res) => {
-    const requesterRole = getRequesterRole(req);
-    if (!isUserAdminRole(requesterRole)) {
-        return res.status(403).json({ error: 'Sem permissao para acessar auditoria de integridade' });
-    }
-
-    const workerState = buildTenantIntegrityAuditWorkerState();
-    const response = {
-        success: true,
-        worker: {
-            enabled: workerState.enabled,
-            intervalMs: workerState.intervalMs,
-            sampleLimit: workerState.sampleLimit,
-            leaderLockEnabled: workerState.leaderLockEnabled,
-            leaderLockHeld: workerState.leaderLockHeld,
-            running: workerState.running,
-            lastRunAt: workerState.lastRunAt,
-            lastError: workerState.lastError,
-            lastRunRecordId: workerState.lastRunRecordId,
-            lastPersistError: workerState.lastPersistError,
-            hasLastResult: !!workerState.lastResult
-        },
-        manualRun: {
-            defaultScope: 'owner',
-            allowGlobal: TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL
-        }
-    };
-
-    if (TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL && workerState.lastResult) {
-        response.worker.lastResult = workerState.lastResult;
-    }
-
-    res.json(response);
-});
-
-app.get('/api/admin/audits/tenant-integrity/history', authenticate, async (req, res) => {
-    const requesterRole = getRequesterRole(req);
-    if (!isUserAdminRole(requesterRole)) {
-        return res.status(403).json({ error: 'Sem permissao para acessar historico da auditoria' });
-    }
-
-    try {
-        const requestedScope = String(req.query?.scope || 'owner').trim().toLowerCase();
-        const requestedLimit = req.query?.limit || 20;
-        const includeResult = ['1', 'true', 'sim', 'yes', 'on'].includes(String(req.query?.includeResult || '').trim().toLowerCase());
-        const onlyIssues = ['1', 'true', 'sim', 'yes', 'on'].includes(String(req.query?.onlyIssues || '').trim().toLowerCase());
-
-        let ownerScopeUserId = null;
-        if (requestedScope !== 'global') {
-            ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-            if (!ownerScopeUserId) {
-                return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
-            }
-        } else if (!TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL) {
-            return res.status(403).json({ error: 'Consulta global do historico desabilitada' });
-        }
-
-        const runs = await tenantIntegrityAuditService.listAuditRuns({
-            scope: requestedScope === 'global' ? 'global' : 'owner',
-            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
-            limit: requestedLimit,
-            includeResult,
-            onlyIssues
-        });
-
-        res.json({
-            success: true,
-            scope: requestedScope === 'global' ? 'global' : 'owner',
-            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
-            count: Array.isArray(runs) ? runs.length : 0,
-            runs
-        });
-    } catch (error) {
-        console.error('[TenantIntegrityAudit][history-endpoint] falha:', error);
-        res.status(500).json({ error: 'Falha ao consultar historico da auditoria', details: error.message });
-    }
-});
-
-app.post('/api/admin/audits/tenant-integrity/run', authenticate, async (req, res) => {
-    const requesterRole = getRequesterRole(req);
-    if (!isUserAdminRole(requesterRole)) {
-        return res.status(403).json({ error: 'Sem permissao para executar auditoria de integridade' });
-    }
-
-    try {
-        const body = req.body && typeof req.body === 'object' ? req.body : {};
-        const requestedScope = String(body.scope || req.query?.scope || 'owner').trim().toLowerCase();
-        const requestedSampleLimit = body.sampleLimit || req.query?.sampleLimit || TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT;
-
-        let ownerScopeUserId = null;
-        if (requestedScope !== 'global') {
-            ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-            if (!ownerScopeUserId) {
-                return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
-            }
-        } else if (!TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL) {
-            return res.status(403).json({ error: 'Execucao manual global de auditoria desabilitada' });
-        }
-
-        const audit = await runTenantIntegrityAudit({
-            trigger: 'manual-endpoint',
-            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
-            sampleLimit: requestedSampleLimit,
-            cacheAsWorker: false
-        });
-
-        res.json({
-            success: true,
-            audit,
-            worker: buildTenantIntegrityAuditWorkerState()
-        });
-    } catch (error) {
-        console.error('[TenantIntegrityAudit][manual-endpoint] falha:', error);
-        res.status(500).json({ error: 'Falha ao executar auditoria de integridade', details: error.message });
-    }
-});
+app.use(createAdminAuditRoutes({
+    authenticate,
+    getRequesterRole,
+    isUserAdminRole,
+    buildTenantIntegrityAuditWorkerState,
+    tenantIntegrityAuditService,
+    resolveRequesterOwnerUserId,
+    tenantIntegrityAuditAllowGlobalManual: TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL,
+    tenantIntegrityAuditSampleLimit: TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT,
+    runTenantIntegrityAudit
+}));
 
 
 
