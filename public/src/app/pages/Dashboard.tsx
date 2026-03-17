@@ -40,7 +40,7 @@ function DashboardStyles() {
         .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: #f5fbf8; }
         .stats-period-card {
           border-color: rgba(var(--primary-rgb), 0.2);
-          background: rgba(21, 38, 60, 0.96);
+          background: rgba(16, 31, 51, 0.96);
           box-shadow:
             0 22px 48px rgba(2, 8, 20, 0.28),
             inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
@@ -114,7 +114,7 @@ function DashboardStyles() {
           padding: 16px 14px 10px;
           border-radius: 18px;
           border: 1px solid rgba(var(--primary-rgb), 0.22);
-          background: rgba(25, 43, 67, 0.96);
+          background: rgba(18, 32, 54, 0.96);
           box-shadow:
             inset 0 1px 0 rgba(var(--primary-rgb), 0.16),
             0 0 0 1px rgba(var(--primary-rgb), 0.04),
@@ -292,7 +292,7 @@ function DashboardStyles() {
           position: relative;
           overflow: hidden;
           border-color: rgba(var(--primary-rgb), 0.2);
-          background: rgba(21, 38, 60, 0.96);
+          background: rgba(16, 31, 51, 0.96);
           box-shadow:
             0 18px 42px rgba(2, 8, 20, 0.22),
             inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
@@ -325,7 +325,7 @@ function DashboardStyles() {
           padding: 22px 16px 20px;
           border-radius: 18px;
           border-color: rgba(var(--primary-rgb), 0.18);
-          background: rgba(31, 50, 76, 0.92);
+          background: rgba(24, 41, 65, 0.92);
           box-shadow:
             inset 0 1px 0 rgba(var(--primary-rgb), 0.1),
             0 12px 28px rgba(2, 6, 23, 0.16);
@@ -340,12 +340,12 @@ function DashboardStyles() {
         }
         .dashboard-react .funnel-stage:hover {
           border-color: rgba(var(--primary-rgb), 0.28);
-          background: rgba(36, 56, 84, 0.96);
+          background: rgba(28, 45, 72, 0.96);
           transform: translateY(-2px);
         }
         .dashboard-react .funnel-stage.active {
           border-color: rgba(var(--primary-rgb), 0.32);
-          background: rgba(41, 62, 92, 0.96);
+          background: rgba(31, 49, 77, 0.96);
           box-shadow:
             inset 0 1px 0 rgba(var(--primary-rgb), 0.22),
             0 18px 36px rgba(2, 8, 20, 0.22),
@@ -376,7 +376,7 @@ function DashboardStyles() {
         }
         .account-health-card {
           margin-bottom: 24px;
-          background: rgba(21, 38, 60, 0.96);
+          background: rgba(16, 31, 51, 0.96);
           border-radius: var(--border-radius-lg);
           box-shadow:
             var(--shadow-md),
@@ -406,7 +406,7 @@ function DashboardStyles() {
           position: relative;
           border: 1px solid rgba(148, 163, 184, 0.18);
           border-radius: 18px;
-          background: rgba(22, 40, 62, 0.92);
+          background: rgba(16, 31, 51, 0.92);
           box-shadow:
             inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
             0 10px 22px rgba(2, 8, 20, 0.16),
@@ -548,7 +548,7 @@ function DashboardStyles() {
           padding: 14px;
           border-radius: 14px;
           border: 1px solid rgba(var(--primary-rgb), 0.12);
-          background: rgba(31, 50, 76, 0.84);
+          background: rgba(24, 41, 65, 0.84);
         }
         .account-health-metric-label,
         .account-health-op-label {
@@ -604,7 +604,7 @@ function DashboardStyles() {
           align-items: center;
           padding: 12px 14px;
           border-radius: 14px;
-          background: rgba(31, 50, 76, 0.82);
+          background: rgba(24, 41, 65, 0.82);
           border: 1px solid rgba(var(--primary-rgb), 0.1);
         }
         .account-health-dispatch-main {
@@ -657,32 +657,32 @@ function DashboardStyles() {
           transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
         }
         .account-health-account.is-critical {
-          background: rgba(23, 31, 46, 0.96);
+          background: rgba(18, 25, 39, 0.96);
         }
         .account-health-account.is-attention {
-          background: rgba(22, 40, 62, 0.92);
+          background: rgba(16, 31, 51, 0.92);
         }
         .account-health-account.is-healthy {
-          background: rgba(22, 40, 62, 0.92);
+          background: rgba(16, 31, 51, 0.92);
         }
         .account-health-account.is-paused {
-          background: rgba(21, 38, 60, 0.9);
+          background: rgba(16, 31, 51, 0.9);
         }
         .account-health-account[open] {
           border-color: rgba(var(--primary-rgb), 0.28);
-          background: rgba(24, 43, 66, 0.96);
+          background: rgba(16, 31, 51, 0.96);
         }
         .account-health-account.is-critical[open] {
           border-color: rgba(248, 113, 113, 0.26);
-          background: rgba(29, 33, 46, 0.98);
+          background: rgba(24, 26, 38, 0.98);
         }
         .account-health-account.is-attention[open] {
           border-color: rgba(250, 204, 21, 0.24);
-          background: rgba(25, 45, 69, 0.98);
+          background: rgba(18, 34, 56, 0.98);
         }
         .account-health-account.is-healthy[open] {
           border-color: rgba(var(--primary-rgb), 0.22);
-          background: rgba(25, 45, 69, 0.98);
+          background: rgba(18, 34, 56, 0.98);
         }
         .account-health-summary-row {
           list-style: none;
@@ -789,18 +789,18 @@ function DashboardStyles() {
           padding: 14px;
           border-radius: 14px;
           border: 1px solid rgba(var(--primary-rgb), 0.1);
-          background: rgba(31, 50, 76, 0.82);
+          background: rgba(24, 41, 65, 0.82);
         }
         .account-health-detail-card.is-response {
-          background: rgba(var(--primary-rgb), 0.1);
+          background: rgba(var(--primary-rgb), 0.08);
           border-color: rgba(var(--primary-rgb), 0.18);
         }
         .account-health-detail-card.is-rhythm {
-          background: rgba(var(--primary-rgb), 0.08);
+          background: rgba(var(--primary-rgb), 0.06);
           border-color: rgba(var(--primary-rgb), 0.16);
         }
         .account-health-detail-card.is-insight {
-          background: rgba(250, 204, 21, 0.08);
+          background: rgba(250, 204, 21, 0.06);
           border-color: rgba(250, 204, 21, 0.16);
         }
         .account-health-detail-card-title {
@@ -839,7 +839,7 @@ function DashboardStyles() {
           padding: 14px;
           border-radius: 14px;
           border: 1px solid rgba(148, 163, 184, 0.12);
-          background: rgba(255, 255, 255, 0.04);
+          background: rgba(255, 255, 255, 0.02);
         }
         .account-health-dispatches-head {
           margin-bottom: 10px;
