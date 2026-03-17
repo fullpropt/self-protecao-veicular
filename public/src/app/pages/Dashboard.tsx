@@ -41,19 +41,21 @@ function DashboardStyles() {
         .stats-period-card {
           border-color: rgba(var(--primary-rgb), 0.2);
           background:
-            radial-gradient(circle at 10% 0%, rgba(var(--primary-rgb), 0.18), transparent 28%),
-            radial-gradient(circle at 88% 100%, rgba(16, 185, 129, 0.1), transparent 32%),
-            linear-gradient(180deg, rgba(5, 21, 18, 0.98), rgba(4, 15, 15, 0.99));
+            radial-gradient(circle at 0% 0%, rgba(var(--primary-rgb), 0.14), transparent 26%),
+            radial-gradient(circle at 100% 100%, rgba(var(--primary-rgb), 0.05), transparent 34%),
+            linear-gradient(180deg, rgba(16, 31, 51, 0.96) 0%, rgba(10, 22, 38, 0.98) 100%);
           box-shadow:
-            0 22px 48px rgba(2, 6, 23, 0.28),
-            inset 0 1px 0 rgba(110, 255, 214, 0.05);
+            0 22px 48px rgba(2, 8, 20, 0.28),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+            0 0 0 1px rgba(var(--primary-rgb), 0.06),
+            0 0 18px rgba(var(--primary-rgb), 0.08);
         }
         .stats-period-card::after {
           content: '';
           position: absolute;
           inset: auto 24px 24px 24px;
           height: 1px;
-          background: linear-gradient(90deg, rgba(var(--primary-rgb), 0), rgba(var(--primary-rgb), 0.34), rgba(16, 185, 129, 0));
+          background: linear-gradient(90deg, rgba(var(--primary-rgb), 0), rgba(var(--primary-rgb), 0.34), rgba(var(--primary-rgb), 0));
           pointer-events: none;
         }
         .stats-period-controls {
@@ -114,16 +116,17 @@ function DashboardStyles() {
           min-height: 228px;
           padding: 16px 14px 10px;
           border-radius: 18px;
-          border: 1px solid rgba(var(--primary-rgb), 0.15);
+          border: 1px solid rgba(var(--primary-rgb), 0.22);
           background:
-            linear-gradient(rgba(110, 255, 214, 0.045) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(110, 255, 214, 0.035) 1px, transparent 1px),
-            radial-gradient(circle at top, rgba(var(--primary-rgb), 0.1), transparent 48%),
-            linear-gradient(180deg, rgba(5, 18, 20, 0.92), rgba(4, 12, 18, 0.96));
+            linear-gradient(rgba(var(--primary-rgb), 0.035) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(var(--primary-rgb), 0.028) 1px, transparent 1px),
+            radial-gradient(circle at top, rgba(var(--primary-rgb), 0.08), transparent 48%),
+            linear-gradient(180deg, rgba(24, 41, 65, 0.9) 0%, rgba(21, 37, 61, 0.94) 55%, rgba(18, 32, 54, 0.98) 100%);
           background-size: 100% 100%, 12.5% 100%, 100% 100%, 100% 100%;
           box-shadow:
-            inset 0 1px 0 rgba(110, 255, 214, 0.04),
-            inset 0 0 32px rgba(var(--primary-rgb), 0.06);
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.16),
+            0 0 0 1px rgba(var(--primary-rgb), 0.04),
+            inset 0 0 28px rgba(var(--primary-rgb), 0.04);
         }
         .stats-period-chart::before {
           content: '';
@@ -265,7 +268,7 @@ function DashboardStyles() {
           background: rgba(var(--primary-rgb), 0.42);
         }
         .dashboard-react .stats-grid .stat-icon.success::after {
-          background: rgba(110, 255, 214, 0.38);
+          background: rgba(var(--primary-rgb), 0.38);
         }
         .dashboard-react .stats-grid .stat-icon.warning::after {
           background: rgba(226, 232, 240, 0.3);
@@ -303,12 +306,14 @@ function DashboardStyles() {
           overflow: hidden;
           border-color: rgba(var(--primary-rgb), 0.2);
           background:
-            radial-gradient(circle at 0% 0%, rgba(var(--primary-rgb), 0.14), transparent 24%),
-            radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.08), transparent 30%),
-            linear-gradient(180deg, rgba(6, 21, 18, 0.98), rgba(5, 15, 15, 0.99));
+            radial-gradient(circle at 0% 0%, rgba(var(--primary-rgb), 0.13), transparent 24%),
+            radial-gradient(circle at 100% 100%, rgba(var(--primary-rgb), 0.04), transparent 30%),
+            linear-gradient(180deg, rgba(16, 31, 51, 0.96) 0%, rgba(10, 22, 38, 0.98) 100%);
           box-shadow:
-            0 18px 42px rgba(2, 6, 23, 0.22),
-            inset 0 1px 0 rgba(110, 255, 214, 0.04);
+            0 18px 42px rgba(2, 8, 20, 0.22),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+            0 0 0 1px rgba(var(--primary-rgb), 0.05),
+            0 0 18px rgba(var(--primary-rgb), 0.06);
         }
         .dashboard-react .funnel-container::before {
           content: '';
@@ -328,19 +333,19 @@ function DashboardStyles() {
           gap: 12px;
         }
         .dashboard-react .funnel-title .icon {
-          color: rgba(110, 255, 214, 0.82);
+          color: rgba(var(--primary-rgb), 0.82);
         }
         .dashboard-react .funnel-stage {
           position: relative;
           overflow: hidden;
           padding: 22px 16px 20px;
           border-radius: 18px;
-          border-color: rgba(var(--primary-rgb), 0.14);
+          border-color: rgba(var(--primary-rgb), 0.18);
           background:
-            radial-gradient(circle at top, rgba(var(--primary-rgb), 0.08), transparent 52%),
-            linear-gradient(180deg, rgba(10, 25, 23, 0.92), rgba(6, 16, 17, 0.98));
+            radial-gradient(circle at top, rgba(var(--primary-rgb), 0.06), transparent 52%),
+            linear-gradient(180deg, rgba(28, 45, 72, 0.9) 0%, rgba(31, 49, 77, 0.91) 56%, rgba(24, 41, 65, 0.94) 100%);
           box-shadow:
-            inset 0 1px 0 rgba(110, 255, 214, 0.04),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.1),
             0 12px 28px rgba(2, 6, 23, 0.16);
         }
         .dashboard-react .funnel-stage::before {
@@ -354,19 +359,23 @@ function DashboardStyles() {
         .dashboard-react .funnel-stage:hover {
           border-color: rgba(var(--primary-rgb), 0.28);
           background:
-            radial-gradient(circle at top, rgba(var(--primary-rgb), 0.12), transparent 52%),
-            linear-gradient(180deg, rgba(11, 29, 26, 0.94), rgba(6, 16, 17, 0.98));
+            radial-gradient(circle at top, rgba(var(--primary-rgb), 0.1), transparent 52%),
+            linear-gradient(180deg, rgba(31, 49, 77, 0.93) 0%, rgba(28, 45, 72, 0.95) 56%, rgba(24, 41, 65, 0.98) 100%);
           transform: translateY(-2px);
         }
         .dashboard-react .funnel-stage.active {
           border-color: rgba(var(--primary-rgb), 0.32);
           background:
-            radial-gradient(circle at top, rgba(var(--primary-rgb), 0.16), transparent 52%),
-            linear-gradient(180deg, rgba(12, 31, 28, 0.96), rgba(6, 18, 18, 0.99));
+            linear-gradient(
+              90deg,
+              rgba(var(--primary-rgb), 0.18) 0%,
+              rgba(31, 49, 77, 0.94) 58%,
+              rgba(24, 41, 65, 0.96) 100%
+            );
           box-shadow:
-            0 18px 36px rgba(2, 6, 23, 0.22),
-            0 0 0 1px rgba(var(--primary-rgb), 0.08),
-            inset 0 1px 0 rgba(110, 255, 214, 0.06);
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.22),
+            0 18px 36px rgba(2, 8, 20, 0.22),
+            0 0 0 1px rgba(var(--primary-rgb), 0.08);
         }
         .dashboard-react .funnel-value,
         .dashboard-react .funnel-label,
@@ -395,10 +404,14 @@ function DashboardStyles() {
           margin-bottom: 24px;
           background:
             radial-gradient(circle at top right, rgba(var(--primary-rgb), 0.14), transparent 28%),
-            radial-gradient(circle at left bottom, rgba(16, 185, 129, 0.08), transparent 30%),
-            linear-gradient(180deg, rgba(5, 20, 18, 0.98), rgba(4, 14, 14, 0.99));
+            radial-gradient(circle at left bottom, rgba(var(--primary-rgb), 0.04), transparent 30%),
+            linear-gradient(180deg, rgba(16, 31, 51, 0.96) 0%, rgba(10, 22, 38, 0.98) 100%);
           border-radius: var(--border-radius-lg);
-          box-shadow: var(--shadow-md);
+          box-shadow:
+            var(--shadow-md),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+            0 0 0 1px rgba(var(--primary-rgb), 0.05),
+            0 0 18px rgba(var(--primary-rgb), 0.06);
           padding: 24px;
           border: 1px solid rgba(var(--primary-rgb), 0.18);
         }
@@ -422,7 +435,18 @@ function DashboardStyles() {
           position: relative;
           border: 1px solid rgba(148, 163, 184, 0.18);
           border-radius: 18px;
-          background: linear-gradient(180deg, rgba(9, 21, 20, 0.82), rgba(6, 15, 15, 0.94));
+          background:
+            linear-gradient(
+              90deg,
+              rgba(var(--primary-rgb), 0.08) 0%,
+              rgba(15, 23, 42, 0.3) 42%,
+              rgba(15, 23, 42, 0.24) 100%
+            ),
+            linear-gradient(180deg, rgba(16, 31, 51, 0.92) 0%, rgba(10, 22, 38, 0.98) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+            0 10px 22px rgba(2, 8, 20, 0.16),
+            0 0 0 1px rgba(var(--primary-rgb), 0.05);
           overflow: hidden;
         }
         .account-health-account::before {
@@ -430,7 +454,7 @@ function DashboardStyles() {
           position: absolute;
           inset: 0 auto 0 0;
           width: 3px;
-          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.85), rgba(16, 185, 129, 0.55));
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.85), rgba(var(--primary-rgb), 0.55));
           opacity: 0.7;
         }
         .account-health-account.is-critical::before {
@@ -440,7 +464,7 @@ function DashboardStyles() {
           background: linear-gradient(180deg, rgba(250, 204, 21, 0.85), rgba(45, 212, 191, 0.45));
         }
         .account-health-account.is-healthy::before {
-          background: linear-gradient(180deg, rgba(16, 185, 129, 0.85), rgba(34, 197, 94, 0.45));
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.85), rgba(var(--primary-rgb), 0.45));
         }
         .account-health-account.is-paused::before {
           background: linear-gradient(180deg, rgba(148, 163, 184, 0.8), rgba(71, 85, 105, 0.5));
@@ -560,7 +584,7 @@ function DashboardStyles() {
           padding: 14px;
           border-radius: 14px;
           border: 1px solid rgba(var(--primary-rgb), 0.12);
-          background: rgba(5, 14, 13, 0.42);
+          background: linear-gradient(180deg, rgba(24, 41, 65, 0.78), rgba(18, 32, 54, 0.9));
         }
         .account-health-metric-label,
         .account-health-op-label {
@@ -616,7 +640,7 @@ function DashboardStyles() {
           align-items: center;
           padding: 12px 14px;
           border-radius: 14px;
-          background: rgba(4, 11, 11, 0.42);
+          background: linear-gradient(180deg, rgba(24, 41, 65, 0.72), rgba(18, 32, 54, 0.88));
           border: 1px solid rgba(var(--primary-rgb), 0.1);
         }
         .account-health-dispatch-main {
@@ -676,22 +700,28 @@ function DashboardStyles() {
         .account-health-account.is-attention {
           background:
             radial-gradient(circle at right top, rgba(250, 204, 21, 0.07), transparent 30%),
-            linear-gradient(180deg, rgba(15, 24, 24, 0.92), rgba(8, 16, 17, 0.98));
+            linear-gradient(180deg, rgba(16, 31, 51, 0.92) 0%, rgba(10, 22, 38, 0.98) 100%);
         }
         .account-health-account.is-healthy {
           background:
-            radial-gradient(circle at right top, rgba(16, 185, 129, 0.06), transparent 30%),
-            linear-gradient(180deg, rgba(8, 22, 20, 0.92), rgba(5, 15, 15, 0.98));
+            radial-gradient(circle at right top, rgba(var(--primary-rgb), 0.06), transparent 30%),
+            linear-gradient(180deg, rgba(16, 31, 51, 0.92) 0%, rgba(10, 22, 38, 0.98) 100%);
         }
         .account-health-account.is-paused {
           background:
             radial-gradient(circle at right top, rgba(148, 163, 184, 0.06), transparent 30%),
-            linear-gradient(180deg, rgba(13, 20, 23, 0.9), rgba(8, 14, 17, 0.98));
+            linear-gradient(180deg, rgba(16, 31, 51, 0.9) 0%, rgba(10, 22, 38, 0.98) 100%);
         }
         .account-health-account[open] {
           border-color: rgba(var(--primary-rgb), 0.28);
           background:
-            linear-gradient(180deg, rgba(9, 24, 22, 0.94), rgba(5, 15, 15, 0.98));
+            linear-gradient(
+              90deg,
+              rgba(var(--primary-rgb), 0.12) 0%,
+              rgba(15, 23, 42, 0.32) 42%,
+              rgba(15, 23, 42, 0.26) 100%
+            ),
+            linear-gradient(180deg, rgba(16, 31, 51, 0.94) 0%, rgba(10, 22, 38, 0.98) 100%);
         }
         .account-health-account.is-critical[open] {
           border-color: rgba(248, 113, 113, 0.26);
@@ -703,13 +733,13 @@ function DashboardStyles() {
           border-color: rgba(250, 204, 21, 0.24);
           background:
             radial-gradient(circle at right top, rgba(250, 204, 21, 0.1), transparent 32%),
-            linear-gradient(180deg, rgba(18, 24, 25, 0.96), rgba(8, 16, 17, 0.99));
+            linear-gradient(180deg, rgba(16, 31, 51, 0.94) 0%, rgba(10, 22, 38, 0.99) 100%);
         }
         .account-health-account.is-healthy[open] {
-          border-color: rgba(16, 185, 129, 0.22);
+          border-color: rgba(var(--primary-rgb), 0.22);
           background:
-            radial-gradient(circle at right top, rgba(16, 185, 129, 0.08), transparent 32%),
-            linear-gradient(180deg, rgba(9, 25, 23, 0.96), rgba(5, 15, 15, 0.99));
+            radial-gradient(circle at right top, rgba(var(--primary-rgb), 0.08), transparent 32%),
+            linear-gradient(180deg, rgba(16, 31, 51, 0.94) 0%, rgba(10, 22, 38, 0.99) 100%);
         }
         .account-health-summary-row {
           list-style: none;
@@ -727,7 +757,7 @@ function DashboardStyles() {
           content: '';
         }
         .account-health-summary-row:hover {
-          background: rgba(255, 255, 255, 0.02);
+          background: rgba(var(--primary-rgb), 0.06);
         }
         .account-health-summary-main {
           min-width: 0;
@@ -816,15 +846,15 @@ function DashboardStyles() {
           padding: 14px;
           border-radius: 14px;
           border: 1px solid rgba(var(--primary-rgb), 0.1);
-          background: rgba(255, 255, 255, 0.03);
+          background: linear-gradient(180deg, rgba(24, 41, 65, 0.7), rgba(18, 32, 54, 0.88));
         }
         .account-health-detail-card.is-response {
-          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.1), rgba(255, 255, 255, 0.02));
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.16), rgba(24, 41, 65, 0.72));
           border-color: rgba(var(--primary-rgb), 0.18);
         }
         .account-health-detail-card.is-rhythm {
-          background: linear-gradient(180deg, rgba(16, 185, 129, 0.08), rgba(255, 255, 255, 0.02));
-          border-color: rgba(16, 185, 129, 0.16);
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.1), rgba(24, 41, 65, 0.72));
+          border-color: rgba(var(--primary-rgb), 0.16);
         }
         .account-health-detail-card.is-insight {
           background: linear-gradient(180deg, rgba(250, 204, 21, 0.08), rgba(255, 255, 255, 0.02));
