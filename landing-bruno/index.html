@@ -1041,15 +1041,24 @@
             margin-bottom: 48px;
         }
 
-        .video-experience-header .tag {
+        .video-experience-header .tag,
+        .faq-tag {
             font-family: var(--font-display);
             font-size: 0.75rem;
             font-weight: 800;
             color: var(--primary);
             text-transform: uppercase;
             letter-spacing: 2px;
-            margin-bottom: 12px;
             display: block;
+        }
+
+        .video-experience-header .tag {
+            margin-bottom: 12px;
+        }
+
+        .faq-tag {
+            margin-bottom: 28px;
+            text-align: center;
         }
 
         .video-experience-header h2 {
@@ -1339,6 +1348,7 @@
             color: var(--primary);
             text-shadow: 0 0 24px rgba(0, 255, 163, 0.12);
             max-width: 16ch;
+            text-wrap: balance;
         }
 
         .story-heading--md {
@@ -1520,6 +1530,13 @@
             max-width: 18ch;
             margin-left: auto;
             margin-right: auto;
+        }
+
+        .gain-block .story-heading--wide,
+        .compare-block .story-heading--wide,
+        .benefit-block .story-heading--wide,
+        .proof-block .story-heading--wide {
+            max-width: 24ch;
         }
 
         .gain-block .story-lead,
@@ -2491,6 +2508,13 @@
 
             .story-heading,
             .story-heading--md {
+                max-width: 100%;
+            }
+
+            .gain-block .story-heading--wide,
+            .compare-block .story-heading--wide,
+            .benefit-block .story-heading--wide,
+            .proof-block .story-heading--wide {
                 max-width: 100%;
             }
 
@@ -4832,7 +4856,7 @@
 
         <section class="story-block container gain-block">
             <span class="story-eyebrow">Ganho prático</span>
-            <h2 class="story-heading story-heading--md">O que muda na prática quando seu WhatsApp deixa de ser bagunça e vira <span class="copy-gradient">processo</span></h2>
+            <h2 class="story-heading story-heading--md story-heading--wide">O que muda na prática quando seu WhatsApp deixa de ser bagunça e vira <span class="copy-gradient">processo</span></h2>
             <div class="practical-grid">
                 <article class="practical-card practical-card--direction">
                     <span class="practical-index">01</span>
@@ -4926,7 +4950,7 @@
 
         <section class="story-block container compare-block">
             <span class="story-eyebrow">Antes e depois</span>
-            <h2 class="story-heading story-heading--md">Antes do ZapVender, vender no WhatsApp parece isso. Depois, parece <span class="copy-gradient">operação</span>.</h2>
+            <h2 class="story-heading story-heading--md story-heading--wide">Antes do ZapVender, vender no WhatsApp parece isso. Depois, parece <span class="copy-gradient">operação</span>.</h2>
             <div class="compare-grid">
                 <article class="compare-card compare-before">
                     <span class="surface-tag">Antes</span>
@@ -5131,7 +5155,7 @@
 
         <section class="story-block container benefit-block" id="beneficios">
             <span class="story-eyebrow">Benefícios práticos</span>
-            <h2 class="story-heading story-heading--md">O ZapVender foi pensado para resolver os <span class="copy-gradient">gargalos que mais travam vendas</span> no WhatsApp</h2>
+            <h2 class="story-heading story-heading--md story-heading--wide">O ZapVender foi pensado para resolver os <span class="copy-gradient">gargalos que mais travam vendas</span> no WhatsApp</h2>
             <div class="benefit-grid">
                 <article class="benefit-card">
                     <span class="benefit-badge">Processo</span>
@@ -5168,7 +5192,7 @@
 
         <section class="story-block container proof-block">
             <span class="story-eyebrow">Prova</span>
-            <h2 class="story-heading story-heading--md">Quando existe processo, o WhatsApp <span class="copy-gradient">para de parecer improviso</span></h2>
+            <h2 class="story-heading story-heading--md story-heading--wide">Quando existe processo, o WhatsApp <span class="copy-gradient">para de parecer improviso</span></h2>
             <p class="proof-note">O resultado visível é <span class="copy-emphasis">menos ruído operacional</span> e <span class="copy-gradient">mais clareza</span> para acompanhar etapa, prioridade, retomada e contexto em um só lugar.</p>
             <div class="proof-grid">
                 <article class="proof-card">
@@ -5341,8 +5365,7 @@
     </section>
 
     <section class="post-faq-section container">
-        <span class="story-eyebrow">FAQ final</span>
-        <h2 class="story-heading story-heading--md">D&uacute;vidas comuns antes de come&ccedil;ar</h2>
+        <h2 class="faq-tag">D&uacute;vidas comuns antes de come&ccedil;ar</h2>
         <div class="faq-list">
             <details class="faq-item" open>
                 <summary>O ZapVender serve para quem vende pelo pr&oacute;prio WhatsApp?</summary>
