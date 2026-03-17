@@ -1116,18 +1116,23 @@ function renderCustomEventsList(response: CustomEventsStatsResponse) {
                                 <span class="custom-event-status ${statusClass}">${statusLabel}</span>
                                 ${eventKey ? `<div class="events-row-key">${eventKey}</div>` : ''}
                             </div>
-                            <div class="events-row-actions">
-                                <button class="btn btn-sm btn-outline btn-icon" title="Editar evento" onclick="openCustomEventModal(${eventId})">
-                                    <span class="icon icon-edit icon-sm"></span>
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger btn-icon" title="Excluir evento" onclick="deleteCustomEvent(${eventId})">
-                                    <span class="icon icon-delete icon-sm"></span>
-                                </button>
+                            <div class="events-row-side">
+                                <div class="events-row-count">
+                                    <strong>${formatNumber(eventTotal)}</strong>
+                                    <span>no período</span>
+                                </div>
+                                <div class="events-row-actions">
+                                    <button class="btn btn-sm btn-outline btn-icon" title="Editar evento" onclick="openCustomEventModal(${eventId})">
+                                        <span class="icon icon-edit icon-sm"></span>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger btn-icon" title="Excluir evento" onclick="deleteCustomEvent(${eventId})">
+                                        <span class="icon icon-delete icon-sm"></span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="events-row-meta">
                             <div class="events-row-last">Último disparo: ${lastTriggered}</div>
-                            <div class="events-row-count">${formatNumber(eventTotal)} no período</div>
                         </div>
                     </div>
                 `;

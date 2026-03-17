@@ -520,11 +520,13 @@ function DashboardStyles() {
           flex-wrap: wrap;
           gap: 10px 16px;
           justify-content: flex-start;
+          align-items: flex-start;
         }
         .account-health-metric-chip {
           display: grid;
           gap: 2px;
-          min-width: 72px;
+          flex: 0 0 94px;
+          min-width: 94px;
           padding: 0;
           border: none;
           border-radius: 0;
@@ -659,8 +661,11 @@ function DashboardStyles() {
         .events-row-main { min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .events-row-name { font-weight: 700; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
         .events-row-key { display: none; }
+        .events-row-side { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
         .events-row-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
-        .events-row-count { font-size: 13px; color: var(--gray-600); white-space: nowrap; }
+        .events-row-count { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+        .events-row-count strong { font-size: 18px; font-weight: 800; color: var(--dark); line-height: 1; }
+        .events-row-count span { font-size: 11px; color: var(--gray-500); }
         .events-row-last { font-size: 12px; color: var(--gray-500); white-space: nowrap; line-height: 1.2; }
         .events-row-actions { display: inline-flex; gap: 6px; }
         .events-loading, .events-error { padding: 14px; text-align: center; border: 1px dashed var(--border-color); border-radius: 10px; color: var(--gray-500); }
@@ -701,25 +706,33 @@ function DashboardStyles() {
           gap: 8px;
         }
         .events-personalized-card.is-sidebar .events-row-name,
-        .events-personalized-card.is-sidebar .events-row-count,
         .events-personalized-card.is-sidebar .events-row-last {
           white-space: normal;
         }
+        .events-personalized-card.is-sidebar .events-row-side {
+          gap: 8px;
+        }
         .events-personalized-card.is-sidebar .events-row-meta {
-          gap: 6px 10px;
+          gap: 4px;
         }
         .events-personalized-card.is-sidebar .events-empty {
           padding: 24px 12px;
         }
         .onboarding-card {
+          position: relative;
+          overflow: hidden;
           margin-bottom: 24px;
           padding: 22px;
           border-radius: var(--border-radius-lg);
-          border: 1px solid rgba(var(--primary-rgb), 0.32);
-          box-shadow: var(--shadow-md);
+          border: 1px solid rgba(0, 240, 255, 0.22);
+          box-shadow:
+            0 18px 42px rgba(2, 6, 23, 0.34),
+            inset 0 1px 0 rgba(143, 255, 225, 0.04);
           background:
-            radial-gradient(circle at 16% 0%, rgba(var(--primary-rgb), 0.22), transparent 56%),
-            linear-gradient(165deg, rgba(9, 18, 34, 0.98), rgba(6, 14, 28, 0.98));
+            radial-gradient(circle at 14% 16%, rgba(0, 240, 255, 0.18), transparent 34%),
+            radial-gradient(circle at 78% 8%, rgba(143, 255, 225, 0.1), transparent 24%),
+            linear-gradient(90deg, rgba(4, 64, 90, 0.34), rgba(6, 26, 46, 0.14) 34%, rgba(4, 13, 26, 0) 62%),
+            linear-gradient(165deg, rgba(6, 22, 42, 0.98), rgba(4, 13, 28, 0.99));
         }
         .onboarding-card-header {
           display: flex;
@@ -736,10 +749,10 @@ function DashboardStyles() {
         .onboarding-toggle-btn {
           width: 30px;
           height: 30px;
-          border: 1px solid rgba(var(--primary-rgb), 0.28);
+          border: 1px solid rgba(0, 240, 255, 0.22);
           border-radius: 999px;
-          background: rgba(6, 15, 30, 0.78);
-          color: #d8f4e6;
+          background: rgba(4, 14, 29, 0.82);
+          color: #dffdf7;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -749,11 +762,11 @@ function DashboardStyles() {
           padding: 0;
         }
         .onboarding-toggle-btn:hover {
-          border-color: rgba(var(--primary-rgb), 0.5);
-          background: rgba(var(--primary-rgb), 0.2);
+          border-color: rgba(143, 255, 225, 0.42);
+          background: rgba(0, 240, 255, 0.12);
         }
         .onboarding-toggle-btn:focus-visible {
-          outline: 2px solid rgba(var(--primary-rgb), 0.48);
+          outline: 2px solid rgba(0, 240, 255, 0.34);
           outline-offset: 2px;
         }
         .onboarding-card-header h3 {
@@ -1041,15 +1054,16 @@ function DashboardStyles() {
           .events-controls .form-select, .events-controls .btn { width: 100%; }
           .events-row-head { align-items: flex-start; }
           .events-row-main { min-width: 0; }
-          .events-row-meta { gap: 4px 10px; }
+          .events-row-side { width: 100%; justify-content: space-between; }
+          .events-row-meta { gap: 4px; }
           .events-row-count, .events-row-last { white-space: normal; }
           .events-row-actions { justify-content: flex-end; }
           .events-empty { padding: 20px 10px; }
           .events-empty-emoji { width: 34px; height: 34px; margin-bottom: 10px; }
           .account-health-summary-row,
           .account-health-details { padding-left: 12px; padding-right: 12px; }
-          .account-health-summary-metrics { gap: 6px; }
-          .account-health-metric-chip { min-width: 0; flex: 0 1 auto; }
+          .account-health-summary-metrics { gap: 6px 12px; }
+          .account-health-metric-chip { min-width: calc(50% - 6px); flex: 0 0 calc(50% - 6px); }
           .account-health-summary-side { width: 100%; justify-content: space-between; }
           .account-health-detail-card,
           .account-health-dispatches { padding: 12px; }
