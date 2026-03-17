@@ -749,18 +749,12 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                                     <strong>${escapeHtml(possibleBlockedText)}</strong>
                                 </div>
                             </div>
-                            ${possibleBlockedContacts > 0 ? `
-                                <p class="account-health-detail-text" style="margin-top: 12px; color: rgba(214, 228, 239, 0.68);">
-                                    Suspeita de bloqueio considera 2 ou mais envios recentes sem entrega, leitura ou resposta.
-                                </p>
-                            ` : ''}
                         </section>
                     </div>
 
                     <div class="account-health-dispatches">
                         <div class="account-health-dispatches-head">
                             <strong>Disparos do dia</strong>
-                            <span>Expanda apenas as contas que pedirem investigacao.</span>
                         </div>
                         <div class="account-health-dispatch-list">
                             ${dispatches.length
