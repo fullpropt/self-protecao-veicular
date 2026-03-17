@@ -1276,9 +1276,13 @@ body {
 .inbox-react.workspace-surface-page .chat-area,
 .inbox-react.workspace-surface-page .inbox-right-panel,
 .flow-builder-react.workspace-surface-page .nodes-panel,
-.flow-builder-react.workspace-surface-page .properties-panel,
 .flow-builder-react.workspace-surface-page .flow-preview-panel {
     background: rgba(8, 19, 33, 0.72);
+}
+
+.flow-builder-react.workspace-surface-page .properties-panel {
+    background: linear-gradient(180deg, rgba(24, 47, 74, 0.96) 0%, rgba(18, 38, 61, 0.97) 100%);
+    border-left-color: rgba(var(--primary-rgb), 0.14);
 }
 
 .inbox-react.workspace-surface-page .conversations-panel,
