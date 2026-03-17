@@ -197,11 +197,10 @@ function DashboardStyles() {
           position: relative;
           overflow: hidden;
           border-color: transparent;
-          background: linear-gradient(180deg, rgba(23, 28, 35, 0.98) 0%, rgba(17, 21, 27, 0.98) 100%);
+          background: transparent;
           box-shadow:
-            0 18px 40px rgba(1, 3, 7, 0.32),
-            0 0 18px rgba(var(--primary-rgb), 0.04),
-            inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            0 14px 32px rgba(1, 3, 7, 0.18),
+            0 0 18px rgba(var(--primary-rgb), 0.03);
         }
         .dashboard-react .stats-grid .stat-card::before {
           content: '';
@@ -219,12 +218,9 @@ function DashboardStyles() {
           pointer-events: none;
         }
         .dashboard-react .stats-grid .stat-card:hover {
-          border-color: rgba(var(--primary-rgb), 0.24);
           box-shadow:
-            0 22px 48px rgba(1, 3, 7, 0.36),
-            0 0 22px rgba(var(--primary-rgb), 0.06),
-            0 0 0 1px rgba(var(--primary-rgb), 0.08),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            0 14px 32px rgba(1, 3, 7, 0.18),
+            0 0 18px rgba(var(--primary-rgb), 0.03);
         }
         .dashboard-react .stats-grid .stat-icon {
           position: relative;
