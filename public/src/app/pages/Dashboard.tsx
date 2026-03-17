@@ -332,7 +332,7 @@ function DashboardStyles() {
           padding: 22px 16px 20px;
           border-radius: 18px;
           border-color: rgba(var(--primary-rgb), 0.18);
-          background: linear-gradient(180deg, rgba(27, 46, 72, 0.94) 0%, rgba(21, 37, 58, 0.94) 100%);
+          background: linear-gradient(180deg, rgba(23, 40, 62, 0.94) 0%, rgba(17, 31, 48, 0.94) 100%);
           box-shadow:
             inset 0 1px 0 rgba(var(--primary-rgb), 0.1),
             0 12px 28px rgba(2, 6, 23, 0.16);
@@ -346,13 +346,12 @@ function DashboardStyles() {
           pointer-events: none;
         }
         .dashboard-react .funnel-stage:hover {
-          border-color: rgba(var(--primary-rgb), 0.28);
-          background: linear-gradient(180deg, rgba(32, 52, 80, 0.96) 0%, rgba(25, 42, 65, 0.96) 100%);
-          transform: translateY(-2px);
+          border-color: rgba(var(--primary-rgb), 0.18);
+          background: linear-gradient(180deg, rgba(23, 40, 62, 0.94) 0%, rgba(17, 31, 48, 0.94) 100%);
         }
         .dashboard-react .funnel-stage.active {
           border-color: rgba(var(--primary-rgb), 0.32);
-          background: linear-gradient(180deg, rgba(36, 57, 88, 0.96) 0%, rgba(28, 46, 71, 0.96) 100%);
+          background: linear-gradient(180deg, rgba(28, 47, 73, 0.96) 0%, rgba(20, 35, 54, 0.96) 100%);
           box-shadow:
             inset 0 1px 0 rgba(var(--primary-rgb), 0.22),
             0 18px 36px rgba(2, 8, 20, 0.22),
