@@ -983,10 +983,15 @@ function DashboardStyles() {
           align-items: center;
           gap: 8px;
         }
-        .onboarding-restore-wrap {
+        .dashboard-subtitle-row {
           display: flex;
-          justify-content: flex-end;
-          margin-bottom: 14px;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .dashboard-subtitle-row p {
+          margin: 0;
         }
         .onboarding-toggle-btn {
           width: 30px;
@@ -1193,6 +1198,9 @@ function DashboardStyles() {
           .events-empty-create-btn { display: none !important; }
         }
         @media (max-width: 640px) {
+          .dashboard-subtitle-row {
+            align-items: flex-start;
+          }
           .dashboard-botconversa { gap: 14px; margin-bottom: 16px; }
           .stats-period-card, .stats-general-card, .events-personalized-card, .account-health-card { padding: 12px; border-radius: 12px; }
           .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3, .account-health-card h3 { margin-bottom: 12px; font-size: 15px; }
@@ -1365,15 +1373,34 @@ function DashboardStyles() {
   );
 }
 
-function DashboardHeader() {
+function DashboardHeader({
+  isOnboardingDismissed,
+  onRestoreOnboarding
+}: {
+  isOnboardingDismissed: boolean;
+  onRestoreOnboarding: () => void;
+}) {
   return (
     <div className="page-header">
       <div className="page-title">
         <h1>Painel de Controle</h1>
-        <p>
-          Bem-vindo, <span className="user-name">Usuário</span> |{' '}
-          <span className="current-date"></span>
-        </p>
+        <div className="dashboard-subtitle-row">
+          <p>
+            Bem-vindo, <span className="user-name">Usuário</span> |{' '}
+            <span className="current-date"></span>
+          </p>
+          {isOnboardingDismissed ? (
+            <button
+              type="button"
+              className="onboarding-restore-btn"
+              onClick={onRestoreOnboarding}
+              title="Reativar primeiros passos"
+              aria-label="Reativar primeiros passos"
+            >
+              <span aria-hidden="true">+</span>
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -1526,12 +1553,17 @@ function readStoredOnboardingFlag(storageKey: string) {
   }
 }
 
-function OnboardingCard() {
+function OnboardingCard({
+  isDismissed,
+  onDismissedChange
+}: {
+  isDismissed: boolean;
+  onDismissedChange: (nextValue: boolean) => void;
+}) {
   const globals = window as Window & DashboardGlobals;
   const collapseStorageKey = buildOnboardingCollapseStorageKey();
   const dismissStorageKey = buildOnboardingDismissedStorageKey();
   const [isCollapsed, setIsCollapsed] = useState(() => readStoredOnboardingFlag(collapseStorageKey));
-  const [isDismissed, setIsDismissed] = useState(() => readStoredOnboardingFlag(dismissStorageKey));
   const wasDismissedRef = useRef(isDismissed);
 
   useEffect(() => {
@@ -1568,28 +1600,11 @@ function OnboardingCard() {
 
   const handleDismiss = () => {
     setIsCollapsed(false);
-    setIsDismissed(true);
-  };
-
-  const handleRestore = () => {
-    setIsCollapsed(false);
-    setIsDismissed(false);
+    onDismissedChange(true);
   };
 
   if (isDismissed) {
-    return (
-      <div className="onboarding-restore-wrap">
-        <button
-          type="button"
-          className="onboarding-restore-btn"
-          onClick={handleRestore}
-          title="Reativar primeiros passos"
-          aria-label="Reativar primeiros passos"
-        >
-          <span aria-hidden="true">+</span>
-        </button>
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -2067,6 +2082,10 @@ function LeadModals() {
 }
 
 export default function Dashboard() {
+  const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(() =>
+    readStoredOnboardingFlag(buildOnboardingDismissedStorageKey())
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -2185,8 +2204,14 @@ export default function Dashboard() {
         </div>
       </aside>
       <main className="main-content">
-        <DashboardHeader />
-        <OnboardingCard />
+        <DashboardHeader
+          isOnboardingDismissed={isOnboardingDismissed}
+          onRestoreOnboarding={() => setIsOnboardingDismissed(false)}
+        />
+        <OnboardingCard
+          isDismissed={isOnboardingDismissed}
+          onDismissedChange={setIsOnboardingDismissed}
+        />
         <StatsPeriod />
         <AccountHealthCard />
         <StatsCards />
