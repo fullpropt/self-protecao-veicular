@@ -792,20 +792,14 @@ function DashboardStyles() {
           min-width: 0;
           padding: 14px;
           border-radius: 14px;
-          border: 1px solid rgba(var(--primary-rgb), 0.1);
-          background: linear-gradient(180deg, rgba(27, 46, 72, 0.86) 0%, rgba(21, 37, 58, 0.86) 100%);
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          background: linear-gradient(180deg, rgba(25, 41, 63, 0.88) 0%, rgba(19, 33, 52, 0.88) 100%);
         }
-        .account-health-detail-card.is-response {
-          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.1) 0%, rgba(18, 36, 58, 0.82) 100%);
-          border-color: rgba(var(--primary-rgb), 0.18);
-        }
-        .account-health-detail-card.is-rhythm {
-          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.08) 0%, rgba(18, 36, 58, 0.8) 100%);
-          border-color: rgba(var(--primary-rgb), 0.16);
-        }
+        .account-health-detail-card.is-response,
+        .account-health-detail-card.is-rhythm,
         .account-health-detail-card.is-insight {
-          background: linear-gradient(180deg, rgba(250, 204, 21, 0.08) 0%, rgba(18, 36, 58, 0.8) 100%);
-          border-color: rgba(250, 204, 21, 0.16);
+          background: linear-gradient(180deg, rgba(25, 41, 63, 0.88) 0%, rgba(19, 33, 52, 0.88) 100%);
+          border-color: rgba(148, 163, 184, 0.14);
         }
         .account-health-detail-card-title {
           display: block;

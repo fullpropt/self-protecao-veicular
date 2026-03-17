@@ -125,7 +125,13 @@ body {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    overflow-x: visible;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.sidebar::-webkit-scrollbar {
+    display: none;
 }
 
 .sidebar-header {
@@ -158,11 +164,11 @@ body {
 
 .sidebar-nav {
     flex: 1;
-    padding: 15px 10px;
+    padding: 14px 18px 12px 10px;
 }
 
 .nav-section {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .nav-section-title {
@@ -188,7 +194,7 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 15px;
+    padding: 11px 15px;
     color: rgba(234, 239, 244, 0.8);
     text-decoration: none;
     border-radius: var(--border-radius);
@@ -215,16 +221,16 @@ body {
 .nav-link.active {
     position: relative;
     z-index: 2;
-    margin-right: -16px;
-    padding-right: 30px;
-    background: linear-gradient(180deg, rgba(8, 15, 27, 0.98) 0%, rgba(9, 18, 32, 0.98) 100%);
-    color: var(--primary);
+    margin-right: -10px;
+    padding-right: 26px;
+    background: linear-gradient(180deg, rgba(12, 23, 39, 0.98) 0%, rgba(14, 27, 46, 0.98) 100%);
+    color: var(--primary-light);
     border-radius: var(--border-radius-full) 0 0 var(--border-radius-full);
     border: none;
     box-shadow:
-        inset 0 1px 0 rgba(var(--primary-rgb), 0.06),
-        0 10px 18px rgba(3, 10, 23, 0.16),
-        0 0 14px rgba(var(--primary-rgb), 0.03);
+        inset 0 1px 0 rgba(var(--primary-rgb), 0.08),
+        0 10px 18px rgba(3, 10, 23, 0.14),
+        0 0 14px rgba(var(--primary-rgb), 0.04);
 }
 
 .nav-link.active::before,
@@ -241,13 +247,13 @@ body {
 .nav-link.active::before {
     top: -20px;
     border-bottom-right-radius: 20px;
-    box-shadow: 8px 8px 0 8px rgba(8, 15, 27, 0.98);
+    box-shadow: 8px 8px 0 8px rgba(12, 23, 39, 0.98);
 }
 
 .nav-link.active::after {
     bottom: -20px;
     border-top-right-radius: 20px;
-    box-shadow: 8px -8px 0 8px rgba(9, 18, 32, 0.98);
+    box-shadow: 8px -8px 0 8px rgba(14, 27, 46, 0.98);
 }
 
 /* Hide sidebar WhatsApp menu entry only on mobile */
@@ -354,7 +360,7 @@ body {
 }
 
 .sidebar-footer {
-    padding: 15px;
+    padding: 12px 18px 15px 15px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -419,19 +425,24 @@ body {
     gap: 10px;
     width: 100%;
     padding: 12px;
-    background: rgba(248, 113, 113, 0.15);
-    border: none;
+    background: linear-gradient(135deg, rgba(10, 37, 35, 0.94) 0%, rgba(8, 24, 34, 0.98) 100%);
+    border: 1px solid rgba(var(--primary-rgb), 0.28);
     border-radius: var(--border-radius);
-    color: #fecaca;
+    color: #dffef3;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
+    box-shadow:
+        inset 0 1px 0 rgba(var(--primary-rgb), 0.08),
+        0 0 18px rgba(var(--primary-rgb), 0.08);
     transition: all var(--transition);
 }
 
 .btn-logout:hover {
-    background: rgba(248, 113, 113, 0.3);
-    color: #fff;
+    background: linear-gradient(135deg, rgba(12, 46, 42, 0.98) 0%, rgba(10, 30, 42, 0.98) 100%);
+    border-color: rgba(var(--primary-rgb), 0.4);
+    color: #f6fffb;
+    transform: translateY(-1px);
 }
 
 /* ============================================
