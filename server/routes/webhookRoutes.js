@@ -22,6 +22,14 @@ function createWebhookRoutes(options = {}) {
         await controller.deleteWebhook(req, res);
     });
 
+    router.get('/api/webhooks/incoming/credential', authenticate, async (req, res) => {
+        await controller.getIncomingWebhookCredential(req, res);
+    });
+
+    router.post('/api/webhooks/incoming/credential/regenerate', authenticate, async (req, res) => {
+        await controller.regenerateIncomingWebhookCredential(req, res);
+    });
+
     return router;
 }
 

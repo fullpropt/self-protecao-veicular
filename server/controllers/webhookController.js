@@ -3,6 +3,12 @@ function createWebhookController(options = {}) {
     const resolveRequesterOwnerUserId = options.resolveRequesterOwnerUserId;
     const getScopedUserId = options.getScopedUserId;
     const getRequesterUserId = options.getRequesterUserId;
+    const getRequesterRole = options.getRequesterRole;
+    const isUserAdminRole = options.isUserAdminRole;
+    const IncomingWebhookCredential = options.IncomingWebhookCredential;
+    const resolveIncomingWebhookOwnerUserId = options.resolveIncomingWebhookOwnerUserId;
+    const normalizeIncomingWebhookSecret = options.normalizeIncomingWebhookSecret;
+    const serializeIncomingWebhookCredentialForApi = options.serializeIncomingWebhookCredentialForApi;
 
     return {
         async listWebhooks(req, res) {
@@ -61,6 +67,78 @@ function createWebhookController(options = {}) {
             }
 
             return res.json({ success: true });
+        },
+
+        async getIncomingWebhookCredential(req, res) {
+            try {
+                const requesterRole = getRequesterRole(req);
+                if (!isUserAdminRole(requesterRole)) {
+                    return res.status(403).json({ error: 'Sem permissao para gerenciar webhook de entrada' });
+                }
+
+                const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+                if (!ownerScopeUserId) {
+                    return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
+                }
+
+                const credential = await IncomingWebhookCredential.findByOwnerUserId(ownerScopeUserId);
+                const legacyOwnerUserId = resolveIncomingWebhookOwnerUserId();
+                const legacySecretConfigured = normalizeIncomingWebhookSecret(process.env.WEBHOOK_SECRET).length > 0;
+
+                return res.json({
+                    success: true,
+                    credential: serializeIncomingWebhookCredentialForApi(credential),
+                    legacy_fallback: {
+                        configured: legacySecretConfigured && !!legacyOwnerUserId,
+                        owner_user_id: legacyOwnerUserId || null,
+                        active_for_owner: legacySecretConfigured
+                            && !!legacyOwnerUserId
+                            && legacyOwnerUserId === ownerScopeUserId
+                    }
+                });
+            } catch (error) {
+                console.error('[IncomingWebhook] Falha ao consultar credencial:', error);
+                return res.status(500).json({ error: 'Falha ao consultar credencial do webhook de entrada' });
+            }
+        },
+
+        async regenerateIncomingWebhookCredential(req, res) {
+            try {
+                const requesterRole = getRequesterRole(req);
+                if (!isUserAdminRole(requesterRole)) {
+                    return res.status(403).json({ error: 'Sem permissao para gerenciar webhook de entrada' });
+                }
+
+                const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+                if (!ownerScopeUserId) {
+                    return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
+                }
+
+                const incomingBody = req.body && typeof req.body === 'object' ? req.body : {};
+                const requestedSecret = normalizeIncomingWebhookSecret(incomingBody.secret);
+                if (
+                    requestedSecret
+                    && !IncomingWebhookCredential.isValidSecret(requestedSecret)
+                ) {
+                    return res.status(400).json({
+                        error: `Secret invalido (minimo ${IncomingWebhookCredential.MIN_SECRET_LENGTH} caracteres)`
+                    });
+                }
+
+                const result = await IncomingWebhookCredential.upsertForOwner(ownerScopeUserId, {
+                    secret: requestedSecret || undefined,
+                    created_by: getRequesterUserId(req) || undefined
+                });
+
+                return res.json({
+                    success: true,
+                    secret: result.secret,
+                    credential: serializeIncomingWebhookCredentialForApi(result.credential)
+                });
+            } catch (error) {
+                console.error('[IncomingWebhook] Falha ao regenerar credencial:', error);
+                return res.status(400).json({ error: error.message || 'Falha ao regenerar credencial do webhook de entrada' });
+            }
         }
     };
 }
