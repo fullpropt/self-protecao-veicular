@@ -239,6 +239,36 @@ export default function Contatos() {
         .contatos-react #bulkActions span {
           color: rgba(214, 228, 239, 0.64);
         }
+        .contatos-react td[data-label="Status"] .badge {
+          min-height: 28px;
+          padding: 5px 12px;
+          border: 1px solid transparent;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 8px 18px rgba(3, 10, 23, 0.14);
+        }
+        .contatos-react td[data-label="Status"] .badge-info {
+          background: rgba(59, 130, 246, 0.14);
+          border-color: rgba(96, 165, 250, 0.14);
+          color: #60a5fa;
+        }
+        .contatos-react td[data-label="Status"] .badge-warning {
+          background: rgba(245, 158, 11, 0.16);
+          border-color: rgba(251, 191, 36, 0.14);
+          color: #f59e0b;
+        }
+        .contatos-react td[data-label="Status"] .badge-success {
+          background: rgba(34, 197, 94, 0.14);
+          border-color: rgba(74, 222, 128, 0.14);
+          color: #00e889;
+        }
+        .contatos-react td[data-label="Status"] .badge-danger {
+          background: rgba(239, 68, 68, 0.14);
+          border-color: rgba(248, 113, 113, 0.14);
+          color: #f87171;
+        }
         .contatos-react #selectedCount {
           color: #f5fbf8;
         }
