@@ -1,0 +1,63 @@
+groups:
+  - name: zapvender-ops-alerts
+    interval: 30s
+    rules:
+      - alert: ZapVenderQueuePendingHigh
+        expr: zapvender_queue_pending_messages > zapvender_ops_alert_queue_pending_warn_threshold
+        for: 5m
+        labels:
+          severity: warning
+          service: zapvender
+        annotations:
+          summary: "Fila pendente acima do limite"
+          description: "queue_pending={{ $value }} acima do threshold configurado."
+
+      - alert: ZapVenderQueueFailedHigh
+        expr: zapvender_queue_failed_messages > zapvender_ops_alert_queue_failed_warn_threshold
+        for: 5m
+        labels:
+          severity: critical
+          service: zapvender
+        annotations:
+          summary: "Fila com falhas acima do limite"
+          description: "queue_failed={{ $value }} acima do threshold configurado."
+
+      - alert: ZapVenderFlowRunningHigh
+        expr: zapvender_flow_executions_running > zapvender_ops_alert_flow_running_warn_threshold
+        for: 10m
+        labels:
+          severity: warning
+          service: zapvender
+        annotations:
+          summary: "Flows running acima do limite"
+          description: "flow_running={{ $value }} acima do threshold configurado."
+
+      - alert: ZapVenderNoConnectedSessions
+        expr: zapvender_whatsapp_sessions_total > 0 and zapvender_whatsapp_sessions_connected == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: zapvender
+        annotations:
+          summary: "Nenhuma sessao WhatsApp conectada"
+          description: "Existem sessoes carregadas, mas nenhuma conectada."
+
+      - alert: ZapVenderOpsNotifierFailing
+        expr: zapvender_ops_alert_notify_enabled == 1 and zapvender_ops_alert_last_cycle_notify_failed > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: zapvender
+        annotations:
+          summary: "Notificador externo de alertas com falha"
+          description: "O ciclo de alerta registrou falha em notificacao externa."
+
+      - alert: ZapVenderOpsAlertsWorkerDisabled
+        expr: zapvender_ops_alerts_enabled == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: zapvender
+        annotations:
+          summary: "Worker de alertas operacionais desabilitado"
+          description: "Ative OPS_ALERTS_ENABLED para monitoramento continuo."

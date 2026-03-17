@@ -42,3 +42,8 @@ Suggested alert starters:
 - No connected WhatsApp sessions (`zapvender_whatsapp_sessions_connected == 0`)
 - Running flows stuck high for long period (`zapvender_flow_executions_running`)
 - External notifier failures (`zapvender_ops_alert_last_cycle_notify_failed > 0`)
+
+Operational references:
+
+- `docs/ops/PROMETHEUS_ALERT_RULES.yml`
+- `docs/ops/GRAFANA_DASHBOARD_QUERIES.md`

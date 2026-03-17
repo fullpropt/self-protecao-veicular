@@ -54,6 +54,8 @@ Status do bloco: [~] Parcial (tecnicamente avancado)
   Evidencia: `runOpsAlertsCycle`, `buildOpsThresholdState` e metricas `zapvender_ops_alert_*` em `server/index.js`.
 - [x] Notificacao externa de alertas operacionais via webhook configuravel.
   Evidencia: `dispatchOpsAlertExternalNotification` + envs `OPS_ALERT_NOTIFY_*` em `server/index.js` e `.env.example`.
+- [x] Politicas base de alerta e consultas de dashboard documentadas.
+  Evidencia: `docs/ops/PROMETHEUS_ALERT_RULES.yml` e `docs/ops/GRAFANA_DASHBOARD_QUERIES.md`.
 - [~] Logging estruturado aplicado nos pontos criticos de inbound/locks/idempotencia.
   Evidencia: `logStructured(...)` com eventos `flow.inbound.*`, `flow.idempotency.*` e `flow.lock.*` em `server/index.js`.
 

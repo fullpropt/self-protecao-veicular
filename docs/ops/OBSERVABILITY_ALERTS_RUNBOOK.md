@@ -56,3 +56,7 @@ Padronizar monitoramento do fluxo/menu com logs estruturados e alertas de backlo
 - Worker de alerta e iniciado no boot e encerrado em `SIGTERM`/`SIGINT`.
 - Notificador externo usa timeout (`OPS_ALERT_NOTIFY_TIMEOUT_MS`) para nao travar o ciclo.
 - Ajuste limiares por carga real do tenant.
+
+## Integracao recomendada
+- Regras de alerta prontas: `docs/ops/PROMETHEUS_ALERT_RULES.yml`
+- Base de dashboard: `docs/ops/GRAFANA_DASHBOARD_QUERIES.md`
