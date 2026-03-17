@@ -197,9 +197,10 @@ function DashboardStyles() {
           position: relative;
           overflow: hidden;
           border-color: transparent;
-          background: rgba(8, 11, 16, 0.98);
+          background: rgba(18, 22, 28, 0.98);
           box-shadow:
             0 18px 40px rgba(1, 3, 7, 0.32),
+            0 0 18px rgba(var(--primary-rgb), 0.04),
             inset 0 1px 0 rgba(255, 255, 255, 0.04);
         }
         .dashboard-react .stats-grid .stat-card::before {
@@ -221,6 +222,7 @@ function DashboardStyles() {
           border-color: rgba(var(--primary-rgb), 0.24);
           box-shadow:
             0 22px 48px rgba(1, 3, 7, 0.36),
+            0 0 22px rgba(var(--primary-rgb), 0.06),
             0 0 0 1px rgba(var(--primary-rgb), 0.08),
             inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
@@ -857,9 +859,10 @@ function DashboardStyles() {
         }
         .events-personalized-card {
           border-color: transparent;
-          background: rgba(7, 9, 14, 0.98);
+          background: rgba(17, 21, 27, 0.98);
           box-shadow:
             0 24px 52px rgba(1, 2, 6, 0.34),
+            0 0 22px rgba(var(--primary-rgb), 0.035),
             inset 0 1px 0 rgba(255, 255, 255, 0.04);
         }
         .events-personalized-card::before {
@@ -883,7 +886,7 @@ function DashboardStyles() {
         .events-summary { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: rgba(214, 228, 239, 0.58); }
         .events-summary strong { color: #f5fbf8; }
         .events-list { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; }
-        .events-row { position: relative; overflow: hidden; display: grid; gap: 8px; padding: 10px 12px; border: 1px solid transparent; border-radius: 12px; background: rgba(11, 14, 20, 0.92); }
+        .events-row { position: relative; overflow: hidden; display: grid; gap: 8px; padding: 10px 12px; border: 1px solid transparent; border-radius: 12px; background: rgba(24, 29, 36, 0.94); box-shadow: 0 10px 24px rgba(1, 3, 7, 0.18), 0 0 14px rgba(var(--primary-rgb), 0.025); }
         .events-row::before {
           content: '';
           position: absolute;
