@@ -13,6 +13,9 @@ const { createFlowModel } = require('./models/flowModel');
 const { createCustomEventModel } = require('./models/customEventModel');
 const { createMessageQueueModel } = require('./models/messageQueueModel');
 const { createTagModel } = require('./models/tagModel');
+const { createIncomingWebhookCredentialModel } = require('./models/incomingWebhookCredentialModel');
+const { createWebhookModel } = require('./models/webhookModel');
+const { createWebhookDeliveryQueueModel } = require('./models/webhookDeliveryQueueModel');
 const {
     normalizeTagLabel: sharedNormalizeTagLabel,
     normalizeTagKey: sharedNormalizeTagKey,
@@ -1377,462 +1380,34 @@ const Tag = createTagModel({
 // WEBHOOKS
 // ============================================
 
-const IncomingWebhookCredential = {
-    MIN_SECRET_LENGTH: INCOMING_WEBHOOK_SECRET_MIN_LENGTH,
+const IncomingWebhookCredential = createIncomingWebhookCredentialModel({
+    queryOne,
+    run,
+    parsePositiveInteger,
+    normalizeIncomingWebhookSecret,
+    hashIncomingWebhookSecret,
+    generateIncomingWebhookSecret,
+    buildIncomingWebhookSecretPreview,
+    incomingWebhookSecretMinLength: INCOMING_WEBHOOK_SECRET_MIN_LENGTH
+});
 
-    normalizeSecret(value) {
-        return normalizeIncomingWebhookSecret(value);
-    },
+const Webhook = createWebhookModel({
+    query,
+    queryOne,
+    run,
+    generateUUID,
+    appendOwnerCreatedByFilters
+});
 
-    isValidSecret(value, options = {}) {
-        const minLength = parsePositiveInteger(options?.minLength, INCOMING_WEBHOOK_SECRET_MIN_LENGTH)
-            || INCOMING_WEBHOOK_SECRET_MIN_LENGTH;
-        return normalizeIncomingWebhookSecret(value).length >= minLength;
-    },
-
-    generateSecret() {
-        return generateIncomingWebhookSecret();
-    },
-
-    async hasAny() {
-        const row = await queryOne('SELECT id FROM incoming_webhook_credentials LIMIT 1');
-        return !!row;
-    },
-
-    async findByOwnerUserId(ownerUserId) {
-        const normalizedOwnerUserId = parsePositiveInteger(ownerUserId, null);
-        if (!normalizedOwnerUserId) return null;
-
-        return await queryOne(`
-            SELECT
-                id,
-                owner_user_id,
-                secret_prefix,
-                secret_suffix,
-                created_by,
-                last_rotated_at,
-                last_used_at,
-                created_at,
-                updated_at
-            FROM incoming_webhook_credentials
-            WHERE owner_user_id = ?
-            LIMIT 1
-        `, [normalizedOwnerUserId]);
-    },
-
-    async findOwnerBySecret(secret) {
-        const normalizedSecret = normalizeIncomingWebhookSecret(secret);
-        if (!normalizedSecret) return null;
-
-        const secretHash = hashIncomingWebhookSecret(normalizedSecret);
-        if (!secretHash) return null;
-
-        const credential = await queryOne(`
-            SELECT
-                id,
-                owner_user_id,
-                secret_prefix,
-                secret_suffix,
-                created_by,
-                last_rotated_at,
-                last_used_at,
-                created_at,
-                updated_at
-            FROM incoming_webhook_credentials
-            WHERE secret_hash = ?
-            LIMIT 1
-        `, [secretHash]);
-
-        if (!credential) {
-            return null;
-        }
-
-        await run(`
-            UPDATE incoming_webhook_credentials
-            SET last_used_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `, [credential.id]);
-
-        return credential;
-    },
-
-    async upsertForOwner(ownerUserId, options = {}) {
-        const normalizedOwnerUserId = parsePositiveInteger(ownerUserId, null);
-        if (!normalizedOwnerUserId) {
-            throw new Error('owner_user_id invalido');
-        }
-
-        const providedSecret = normalizeIncomingWebhookSecret(options?.secret);
-        const secret = providedSecret || generateIncomingWebhookSecret();
-        if (!this.isValidSecret(secret)) {
-            throw new Error(`Secret invalido (minimo ${INCOMING_WEBHOOK_SECRET_MIN_LENGTH} caracteres)`);
-        }
-
-        const secretHash = hashIncomingWebhookSecret(secret);
-        if (!secretHash) {
-            throw new Error('Secret invalido');
-        }
-
-        const { prefix, suffix } = buildIncomingWebhookSecretPreview(secret);
-        const createdBy = parsePositiveInteger(options?.created_by ?? options?.createdBy, null);
-
-        let credential;
-        try {
-            credential = await queryOne(`
-                INSERT INTO incoming_webhook_credentials (
-                    owner_user_id,
-                    secret_hash,
-                    secret_prefix,
-                    secret_suffix,
-                    created_by,
-                    last_rotated_at
-                )
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT (owner_user_id) DO UPDATE SET
-                    secret_hash = EXCLUDED.secret_hash,
-                    secret_prefix = EXCLUDED.secret_prefix,
-                    secret_suffix = EXCLUDED.secret_suffix,
-                    created_by = COALESCE(EXCLUDED.created_by, incoming_webhook_credentials.created_by),
-                    last_rotated_at = CURRENT_TIMESTAMP,
-                    updated_at = CURRENT_TIMESTAMP
-                RETURNING
-                    id,
-                    owner_user_id,
-                    secret_prefix,
-                    secret_suffix,
-                    created_by,
-                    last_rotated_at,
-                    last_used_at,
-                    created_at,
-                    updated_at
-            `, [
-                normalizedOwnerUserId,
-                secretHash,
-                prefix,
-                suffix,
-                createdBy
-            ]);
-        } catch (error) {
-            const message = String(error?.message || '').toLowerCase();
-            if (message.includes('secret_hash') && message.includes('duplicate')) {
-                throw new Error('Secret informado ja esta em uso');
-            }
-            throw error;
-        }
-
-        return {
-            secret,
-            credential
-        };
-    }
-};
-
-const Webhook = {
-    async create(data) {
-        const uuid = generateUUID();
-        
-        const result = await run(`
-            INSERT INTO webhooks (uuid, name, url, secret, events, headers, is_active, retry_count, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-            uuid,
-            data.name,
-            data.url,
-            data.secret,
-            JSON.stringify(data.events || []),
-            JSON.stringify(data.headers || {}),
-            data.is_active !== undefined ? data.is_active : 1,
-            data.retry_count || 3,
-            data.created_by
-        ]);
-        
-        return { id: result.lastInsertRowid, uuid };
-    },
-    
-    async findById(id, options = {}) {
-        const filters = ['webhooks.id = ?'];
-        const params = [id];
-        appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'webhooks' });
-
-        return await queryOne(`
-            SELECT webhooks.*
-            FROM webhooks
-            WHERE ${filters.join(' AND ')}
-        `, params);
-    },
-    
-    async findByEvent(event, options = {}) {
-        const filters = [
-            'webhooks.is_active = 1',
-            'webhooks.events LIKE ?'
-        ];
-        const params = [`%"${event}"%`];
-        appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'webhooks' });
-
-        return await query(`
-            SELECT webhooks.*
-            FROM webhooks
-            WHERE ${filters.join(' AND ')}
-        `, params);
-    },
-    
-    async list(options = {}) {
-        const filters = [];
-        const params = [];
-        appendOwnerCreatedByFilters(filters, params, options, { tableAlias: 'webhooks' });
-
-        const whereClause = filters.length > 0
-            ? `WHERE ${filters.join(' AND ')}`
-            : '';
-
-        return await query(`
-            SELECT webhooks.*
-            FROM webhooks
-            ${whereClause}
-            ORDER BY webhooks.name ASC
-        `, params);
-    },
-    
-    async update(id, data, options = {}) {
-        const existing = await this.findById(id, options);
-        if (!existing) return null;
-
-        const fields = [];
-        const values = [];
-        
-        const allowedFields = ['name', 'url', 'secret', 'events', 'headers', 'is_active', 'retry_count'];
-        
-        for (const [key, value] of Object.entries(data)) {
-            if (allowedFields.includes(key)) {
-                fields.push(`${key} = ?`);
-                values.push(typeof value === 'object' ? JSON.stringify(value) : value);
-            }
-        }
-        
-        if (fields.length === 0) return existing;
-        
-        fields.push("updated_at = CURRENT_TIMESTAMP");
-        values.push(id);
-        
-        await run(`UPDATE webhooks SET ${fields.join(', ')} WHERE id = ?`, values);
-        return await this.findById(id, options);
-    },
-    
-    async logTrigger(webhookId, event, payload, responseStatus, responseBody, durationMs) {
-        return await run(`
-            INSERT INTO webhook_logs (webhook_id, event, payload, response_status, response_body, duration_ms)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `, [webhookId, event, JSON.stringify(payload), responseStatus, responseBody, durationMs]);
-    },
-    
-    async delete(id, options = {}) {
-        const existing = await this.findById(id, options);
-        if (!existing) return null;
-        return await run('DELETE FROM webhooks WHERE id = ?', [id]);
-    }
-};
-
-const WebhookDeliveryQueue = {
-    async add(data) {
-        const webhookId = parsePositiveInteger(data?.webhook_id ?? data?.webhookId, null);
-        if (!webhookId) {
-            throw new Error('webhook_id invalido');
-        }
-
-        const event = String(data?.event || '').trim();
-        if (!event) {
-            throw new Error('event invalido');
-        }
-
-        const dedupeKey = String((data?.dedupe_key ?? data?.dedupeKey) || '').trim().slice(0, 255);
-        if (!dedupeKey) {
-            throw new Error('dedupe_key invalido');
-        }
-
-        const payload = toJsonStringOrNull(data?.payload);
-        if (!payload) {
-            throw new Error('payload invalido');
-        }
-
-        const maxAttempts = Math.max(
-            1,
-            Math.min(
-                20,
-                parsePositiveInteger(data?.max_attempts ?? data?.maxAttempts, 3) || 3
-            )
-        );
-        const nextAttemptAt = data?.next_attempt_at ?? data?.nextAttemptAt ?? null;
-        const uuid = generateUUID();
-
-        const inserted = await queryOne(`
-            INSERT INTO webhook_delivery_queue (
-                uuid, webhook_id, event, payload, dedupe_key, max_attempts, next_attempt_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (webhook_id, dedupe_key) DO NOTHING
-            RETURNING id, uuid, webhook_id, event, dedupe_key, status, attempts, max_attempts, next_attempt_at, created_at
-        `, [
-            uuid,
-            webhookId,
-            event,
-            payload,
-            dedupeKey,
-            maxAttempts,
-            nextAttemptAt
-        ]);
-
-        if (inserted) {
-            return {
-                ...inserted,
-                created: true,
-                duplicated: false
-            };
-        }
-
-        const existing = await queryOne(`
-            SELECT id, uuid, webhook_id, event, dedupe_key, status, attempts, max_attempts, next_attempt_at, created_at
-            FROM webhook_delivery_queue
-            WHERE webhook_id = ?
-              AND dedupe_key = ?
-            LIMIT 1
-        `, [webhookId, dedupeKey]);
-
-        return {
-            ...(existing || {}),
-            created: false,
-            duplicated: true
-        };
-    },
-
-    async findById(id) {
-        return await queryOne('SELECT * FROM webhook_delivery_queue WHERE id = ?', [id]);
-    },
-
-    async getPending(options = {}) {
-        const limit = parsePositiveInteger(options?.limit, 20) || 20;
-        return await query(`
-            SELECT *
-            FROM webhook_delivery_queue
-            WHERE status = 'pending'
-              AND attempts < max_attempts
-              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
-            ORDER BY COALESCE(next_attempt_at, created_at) ASC, id ASC
-            LIMIT ?
-        `, [limit]);
-    },
-
-    async markProcessing(id) {
-        return await run(`
-            UPDATE webhook_delivery_queue
-            SET status = 'processing',
-                attempts = attempts + 1,
-                locked_at = CURRENT_TIMESTAMP,
-                processed_at = NULL
-            WHERE id = ?
-        `, [id]);
-    },
-
-    async markSent(id, options = {}) {
-        const responseStatus = parseNonNegativeInteger(options?.response_status ?? options?.responseStatus, null);
-        const responseBody = String((options?.response_body ?? options?.responseBody) || '').slice(0, 2000) || null;
-        const durationMs = parseNonNegativeInteger(options?.duration_ms ?? options?.durationMs, null);
-
-        return await run(`
-            UPDATE webhook_delivery_queue
-            SET status = 'sent',
-                next_attempt_at = NULL,
-                locked_at = NULL,
-                last_error = NULL,
-                response_status = ?,
-                response_body = ?,
-                duration_ms = ?,
-                processed_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `, [responseStatus, responseBody, durationMs, id]);
-    },
-
-    async markFailed(id, errorMessage, options = {}) {
-        const nextAttemptAt = options?.next_attempt_at ?? options?.nextAttemptAt ?? null;
-        const responseStatus = parseNonNegativeInteger(options?.response_status ?? options?.responseStatus, null);
-        const responseBody = String((options?.response_body ?? options?.responseBody) || '').slice(0, 2000) || null;
-        const durationMs = parseNonNegativeInteger(options?.duration_ms ?? options?.durationMs, null);
-        const normalizedError = String(errorMessage || '').slice(0, 1000) || 'Falha desconhecida na entrega';
-
-        return await run(`
-            UPDATE webhook_delivery_queue
-            SET status = CASE
-                    WHEN attempts >= max_attempts THEN 'failed'
-                    ELSE 'pending'
-                END,
-                next_attempt_at = CASE
-                    WHEN attempts >= max_attempts THEN NULL
-                    ELSE ?
-                END,
-                locked_at = NULL,
-                last_error = ?,
-                response_status = ?,
-                response_body = ?,
-                duration_ms = ?,
-                processed_at = CASE
-                    WHEN attempts >= max_attempts THEN CURRENT_TIMESTAMP
-                    ELSE NULL
-                END
-            WHERE id = ?
-        `, [nextAttemptAt, normalizedError, responseStatus, responseBody, durationMs, id]);
-    },
-
-    async markCancelled(id, reason = 'Cancelado') {
-        return await run(`
-            UPDATE webhook_delivery_queue
-            SET status = 'cancelled',
-                next_attempt_at = NULL,
-                locked_at = NULL,
-                last_error = ?,
-                processed_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `, [String(reason || 'Cancelado').slice(0, 500), id]);
-    },
-
-    async requeueStuck(staleAfterMs = 120000) {
-        const safeStaleMs = Math.max(5000, parseNonNegativeInteger(staleAfterMs, 120000));
-        const result = await run(`
-            UPDATE webhook_delivery_queue
-            SET status = 'pending',
-                next_attempt_at = CURRENT_TIMESTAMP,
-                locked_at = NULL,
-                processed_at = NULL,
-                last_error = COALESCE(last_error, '[WEBHOOK_RECOVERY] Reenfileirado apos processamento interrompido')
-            WHERE status = 'processing'
-              AND locked_at IS NOT NULL
-              AND locked_at <= (CURRENT_TIMESTAMP - (? * INTERVAL '1 millisecond'))
-        `, [safeStaleMs]);
-
-        return Number(result?.changes || 0);
-    },
-
-    async getStats() {
-        const row = await queryOne(`
-            SELECT
-                COUNT(*) AS total,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-                SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
-                SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
-                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
-            FROM webhook_delivery_queue
-        `);
-
-        return {
-            total: Number(row?.total || 0),
-            pending: Number(row?.pending || 0),
-            processing: Number(row?.processing || 0),
-            sent: Number(row?.sent || 0),
-            failed: Number(row?.failed || 0),
-            cancelled: Number(row?.cancelled || 0)
-        };
-    }
-};
+const WebhookDeliveryQueue = createWebhookDeliveryQueueModel({
+    query,
+    queryOne,
+    run,
+    generateUUID,
+    parsePositiveInteger,
+    parseNonNegativeInteger,
+    toJsonStringOrNull
+});
 
 const SupportInboxMessage = {
     async upsert(data = {}) {
@@ -2690,6 +2265,7 @@ module.exports = {
     Settings,
     User
 };
+
 
 
 
