@@ -67,6 +67,56 @@ type SettingsResponse = {
     settings?: Record<string, unknown> | null;
     onboarding_video_url?: string;
 };
+type AccountHealthRiskLevel = 'critical' | 'attention' | 'healthy' | 'paused';
+type AccountHealthDispatch = {
+    campaign_id?: number | null;
+    campaign_name?: string | null;
+    sent_today?: number;
+    unique_leads_today?: number;
+    replied_today?: number;
+    response_rate?: number;
+    first_sent_at?: string | null;
+    last_sent_at?: string | null;
+};
+type AccountHealthAccount = {
+    session_id?: string;
+    session_name?: string | null;
+    phone?: string | null;
+    status?: string;
+    status_label?: string;
+    campaign_enabled?: boolean;
+    daily_limit?: number;
+    hourly_limit?: number;
+    cooldown_until?: string | null;
+    cooldown_active?: boolean;
+    sent_today?: number;
+    unique_leads_today?: number;
+    replied_today?: number;
+    response_rate?: number;
+    sent_last_hour?: number;
+    first_sent_at?: string | null;
+    last_sent_at?: string | null;
+    risk_level?: AccountHealthRiskLevel;
+    risk_label?: string;
+    risk_reason?: string;
+    daily_usage_ratio?: number | null;
+    hourly_usage_ratio?: number | null;
+    dispatches?: AccountHealthDispatch[];
+};
+type AccountHealthSummary = {
+    total_accounts?: number;
+    critical?: number;
+    attention?: number;
+    healthy?: number;
+    paused?: number;
+    cooldown?: number;
+};
+type AccountHealthResponse = {
+    summary?: AccountHealthSummary;
+    accounts?: AccountHealthAccount[];
+    generatedAt?: string;
+    date?: string;
+};
 type OnboardingStepId =
     | 'connect_whatsapp'
     | 'create_first_contact'
@@ -471,6 +521,249 @@ function initOnboardingCard() {
     onboardingState = readOnboardingState();
     renderOnboardingChecklist();
     void loadOnboardingVideo({ silent: true });
+}
+
+function normalizeAccountHealthResponse(response: AccountHealthResponse | null | undefined) {
+    return {
+        summary: response?.summary || {},
+        accounts: Array.isArray(response?.accounts) ? response.accounts : [],
+        generatedAt: String(response?.generatedAt || '').trim(),
+        date: String(response?.date || '').trim()
+    };
+}
+
+function renderAccountHealthPlaceholder(message: string) {
+    const list = document.getElementById('accountHealthList') as HTMLElement | null;
+    const summary = document.getElementById('accountHealthSummary') as HTMLElement | null;
+    if (summary) {
+        summary.innerHTML = `<span class="account-health-summary-item">${escapeHtml(message)}</span>`;
+    }
+    if (list) {
+        list.innerHTML = `<div class="account-health-empty">${escapeHtml(message)}</div>`;
+    }
+}
+
+function normalizeAccountHealthPhone(value: unknown) {
+    const raw = String(value || '').trim();
+    if (!raw) return '-';
+    const digits = raw.replace(/\D/g, '');
+    if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+        return formatPhone(digits.slice(2));
+    }
+    if (digits.length === 10 || digits.length === 11) {
+        return formatPhone(digits);
+    }
+    return raw;
+}
+
+function getAccountHealthStatusClass(account: AccountHealthAccount) {
+    const status = String(account.status || '').trim().toLowerCase();
+    if (status === 'connected') return 'is-connected';
+    if (status === 'warming_up') return 'is-warming';
+    return 'is-offline';
+}
+
+function getAccountHealthRiskClass(level: unknown) {
+    const normalized = String(level || '').trim().toLowerCase();
+    if (normalized === 'critical') return 'is-critical';
+    if (normalized === 'attention') return 'is-attention';
+    if (normalized === 'paused') return 'is-paused';
+    return 'is-healthy';
+}
+
+function formatAccountHealthLimit(currentValue: unknown, limitValue: unknown) {
+    const current = toNonNegativeInt(currentValue);
+    const limit = toNonNegativeInt(limitValue);
+    if (limit > 0) {
+        return `${formatNumber(current)} / ${formatNumber(limit)}`;
+    }
+    return formatNumber(current);
+}
+
+function formatAccountHealthLimitHint(limitValue: unknown, ratioValue: unknown, unlimitedText: string) {
+    const limit = toNonNegativeInt(limitValue);
+    const ratio = Number(ratioValue);
+    if (limit > 0 && Number.isFinite(ratio)) {
+        return `${formatPercent(ratio * 100)} do limite configurado`;
+    }
+    return unlimitedText;
+}
+
+function formatAccountHealthTime(value: unknown, format: 'time' | 'datetime' = 'time') {
+    const normalized = String(value || '').trim();
+    return normalized ? formatDate(normalized, format) : '-';
+}
+
+function renderAccountHealthSummary(summaryInput: AccountHealthSummary | null | undefined, generatedAt: string) {
+    const summary = document.getElementById('accountHealthSummary') as HTMLElement | null;
+    if (!summary) return;
+
+    const totalAccounts = toNonNegativeInt(summaryInput?.total_accounts);
+    const critical = toNonNegativeInt(summaryInput?.critical);
+    const attention = toNonNegativeInt(summaryInput?.attention);
+    const cooldown = toNonNegativeInt(summaryInput?.cooldown);
+    const updatedAtLabel = generatedAt ? formatDate(generatedAt, 'time') : '-';
+
+    summary.innerHTML = [
+        `<span class="account-health-summary-item"><strong>${formatNumber(totalAccounts)}</strong> conta(s)</span>`,
+        `<span class="account-health-summary-item"><strong>${formatNumber(critical)}</strong> em risco alto</span>`,
+        `<span class="account-health-summary-item"><strong>${formatNumber(attention)}</strong> pedem atencao</span>`,
+        `<span class="account-health-summary-item"><strong>${formatNumber(cooldown)}</strong> em cooldown</span>`,
+        `<span class="account-health-summary-item">Atualizado <strong>${escapeHtml(updatedAtLabel)}</strong></span>`
+    ].join('');
+}
+
+function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | null | undefined) {
+    const list = document.getElementById('accountHealthList') as HTMLElement | null;
+    if (!list) return;
+
+    const accounts = Array.isArray(accountsInput) ? accountsInput : [];
+    if (!accounts.length) {
+        list.innerHTML = '<div class="account-health-empty">Nenhuma conta de disparo encontrada para monitoramento.</div>';
+        return;
+    }
+
+    list.innerHTML = accounts.map((account) => {
+        const sessionName = escapeHtml(String(account.session_name || account.session_id || 'Conta sem nome'));
+        const sessionId = escapeHtml(String(account.session_id || '-'));
+        const phone = escapeHtml(normalizeAccountHealthPhone(account.phone));
+        const statusLabel = escapeHtml(String(account.status_label || 'Indisponivel'));
+        const statusClass = getAccountHealthStatusClass(account);
+        const riskClass = getAccountHealthRiskClass(account.risk_level);
+        const riskLabel = escapeHtml(String(account.risk_label || 'Monitorando'));
+        const riskReason = escapeHtml(String(account.risk_reason || 'Sem observacoes para esta conta.'));
+        const sentToday = toNonNegativeInt(account.sent_today);
+        const repliedToday = toNonNegativeInt(account.replied_today);
+        const uniqueLeadsToday = toNonNegativeInt(account.unique_leads_today);
+        const sentLastHour = toNonNegativeInt(account.sent_last_hour);
+        const responseRate = Number(account.response_rate || 0);
+        const dispatches = Array.isArray(account.dispatches) ? account.dispatches : [];
+        const cooldownActive = account.cooldown_active === true;
+        const lastSentText = account.last_sent_at
+            ? `Ultimo disparo ${escapeHtml(formatDate(account.last_sent_at, 'time'))}`
+            : 'Sem disparos hoje';
+
+        return `
+            <section class="account-health-account">
+                <div class="account-health-account-head">
+                    <div class="account-health-account-title">
+                        <div class="account-health-account-name-row">
+                            <span class="account-health-account-name">${sessionName}</span>
+                            <span class="account-health-pill ${statusClass}">${statusLabel}</span>
+                            ${account.campaign_enabled === false ? '<span class="account-health-pill is-paused">Disparo pausado</span>' : ''}
+                        </div>
+                        <div class="account-health-account-meta">
+                            <span>${phone}</span>
+                            <span>Sessao: ${sessionId}</span>
+                            <span>${lastSentText}</span>
+                        </div>
+                    </div>
+                    <div class="account-health-risk">
+                        <span class="account-health-risk-badge ${riskClass}">${riskLabel}</span>
+                        <span class="account-health-risk-text">${riskReason}</span>
+                    </div>
+                </div>
+
+                <div class="account-health-metrics">
+                    <div class="account-health-metric">
+                        <span class="account-health-metric-label">Enviadas hoje</span>
+                        <strong class="account-health-metric-value">${formatNumber(sentToday)}</strong>
+                        <span class="account-health-metric-sub">${formatNumber(uniqueLeadsToday)} contato(s) impactado(s)</span>
+                    </div>
+                    <div class="account-health-metric">
+                        <span class="account-health-metric-label">Responderam</span>
+                        <strong class="account-health-metric-value">${formatNumber(repliedToday)}</strong>
+                        <span class="account-health-metric-sub">Leads que responderam apos o disparo</span>
+                    </div>
+                    <div class="account-health-metric">
+                        <span class="account-health-metric-label">Taxa de resposta</span>
+                        <strong class="account-health-metric-value">${formatPercent(responseRate)}</strong>
+                        <span class="account-health-metric-sub">Calculada sobre contatos impactados</span>
+                    </div>
+                    <div class="account-health-metric">
+                        <span class="account-health-metric-label">Ultima hora</span>
+                        <strong class="account-health-metric-value">${formatNumber(sentLastHour)}</strong>
+                        <span class="account-health-metric-sub">Volume recente de disparos</span>
+                    </div>
+                </div>
+
+                <div class="account-health-ops">
+                    <div class="account-health-op">
+                        <span class="account-health-op-label">Uso diario</span>
+                        <strong class="account-health-op-value">${escapeHtml(formatAccountHealthLimit(account.sent_today, account.daily_limit))}</strong>
+                        <span class="account-health-op-sub">${escapeHtml(formatAccountHealthLimitHint(account.daily_limit, account.daily_usage_ratio, 'Sem limite diario configurado'))}</span>
+                    </div>
+                    <div class="account-health-op">
+                        <span class="account-health-op-label">Uso por hora</span>
+                        <strong class="account-health-op-value">${escapeHtml(formatAccountHealthLimit(account.sent_last_hour, account.hourly_limit))}</strong>
+                        <span class="account-health-op-sub">${escapeHtml(formatAccountHealthLimitHint(account.hourly_limit, account.hourly_usage_ratio, 'Sem limite por hora configurado'))}</span>
+                    </div>
+                    <div class="account-health-op">
+                        <span class="account-health-op-label">Cooldown</span>
+                        <strong class="account-health-op-value">${cooldownActive ? escapeHtml(formatAccountHealthTime(account.cooldown_until, 'time')) : 'Livre'}</strong>
+                        <span class="account-health-op-sub">${cooldownActive ? `Ativo ate ${escapeHtml(formatAccountHealthTime(account.cooldown_until, 'datetime'))}` : 'Sem resfriamento automatico ativo'}</span>
+                    </div>
+                </div>
+
+                <div class="account-health-dispatches">
+                    <div class="account-health-dispatches-head">
+                        <strong>Disparos do dia</strong>
+                        <span>Leitura por conta para acompanhar risco operacional</span>
+                    </div>
+                    <div class="account-health-dispatch-list">
+                        ${dispatches.length
+                            ? dispatches.map((dispatch) => `
+                                <article class="account-health-dispatch-row">
+                                    <div class="account-health-dispatch-main">
+                                        <span class="account-health-dispatch-name">${escapeHtml(String(dispatch.campaign_name || 'Envios avulsos'))}</span>
+                                        <span class="account-health-dispatch-meta">${dispatch.last_sent_at ? `Ultimo envio ${escapeHtml(formatDate(dispatch.last_sent_at, 'time'))}` : 'Sem horario registrado'}</span>
+                                    </div>
+                                    <div class="account-health-dispatch-stat">
+                                        <strong>${formatNumber(toNonNegativeInt(dispatch.sent_today))}</strong>
+                                        <span>enviadas</span>
+                                    </div>
+                                    <div class="account-health-dispatch-stat">
+                                        <strong>${formatNumber(toNonNegativeInt(dispatch.replied_today))}</strong>
+                                        <span>responderam</span>
+                                    </div>
+                                    <div class="account-health-dispatch-stat">
+                                        <strong>${formatPercent(Number(dispatch.response_rate || 0))}</strong>
+                                        <span>taxa</span>
+                                    </div>
+                                </article>
+                            `).join('')
+                            : '<div class="account-health-empty">Nenhum disparo enviado hoje nesta conta.</div>'
+                        }
+                    </div>
+                </div>
+            </section>
+        `;
+    }).join('');
+}
+
+async function loadAccountHealth(options: { silent?: boolean } = {}) {
+    const hasCard = Boolean(document.getElementById('accountHealthList'));
+    if (!hasCard) return;
+
+    const hasRenderedContent = Boolean(document.querySelector('#accountHealthList .account-health-account'));
+    if (!hasRenderedContent) {
+        renderAccountHealthPlaceholder('Carregando saude das contas...');
+    }
+
+    try {
+        const response: AccountHealthResponse = await api.get('/api/dashboard/account-health');
+        const normalized = normalizeAccountHealthResponse(response);
+        renderAccountHealthSummary(normalized.summary, normalized.generatedAt);
+        renderAccountHealthAccounts(normalized.accounts);
+    } catch (error) {
+        if (!hasRenderedContent) {
+            renderAccountHealthPlaceholder('Nao foi possivel carregar a saude das contas.');
+        }
+        if (!options.silent) {
+            showToast('warning', 'Aviso', 'Nao foi possivel carregar saude das contas');
+        }
+        console.error(error);
+    }
 }
 
 function normalizeDateInputValue(value: string | null | undefined) {
@@ -941,6 +1234,7 @@ async function loadDashboardData() {
             loadDashboardLeadSummary({ silent: true }),
             leadsTablePromise,
             updateStatsPeriodChart({ silent: true }),
+            loadAccountHealth({ silent: true }),
             loadCustomEvents({ silent: true }),
             loadOnboardingVideo({ silent: true })
         ]);
