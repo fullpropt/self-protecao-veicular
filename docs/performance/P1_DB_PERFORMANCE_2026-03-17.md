@@ -13,6 +13,7 @@ Arquivos-base:
 Relatorios de execucao:
 - `docs/performance/2026-03-17T12-38-17-857Z-p1-db-baseline.md`
 - `docs/performance/2026-03-17T12-40-11-878Z-p1-db-after.md`
+- `docs/performance/2026-03-17T12-50-15-354Z-p1-db-after.md`
 
 ## Diagnostico (baseline)
 
@@ -45,15 +46,31 @@ Indices:
 
 Os mesmos `CREATE INDEX IF NOT EXISTS` foram executados diretamente no Postgres de producao para efeito imediato, sem aguardar deploy.
 
+### Refatoracao da query de inbox por owner (sem alterar regra de acesso)
+
+Arquivo:
+- `server/database/models.js` (`Conversation.list`)
+
+Mudancas:
+- Removido filtro pesado com `OR + EXISTS` na consulta principal.
+- Introduzido conjunto intermediario via CTE:
+  - `owner_scope_users`
+  - `owner_scope_conversations`
+  - `filtered_conversations`
+- Aplicado `ORDER BY/LIMIT/OFFSET` antes do join final com `leads/users`.
+
+Validacao de seguranca funcional:
+- Comparacao SQL direta (query antiga vs nova) em owners reais de producao.
+- Resultado: mesmos IDs retornados (`missing=0`, `extra=0` nos owners testados).
+
 ## Resultado (after)
 
 - `messages_list_by_conversation_timeline`: **4.933 ms -> 0.334 ms** (ganho ~93%)
   - Plano passou a usar `Index Scan` em `idx_messages_conversation_sent_coalesce_desc`.
 - `flow_executions_running_with_conversation`: **0.105 ms -> 0.062 ms**
   - Plano passou a usar `Index Scan` em `idx_flow_executions_status_id_desc`.
-- `conversations_owner_list`: **10.819 ms -> 11.941 ms** (sem ganho relevante no dataset atual)
-  - Gargalo principal continua no filtro multi-tenant com `OR + EXISTS` e joins.
-  - Necessita refatoracao da query para ganho estrutural (nao apenas indice).
+- `conversations_owner_list`: **10.819 ms -> 8.600 ms** (ganho ~20%)
+  - Melhora veio da refatoracao da consulta de owner para CTE + pre-filtro antes dos joins finais.
 
 ## Revisao N+1
 
@@ -61,4 +78,3 @@ Os mesmos `CREATE INDEX IF NOT EXISTS` foram executados diretamente no Postgres 
   - `GET /api/conversations` usa consulta unica + busca em lote de ultimas mensagens por `conversation_id`.
   - `GET /api/messages/:leadId` executa poucas consultas por request, sem loop por item de lista.
 - Pendencia futura: manter revisao recorrente quando novas rotas de inbox/flow forem adicionadas.
-

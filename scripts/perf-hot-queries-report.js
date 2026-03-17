@@ -145,37 +145,52 @@ async function buildReport(mode) {
 
         if (ownerUserId) {
             const sqlConversations = `
-                SELECT c.*, l.name AS lead_name, l.phone, l.vehicle, l.custom_fields AS lead_custom_fields, u.name AS agent_name
-                FROM conversations c
-                LEFT JOIN leads l ON c.lead_id = l.id
-                LEFT JOIN users u ON c.assigned_to = u.id
-                WHERE (
-                    l.owner_user_id = $1
-                    OR EXISTS (
-                        SELECT 1
-                        FROM users owner_scope
-                        WHERE owner_scope.id = COALESCE(c.assigned_to, l.assigned_to)
-                          AND (owner_scope.owner_user_id = $2 OR owner_scope.id = $3)
-                    )
-                    OR EXISTS (
-                        SELECT 1
-                        FROM whatsapp_sessions ws
-                        WHERE ws.session_id = c.session_id
-                          AND (
-                              ws.created_by = $4
-                              OR EXISTS (
-                                  SELECT 1
-                                  FROM users ws_owner
-                                  WHERE ws_owner.id = ws.created_by
-                                    AND (ws_owner.owner_user_id = $5 OR ws_owner.id = $6)
-                              )
-                          )
-                    )
+                WITH owner_scope_users AS (
+                    SELECT id
+                    FROM users
+                    WHERE id = $1 OR owner_user_id = $2
+                ),
+                owner_scope_conversations AS (
+                    SELECT c.id
+                    FROM leads l
+                    JOIN conversations c ON c.lead_id = l.id
+                    WHERE l.owner_user_id = $3
+
+                    UNION
+
+                    SELECT c.id
+                    FROM conversations c
+                    WHERE c.assigned_to IN (SELECT id FROM owner_scope_users)
+
+                    UNION
+
+                    SELECT c.id
+                    FROM leads l
+                    JOIN conversations c ON c.lead_id = l.id
+                    WHERE c.assigned_to IS NULL
+                      AND l.assigned_to IN (SELECT id FROM owner_scope_users)
+
+                    UNION
+
+                    SELECT c.id
+                    FROM conversations c
+                    JOIN whatsapp_sessions ws ON ws.session_id = c.session_id
+                    WHERE ws.created_by IN (SELECT id FROM owner_scope_users)
+                ),
+                filtered_conversations AS (
+                    SELECT c.*
+                    FROM conversations c
+                    WHERE c.id IN (SELECT id FROM owner_scope_conversations)
+                    ORDER BY c.updated_at DESC
+                    LIMIT 100
                 )
-                ORDER BY c.updated_at DESC
-                LIMIT 100
+                SELECT fc.*, l.name AS lead_name, l.phone, l.vehicle, l.custom_fields AS lead_custom_fields, u.name AS agent_name
+                FROM filtered_conversations fc
+                JOIN leads l ON fc.lead_id = l.id
+                LEFT JOIN users u ON fc.assigned_to = u.id
+                ORDER BY fc.updated_at DESC
             `;
-            const params = [ownerUserId, ownerUserId, ownerUserId, ownerUserId, ownerUserId, ownerUserId];
+            const params = [ownerUserId, ownerUserId, ownerUserId];
             queries.push({
                 key: 'conversations_owner_list',
                 sql: sqlConversations,

@@ -1091,74 +1091,104 @@ const Conversation = {
     },
     
     async list(options = {}) {
-        let sql = `
-            SELECT c.*, l.name as lead_name, l.phone, l.vehicle, l.custom_fields as lead_custom_fields, u.name as agent_name
-            FROM conversations c
-            LEFT JOIN leads l ON c.lead_id = l.id
-            LEFT JOIN users u ON c.assigned_to = u.id
-            WHERE 1=1
-        `;
         const params = [];
-        
+        const whereClauses = [];
+        const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
+
+        const ctes = [];
+        if (ownerUserId) {
+            ctes.push(`
+                owner_scope_users AS (
+                    SELECT id
+                    FROM users
+                    WHERE id = ? OR owner_user_id = ?
+                )
+            `);
+            ctes.push(`
+                owner_scope_conversations AS (
+                    SELECT c.id
+                    FROM leads l
+                    JOIN conversations c ON c.lead_id = l.id
+                    WHERE l.owner_user_id = ?
+
+                    UNION
+
+                    SELECT c.id
+                    FROM conversations c
+                    WHERE c.assigned_to IN (SELECT id FROM owner_scope_users)
+
+                    UNION
+
+                    SELECT c.id
+                    FROM leads l
+                    JOIN conversations c ON c.lead_id = l.id
+                    WHERE c.assigned_to IS NULL
+                      AND l.assigned_to IN (SELECT id FROM owner_scope_users)
+
+                    UNION
+
+                    SELECT c.id
+                    FROM conversations c
+                    JOIN whatsapp_sessions ws ON ws.session_id = c.session_id
+                    WHERE ws.created_by IN (SELECT id FROM owner_scope_users)
+                )
+            `);
+            params.push(ownerUserId, ownerUserId, ownerUserId);
+            whereClauses.push('c.id IN (SELECT id FROM owner_scope_conversations)');
+        }
+
         if (options.status) {
-            sql += ' AND c.status = ?';
+            whereClauses.push('c.status = ?');
             params.push(options.status);
         }
         
         if (options.assigned_to) {
-            sql += ' AND c.assigned_to = ?';
+            whereClauses.push('c.assigned_to = ?');
             params.push(options.assigned_to);
-        }
-
-        if (options.owner_user_id) {
-            const ownerUserId = parsePositiveInteger(options.owner_user_id, null);
-            if (ownerUserId) {
-                sql += `
-                    AND (
-                        l.owner_user_id = ?
-                        OR
-                        EXISTS (
-                            SELECT 1
-                            FROM users owner_scope
-                            WHERE owner_scope.id = COALESCE(c.assigned_to, l.assigned_to)
-                              AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
-                        )
-                        OR EXISTS (
-                            SELECT 1
-                            FROM whatsapp_sessions ws
-                            WHERE ws.session_id = c.session_id
-                              AND (
-                                  ws.created_by = ?
-                                  OR EXISTS (
-                                      SELECT 1
-                                      FROM users ws_owner
-                                      WHERE ws_owner.id = ws.created_by
-                                        AND (ws_owner.owner_user_id = ? OR ws_owner.id = ?)
-                                  )
-                              )
-                        )
-                    )
-                `;
-                params.push(ownerUserId, ownerUserId, ownerUserId, ownerUserId, ownerUserId, ownerUserId);
-            }
         }
         
         if (options.session_id) {
-            sql += ' AND c.session_id = ?';
+            whereClauses.push('c.session_id = ?');
             params.push(options.session_id);
         }
-        
-        sql += ' ORDER BY c.updated_at DESC';
-        
+
+        let filteredConversationsSql = `
+            SELECT c.*
+            FROM conversations c
+            ${whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''}
+            ORDER BY c.updated_at DESC
+        `;
+
         if (options.limit) {
-            sql += ' LIMIT ?';
+            filteredConversationsSql += ' LIMIT ?';
             params.push(options.limit);
         }
 
         if (options.offset) {
-            sql += ' OFFSET ?';
+            filteredConversationsSql += ' OFFSET ?';
             params.push(options.offset);
         }
+
+        ctes.push(`
+            filtered_conversations AS (
+                ${filteredConversationsSql}
+            )
+        `);
+
+        const sql = `
+            WITH ${ctes.join(',\n')}
+            SELECT
+                fc.*,
+                l.name as lead_name,
+                l.phone,
+                l.vehicle,
+                l.custom_fields as lead_custom_fields,
+                u.name as agent_name
+            FROM filtered_conversations fc
+            JOIN leads l ON fc.lead_id = l.id
+            LEFT JOIN users u ON fc.assigned_to = u.id
+            ORDER BY fc.updated_at DESC
+        `;
         
         return await query(sql, params);
     }
