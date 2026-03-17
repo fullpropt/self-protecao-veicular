@@ -702,7 +702,7 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
 
                     <div class="account-health-summary-side">
                         <span class="account-health-risk-badge ${riskClass}">${riskLabel}</span>
-                        <span class="account-health-summary-caret" aria-hidden="true">v</span>
+                        <span class="account-health-summary-caret" aria-hidden="true"></span>
                     </div>
                 </summary>
 
@@ -1110,20 +1110,24 @@ function renderCustomEventsList(response: CustomEventsStatsResponse) {
 
                 return `
                     <div class="events-row">
-                        <div class="events-row-main">
-                            <div class="events-row-name">${eventName}</div>
-                            ${eventKey ? `<div class="events-row-key">${eventKey}</div>` : ''}
-                            <div class="events-row-last">Último disparo: ${lastTriggered}</div>
+                        <div class="events-row-head">
+                            <div class="events-row-main">
+                                <div class="events-row-name">${eventName}</div>
+                                <span class="custom-event-status ${statusClass}">${statusLabel}</span>
+                                ${eventKey ? `<div class="events-row-key">${eventKey}</div>` : ''}
+                            </div>
+                            <div class="events-row-actions">
+                                <button class="btn btn-sm btn-outline btn-icon" title="Editar evento" onclick="openCustomEventModal(${eventId})">
+                                    <span class="icon icon-edit icon-sm"></span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger btn-icon" title="Excluir evento" onclick="deleteCustomEvent(${eventId})">
+                                    <span class="icon icon-delete icon-sm"></span>
+                                </button>
+                            </div>
                         </div>
-                        <span class="custom-event-status ${statusClass}">${statusLabel}</span>
-                        <div class="events-row-count">${formatNumber(eventTotal)} no período</div>
-                        <div class="events-row-actions">
-                            <button class="btn btn-sm btn-outline btn-icon" title="Editar evento" onclick="openCustomEventModal(${eventId})">
-                                <span class="icon icon-edit icon-sm"></span>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger btn-icon" title="Excluir evento" onclick="deleteCustomEvent(${eventId})">
-                                <span class="icon icon-delete icon-sm"></span>
-                            </button>
+                        <div class="events-row-meta">
+                            <div class="events-row-last">Último disparo: ${lastTriggered}</div>
+                            <div class="events-row-count">${formatNumber(eventTotal)} no período</div>
                         </div>
                     </div>
                 `;

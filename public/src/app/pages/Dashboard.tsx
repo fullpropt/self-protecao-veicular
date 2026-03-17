@@ -518,65 +518,21 @@ function DashboardStyles() {
         .account-health-summary-metrics {
           display: flex;
           flex-wrap: wrap;
-          gap: 8px;
+          gap: 10px 16px;
           justify-content: flex-start;
         }
         .account-health-metric-chip {
-          position: relative;
-          overflow: hidden;
-          min-width: 86px;
-          padding: 8px 10px 8px 12px;
-          border-radius: 12px;
-          border: 1px solid rgba(148, 163, 184, 0.16);
-          background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
-          box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.03),
-            0 10px 24px rgba(2, 6, 23, 0.12);
-        }
-        .account-health-metric-chip::before {
-          content: '';
-          position: absolute;
-          top: 9px;
-          left: 0;
-          bottom: 9px;
-          width: 2px;
-          border-radius: 999px;
-          background: rgba(226, 232, 240, 0.18);
-        }
-        .account-health-metric-chip.is-sent::before {
-          background: rgba(226, 232, 240, 0.16);
-        }
-        .account-health-metric-chip.is-replied::before {
-          background: rgba(226, 232, 240, 0.24);
-        }
-        .account-health-metric-chip.is-rate::before {
-          background: rgba(226, 232, 240, 0.2);
-        }
-        .account-health-metric-chip.is-usage {
-          border-style: solid;
-        }
-        .account-health-metric-chip.is-usage::before {
-          width: 3px;
-          background: rgba(226, 232, 240, 0.22);
-        }
-        .account-health-metric-chip.is-blocked {
-          border-style: dashed;
-          background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.024));
-        }
-        .account-health-metric-chip.is-blocked::before {
-          width: 3px;
-          background:
-            repeating-linear-gradient(
-              180deg,
-              rgba(226, 232, 240, 0.34) 0 5px,
-              rgba(226, 232, 240, 0.08) 5px 9px
-            );
+          display: grid;
+          gap: 2px;
+          min-width: 72px;
+          padding: 0;
+          border: none;
+          border-radius: 0;
+          background: none;
+          box-shadow: none;
         }
         .account-health-metric-chip-label {
           display: block;
-          margin-bottom: 2px;
           font-size: 10px;
           letter-spacing: 0.06em;
           text-transform: uppercase;
@@ -604,9 +560,15 @@ function DashboardStyles() {
           border-radius: 999px;
           border: 1px solid rgba(148, 163, 184, 0.18);
           background: rgba(255, 255, 255, 0.03);
-          color: rgba(214, 228, 239, 0.74);
-          font-size: 12px;
-          transition: transform 0.2s ease;
+          transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+        }
+        .account-health-summary-caret::before {
+          content: '';
+          width: 8px;
+          height: 8px;
+          border-right: 1.8px solid rgba(214, 228, 239, 0.82);
+          border-bottom: 1.8px solid rgba(214, 228, 239, 0.82);
+          transform: rotate(45deg) translateY(-1px);
         }
         .account-health-account[open] .account-health-summary-caret {
           transform: rotate(180deg);
@@ -692,10 +654,12 @@ function DashboardStyles() {
         .events-summary { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: var(--gray-500); }
         .events-summary strong { color: var(--gray-700); }
         .events-list { display: flex; flex-direction: column; gap: 10px; }
-        .events-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(12, 24, 40, 0.58); }
-        .events-row-main { min-width: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .events-row { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(12, 24, 40, 0.58); }
+        .events-row-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .events-row-main { min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .events-row-name { font-weight: 700; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
         .events-row-key { display: none; }
+        .events-row-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
         .events-row-count { font-size: 13px; color: var(--gray-600); white-space: nowrap; }
         .events-row-last { font-size: 12px; color: var(--gray-500); white-space: nowrap; line-height: 1.2; }
         .events-row-actions { display: inline-flex; gap: 6px; }
@@ -703,7 +667,7 @@ function DashboardStyles() {
         .info-icon { cursor: help; opacity: 0.7; }
         .events-empty { text-align: center; padding: 40px 20px; color: var(--gray-500); }
         .events-empty-emoji { width: 48px; height: 48px; display: block; margin: 0 auto 16px; opacity: 0.6; background-color: var(--gray-400); }
-        .custom-event-status { font-size: 11px; border-radius: 999px; padding: 3px 8px; border: 1px solid rgba(var(--primary-rgb), 0.25); color: var(--gray-500); background: rgba(12, 24, 40, 0.58); white-space: nowrap; }
+        .custom-event-status { display: inline-flex; align-items: center; font-size: 11px; border-radius: 999px; padding: 2px 8px; border: 1px solid rgba(var(--primary-rgb), 0.25); color: var(--gray-500); background: rgba(12, 24, 40, 0.58); white-space: nowrap; line-height: 1.2; }
         .custom-event-status.active { border-color: rgba(var(--primary-rgb), 0.45); color: #d8f4e6; background: rgba(var(--primary-rgb), 0.13); }
         .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.4); color: var(--gray-800); }
         .events-personalized-card.is-sidebar {
@@ -731,21 +695,18 @@ function DashboardStyles() {
           gap: 8px;
         }
         .events-personalized-card.is-sidebar .events-row {
-          grid-template-columns: 1fr;
-          gap: 8px;
           padding: 10px 12px;
         }
-        .events-personalized-card.is-sidebar .events-row-main {
-          display: grid;
-          gap: 4px;
+        .events-personalized-card.is-sidebar .events-row-head {
+          gap: 8px;
         }
         .events-personalized-card.is-sidebar .events-row-name,
         .events-personalized-card.is-sidebar .events-row-count,
         .events-personalized-card.is-sidebar .events-row-last {
           white-space: normal;
         }
-        .events-personalized-card.is-sidebar .events-row-actions {
-          justify-content: flex-end;
+        .events-personalized-card.is-sidebar .events-row-meta {
+          gap: 6px 10px;
         }
         .events-personalized-card.is-sidebar .events-empty {
           padding: 24px 12px;
@@ -798,7 +759,13 @@ function DashboardStyles() {
         .onboarding-card-header h3 {
           margin: 0;
           font-size: 20px;
-          color: #effaf7;
+          display: inline-block;
+          background: linear-gradient(90deg, #00f0ff 0%, #8fffe1 50%, #00f0ff 100%);
+          background-size: 200% auto;
+          color: transparent;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.16));
         }
         .onboarding-card-header p {
           margin: 6px 0 0;
@@ -1072,8 +1039,9 @@ function DashboardStyles() {
           .events-header { gap: 8px; margin-bottom: 12px; }
           .events-controls { width: 100%; margin-left: 0; }
           .events-controls .form-select, .events-controls .btn { width: 100%; }
-          .events-row { grid-template-columns: 1fr; gap: 8px; }
-          .events-row-main { display: grid; gap: 4px; }
+          .events-row-head { align-items: flex-start; }
+          .events-row-main { min-width: 0; }
+          .events-row-meta { gap: 4px 10px; }
           .events-row-count, .events-row-last { white-space: normal; }
           .events-row-actions { justify-content: flex-end; }
           .events-empty { padding: 20px 10px; }
@@ -1081,7 +1049,7 @@ function DashboardStyles() {
           .account-health-summary-row,
           .account-health-details { padding-left: 12px; padding-right: 12px; }
           .account-health-summary-metrics { gap: 6px; }
-          .account-health-metric-chip { min-width: calc(50% - 3px); flex: 1 1 calc(50% - 3px); }
+          .account-health-metric-chip { min-width: 0; flex: 0 1 auto; }
           .account-health-summary-side { width: 100%; justify-content: space-between; }
           .account-health-detail-card,
           .account-health-dispatches { padding: 12px; }
