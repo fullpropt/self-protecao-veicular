@@ -22,14 +22,12 @@ Legenda:
   Evidencia: `server/index.js` (constantes CSP + helmet + endpoint de report).
 - [x] Fail-fast para chaves inseguras/ausentes em producao (`JWT_SECRET` e `ENCRYPTION_KEY`).
   Evidencia: `server/index.js` (erros de startup quando chave e fraca/ausente).
-- [~] Rotacao de segredos em producao (API keys, JWT, encryption, webhooks) em andamento.
-  Evidencia: rotacionados no Railway (servico `ZapVender`) `JWT_SECRET`, `WEBHOOK_SECRET`, `SUPPORT_INBOX_WEBHOOK_SECRET` e `ENCRYPTION_KEY` com fallback temporario e remocao segura do `ENCRYPTION_KEY_PREVIOUS` apos auditoria/migracao.
-  Evidencia tecnica: script `scripts/encryption-key-rotation.js` (audit/migrate), execucao em 2026-03-17 com `previous_only=0` antes da remocao do fallback.
-  Pendencia: rotacao e revogacao das chaves de provedores externos (OpenAI/Gemini/Stripe/Pagar.me/Mailgun/MailMKT).
+- [x] Rotacao de segredos externos dispensada neste ciclo (decisao operacional).
+  Evidencia: mantida rotacao ja aplicada no Railway para segredos internos (`JWT_SECRET`, `WEBHOOK_SECRET`, `SUPPORT_INBOX_WEBHOOK_SECRET`, `ENCRYPTION_KEY`) e item de provedores externos retirado da lista de pendencias.
 - [x] Validacao de schema nas rotas criticas (login, send, bulk, webhooks) conectada.
   Evidencia: `server/index.js` com `validateLogin`, `validateApiSendRequest`, `validateQueueBulkRequest`, `validateStripeWebhook`, `validatePagarmeWebhook`.
 
-Status do bloco: [~] Parcial
+Status do bloco: [x] Concluido
 
 ## P0 - Estabilidade WhatsApp/menu
 
@@ -107,11 +105,11 @@ Status do bloco: [~] Parcial baixo
 
 ## Resumo executivo
 
-- Blocos concluidos: 1/7
-- Blocos parciais: 5/7
+- Blocos concluidos: 2/7
+- Blocos parciais: 4/7
 - Blocos nao iniciados: 1/7
 
 Proximo foco recomendado:
-1. Fechar P0 Seguranca com rotacao completa de segredos externos (revogacao + troca + evidencia).
-2. Consolidar observabilidade com dashboard e politicas de alerta (Grafana/Alertmanager/Sentry), usando o webhook externo ja disponivel.
-3. Iniciar P1 Refatoracao incremental (`server/index.js` e `server/database/models.js` por dominio).
+1. Consolidar observabilidade com dashboard e politicas de alerta (Grafana/Alertmanager/Sentry), usando o webhook externo ja disponivel.
+2. Iniciar P1 Refatoracao incremental (`server/index.js` e `server/database/models.js` por dominio).
+3. Avancar P2 Escala estrutural com separacao formal de worker dedicado por servico.
