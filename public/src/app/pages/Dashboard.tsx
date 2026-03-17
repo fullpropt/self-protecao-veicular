@@ -196,7 +196,7 @@ function DashboardStyles() {
         .dashboard-react .stats-grid .stat-card {
           position: relative;
           overflow: hidden;
-          border-color: rgba(148, 163, 184, 0.16);
+          border-color: transparent;
           background: rgba(8, 11, 16, 0.98);
           box-shadow:
             0 18px 40px rgba(1, 3, 7, 0.32),
@@ -207,7 +207,14 @@ function DashboardStyles() {
           position: absolute;
           inset: 0;
           border-radius: inherit;
-          background: none;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(var(--primary-rgb), 0.14) 52%, rgba(148, 163, 184, 0.08) 100%);
+          opacity: 0.42;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
           pointer-events: none;
         }
         .dashboard-react .stats-grid .stat-card:hover {
@@ -850,7 +857,7 @@ function DashboardStyles() {
           border-radius: 12px;
         }
         .events-personalized-card {
-          border-color: rgba(148, 163, 184, 0.16);
+          border-color: transparent;
           background: rgba(7, 9, 14, 0.98);
           box-shadow:
             0 24px 52px rgba(1, 2, 6, 0.34),
@@ -861,7 +868,14 @@ function DashboardStyles() {
           position: absolute;
           inset: 0;
           border-radius: inherit;
-          background: none;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(var(--primary-rgb), 0.12) 52%, rgba(148, 163, 184, 0.08) 100%);
+          opacity: 0.38;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
           pointer-events: none;
         }
         .events-header { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
@@ -870,7 +884,22 @@ function DashboardStyles() {
         .events-summary { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: rgba(214, 228, 239, 0.58); }
         .events-summary strong { color: #f5fbf8; }
         .events-list { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; }
-        .events-row { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid rgba(148, 163, 184, 0.12); border-radius: 12px; background: rgba(11, 14, 20, 0.92); }
+        .events-row { position: relative; overflow: hidden; display: grid; gap: 8px; padding: 10px 12px; border: 1px solid transparent; border-radius: 12px; background: rgba(11, 14, 20, 0.92); }
+        .events-row::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(var(--primary-rgb), 0.1) 55%, rgba(148, 163, 184, 0.06) 100%);
+          opacity: 0.34;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
         .events-row-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
         .events-row-main { min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .events-row-name { font-weight: 700; color: #f5fbf8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
