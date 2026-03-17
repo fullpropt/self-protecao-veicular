@@ -165,7 +165,7 @@ function DashboardStyles() {
         .account-health-header {
           display: flex;
           align-items: flex-start;
-          justify-content: space-between;
+          justify-content: flex-start;
           gap: 16px;
           flex-wrap: wrap;
           margin-bottom: 18px;
@@ -173,53 +173,6 @@ function DashboardStyles() {
         .account-health-header h3 {
           margin: 0 0 6px;
           font-size: 18px;
-        }
-        .account-health-header p {
-          margin: 0;
-          max-width: 720px;
-          font-size: 13px;
-          color: rgba(220, 236, 243, 0.78);
-          line-height: 1.5;
-        }
-        .account-health-summary {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-        }
-        .account-health-summary-item {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          border-radius: 999px;
-          border: 1px solid rgba(148, 163, 184, 0.22);
-          background: rgba(12, 24, 40, 0.58);
-          color: #d7e4ef;
-          font-size: 12px;
-          white-space: nowrap;
-        }
-        .account-health-summary-item strong {
-          color: #f4fbf8;
-        }
-        .account-health-summary-item.is-total {
-          border-color: rgba(var(--primary-rgb), 0.28);
-          background: rgba(var(--primary-rgb), 0.1);
-        }
-        .account-health-summary-item.is-critical {
-          border-color: rgba(248, 113, 113, 0.24);
-          background: rgba(248, 113, 113, 0.08);
-        }
-        .account-health-summary-item.is-attention {
-          border-color: rgba(250, 204, 21, 0.24);
-          background: rgba(250, 204, 21, 0.08);
-        }
-        .account-health-summary-item.is-cooldown {
-          border-color: rgba(56, 189, 248, 0.24);
-          background: rgba(56, 189, 248, 0.08);
-        }
-        .account-health-summary-item.is-updated {
-          background: rgba(16, 185, 129, 0.08);
         }
         .account-health-list {
           display: grid;
@@ -1054,7 +1007,6 @@ function DashboardStyles() {
           .events-row-actions { justify-content: flex-end; }
           .events-empty { padding: 20px 10px; }
           .events-empty-emoji { width: 34px; height: 34px; margin-bottom: 10px; }
-          .account-health-summary { justify-content: flex-start; }
           .account-health-summary-row,
           .account-health-details { padding-left: 12px; padding-right: 12px; }
           .account-health-summary-metrics { gap: 6px; }
@@ -1134,21 +1086,11 @@ function AccountHealthCard() {
       <div className="account-health-header">
         <div>
           <h3>Saude das contas de disparo</h3>
-          <p>
-            Acompanhe o volume enviado hoje, a taxa de resposta e os sinais que merecem atencao para evitar
-            pressao excessiva nas contas.
-          </p>
-        </div>
-        <div className="account-health-summary" id="accountHealthSummary">
-          <span className="account-health-summary-item">Carregando...</span>
         </div>
       </div>
       <div className="account-health-list" id="accountHealthList">
         <div className="account-health-empty">Carregando saude das contas...</div>
       </div>
-      <p className="account-health-footnote">
-        Cada linha mostra o essencial. Abra apenas as contas que pedirem contexto ou investigacao.
-      </p>
     </section>
   );
 }
