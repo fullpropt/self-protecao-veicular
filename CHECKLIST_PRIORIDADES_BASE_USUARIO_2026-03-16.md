@@ -60,10 +60,12 @@ Status do bloco: [~] Parcial
 
 - [x] Indices para tabelas quentes ja existem no schema.
   Evidencia: `server/database/schema.sql` e `server/database/schema.pg.sql`.
-- [ ] Revisao de N+1 nas rotas quentes (inbox/fluxos/mensagens) com checklist de query por endpoint.
-- [ ] Plano de execucao (`EXPLAIN ANALYZE`) documentado para queries mais custosas.
+- [x] Revisao de N+1 nas rotas quentes (inbox/fluxos/mensagens) com checklist de query por endpoint.
+  Evidencia: `docs/performance/P1_DB_PERFORMANCE_2026-03-17.md` (rotas auditadas e conclusoes sobre N+1).
+- [x] Plano de execucao (`EXPLAIN ANALYZE`) documentado para queries mais custosas.
+  Evidencia: `docs/performance/2026-03-17T12-38-17-857Z-p1-db-baseline.md`, `docs/performance/2026-03-17T12-40-11-878Z-p1-db-after.md` e consolidado em `docs/performance/P1_DB_PERFORMANCE_2026-03-17.md`.
 
-Status do bloco: [~] Parcial
+Status do bloco: [x] Concluido
 
 ## P1 - Refatoracao incremental
 
@@ -100,11 +102,11 @@ Status do bloco: [~] Parcial baixo
 
 ## Resumo executivo
 
-- Blocos concluidos: 0/7
-- Blocos parciais: 6/7
+- Blocos concluidos: 1/7
+- Blocos parciais: 5/7
 - Blocos nao iniciados: 1/7
 
 Proximo foco recomendado:
-1. Fechar P0 Seguranca com rotacao completa de segredos (revogacao + troca + evidencia).
-2. Fechar P0 Observabilidade (ativar metricas e padronizar logs estruturados em producao).
-3. Entrar em P1 Performance (N+1 + EXPLAIN nas queries quentes).
+1. Fechar P0 Seguranca com rotacao completa de segredos externos (revogacao + troca + evidencia).
+2. Evoluir P0 Observabilidade para alertas (SLO, filtros e alarmes de fila/latencia/erro).
+3. Iniciar P1 Refatoracao incremental (`server/index.js` e `server/database/models.js` por dominio).
