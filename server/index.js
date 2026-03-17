@@ -157,6 +157,7 @@ const { createAutomationRoutes } = require('./routes/automationRoutes');
 const { createFlowRoutes } = require('./routes/flowRoutes');
 const { createMessageRoutes } = require('./routes/messageRoutes');
 const { createQueueRoutes } = require('./routes/queueRoutes');
+const { createSettingsRoutes } = require('./routes/settingsRoutes');
 const { createTagRoutes } = require('./routes/tagRoutes');
 const { createTemplateRoutes } = require('./routes/templateRoutes');
 const { createWebhookRoutes } = require('./routes/webhookRoutes');
@@ -19548,193 +19549,24 @@ async function buildOwnerPlanStatus(ownerScopeUserId) {
     };
 }
 
-app.get('/api/plan/status', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const ownerAdmin = await User.findById(ownerScopeUserId || req.user?.id);
-        const plan = await buildOwnerPlanStatus(ownerScopeUserId);
-
-        res.json({
-            success: true,
-            owner_admin: ownerAdmin ? {
-                id: ownerAdmin.id,
-                name: ownerAdmin.name,
-                email: ownerAdmin.email
-            } : null,
-            plan
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Erro ao carregar status do plano' });
-    }
-});
-
-app.post('/api/plan/status/refresh', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const nowIso = new Date().toISOString();
-        const ownerAdmin = await User.findById(ownerScopeUserId || req.user?.id);
-        let plan = await buildOwnerPlanStatus(ownerScopeUserId);
-
-        if (String(plan?.provider || '').trim().toLowerCase() === 'stripe') {
-            const subscriptionId = String(plan?.external_reference || '').trim();
-            if (subscriptionId) {
-                const subscription = await stripeCheckoutService.retrieveSubscription(subscriptionId);
-                const registration = await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
-                    || await CheckoutRegistration.findByStripeCustomerId(subscription?.customer);
-                const priceId = String(subscription?.items?.data?.[0]?.price?.id || '').trim();
-                const inferredPlan = stripeCheckoutService.inferPlanByPriceId(priceId);
-
-                await syncStripePlanStatusByIdentifiers({
-                    subscriptionId,
-                    customerId: String(subscription?.customer || '').trim(),
-                    priceId,
-                    planKey: registration?.stripe_plan_key || inferredPlan?.key || '',
-                    planCode: registration?.stripe_plan_code || inferredPlan?.code || '',
-                    planName: registration?.stripe_plan_name || inferredPlan?.name || '',
-                    subscriptionStatus: stripeCheckoutService.normalizePlanStatus(subscription?.status),
-                    renewalDate: Number(subscription?.current_period_end || 0) > 0
-                        ? new Date(Number(subscription.current_period_end) * 1000).toISOString()
-                        : null
-                });
-                plan = await buildOwnerPlanStatus(ownerScopeUserId);
-            } else {
-                await Settings.set(
-                    buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
-                    nowIso,
-                    'string'
-                );
-                plan = await buildOwnerPlanStatus(ownerScopeUserId);
-            }
-        } else if (String(plan?.provider || '').trim().toLowerCase() === 'pagarme') {
-            const subscriptionId = String(plan?.external_reference || '').trim();
-            if (subscriptionId) {
-                const subscription = await pagarmeCheckoutService.retrieveSubscription(subscriptionId);
-                const subscriptionPayload = await pagarmeCheckoutService.resolveSubscriptionPayload(subscription);
-                const registration = await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
-                    || await CheckoutRegistration.findByStripeCustomerId(subscriptionPayload?.customerId || '');
-
-                await syncPagarmePlanStatusByIdentifiers({
-                    subscriptionId,
-                    customerId: String(subscriptionPayload?.customerId || '').trim(),
-                    customerEmail: String(subscriptionPayload?.customerEmail || '').trim().toLowerCase(),
-                    priceId: String(subscriptionPayload?.priceId || '').trim(),
-                    planKey: subscriptionPayload?.planKey || registration?.stripe_plan_key || '',
-                    planCode: subscriptionPayload?.planCode || registration?.stripe_plan_code || '',
-                    planName: subscriptionPayload?.planName || registration?.stripe_plan_name || '',
-                    subscriptionStatus: subscriptionPayload?.subscriptionStatus || 'active',
-                    renewalDate: subscriptionPayload?.renewalDate || null,
-                    metadata: {
-                        ...(subscriptionPayload?.metadata && typeof subscriptionPayload.metadata === 'object'
-                            ? subscriptionPayload.metadata
-                            : {}),
-                        provider: 'pagarme'
-                    }
-                });
-                plan = await buildOwnerPlanStatus(ownerScopeUserId);
-            } else {
-                await Settings.set(
-                    buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
-                    nowIso,
-                    'string'
-                );
-                plan = await buildOwnerPlanStatus(ownerScopeUserId);
-            }
-        } else {
-            await Settings.set(
-                buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
-                nowIso,
-                'string'
-            );
-            plan = await buildOwnerPlanStatus(ownerScopeUserId);
-        }
-
-        res.json({
-            success: true,
-            owner_admin: ownerAdmin ? {
-                id: ownerAdmin.id,
-                name: ownerAdmin.name,
-                email: ownerAdmin.email
-            } : null,
-            plan
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Erro ao atualizar status do plano' });
-    }
-});
-
-app.get('/api/settings', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const settings = normalizeSettingsForResponse(await Settings.getAll(), ownerScopeUserId);
-
-    res.json({ success: true, settings });
-
-});
-
-
-
-app.put('/api/settings', authenticate, async (req, res) => {
-
-    const requesterRole = getRequesterRole(req);
-    if (!isUserAdminRole(requesterRole)) {
-        return res.status(403).json({
-            success: false,
-            error: 'Sem permissao para atualizar configuracoes da conta'
-        });
-    }
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const incomingSettings = req.body && typeof req.body === 'object' ? req.body : {};
-    const changedKeys = Object.keys(incomingSettings);
-
-    for (const [key, value] of Object.entries(incomingSettings)) {
-
-        const type = typeof value === 'number' ? 'number' : 
-
-                     typeof value === 'boolean' ? 'boolean' :
-
-                     typeof value === 'object' ? 'json' : 'string';
-
-        await Settings.set(buildScopedSettingsKey(key, ownerScopeUserId), value, type);
-
-    }
-
-    
-
-    // Atualizar serviÃ§o de fila se necessÃ¡rio
-
-    const hasQueueSettings =
-        Object.prototype.hasOwnProperty.call(incomingSettings, 'bulk_message_delay') ||
-        Object.prototype.hasOwnProperty.call(incomingSettings, 'max_messages_per_minute');
-
-    if (hasQueueSettings && !ownerScopeUserId) {
-
-        await queueService.updateSettings({
-
-            delay: incomingSettings.bulk_message_delay,
-
-            maxPerMinute: incomingSettings.max_messages_per_minute
-
-        });
-
-    }
-
-    const touchedBusinessHours = changedKeys.some((key) => String(key || '').startsWith('business_hours_'));
-    if (touchedBusinessHours) {
-        invalidateBusinessHoursSettingsCache(ownerScopeUserId || null);
-        if (typeof queueService.invalidateBusinessHoursCache === 'function') {
-            queueService.invalidateBusinessHoursCache(ownerScopeUserId || null);
-        }
-    }
-
-    
-
-    res.json({
-        success: true,
-        settings: normalizeSettingsForResponse(await Settings.getAll(), ownerScopeUserId)
-    });
-
-});
+app.use(createSettingsRoutes({
+    authenticate,
+    resolveRequesterOwnerUserId,
+    User,
+    buildOwnerPlanStatus,
+    stripeCheckoutService,
+    pagarmeCheckoutService,
+    CheckoutRegistration,
+    syncStripePlanStatusByIdentifiers,
+    syncPagarmePlanStatusByIdentifiers,
+    Settings,
+    buildScopedSettingsKey,
+    normalizeSettingsForResponse,
+    getRequesterRole,
+    isUserAdminRole,
+    queueService,
+    invalidateBusinessHoursSettingsCache
+}));
 
 
 
