@@ -153,6 +153,7 @@ const {
 } = require('./middleware/validator');
 const { createAutomationRoutes } = require('./routes/automationRoutes');
 const { createFlowRoutes } = require('./routes/flowRoutes');
+const { createTemplateRoutes } = require('./routes/templateRoutes');
 
 
 
@@ -17354,86 +17355,13 @@ app.delete('/api/queue', authenticate, async (req, res) => {
 
 // ============================================
 
-
-
-app.get('/api/templates', authenticate, async (req, res) => {
-
-    const scopedUserId = getScopedUserId(req);
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const templates = await Template.list({
-        ...req.query,
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    res.json({ success: true, templates });
-
-});
-
-
-
-app.post('/api/templates', authenticate, async (req, res) => {
-
-    const payload = {
-        ...req.body,
-        created_by: req.user?.id
-    };
-    const result = await Template.create(payload);
-
-    const template = await Template.findById(result.id);
-
-    res.json({ success: true, template });
-
-});
-
-
-
-app.put('/api/templates/:id', authenticate, async (req, res) => {
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const existing = await Template.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: getScopedUserId(req) || undefined
-    });
-    if (!existing) {
-        return res.status(404).json({ error: 'Template nao encontrado' });
-    }
-    if (!canAccessCreatedRecord(req, existing.created_by)) {
-        return res.status(403).json({ error: 'Sem permissao para editar este template' });
-    }
-
-    await Template.update(req.params.id, req.body);
-
-    const template = await Template.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: getScopedUserId(req) || undefined
-    });
-
-    res.json({ success: true, template });
-
-});
-
-
-
-app.delete('/api/templates/:id', authenticate, async (req, res) => {
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const existing = await Template.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: getScopedUserId(req) || undefined
-    });
-    if (!existing) {
-        return res.status(404).json({ error: 'Template nao encontrado' });
-    }
-    if (!canAccessCreatedRecord(req, existing.created_by)) {
-        return res.status(403).json({ error: 'Sem permissao para remover este template' });
-    }
-
-    await Template.delete(req.params.id);
-
-    res.json({ success: true });
-
-});
-
-
+app.use(createTemplateRoutes({
+    authenticate,
+    Template,
+    getScopedUserId,
+    resolveRequesterOwnerUserId,
+    canAccessCreatedRecord
+}));
 
 // ============================================
 
