@@ -746,9 +746,9 @@ export default function FlowBuilder() {
         }
 
         .flow-builder-react .sidebar-footer {
-            margin-top: auto;
-            padding: 15px;
-            border-top: 1px solid rgba(148, 163, 184, 0.2);
+            margin-top: 8px;
+            padding: 8px 15px 20px;
+            border-top: none;
         }
 
         .flow-builder-react .btn-logout {

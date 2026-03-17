@@ -170,8 +170,8 @@ body {
 }
 
 .sidebar-nav {
-    flex: 1;
-    padding: 14px 18px 12px 10px;
+    flex: 0 0 auto;
+    padding: 14px 18px 8px 10px;
     position: relative;
     z-index: 1;
 }
@@ -385,8 +385,8 @@ body {
 }
 
 .sidebar-footer {
-    padding: 12px 18px 15px 15px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 8px 18px 22px 15px;
+    border-top: none;
 }
 
 .sidebar-admin-access {
