@@ -49,8 +49,8 @@ Status do bloco: [~] Parcial (tecnicamente avancado)
   Evidencia: `server/index.js`.
 - [x] Telemetria de fluxo inbound por etapas implementada.
   Evidencia: logs `[flow-telemetry]` em `server/index.js`.
-- [ ] Metricas ativas em producao no servico principal (`METRICS_ENABLED=true` + token).
-  Evidencia atual: `/metrics` retorna 404 quando desativado.
+- [x] Metricas ativas em producao no servico principal (`METRICS_ENABLED=true` + token).
+  Evidencia: variaveis aplicadas no Railway em 2026-03-17 e validacao com `/metrics` retornando `200` com bearer token e `401` sem token.
 - [ ] Logging estruturado consistente em producao (sem depender de `console.*`).
   Evidencia: `pino` esta em `level: 'silent'` no runtime principal.
 

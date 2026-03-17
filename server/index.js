@@ -231,6 +231,11 @@ const WHATSAPP_SESSION_RATE_LIMIT_MAX_PER_MINUTE = parsePositiveIntInRange(
 );
 const METRICS_ENABLED = parseBooleanEnv(process.env.METRICS_ENABLED, false);
 const METRICS_BEARER_TOKEN = String(process.env.METRICS_BEARER_TOKEN || '').trim();
+const APP_LOG_LEVEL = parseLogLevel(
+    process.env.LOG_LEVEL,
+    process.env.NODE_ENV === 'production' ? 'info' : 'debug'
+);
+const WHATSAPP_LOG_LEVEL = parseLogLevel(process.env.WHATSAPP_LOG_LEVEL, 'warn');
 const FLOW_INBOUND_TELEMETRY_ENABLED = parseBooleanEnv(process.env.FLOW_INBOUND_TELEMETRY_ENABLED, false);
 const FLOW_INBOUND_TELEMETRY_SLOW_MS = parsePositiveIntInRange(
     process.env.FLOW_INBOUND_TELEMETRY_SLOW_MS,
@@ -388,6 +393,13 @@ function parseBooleanEnv(value, fallback = false) {
     const normalized = String(value).trim().toLowerCase();
     if (['1', 'true', 'yes', 'sim', 'on'].includes(normalized)) return true;
     if (['0', 'false', 'no', 'nao', 'nÃ£o', 'off'].includes(normalized)) return false;
+    return fallback;
+}
+
+function parseLogLevel(value, fallback = 'info') {
+    const normalized = String(value || '').trim().toLowerCase();
+    const validLevels = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']);
+    if (validLevels.has(normalized)) return normalized;
     return fallback;
 }
 
@@ -2155,7 +2167,7 @@ const reconnectAttempts = whatsappService.reconnectAttempts;
 
 const qrTimeouts = whatsappService.qrTimeouts;
 
-const logger = pino({ level: 'silent' });
+const logger = pino({ level: WHATSAPP_LOG_LEVEL || APP_LOG_LEVEL });
 
 const typingStatus = new Map();
 

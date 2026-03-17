@@ -9,7 +9,15 @@ const { getBaileys } = require('./baileysLoader');
 const { loadAuthState } = require('./auth');
 const { registerEvents } = require('./events');
 
-const logger = pino({ level: 'silent' });
+function resolveSocketLogLevel() {
+    const normalized = String(process.env.WHATSAPP_LOG_LEVEL || process.env.LOG_LEVEL || 'warn')
+        .trim()
+        .toLowerCase();
+    const validLevels = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']);
+    return validLevels.has(normalized) ? normalized : 'warn';
+}
+
+const logger = pino({ level: resolveSocketLogLevel() });
 
 /**
  * Criar socket WhatsApp para uma sessão
