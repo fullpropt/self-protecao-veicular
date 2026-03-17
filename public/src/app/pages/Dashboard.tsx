@@ -203,6 +203,29 @@ function DashboardStyles() {
         .dashboard-react .stats-grid .stat-card {
           position: relative;
           overflow: hidden;
+          border-color: rgba(56, 189, 248, 0.14);
+          background:
+            radial-gradient(circle at 10% 0%, rgba(34, 211, 238, 0.14), transparent 28%),
+            radial-gradient(circle at 100% 100%, rgba(96, 165, 250, 0.08), transparent 34%),
+            linear-gradient(180deg, rgba(12, 26, 45, 0.98), rgba(9, 20, 35, 0.98));
+          box-shadow:
+            0 18px 40px rgba(2, 6, 23, 0.22),
+            inset 0 1px 0 rgba(125, 211, 252, 0.04);
+        }
+        .dashboard-react .stats-grid .stat-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(180deg, rgba(125, 211, 252, 0.04), rgba(125, 211, 252, 0));
+          pointer-events: none;
+        }
+        .dashboard-react .stats-grid .stat-card:hover {
+          border-color: rgba(56, 189, 248, 0.28);
+          box-shadow:
+            0 22px 48px rgba(2, 6, 23, 0.28),
+            0 0 0 1px rgba(34, 211, 238, 0.08),
+            inset 0 1px 0 rgba(125, 211, 252, 0.06);
         }
         .dashboard-react .stats-grid .stat-icon {
           position: relative;
@@ -251,6 +274,124 @@ function DashboardStyles() {
         }
         .dashboard-react .stats-grid .stat-icon.info::after {
           background: rgba(191, 219, 254, 0.42);
+        }
+        .dashboard-react .stats-grid .stat-content,
+        .dashboard-react .stats-grid .stat-icon {
+          position: relative;
+          z-index: 1;
+        }
+        .dashboard-react .stats-grid .stat-value {
+          color: #f3fbff;
+          letter-spacing: -0.03em;
+        }
+        .dashboard-react .stats-grid .stat-label {
+          color: rgba(191, 219, 254, 0.66);
+        }
+        .dashboard-react .stats-grid .stat-change {
+          border: 1px solid transparent;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+        }
+        .dashboard-react .stats-grid .stat-change.positive {
+          background: rgba(34, 197, 94, 0.12);
+          border-color: rgba(74, 222, 128, 0.12);
+        }
+        .dashboard-react .stats-grid .stat-change.negative {
+          background: rgba(239, 68, 68, 0.12);
+          border-color: rgba(248, 113, 113, 0.12);
+        }
+        .dashboard-react .funnel-container {
+          position: relative;
+          overflow: hidden;
+          border-color: rgba(56, 189, 248, 0.16);
+          background:
+            radial-gradient(circle at 0% 0%, rgba(34, 211, 238, 0.14), transparent 24%),
+            radial-gradient(circle at 100% 100%, rgba(96, 165, 250, 0.08), transparent 30%),
+            linear-gradient(180deg, rgba(12, 26, 45, 0.98), rgba(9, 20, 35, 0.98));
+          box-shadow:
+            0 18px 42px rgba(2, 6, 23, 0.22),
+            inset 0 1px 0 rgba(125, 211, 252, 0.04);
+        }
+        .dashboard-react .funnel-container::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(180deg, rgba(125, 211, 252, 0.04), rgba(125, 211, 252, 0));
+          pointer-events: none;
+        }
+        .dashboard-react .funnel-title,
+        .dashboard-react .funnel-stages {
+          position: relative;
+          z-index: 1;
+        }
+        .dashboard-react .funnel-title {
+          color: #f3fbff;
+          gap: 12px;
+        }
+        .dashboard-react .funnel-title .icon {
+          color: rgba(191, 219, 254, 0.9);
+        }
+        .dashboard-react .funnel-stage {
+          position: relative;
+          overflow: hidden;
+          padding: 22px 16px 20px;
+          border-radius: 18px;
+          border-color: rgba(56, 189, 248, 0.14);
+          background:
+            radial-gradient(circle at top, rgba(34, 211, 238, 0.08), transparent 52%),
+            linear-gradient(180deg, rgba(17, 35, 58, 0.92), rgba(10, 21, 36, 0.98));
+          box-shadow:
+            inset 0 1px 0 rgba(125, 211, 252, 0.04),
+            0 12px 28px rgba(2, 6, 23, 0.16);
+        }
+        .dashboard-react .funnel-stage::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(180deg, rgba(125, 211, 252, 0.04), rgba(125, 211, 252, 0));
+          pointer-events: none;
+        }
+        .dashboard-react .funnel-stage:hover {
+          border-color: rgba(56, 189, 248, 0.3);
+          background:
+            radial-gradient(circle at top, rgba(34, 211, 238, 0.12), transparent 52%),
+            linear-gradient(180deg, rgba(18, 39, 64, 0.94), rgba(10, 21, 36, 0.98));
+          transform: translateY(-2px);
+        }
+        .dashboard-react .funnel-stage.active {
+          border-color: rgba(34, 211, 238, 0.34);
+          background:
+            radial-gradient(circle at top, rgba(34, 211, 238, 0.16), transparent 52%),
+            linear-gradient(180deg, rgba(18, 42, 66, 0.96), rgba(10, 23, 39, 0.99));
+          box-shadow:
+            0 18px 36px rgba(2, 6, 23, 0.22),
+            0 0 0 1px rgba(34, 211, 238, 0.08),
+            inset 0 1px 0 rgba(125, 211, 252, 0.06);
+        }
+        .dashboard-react .funnel-value,
+        .dashboard-react .funnel-label,
+        .dashboard-react .funnel-percent {
+          position: relative;
+          z-index: 1;
+        }
+        .dashboard-react .funnel-value {
+          color: #29f3c2;
+          text-shadow: 0 0 18px rgba(41, 243, 194, 0.14);
+          letter-spacing: -0.04em;
+        }
+        .dashboard-react .funnel-label {
+          color: rgba(191, 219, 254, 0.68);
+        }
+        .dashboard-react .funnel-percent {
+          color: #59f7d1;
+        }
+        .dashboard-react .funnel-arrow {
+          color: rgba(125, 211, 252, 0.62);
+          font-size: 18px;
+          font-weight: 500;
+          transform: translateY(-4px);
         }
         .account-health-card {
           margin-bottom: 24px;
@@ -1051,6 +1192,13 @@ function DashboardStyles() {
             margin-top: 6px;
             font-size: 10px;
             padding: 2px 6px;
+          }
+          .dashboard-react .funnel-stage {
+            border-radius: 14px;
+            padding: 18px 14px 16px;
+          }
+          .dashboard-react .funnel-arrow {
+            transform: none;
           }
           .stats-period-controls {
             display: grid;
