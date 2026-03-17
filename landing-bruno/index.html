@@ -1521,6 +1521,96 @@
             text-align: center;
         }
 
+        .story-block.benefit-block,
+        .story-block.proof-block,
+        .story-block.objection-block {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+            padding: 48px clamp(24px, 4vw, 52px);
+            border-radius: 34px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 28px 72px rgba(0, 0, 0, 0.22);
+        }
+
+        .story-block.benefit-block::before,
+        .story-block.proof-block::before,
+        .story-block.objection-block::before,
+        .story-block.benefit-block::after,
+        .story-block.proof-block::after,
+        .story-block.objection-block::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            display: block;
+            border-radius: inherit;
+            pointer-events: none;
+        }
+
+        .story-block.benefit-block {
+            background: linear-gradient(180deg, rgba(3, 18, 14, 0.94), rgba(2, 7, 9, 0.96));
+            border-color: rgba(0, 255, 163, 0.12);
+        }
+
+        .story-block.benefit-block::before {
+            background:
+                radial-gradient(circle at 14% 18%, rgba(0, 255, 163, 0.2) 0%, transparent 30%),
+                radial-gradient(circle at 86% 14%, rgba(0, 240, 255, 0.14) 0%, transparent 28%),
+                linear-gradient(135deg, rgba(0, 255, 163, 0.08), rgba(2, 7, 9, 0.16) 48%, rgba(0, 240, 255, 0.08));
+        }
+
+        .story-block.benefit-block::after {
+            inset: 1px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 18%),
+                repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 20px);
+            opacity: 0.48;
+        }
+
+        .story-block.proof-block {
+            background: linear-gradient(180deg, rgba(5, 11, 22, 0.94), rgba(3, 7, 15, 0.97));
+            border-color: rgba(113, 215, 255, 0.14);
+        }
+
+        .story-block.proof-block::before {
+            background:
+                radial-gradient(circle at 50% 0%, rgba(0, 240, 255, 0.2) 0%, transparent 34%),
+                radial-gradient(circle at 16% 78%, rgba(0, 255, 163, 0.12) 0%, transparent 28%),
+                radial-gradient(circle at 84% 76%, rgba(64, 153, 255, 0.12) 0%, transparent 24%),
+                linear-gradient(180deg, rgba(8, 23, 38, 0.92), rgba(3, 7, 15, 0.98));
+        }
+
+        .story-block.proof-block::after {
+            inset: 1px;
+            background:
+                linear-gradient(rgba(143, 255, 225, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(143, 255, 225, 0.05) 1px, transparent 1px);
+            background-size: 44px 44px;
+            opacity: 0.34;
+            mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.86) 18%, rgba(0, 0, 0, 0.86) 82%, transparent 100%);
+            -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.86) 18%, rgba(0, 0, 0, 0.86) 82%, transparent 100%);
+        }
+
+        .story-block.objection-block {
+            background: linear-gradient(180deg, rgba(18, 10, 12, 0.94), rgba(8, 5, 7, 0.97));
+            border-color: rgba(255, 106, 114, 0.14);
+        }
+
+        .story-block.objection-block::before {
+            background:
+                radial-gradient(circle at 14% 18%, rgba(255, 106, 114, 0.16) 0%, transparent 30%),
+                radial-gradient(circle at 88% 22%, rgba(255, 188, 104, 0.1) 0%, transparent 24%),
+                linear-gradient(135deg, rgba(255, 106, 114, 0.08), rgba(10, 5, 8, 0.2) 44%, rgba(0, 255, 163, 0.04));
+        }
+
+        .story-block.objection-block::after {
+            inset: 1px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 24%),
+                repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 18px);
+            opacity: 0.52;
+        }
+
         .gain-block .story-heading,
         .compare-block .story-heading,
         .benefit-block .story-heading,
@@ -1599,6 +1689,43 @@
             font-size: 1.45rem;
             line-height: 1.15;
             letter-spacing: -0.02em;
+        }
+
+        .story-block.benefit-block .benefit-card {
+            background: rgba(7, 22, 18, 0.78);
+            border-color: rgba(0, 255, 163, 0.12);
+        }
+
+        .story-block.proof-block .proof-card {
+            background: rgba(7, 14, 24, 0.82);
+            border-color: rgba(113, 215, 255, 0.14);
+        }
+
+        .story-block.objection-block .objection-card {
+            background: rgba(21, 11, 13, 0.8);
+            border-color: rgba(255, 106, 114, 0.14);
+        }
+
+        .story-block.benefit-block .benefit-card:hover {
+            border-color: rgba(0, 255, 163, 0.24);
+            box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 255, 163, 0.08);
+        }
+
+        .story-block.proof-block .proof-card:hover {
+            border-color: rgba(113, 215, 255, 0.26);
+            box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(113, 215, 255, 0.08);
+        }
+
+        .story-block.objection-block .objection-card:hover {
+            border-color: rgba(255, 106, 114, 0.24);
+            box-shadow: 0 16px 42px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 106, 114, 0.08);
+        }
+
+        .story-block.objection-block .objection-card p::before {
+            background: linear-gradient(90deg, #ff8a72, #ffcc70);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(255, 138, 114, 0.24));
         }
 
         .signal-list,
@@ -2459,6 +2586,13 @@
                 border-radius: 0;
             }
 
+            .story-block.benefit-block,
+            .story-block.proof-block,
+            .story-block.objection-block {
+                padding: 38px 24px;
+                border-radius: 28px;
+            }
+
             .pain-grid,
             .method-grid,
             .offer-grid,
@@ -2544,6 +2678,13 @@
             .post-faq-section {
                 padding: 0;
                 border-radius: 0;
+            }
+
+            .story-block.benefit-block,
+            .story-block.proof-block,
+            .story-block.objection-block {
+                padding: 30px 18px;
+                border-radius: 24px;
             }
 
             .story-eyebrow {
@@ -4162,7 +4303,7 @@
         <div class="nav-links" id="nav-links">
             <a href="#plataforma">Recursos</a>
             <a href="#precos">Planos</a>
-            <a href="#experiencia">Demonstração</a>
+            <a href="#mecanismo">Como funciona</a>
             <a href="#contato">Contato</a>
         </div>
         <div class="nav-actions" id="nav-actions">
@@ -4181,7 +4322,7 @@
         <div class="hero-btns">
             <a href="#plano-premium" class="btn btn-primary-large"
                 style="font-weight: 800; padding: 18px 40px; letter-spacing: 0.5px;">TESTAR 7 DIAS GRÁTIS</a>
-            <a href="#experiencia" class="btn btn-ghost btn-hero-secondary" style="padding: 18px 40px;">Ver Plataforma</a>
+            <a href="#mecanismo" class="btn btn-ghost btn-hero-secondary" style="padding: 18px 40px;">Como funciona</a>
         </div>
 
         <!-- 3D Interactive Dashboard Mockup Overlay -->
@@ -4610,31 +4751,7 @@
         </div>
     </section>
 
-    <!-- ZENVIA-STYLE VIDEO EXPERIENCE -->
-    <section class="video-experience" id="experiencia">
-        <div class="container">
-            <div class="video-experience-header">
-                <span class="tag">Veja na prática</span>
-                <h2>A experiência que transforma vendas no WhatsApp</h2>
-                <p>Assista à plataforma em ação: automação, triagem de leads e conversão em tempo real.</p>
-            </div>
-            <div class="video-wrapper">
-                <video id="hero-video" playsinline controls preload="metadata" poster="">
-                    <source src="IMG_5833.MOV" type="video/quicktime">
-                    <source src="IMG_5833.mp4" type="video/mp4">
-                    Seu navegador não suporta reprodução de vídeo.
-                </video>
-                <div class="video-play-overlay" id="play-overlay" aria-label="Reproduzir vídeo">
-                    <div class="video-play-btn">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5v14l11-7z" />
-                        </svg>
-                    </div>
-                </div>
-            </div>
-            <p class="video-caption">Demonstração da plataforma · ZapVender em uso real</p>
-        </div>
-    </section>
+    <!-- Seção "Veja na prática" em standby temporariamente. -->
 
     <section class="marquee-section" aria-label="Recursos principais do ZapVender">
         <div class="marquee-track">
