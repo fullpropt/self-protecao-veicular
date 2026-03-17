@@ -1304,7 +1304,9 @@
         }
 
         .post-video-flow .story-block + .story-block,
+        .post-video-flow .story-block + .story-band,
         .post-video-flow .story-block + .post-cta-section,
+        .post-video-flow .story-band + .post-cta-section,
         .post-video-flow .post-cta-section + .post-faq-section,
         .post-video-flow .post-faq-section + .post-footer {
             margin-top: 84px;
@@ -1521,94 +1523,49 @@
             text-align: center;
         }
 
-        .story-block.benefit-block,
-        .story-block.proof-block,
-        .story-block.objection-block {
+        .story-band {
             position: relative;
             isolation: isolate;
             overflow: hidden;
-            padding: 48px clamp(24px, 4vw, 52px);
-            border-radius: 34px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 28px 72px rgba(0, 0, 0, 0.22);
+            padding: 64px 0 72px;
         }
 
-        .story-block.benefit-block::before,
-        .story-block.proof-block::before,
-        .story-block.objection-block::before,
-        .story-block.benefit-block::after,
-        .story-block.proof-block::after,
-        .story-block.objection-block::after {
+        .story-band > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .story-band--final::before,
+        .story-band--final::after {
             content: '';
             position: absolute;
-            inset: 0;
-            display: block;
-            border-radius: inherit;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 100vw;
+            transform: translateX(-50%);
             pointer-events: none;
         }
 
-        .story-block.benefit-block {
-            background: linear-gradient(180deg, rgba(3, 18, 14, 0.94), rgba(2, 7, 9, 0.96));
-            border-color: rgba(0, 255, 163, 0.12);
-        }
-
-        .story-block.benefit-block::before {
+        .story-band--final::before {
             background:
-                radial-gradient(circle at 14% 18%, rgba(0, 255, 163, 0.2) 0%, transparent 30%),
-                radial-gradient(circle at 86% 14%, rgba(0, 240, 255, 0.14) 0%, transparent 28%),
-                linear-gradient(135deg, rgba(0, 255, 163, 0.08), rgba(2, 7, 9, 0.16) 48%, rgba(0, 240, 255, 0.08));
+                radial-gradient(circle at 16% 14%, rgba(0, 255, 163, 0.16) 0%, transparent 28%),
+                radial-gradient(circle at 82% 18%, rgba(0, 240, 255, 0.14) 0%, transparent 30%),
+                radial-gradient(circle at 50% 82%, rgba(0, 255, 163, 0.06) 0%, transparent 34%),
+                linear-gradient(180deg, rgba(7, 18, 30, 0.96), rgba(3, 8, 16, 0.98));
+            box-shadow:
+                inset 0 1px 0 rgba(143, 255, 225, 0.08),
+                inset 0 -1px 0 rgba(143, 255, 225, 0.08);
         }
 
-        .story-block.benefit-block::after {
-            inset: 1px;
-            background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 18%),
-                repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 20px);
-            opacity: 0.48;
-        }
-
-        .story-block.proof-block {
-            background: linear-gradient(180deg, rgba(5, 11, 22, 0.94), rgba(3, 7, 15, 0.97));
-            border-color: rgba(113, 215, 255, 0.14);
-        }
-
-        .story-block.proof-block::before {
-            background:
-                radial-gradient(circle at 50% 0%, rgba(0, 240, 255, 0.2) 0%, transparent 34%),
-                radial-gradient(circle at 16% 78%, rgba(0, 255, 163, 0.12) 0%, transparent 28%),
-                radial-gradient(circle at 84% 76%, rgba(64, 153, 255, 0.12) 0%, transparent 24%),
-                linear-gradient(180deg, rgba(8, 23, 38, 0.92), rgba(3, 7, 15, 0.98));
-        }
-
-        .story-block.proof-block::after {
-            inset: 1px;
+        .story-band--final::after {
             background:
                 linear-gradient(rgba(143, 255, 225, 0.05) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(143, 255, 225, 0.05) 1px, transparent 1px);
             background-size: 44px 44px;
             opacity: 0.34;
-            mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.86) 18%, rgba(0, 0, 0, 0.86) 82%, transparent 100%);
-            -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.86) 18%, rgba(0, 0, 0, 0.86) 82%, transparent 100%);
-        }
-
-        .story-block.objection-block {
-            background: linear-gradient(180deg, rgba(18, 10, 12, 0.94), rgba(8, 5, 7, 0.97));
-            border-color: rgba(255, 106, 114, 0.14);
-        }
-
-        .story-block.objection-block::before {
-            background:
-                radial-gradient(circle at 14% 18%, rgba(255, 106, 114, 0.16) 0%, transparent 30%),
-                radial-gradient(circle at 88% 22%, rgba(255, 188, 104, 0.1) 0%, transparent 24%),
-                linear-gradient(135deg, rgba(255, 106, 114, 0.08), rgba(10, 5, 8, 0.2) 44%, rgba(0, 255, 163, 0.04));
-        }
-
-        .story-block.objection-block::after {
-            inset: 1px;
-            background:
-                linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 24%),
-                repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 18px);
-            opacity: 0.52;
+            mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.86) 16%, rgba(0, 0, 0, 0.86) 84%, transparent 100%);
+            -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.86) 16%, rgba(0, 0, 0, 0.86) 84%, transparent 100%);
         }
 
         .gain-block .story-heading,
@@ -1726,6 +1683,10 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             filter: drop-shadow(0 0 10px rgba(255, 138, 114, 0.24));
+        }
+
+        .story-band--final .story-block + .story-block {
+            margin-top: 72px;
         }
 
         .signal-list,
@@ -2586,11 +2547,8 @@
                 border-radius: 0;
             }
 
-            .story-block.benefit-block,
-            .story-block.proof-block,
-            .story-block.objection-block {
-                padding: 38px 24px;
-                border-radius: 28px;
+            .story-band {
+                padding: 56px 0 64px;
             }
 
             .pain-grid,
@@ -2657,10 +2615,16 @@
             }
 
             .post-video-flow .story-block + .story-block,
+            .post-video-flow .story-block + .story-band,
             .post-video-flow .story-block + .post-cta-section,
+            .post-video-flow .story-band + .post-cta-section,
             .post-video-flow .post-cta-section + .post-faq-section,
             .post-video-flow .post-faq-section + .post-footer {
                 margin-top: 72px;
+            }
+
+            .story-band--final .story-block + .story-block {
+                margin-top: 60px;
             }
 
             .post-video-flow .pain-block + .story-block {
@@ -2680,11 +2644,8 @@
                 border-radius: 0;
             }
 
-            .story-block.benefit-block,
-            .story-block.proof-block,
-            .story-block.objection-block {
-                padding: 30px 18px;
-                border-radius: 24px;
+            .story-band {
+                padding: 42px 0 48px;
             }
 
             .story-eyebrow {
@@ -2696,6 +2657,10 @@
             .story-heading {
                 font-size: 1.9rem;
                 line-height: 1.08;
+            }
+
+            .story-band--final .story-block + .story-block {
+                margin-top: 48px;
             }
 
             .story-heading--md {
@@ -5270,6 +5235,7 @@
             </div>
         </section>
 
+        <div class="story-band story-band--final">
         <section class="story-block container benefit-block" id="beneficios">
             <span class="story-eyebrow">Benefícios práticos</span>
             <h2 class="story-heading story-heading--md story-heading--wide">O ZapVender foi pensado para resolver os <span class="copy-gradient">gargalos que mais travam vendas</span> no WhatsApp</h2>
@@ -5386,6 +5352,7 @@
                 </article>
             </div>
         </section>
+        </div>
 
     <section class="container section" id="precos">
         <div class="section-header post-pricing-header">
