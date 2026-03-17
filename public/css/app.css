@@ -137,6 +137,8 @@ body {
 .sidebar-header {
     padding: 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    position: relative;
+    z-index: 3;
 }
 
 .sidebar-logo {
@@ -170,6 +172,8 @@ body {
 .sidebar-nav {
     flex: 1;
     padding: 14px 18px 12px 10px;
+    position: relative;
+    z-index: 1;
 }
 
 .nav-section {
