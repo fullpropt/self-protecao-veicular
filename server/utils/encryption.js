@@ -16,6 +16,7 @@ const PBKDF2_ITERATIONS = 100000;
 // Chave mestra (deve ser configurada via variável de ambiente)
 const DEFAULT_MASTER_KEY = 'self-protecao-veicular-master-key-2024';
 const MASTER_KEY_FROM_ENV = String(process.env.ENCRYPTION_KEY || '').trim();
+const PREVIOUS_MASTER_KEY_FROM_ENV = String(process.env.ENCRYPTION_KEY_PREVIOUS || '').trim();
 const INSECURE_MASTER_KEYS = new Set([
     DEFAULT_MASTER_KEY,
     'self-protecao-veicular-key-2024',
@@ -26,18 +27,39 @@ const INSECURE_MASTER_KEYS = new Set([
     'encryption-key'
 ]);
 
+function validateMasterKeyForProduction(masterKey, envName) {
+    if (!masterKey) return;
+    if (INSECURE_MASTER_KEYS.has(masterKey)) {
+        throw new Error(`${envName} insecure value is not allowed in production`);
+    }
+    if (masterKey.length < 32) {
+        throw new Error(`${envName} must be at least 32 characters in production`);
+    }
+}
+
 if (process.env.NODE_ENV === 'production') {
     if (!MASTER_KEY_FROM_ENV) {
         throw new Error('ENCRYPTION_KEY is required in production');
     }
-    if (INSECURE_MASTER_KEYS.has(MASTER_KEY_FROM_ENV)) {
-        throw new Error('ENCRYPTION_KEY insecure value is not allowed in production');
-    }
-    if (MASTER_KEY_FROM_ENV.length < 32) {
-        throw new Error('ENCRYPTION_KEY must be at least 32 characters in production');
-    }
+    validateMasterKeyForProduction(MASTER_KEY_FROM_ENV, 'ENCRYPTION_KEY');
+    validateMasterKeyForProduction(PREVIOUS_MASTER_KEY_FROM_ENV, 'ENCRYPTION_KEY_PREVIOUS');
 }
+
+if (
+    PREVIOUS_MASTER_KEY_FROM_ENV
+    && MASTER_KEY_FROM_ENV
+    && PREVIOUS_MASTER_KEY_FROM_ENV === MASTER_KEY_FROM_ENV
+) {
+    console.warn('[Encryption] ENCRYPTION_KEY_PREVIOUS igual a ENCRYPTION_KEY; fallback desconsiderado.');
+}
+
 const MASTER_KEY = MASTER_KEY_FROM_ENV || DEFAULT_MASTER_KEY;
+const PREVIOUS_MASTER_KEY = (
+    PREVIOUS_MASTER_KEY_FROM_ENV
+    && PREVIOUS_MASTER_KEY_FROM_ENV !== MASTER_KEY
+)
+    ? PREVIOUS_MASTER_KEY_FROM_ENV
+    : '';
 
 /**
  * Derivar chave a partir de senha
@@ -55,10 +77,13 @@ function deriveKey(password, salt) {
 /**
  * Gerar chave de criptografia derivada da chave mestra
  */
-function getEncryptionKey() {
+function getEncryptionKeyFromMaster(masterKey) {
     // Usar hash SHA-256 da chave mestra como chave de criptografia
-    return crypto.createHash('sha256').update(MASTER_KEY).digest();
+    return crypto.createHash('sha256').update(String(masterKey || '')).digest();
 }
+
+const ACTIVE_MASTER_KEYS = Array.from(new Set([MASTER_KEY, PREVIOUS_MASTER_KEY].filter(Boolean)));
+const ACTIVE_ENCRYPTION_KEYS = ACTIVE_MASTER_KEYS.map((masterKey) => getEncryptionKeyFromMaster(masterKey));
 
 /**
  * Criptografar texto
@@ -69,7 +94,7 @@ function encrypt(plaintext) {
     if (!plaintext) return null;
     
     try {
-        const key = getEncryptionKey();
+        const key = ACTIVE_ENCRYPTION_KEYS[0];
         const iv = crypto.randomBytes(IV_LENGTH);
         
         const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
@@ -96,25 +121,32 @@ function decrypt(ciphertext) {
     if (!ciphertext) return null;
     
     try {
-        const parts = ciphertext.split(':');
+        const serialized = String(ciphertext || '');
+        const parts = serialized.split(':');
         if (parts.length !== 3) {
             // Tentar formato antigo (CryptoJS)
-            return decryptLegacy(ciphertext);
+            return decryptLegacy(serialized);
         }
         
         const [ivBase64, authTagBase64, encrypted] = parts;
-        
-        const key = getEncryptionKey();
         const iv = Buffer.from(ivBase64, 'base64');
         const authTag = Buffer.from(authTagBase64, 'base64');
-        
-        const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-        decipher.setAuthTag(authTag);
-        
-        let decrypted = decipher.update(encrypted, 'base64', 'utf8');
-        decrypted += decipher.final('utf8');
-        
-        return decrypted;
+
+        for (const key of ACTIVE_ENCRYPTION_KEYS) {
+            try {
+                const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+                decipher.setAuthTag(authTag);
+
+                let decrypted = decipher.update(encrypted, 'base64', 'utf8');
+                decrypted += decipher.final('utf8');
+                return decrypted;
+            } catch (_) {
+                // tenta proxima chave
+            }
+        }
+
+        // Tentar formato antigo (CryptoJS) tambem com fallback de chaves
+        return decryptLegacy(serialized);
     } catch (error) {
         console.error('Erro ao descriptografar:', error.message);
         return null;
@@ -128,8 +160,14 @@ function decryptLegacy(ciphertext) {
     try {
         // Tentar descriptografar usando CryptoJS compatível
         const CryptoJS = require('crypto-js');
-        const bytes = CryptoJS.AES.decrypt(ciphertext, MASTER_KEY);
-        return bytes.toString(CryptoJS.enc.Utf8);
+        for (const masterKey of ACTIVE_MASTER_KEYS) {
+            const bytes = CryptoJS.AES.decrypt(ciphertext, masterKey);
+            const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            if (decrypted) {
+                return decrypted;
+            }
+        }
+        return null;
     } catch (error) {
         return null;
     }
