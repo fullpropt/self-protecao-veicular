@@ -74,14 +74,15 @@ Status do bloco: [x] Concluido
 
 ## P1 - Refatoracao incremental
 
-- [ ] Quebra de `server/index.js` por dominio (routes/controllers/services).
+- [~] Quebra de `server/index.js` por dominio iniciada.
+  Evidencia: extraido bloco de observabilidade/alertas para `server/services/opsMonitoringService.js` e `server/index.js` com wrappers.
 - [ ] Quebra de `server/database/models.js` por modulo de dominio.
 
 Evidencia atual:
 - `server/index.js` com ~21684 linhas.
 - `server/database/models.js` com ~5085 linhas.
 
-Status do bloco: [ ] Nao feito
+Status do bloco: [~] Parcial inicial
 
 ## P2 - Escala estrutural
 
@@ -108,10 +109,10 @@ Status do bloco: [~] Parcial baixo
 ## Resumo executivo
 
 - Blocos concluidos: 2/7
-- Blocos parciais: 4/7
-- Blocos nao iniciados: 1/7
+- Blocos parciais: 5/7
+- Blocos nao iniciados: 0/7
 
 Proximo foco recomendado:
-1. Consolidar observabilidade com dashboard e politicas de alerta (Grafana/Alertmanager/Sentry), usando o webhook externo ja disponivel.
-2. Iniciar P1 Refatoracao incremental (`server/index.js` e `server/database/models.js` por dominio).
-3. Avancar P2 Escala estrutural com separacao formal de worker dedicado por servico.
+1. Iniciar P1 Refatoracao incremental (`server/index.js` e `server/database/models.js` por dominio).
+2. Avancar P2 Escala estrutural com separacao formal de worker dedicado por servico.
+3. Evoluir P2 Produto/expansao com onboarding guiado e feature flags por tenant.

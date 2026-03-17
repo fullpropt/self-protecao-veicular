@@ -77,6 +77,7 @@ const openAiFlowDraftService = require('./services/openAiFlowDraftService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
+const { createOpsMonitoringService } = require('./services/opsMonitoringService');
 const stripeCheckoutService = require('./services/stripeCheckoutService');
 const pagarmeCheckoutService = require('./services/pagarmeCheckoutService');
 const planLimitsService = require('./services/planLimitsService');
@@ -1700,135 +1701,37 @@ const corsOptionsDelegate = (req, callback) => {
 
 app.use(cors(corsOptionsDelegate));
 
-let opsAlertsIntervalId = null;
-let opsAlertsBootstrapTimeoutId = null;
-let opsAlertsIsRunning = false;
-let opsAlertsLastSummary = null;
-const opsAlertsLastTriggerByKey = new Map();
+const opsMonitoringService = createOpsMonitoringService({
+    queryOne,
+    getSessionsMap: () => whatsappService.sessions,
+    getProcessUptimeSeconds: () => Math.floor(process.uptime()),
+    opsAlertsEnabled: OPS_ALERTS_ENABLED,
+    opsAlertsPollMs: OPS_ALERTS_POLL_MS,
+    opsAlertsCooldownMs: OPS_ALERTS_COOLDOWN_MS,
+    queuePendingWarn: OPS_ALERT_QUEUE_PENDING_WARN,
+    queueFailedWarn: OPS_ALERT_QUEUE_FAILED_WARN,
+    flowRunningWarn: OPS_ALERT_FLOW_RUNNING_WARN,
+    notifyEnabled: OPS_ALERT_NOTIFY_ENABLED,
+    notifyWebhookUrl: OPS_ALERT_NOTIFY_WEBHOOK_URL,
+    notifyBearerToken: OPS_ALERT_NOTIFY_BEARER_TOKEN,
+    notifyTimeoutMs: OPS_ALERT_NOTIFY_TIMEOUT_MS,
+    notifyIncludeSnapshot: OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT,
+    appBrandName: APP_BRAND_NAME,
+    nodeEnv: process.env.NODE_ENV,
+    logStructured,
+    normalizeErrorForLog
+});
 
 async function getOpsRuntimeSnapshot() {
-    const connectedSessions = Array.from(sessions.values()).filter((session) => session?.isConnected === true).length;
-    const totalSessions = sessions.size;
-
-    const queueStatsRow = await queryOne(`
-        SELECT
-            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-            SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
-            SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
-            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-        FROM message_queue
-    `);
-    const runningFlowsRow = await queryOne(`
-        SELECT COUNT(*)::int AS total
-        FROM flow_executions
-        WHERE status = 'running'
-    `);
-
-    return {
-        totalSessions,
-        connectedSessions,
-        queuePending: Number(queueStatsRow?.pending || 0) || 0,
-        queueProcessing: Number(queueStatsRow?.processing || 0) || 0,
-        queueSent: Number(queueStatsRow?.sent || 0) || 0,
-        queueFailed: Number(queueStatsRow?.failed || 0) || 0,
-        flowRunning: Number(runningFlowsRow?.total || 0) || 0
-    };
+    return await opsMonitoringService.getRuntimeSnapshot();
 }
 
 function buildOpsThresholdState(snapshot = {}) {
-    const queuePending = Number(snapshot.queuePending || 0) || 0;
-    const queueFailed = Number(snapshot.queueFailed || 0) || 0;
-    const flowRunning = Number(snapshot.flowRunning || 0) || 0;
-
-    return {
-        queuePendingExceeded: queuePending >= OPS_ALERT_QUEUE_PENDING_WARN ? 1 : 0,
-        queueFailedExceeded: queueFailed >= OPS_ALERT_QUEUE_FAILED_WARN ? 1 : 0,
-        flowRunningExceeded: flowRunning >= OPS_ALERT_FLOW_RUNNING_WARN ? 1 : 0
-    };
+    return opsMonitoringService.buildThresholdState(snapshot);
 }
 
 function buildOpsMetricsLines(snapshot = {}, thresholdState = {}) {
-    const totalSessions = Number(snapshot.totalSessions || 0) || 0;
-    const connectedSessions = Number(snapshot.connectedSessions || 0) || 0;
-    const queuePending = Number(snapshot.queuePending || 0) || 0;
-    const queueProcessing = Number(snapshot.queueProcessing || 0) || 0;
-    const queueSent = Number(snapshot.queueSent || 0) || 0;
-    const queueFailed = Number(snapshot.queueFailed || 0) || 0;
-    const flowRunning = Number(snapshot.flowRunning || 0) || 0;
-    const lastCycle = (opsAlertsLastSummary && typeof opsAlertsLastSummary === 'object')
-        ? opsAlertsLastSummary
-        : {};
-    const lastCycleTriggered = Number(lastCycle.alertsTriggered || 0) || 0;
-    const lastCycleSuppressed = Number(lastCycle.alertsSuppressedByCooldown || 0) || 0;
-    const lastCycleNotifySent = Number(lastCycle.notificationsSent || 0) || 0;
-    const lastCycleNotifyFailed = Number(lastCycle.notificationsFailed || 0) || 0;
-    const lastCycleNotifySkipped = Number(lastCycle.notificationsSkipped || 0) || 0;
-
-    return [
-        '# HELP zapvender_process_uptime_seconds Node process uptime in seconds',
-        '# TYPE zapvender_process_uptime_seconds gauge',
-        `zapvender_process_uptime_seconds ${Math.floor(process.uptime())}`,
-        '# HELP zapvender_whatsapp_sessions_total Total WhatsApp sessions loaded in runtime',
-        '# TYPE zapvender_whatsapp_sessions_total gauge',
-        `zapvender_whatsapp_sessions_total ${totalSessions}`,
-        '# HELP zapvender_whatsapp_sessions_connected Connected WhatsApp sessions in runtime',
-        '# TYPE zapvender_whatsapp_sessions_connected gauge',
-        `zapvender_whatsapp_sessions_connected ${connectedSessions}`,
-        '# HELP zapvender_queue_pending_messages Pending messages in queue',
-        '# TYPE zapvender_queue_pending_messages gauge',
-        `zapvender_queue_pending_messages ${queuePending}`,
-        '# HELP zapvender_queue_processing_messages Processing messages in queue',
-        '# TYPE zapvender_queue_processing_messages gauge',
-        `zapvender_queue_processing_messages ${queueProcessing}`,
-        '# HELP zapvender_queue_sent_messages Sent messages in queue table',
-        '# TYPE zapvender_queue_sent_messages gauge',
-        `zapvender_queue_sent_messages ${queueSent}`,
-        '# HELP zapvender_queue_failed_messages Failed messages in queue table',
-        '# TYPE zapvender_queue_failed_messages gauge',
-        `zapvender_queue_failed_messages ${queueFailed}`,
-        '# HELP zapvender_flow_executions_running Running flow executions',
-        '# TYPE zapvender_flow_executions_running gauge',
-        `zapvender_flow_executions_running ${flowRunning}`,
-        '# HELP zapvender_ops_alerts_enabled Ops alerts worker enabled (1=true)',
-        '# TYPE zapvender_ops_alerts_enabled gauge',
-        `zapvender_ops_alerts_enabled ${OPS_ALERTS_ENABLED ? 1 : 0}`,
-        '# HELP zapvender_ops_alert_notify_enabled Ops alert external notifier enabled (1=true)',
-        '# TYPE zapvender_ops_alert_notify_enabled gauge',
-        `zapvender_ops_alert_notify_enabled ${OPS_ALERT_NOTIFY_ENABLED ? 1 : 0}`,
-        '# HELP zapvender_ops_alert_queue_pending_warn_threshold Alert threshold for pending queue messages',
-        '# TYPE zapvender_ops_alert_queue_pending_warn_threshold gauge',
-        `zapvender_ops_alert_queue_pending_warn_threshold ${OPS_ALERT_QUEUE_PENDING_WARN}`,
-        '# HELP zapvender_ops_alert_queue_failed_warn_threshold Alert threshold for failed queue messages',
-        '# TYPE zapvender_ops_alert_queue_failed_warn_threshold gauge',
-        `zapvender_ops_alert_queue_failed_warn_threshold ${OPS_ALERT_QUEUE_FAILED_WARN}`,
-        '# HELP zapvender_ops_alert_flow_running_warn_threshold Alert threshold for running flows',
-        '# TYPE zapvender_ops_alert_flow_running_warn_threshold gauge',
-        `zapvender_ops_alert_flow_running_warn_threshold ${OPS_ALERT_FLOW_RUNNING_WARN}`,
-        '# HELP zapvender_ops_alert_queue_pending_exceeded Queue pending threshold exceeded (1=true)',
-        '# TYPE zapvender_ops_alert_queue_pending_exceeded gauge',
-        `zapvender_ops_alert_queue_pending_exceeded ${Number(thresholdState.queuePendingExceeded || 0)}`,
-        '# HELP zapvender_ops_alert_queue_failed_exceeded Queue failed threshold exceeded (1=true)',
-        '# TYPE zapvender_ops_alert_queue_failed_exceeded gauge',
-        `zapvender_ops_alert_queue_failed_exceeded ${Number(thresholdState.queueFailedExceeded || 0)}`,
-        '# HELP zapvender_ops_alert_flow_running_exceeded Flow running threshold exceeded (1=true)',
-        '# TYPE zapvender_ops_alert_flow_running_exceeded gauge',
-        `zapvender_ops_alert_flow_running_exceeded ${Number(thresholdState.flowRunningExceeded || 0)}`,
-        '# HELP zapvender_ops_alert_last_cycle_triggered Alerts triggered in last ops cycle',
-        '# TYPE zapvender_ops_alert_last_cycle_triggered gauge',
-        `zapvender_ops_alert_last_cycle_triggered ${lastCycleTriggered}`,
-        '# HELP zapvender_ops_alert_last_cycle_suppressed Alerts suppressed by cooldown in last ops cycle',
-        '# TYPE zapvender_ops_alert_last_cycle_suppressed gauge',
-        `zapvender_ops_alert_last_cycle_suppressed ${lastCycleSuppressed}`,
-        '# HELP zapvender_ops_alert_last_cycle_notify_sent External notifications sent in last ops cycle',
-        '# TYPE zapvender_ops_alert_last_cycle_notify_sent gauge',
-        `zapvender_ops_alert_last_cycle_notify_sent ${lastCycleNotifySent}`,
-        '# HELP zapvender_ops_alert_last_cycle_notify_failed External notifications failed in last ops cycle',
-        '# TYPE zapvender_ops_alert_last_cycle_notify_failed gauge',
-        `zapvender_ops_alert_last_cycle_notify_failed ${lastCycleNotifyFailed}`,
-        '# HELP zapvender_ops_alert_last_cycle_notify_skipped External notifications skipped in last ops cycle',
-        '# TYPE zapvender_ops_alert_last_cycle_notify_skipped gauge',
-        `zapvender_ops_alert_last_cycle_notify_skipped ${lastCycleNotifySkipped}`
-    ];
+    return opsMonitoringService.buildMetricsLines(snapshot, thresholdState);
 }
 
 
@@ -9015,364 +8918,16 @@ function stopFlowAwaitingInputRecoveryWorker() {
     }
 }
 
-function shouldEmitOpsAlert(alertKey, now = Date.now()) {
-    const normalizedAlertKey = String(alertKey || '').trim().toLowerCase();
-    if (!normalizedAlertKey) return false;
-
-    const lastEmittedAt = Number(opsAlertsLastTriggerByKey.get(normalizedAlertKey) || 0);
-    if (lastEmittedAt > 0 && (now - lastEmittedAt) < OPS_ALERTS_COOLDOWN_MS) {
-        return false;
-    }
-
-    opsAlertsLastTriggerByKey.set(normalizedAlertKey, now);
-
-    if (opsAlertsLastTriggerByKey.size > 200) {
-        const oldestKey = opsAlertsLastTriggerByKey.keys().next().value;
-        if (oldestKey) {
-            opsAlertsLastTriggerByKey.delete(oldestKey);
-        }
-    }
-
-    return true;
-}
-
-function buildOpsAlertsFromSnapshot(snapshot = {}, thresholdState = {}) {
-    const alerts = [];
-    const queuePending = Number(snapshot.queuePending || 0) || 0;
-    const queueFailed = Number(snapshot.queueFailed || 0) || 0;
-    const flowRunning = Number(snapshot.flowRunning || 0) || 0;
-
-    if (Number(thresholdState.queuePendingExceeded || 0) === 1) {
-        alerts.push({
-            key: 'queue_pending_high',
-            metric: 'zapvender_queue_pending_messages',
-            value: queuePending,
-            threshold: OPS_ALERT_QUEUE_PENDING_WARN,
-            message: 'Fila pendente acima do limite'
-        });
-    }
-
-    if (Number(thresholdState.queueFailedExceeded || 0) === 1) {
-        alerts.push({
-            key: 'queue_failed_high',
-            metric: 'zapvender_queue_failed_messages',
-            value: queueFailed,
-            threshold: OPS_ALERT_QUEUE_FAILED_WARN,
-            message: 'Fila com mensagens com falha acima do limite'
-        });
-    }
-
-    if (Number(thresholdState.flowRunningExceeded || 0) === 1) {
-        alerts.push({
-            key: 'flow_running_high',
-            metric: 'zapvender_flow_executions_running',
-            value: flowRunning,
-            threshold: OPS_ALERT_FLOW_RUNNING_WARN,
-            message: 'Fluxos em execucao acima do limite'
-        });
-    }
-
-    return alerts;
-}
-
-function resolveOpsAlertNotifyUrl() {
-    const rawValue = String(OPS_ALERT_NOTIFY_WEBHOOK_URL || '').trim();
-    if (!rawValue) return '';
-    try {
-        return new URL(rawValue).toString();
-    } catch (_) {
-        return '';
-    }
-}
-
-function buildOpsAlertNotificationPayload(options = {}) {
-    const alert = options.alert || {};
-    const summary = options.summary || {};
-    const snapshot = options.snapshot || {};
-    const trigger = String(options.trigger || '').trim() || 'ops-alert-worker';
-    const payload = {
-        source: 'zapvender',
-        app: APP_BRAND_NAME,
-        event: 'ops.alert.threshold_exceeded',
-        emittedAt: new Date().toISOString(),
-        environment: String(process.env.NODE_ENV || '').trim() || 'development',
-        trigger,
-        alert: {
-            key: String(alert.key || '').trim() || 'unknown',
-            metric: String(alert.metric || '').trim() || 'unknown',
-            value: Number(alert.value || 0) || 0,
-            threshold: Number(alert.threshold || 0) || 0,
-            message: String(alert.message || '').trim() || 'Ops alert threshold exceeded',
-            cooldownMs: OPS_ALERTS_COOLDOWN_MS
-        },
-        cycle: {
-            alertsEvaluated: Number(summary.alertsEvaluated || 0) || 0,
-            alertsTriggered: Number(summary.alertsTriggered || 0) || 0,
-            alertsSuppressedByCooldown: Number(summary.alertsSuppressedByCooldown || 0) || 0
-        }
-    };
-
-    if (OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT) {
-        payload.snapshot = {
-            queuePending: Number(snapshot.queuePending || 0) || 0,
-            queueFailed: Number(snapshot.queueFailed || 0) || 0,
-            queueProcessing: Number(snapshot.queueProcessing || 0) || 0,
-            flowRunning: Number(snapshot.flowRunning || 0) || 0,
-            sessionsConnected: Number(snapshot.connectedSessions || 0) || 0,
-            sessionsTotal: Number(snapshot.totalSessions || 0) || 0
-        };
-    }
-
-    return payload;
-}
-
-async function dispatchOpsAlertExternalNotification(options = {}) {
-    if (!OPS_ALERT_NOTIFY_ENABLED) {
-        return { skipped: 'disabled' };
-    }
-
-    const webhookUrl = resolveOpsAlertNotifyUrl();
-    if (!webhookUrl) {
-        return { skipped: 'invalid_webhook_url' };
-    }
-
-    const alert = options.alert || {};
-    const trigger = String(options.trigger || '').trim() || 'ops-alert-worker';
-    const payload = buildOpsAlertNotificationPayload(options);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), OPS_ALERT_NOTIFY_TIMEOUT_MS);
-    const startedAtMs = Date.now();
-
-    try {
-        const headers = {
-            'Content-Type': 'application/json',
-            'User-Agent': `${APP_BRAND_NAME}/ops-alert-notifier`
-        };
-        if (OPS_ALERT_NOTIFY_BEARER_TOKEN) {
-            headers.Authorization = `Bearer ${OPS_ALERT_NOTIFY_BEARER_TOKEN}`;
-        }
-
-        const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload),
-            signal: controller.signal
-        });
-
-        const durationMs = Math.max(0, Date.now() - startedAtMs);
-        if (!response.ok) {
-            const responseBody = String(await response.text().catch(() => '')).trim().slice(0, 240);
-            throw new Error(`http_${response.status}${responseBody ? `_${responseBody}` : ''}`);
-        }
-
-        logStructured(
-            'info',
-            'ops.alert.notification_sent',
-            {
-                trigger,
-                alertKey: String(alert.key || '').trim() || 'unknown',
-                metric: String(alert.metric || '').trim() || 'unknown',
-                statusCode: Number(response.status || 0) || 0,
-                durationMs
-            },
-            'Notificacao externa de alerta enviada'
-        );
-        return { sent: true, statusCode: response.status, durationMs };
-    } catch (error) {
-        const durationMs = Math.max(0, Date.now() - startedAtMs);
-        logStructured(
-            'error',
-            'ops.alert.notification_failed',
-            {
-                trigger,
-                alertKey: String(alert.key || '').trim() || 'unknown',
-                metric: String(alert.metric || '').trim() || 'unknown',
-                durationMs,
-                error: normalizeErrorForLog(error)
-            },
-            'Falha ao enviar notificacao externa de alerta'
-        );
-        return { sent: false, error: normalizeErrorForLog(error), durationMs };
-    } finally {
-        clearTimeout(timeoutId);
-    }
-}
-
 async function runOpsAlertsCycle(options = {}) {
-    const trigger = String(options.trigger || 'ops-alert-worker').trim() || 'ops-alert-worker';
-    const force = options.force === true;
-
-    if (!OPS_ALERTS_ENABLED && !force) {
-        return { skipped: 'disabled', trigger };
-    }
-    if (opsAlertsIsRunning) {
-        return { skipped: 'in_flight', trigger };
-    }
-
-    opsAlertsIsRunning = true;
-    const startedAtMs = Date.now();
-    const summary = {
-        trigger,
-        alertsEvaluated: 0,
-        alertsTriggered: 0,
-        alertsSuppressedByCooldown: 0,
-        notificationsSent: 0,
-        notificationsFailed: 0,
-        notificationsSkipped: 0,
-        elapsedMs: 0
-    };
-
-    try {
-        const snapshot = await getOpsRuntimeSnapshot();
-        const thresholdState = buildOpsThresholdState(snapshot);
-        const alerts = buildOpsAlertsFromSnapshot(snapshot, thresholdState);
-        summary.alertsEvaluated = alerts.length;
-
-        const now = Date.now();
-        for (const alert of alerts) {
-            if (!shouldEmitOpsAlert(alert.key, now)) {
-                summary.alertsSuppressedByCooldown += 1;
-                continue;
-            }
-
-            summary.alertsTriggered += 1;
-            logStructured(
-                'warn',
-                'ops.alert.threshold_exceeded',
-                {
-                    trigger,
-                    alertKey: alert.key,
-                    metric: alert.metric,
-                    value: alert.value,
-                    threshold: alert.threshold,
-                    cooldownMs: OPS_ALERTS_COOLDOWN_MS
-                },
-                alert.message
-            );
-
-            const notifyResult = await dispatchOpsAlertExternalNotification({
-                alert,
-                snapshot,
-                summary,
-                trigger
-            });
-            if (notifyResult?.sent === true) {
-                summary.notificationsSent += 1;
-            } else if (notifyResult?.skipped) {
-                summary.notificationsSkipped += 1;
-                if (notifyResult.skipped === 'invalid_webhook_url') {
-                    logStructured(
-                        'warn',
-                        'ops.alert.notification_skipped',
-                        {
-                            reason: notifyResult.skipped,
-                            trigger
-                        },
-                        'Notificador externo de alerta com URL invalida'
-                    );
-                }
-            } else {
-                summary.notificationsFailed += 1;
-            }
-        }
-
-        return summary;
-    } catch (error) {
-        summary.error = normalizeErrorForLog(error);
-        logStructured(
-            'error',
-            'ops.alert.cycle_failed',
-            {
-                trigger,
-                error: summary.error
-            },
-            'Falha no ciclo de alertas operacionais'
-        );
-        return summary;
-    } finally {
-        summary.elapsedMs = Math.max(0, Date.now() - startedAtMs);
-        opsAlertsLastSummary = {
-            ...summary,
-            completedAt: new Date().toISOString()
-        };
-        opsAlertsIsRunning = false;
-    }
+    return await opsMonitoringService.runCycle(options);
 }
 
 function startOpsAlertsWorker() {
-    if (opsAlertsIntervalId) return;
-
-    if (!OPS_ALERTS_ENABLED) {
-        logStructured(
-            'info',
-            'ops.alert.worker_disabled',
-            { reason: 'config_disabled' },
-            'Worker de alertas operacionais desabilitado por configuracao'
-        );
-        return;
-    }
-
-    const notifyUrlValid = Boolean(resolveOpsAlertNotifyUrl());
-    if (OPS_ALERT_NOTIFY_ENABLED && !notifyUrlValid) {
-        logStructured(
-            'warn',
-            'ops.alert.notification_config_invalid',
-            { reason: 'invalid_webhook_url' },
-            'Notificador externo de alerta habilitado, mas URL do webhook e invalida'
-        );
-    }
-
-    const runCycle = () => {
-        runOpsAlertsCycle({
-            trigger: 'ops-alert-worker'
-        }).catch((error) => {
-            logStructured(
-                'error',
-                'ops.alert.worker_cycle_failed',
-                { error: normalizeErrorForLog(error) },
-                'Falha no ciclo periodico de alertas operacionais'
-            );
-        });
-    };
-
-    opsAlertsIntervalId = setInterval(runCycle, OPS_ALERTS_POLL_MS);
-
-    const bootstrapDelayMs = Math.max(
-        3000,
-        Math.min(15000, Math.floor(OPS_ALERTS_POLL_MS / 2))
-    );
-    opsAlertsBootstrapTimeoutId = setTimeout(() => {
-        opsAlertsBootstrapTimeoutId = null;
-        runCycle();
-    }, bootstrapDelayMs);
-
-    logStructured(
-        'info',
-        'ops.alert.worker_started',
-        {
-            pollMs: OPS_ALERTS_POLL_MS,
-            cooldownMs: OPS_ALERTS_COOLDOWN_MS,
-            queuePendingWarn: OPS_ALERT_QUEUE_PENDING_WARN,
-            queueFailedWarn: OPS_ALERT_QUEUE_FAILED_WARN,
-            flowRunningWarn: OPS_ALERT_FLOW_RUNNING_WARN,
-            notifyEnabled: OPS_ALERT_NOTIFY_ENABLED,
-            notifyWebhookConfigured: notifyUrlValid
-        },
-        'Worker de alertas operacionais ativo'
-    );
+    opsMonitoringService.startWorker();
 }
 
 function stopOpsAlertsWorker() {
-    if (opsAlertsBootstrapTimeoutId) {
-        clearTimeout(opsAlertsBootstrapTimeoutId);
-        opsAlertsBootstrapTimeoutId = null;
-    }
-    if (opsAlertsIntervalId) {
-        clearInterval(opsAlertsIntervalId);
-        opsAlertsIntervalId = null;
-    }
-    opsAlertsIsRunning = false;
-    opsAlertsLastTriggerByKey.clear();
+    opsMonitoringService.stopWorker();
 }
 
 function normalizeHistorySyncMessageBatch(messages, limit = WHATSAPP_HISTORY_SYNC_MESSAGES_LIMIT) {
