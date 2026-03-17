@@ -15000,7 +15000,7 @@ function mapDashboardSessionStatusLabel(status) {
     if (normalized === 'warming_up') return 'Aquecendo';
     if (normalized === 'reconnecting') return 'Reconectando';
     if (normalized === 'disconnected') return 'Desconectada';
-    return normalized ? normalized : 'Indisponivel';
+    return normalized ? normalized : 'Indisponível';
 }
 
 function buildDashboardAccountRisk(account) {
@@ -15035,7 +15035,7 @@ function buildDashboardAccountRisk(account) {
         return {
             level: 'critical',
             label: 'Em cooldown',
-            reason: 'A conta entrou em resfriamento automatico.',
+            reason: 'A conta entrou em resfriamento automático.',
             cooldown_active: true,
             daily_usage_ratio: dailyUsageRatio,
             hourly_usage_ratio: hourlyUsageRatio,
@@ -15068,7 +15068,7 @@ function buildDashboardAccountRisk(account) {
         return {
             level: 'critical',
             label: 'Ritmo alto',
-            reason: 'Conta muito proxima do limite configurado.',
+            reason: 'Conta muito próxima do limite configurado.',
             cooldown_active: false,
             daily_usage_ratio: dailyUsageRatio,
             hourly_usage_ratio: hourlyUsageRatio,
@@ -15091,8 +15091,8 @@ function buildDashboardAccountRisk(account) {
     if (status === 'disconnected' || status === 'reconnecting') {
         return {
             level: 'attention',
-            label: 'Sessao instavel',
-            reason: 'A conta nao esta pronta para disparar agora.',
+            label: 'Sessão instável',
+            reason: 'A conta não está pronta para disparar agora.',
             cooldown_active: false,
             daily_usage_ratio: dailyUsageRatio,
             hourly_usage_ratio: hourlyUsageRatio,
@@ -15103,8 +15103,8 @@ function buildDashboardAccountRisk(account) {
     if (warmDailyLimit || warmHourlyLimit) {
         return {
             level: 'attention',
-            label: 'Pede atencao',
-            reason: 'O ritmo de envio comecou a acelerar.',
+            label: 'Pede atenção',
+            reason: 'O ritmo de envio começou a acelerar.',
             cooldown_active: false,
             daily_usage_ratio: dailyUsageRatio,
             hourly_usage_ratio: hourlyUsageRatio,
@@ -15139,7 +15139,7 @@ function buildDashboardAccountRisk(account) {
     if (sentToday <= 0) {
         return {
             level: 'healthy',
-            label: 'Sem pressao',
+            label: 'Sem pressão',
             reason: 'Nenhum disparo enviado hoje nesta conta.',
             cooldown_active: false,
             daily_usage_ratio: dailyUsageRatio,

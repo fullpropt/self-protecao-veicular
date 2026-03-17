@@ -1112,11 +1112,11 @@ function AccountHealthCard() {
     <section className="account-health-card">
       <div className="account-health-header">
         <div>
-          <h3>Saude das contas de disparo</h3>
+          <h3>Saúde das contas de disparo</h3>
         </div>
       </div>
       <div className="account-health-list" id="accountHealthList">
-        <div className="account-health-empty">Carregando saude das contas...</div>
+        <div className="account-health-empty">Carregando saúde das contas...</div>
       </div>
     </section>
   );

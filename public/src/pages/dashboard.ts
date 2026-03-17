@@ -608,7 +608,7 @@ function renderAccountHealthSummary(summaryInput: AccountHealthSummary | null | 
     summary.innerHTML = [
         `<span class="account-health-summary-item is-total"><strong>${formatNumber(totalAccounts)}</strong> conta(s)</span>`,
         `<span class="account-health-summary-item is-critical"><strong>${formatNumber(critical)}</strong> em risco alto</span>`,
-        `<span class="account-health-summary-item is-attention"><strong>${formatNumber(attention)}</strong> pedem atencao</span>`,
+        `<span class="account-health-summary-item is-attention"><strong>${formatNumber(attention)}</strong> pedem atenção</span>`,
         `<span class="account-health-summary-item is-cooldown"><strong>${formatNumber(cooldown)}</strong> em cooldown</span>`,
         `<span class="account-health-summary-item is-updated">Atualizado <strong>${escapeHtml(updatedAtLabel)}</strong></span>`
     ].join('');
@@ -628,11 +628,11 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
         const sessionName = escapeHtml(String(account.session_name || account.session_id || 'Conta sem nome'));
         const sessionId = escapeHtml(String(account.session_id || '-'));
         const phone = escapeHtml(normalizeAccountHealthPhone(account.phone));
-        const statusLabel = escapeHtml(String(account.status_label || 'Indisponivel'));
+        const statusLabel = escapeHtml(String(account.status_label || 'Indisponível'));
         const statusClass = getAccountHealthStatusClass(account);
         const riskClass = getAccountHealthRiskClass(account.risk_level);
         const riskLabel = escapeHtml(String(account.risk_label || 'Monitorando'));
-        const riskReason = escapeHtml(String(account.risk_reason || 'Sem observacoes para esta conta.'));
+        const riskReason = escapeHtml(String(account.risk_reason || 'Sem observações para esta conta.'));
         const sentToday = toNonNegativeInt(account.sent_today);
         const repliedToday = toNonNegativeInt(account.replied_today);
         const uniqueLeadsToday = toNonNegativeInt(account.unique_leads_today);
@@ -648,9 +648,9 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
             ? `${formatNumber(possibleBlockedContacts)} contato(s)`
             : 'Nenhum sinal forte';
         const summaryNote = cooldownActive
-            ? `Cooldown ate ${escapeHtml(formatAccountHealthTime(account.cooldown_until, 'time'))}`
+            ? `Cooldown até ${escapeHtml(formatAccountHealthTime(account.cooldown_until, 'time'))}`
             : (account.last_sent_at
-                ? `Ultimo disparo ${escapeHtml(formatDate(account.last_sent_at, 'time'))}`
+                ? `Último disparo ${escapeHtml(formatDate(account.last_sent_at, 'time'))}`
                 : 'Sem disparos hoje');
         const accountRiskClass = getAccountHealthRiskClass(account.risk_level).replace('is-', '');
         const accountClasses = [
@@ -670,7 +670,7 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                         </div>
                         <div class="account-health-account-meta">
                             <span>${phone}</span>
-                            <span>Sessao: ${sessionId}</span>
+                            <span>Sessão: ${sessionId}</span>
                             <span class="account-health-summary-note">${summaryNote}</span>
                         </div>
                     </div>
@@ -724,7 +724,7 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                                     <strong>${formatPercent(responseRate)}</strong>
                                 </div>
                                 <div class="account-health-detail-item">
-                                    <span>Ultimo disparo</span>
+                                    <span>Último disparo</span>
                                     <strong>${account.last_sent_at ? escapeHtml(formatDate(account.last_sent_at, 'time')) : '-'}</strong>
                                 </div>
                             </div>
@@ -761,7 +761,7 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                                     <strong>${statusLabel}</strong>
                                 </div>
                                 <div class="account-health-detail-item">
-                                    <span>Sessao</span>
+                                    <span>Sessão</span>
                                     <strong>${sessionId}</strong>
                                 </div>
                                 <div class="account-health-detail-item">
@@ -792,7 +792,7 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                                     <article class="account-health-dispatch-row">
                                         <div class="account-health-dispatch-main">
                                             <span class="account-health-dispatch-name">${escapeHtml(String(dispatch.campaign_name || 'Envios avulsos'))}</span>
-                                            <span class="account-health-dispatch-meta">${dispatch.last_sent_at ? `Ultimo envio ${escapeHtml(formatDate(dispatch.last_sent_at, 'time'))}` : 'Sem horario registrado'}</span>
+                                            <span class="account-health-dispatch-meta">${dispatch.last_sent_at ? `Último envio ${escapeHtml(formatDate(dispatch.last_sent_at, 'time'))}` : 'Sem horário registrado'}</span>
                                         </div>
                                         <div class="account-health-dispatch-stat">
                                             <strong>${formatNumber(toNonNegativeInt(dispatch.sent_today))}</strong>
@@ -824,7 +824,7 @@ async function loadAccountHealth(options: { silent?: boolean } = {}) {
 
     const hasRenderedContent = Boolean(document.querySelector('#accountHealthList .account-health-account'));
     if (!hasRenderedContent) {
-        renderAccountHealthPlaceholder('Carregando saude das contas...');
+        renderAccountHealthPlaceholder('Carregando saúde das contas...');
     }
 
     try {
@@ -834,10 +834,10 @@ async function loadAccountHealth(options: { silent?: boolean } = {}) {
         renderAccountHealthAccounts(normalized.accounts);
     } catch (error) {
         if (!hasRenderedContent) {
-            renderAccountHealthPlaceholder('Nao foi possivel carregar a saude das contas.');
+            renderAccountHealthPlaceholder('Não foi possível carregar a saúde das contas.');
         }
         if (!options.silent) {
-            showToast('warning', 'Aviso', 'Nao foi possivel carregar saude das contas');
+            showToast('warning', 'Aviso', 'Não foi possível carregar saúde das contas');
         }
         console.error(error);
     }
