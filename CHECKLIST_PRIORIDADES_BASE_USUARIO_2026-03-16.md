@@ -1,0 +1,110 @@
+# Checklist de Prioridades (Base do Usuario) - 2026-03-16
+
+Referencia usada:
+- P0 Seguranca real em producao
+- P0 Estabilidade WhatsApp/menu
+- P0 Observabilidade
+- P1 Performance de banco
+- P1 Refatoracao incremental
+- P2 Escala estrutural
+- P2 Produto/expansao
+
+Legenda:
+- [x] Feito
+- [ ] Nao feito
+- [~] Parcial
+
+---
+
+## P0 - Seguranca real em producao
+
+- [x] CSP ativada em modo `report-only` no backend.
+  Evidencia: `server/index.js` (constantes CSP + helmet + endpoint de report).
+- [x] Fail-fast para chaves inseguras/ausentes em producao (`JWT_SECRET` e `ENCRYPTION_KEY`).
+  Evidencia: `server/index.js` (erros de startup quando chave e fraca/ausente).
+- [~] Rotacao de segredos em producao (API keys, JWT, encryption, webhooks) em andamento.
+  Evidencia: rotacionados no Railway (servico `ZapVender`) `JWT_SECRET`, `WEBHOOK_SECRET`, `SUPPORT_INBOX_WEBHOOK_SECRET` e `ENCRYPTION_KEY` com fallback temporario e remocao segura do `ENCRYPTION_KEY_PREVIOUS` apos auditoria/migracao.
+  Evidencia tecnica: script `scripts/encryption-key-rotation.js` (audit/migrate), execucao em 2026-03-17 com `previous_only=0` antes da remocao do fallback.
+  Pendencia: rotacao e revogacao das chaves de provedores externos (OpenAI/Gemini/Stripe/Pagar.me/Mailgun/MailMKT).
+- [x] Validacao de schema nas rotas criticas (login, send, bulk, webhooks) conectada.
+  Evidencia: `server/index.js` com `validateLogin`, `validateApiSendRequest`, `validateQueueBulkRequest`, `validateStripeWebhook`, `validatePagarmeWebhook`.
+
+Status do bloco: [~] Parcial
+
+## P0 - Estabilidade WhatsApp/menu
+
+- [x] Idempotencia de inbound por mensagem implementada.
+  Evidencia: `INCOMING_MESSAGE_IDEMPOTENCY_TTL_MS`, receipts e controle de duplicidade em `server/index.js`.
+- [x] Lock de processamento por conversa/mensagem implementado (inclui lock distribuido via Postgres).
+  Evidencia: `incomingMessageProcessingLocks` + `FLOW_INBOUND_POSTGRES_LOCK_ENABLED` em `server/index.js`.
+- [x] Ajustes de warmup/backoff e melhorias de menu textual implementados.
+  Evidencia: `WHATSAPP_SESSION_SEND_WARMUP_MS`, `WHATSAPP_SESSION_DISPATCH_BACKOFF_MS` e commits recentes de fluxo/menu.
+- [ ] Validacao operacional continua (SLO/alertas) para comprovar eliminacao total de engasgos em todos os servicos.
+
+Status do bloco: [~] Parcial (tecnicamente avancado)
+
+## P0 - Observabilidade
+
+- [x] Endpoint de metricas implementado (`/metrics`).
+  Evidencia: `server/index.js`.
+- [x] Telemetria de fluxo inbound por etapas implementada.
+  Evidencia: logs `[flow-telemetry]` em `server/index.js`.
+- [ ] Metricas ativas em producao no servico principal (`METRICS_ENABLED=true` + token).
+  Evidencia atual: `/metrics` retorna 404 quando desativado.
+- [ ] Logging estruturado consistente em producao (sem depender de `console.*`).
+  Evidencia: `pino` esta em `level: 'silent'` no runtime principal.
+
+Status do bloco: [~] Parcial
+
+## P1 - Performance de banco
+
+- [x] Indices para tabelas quentes ja existem no schema.
+  Evidencia: `server/database/schema.sql` e `server/database/schema.pg.sql`.
+- [ ] Revisao de N+1 nas rotas quentes (inbox/fluxos/mensagens) com checklist de query por endpoint.
+- [ ] Plano de execucao (`EXPLAIN ANALYZE`) documentado para queries mais custosas.
+
+Status do bloco: [~] Parcial
+
+## P1 - Refatoracao incremental
+
+- [ ] Quebra de `server/index.js` por dominio (routes/controllers/services).
+- [ ] Quebra de `server/database/models.js` por modulo de dominio.
+
+Evidencia atual:
+- `server/index.js` com ~21684 linhas.
+- `server/database/models.js` com ~5085 linhas.
+
+Status do bloco: [ ] Nao feito
+
+## P2 - Escala estrutural
+
+- [x] Controles de worker e lock de lideranca existem (fila/agendados/webhook).
+  Evidencia: flags `QUEUE_WORKER_ENABLED`, `SCHEDULED_AUTOMATIONS_WORKER_ENABLED`, `POSTGRES_WORKER_LEADER_LOCK_ENABLED`.
+- [ ] Separacao formal de worker dedicado por servico com topologia definitiva.
+- [ ] Redis/Bull operacional de ponta a ponta (dependencia existe, uso efetivo nao evidenciado no backend).
+- [ ] Trilha de migracao arquitetural (Prisma/Nest/microservicos) formalizada.
+
+Status do bloco: [~] Parcial inicial
+
+## P2 - Produto/expansao
+
+- [x] Base de billing/checkout existe (Stripe/Pagar.me).
+- [ ] Onboarding guiado.
+- [ ] Billing por uso.
+- [ ] Feature flags formalizadas por modulo/tenant.
+- [ ] Trilha enterprise para API oficial do WhatsApp.
+
+Status do bloco: [~] Parcial baixo
+
+---
+
+## Resumo executivo
+
+- Blocos concluidos: 0/7
+- Blocos parciais: 6/7
+- Blocos nao iniciados: 1/7
+
+Proximo foco recomendado:
+1. Fechar P0 Seguranca com rotacao completa de segredos (revogacao + troca + evidencia).
+2. Fechar P0 Observabilidade (ativar metricas e padronizar logs estruturados em producao).
+3. Entrar em P1 Performance (N+1 + EXPLAIN nas queries quentes).

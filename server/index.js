@@ -140,6 +140,14 @@ const {
 
 const { authenticate, requestLogger, verifyToken, rateLimit: authRateLimit } = require('./middleware/auth');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const {
+    sanitizeInput,
+    validateLogin,
+    validateApiSendRequest,
+    validateQueueBulkRequest,
+    validateStripeWebhook,
+    validatePagarmeWebhook
+} = require('./middleware/validator');
 
 
 
@@ -1764,7 +1772,7 @@ app.post(CSP_REPORT_ROUTE_PATH, cspReportBodyParser, (req, res) => {
     return res.status(204).end();
 });
 
-app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), validateStripeWebhook, async (req, res) => {
     try {
         const signature = String(req.headers['stripe-signature'] || '').trim();
         const event = await stripeCheckoutService.constructWebhookEvent(req.body, signature);
@@ -1776,7 +1784,7 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
     }
 });
 
-app.post('/pagarme/webhook', express.json({ type: 'application/json' }), async (req, res) => {
+app.post('/pagarme/webhook', express.json({ type: 'application/json' }), validatePagarmeWebhook, async (req, res) => {
     try {
         const event = await pagarmeCheckoutService.constructWebhookEvent(req.body);
         await handlePagarmeWebhookEvent(req, event);
@@ -4705,6 +4713,24 @@ function decryptMessage(encrypted) {
 
 }
 
+function resolveMessageContentWithFallback(messageRow = {}) {
+
+    if (!messageRow || typeof messageRow !== 'object') return '';
+
+    const encryptedContent = messageRow.content_encrypted;
+    const fallbackContent = messageRow.content;
+
+    if (!encryptedContent) return fallbackContent || '';
+
+    const decryptedContent = decryptMessage(encryptedContent);
+    if (decryptedContent && String(decryptedContent).trim()) {
+        return decryptedContent;
+    }
+
+    return fallbackContent || '';
+
+}
+
 
 
 const formatJid = whatsappService.formatJid;
@@ -5185,11 +5211,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 if (msg) {
 
-                    const content = msg.content_encrypted 
-
-                        ? decryptMessage(msg.content_encrypted) 
-
-                        : msg.content;
+                    const content = resolveMessageContentWithFallback(msg);
 
                     return { conversation: content };
 
@@ -8449,9 +8471,7 @@ function isFlowNodeAwaitingInput(flow, nodeId) {
 }
 
 function resolveStoredMessageTextForFlow(messageRow = {}) {
-    let text = messageRow?.content_encrypted
-        ? decryptMessage(messageRow.content_encrypted)
-        : messageRow?.content;
+    let text = resolveMessageContentWithFallback(messageRow);
 
     if ((!text || !String(text).trim()) && messageRow?.media_type && messageRow.media_type !== 'text') {
         text = previewForMedia(messageRow.media_type);
@@ -11650,7 +11670,7 @@ io.on('connection', (socket) => {
 
         // Descriptografar mensagens
         messages = messages.map(m => {
-            const raw = m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content;
+            const raw = resolveMessageContentWithFallback(m);
             let text = raw;
             if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
                 text = previewForMedia(m.media_type);
@@ -13130,19 +13150,11 @@ app.get('/api/status', authenticate, async (req, res) => {
 
 
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', sanitizeInput, validateLogin, async (req, res) => {
 
     try {
 
-        const { email, password } = req.body;
-
-        
-
-        if (!email || !password) {
-
-            return res.status(400).json({ error: 'Email e senha sÃ£o obrigatÃ³rios' });
-
-        }
+        const { email, password } = req.validatedData || req.body;
 
         
 
@@ -16563,9 +16575,7 @@ app.get('/api/conversations', authenticate, async (req, res) => {
 
     const normalized = conversations.map((c) => {
         const lastMessage = lastMessageByConversationId.get(Number(c.id)) || null;
-        const decrypted = lastMessage?.content_encrypted
-            ? decryptMessage(lastMessage.content_encrypted)
-            : lastMessage?.content;
+        const decrypted = resolveMessageContentWithFallback(lastMessage);
 
         let metadata = {};
         try {
@@ -16685,9 +16695,14 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
 
 });
 
-app.post('/api/send', authenticate, async (req, res) => {
+app.post('/api/send', authenticate, validateApiSendRequest, async (req, res) => {
 
-    const { sessionId, to, message, type, options } = req.body;
+    const validatedPayload = req.validatedData || {};
+    const sessionId = String(validatedPayload.sessionId || req.body?.sessionId || '').trim();
+    const to = validatedPayload.to || req.body?.to;
+    const message = validatedPayload.message || req.body?.message;
+    const type = validatedPayload.type || req.body?.type;
+    const options = req.body?.options;
     const scopedUserId = getScopedUserId(req);
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
@@ -16901,7 +16916,7 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     }
 
     const decrypted = messages.map(m => {
-        const raw = m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content;
+        const raw = resolveMessageContentWithFallback(m);
         let text = raw;
         if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
             text = previewForMedia(m.media_type);
@@ -17136,11 +17151,16 @@ app.post('/api/queue/add', authenticate, async (req, res) => {
 
 
 
-app.post('/api/queue/bulk', authenticate, async (req, res) => {
+app.post('/api/queue/bulk', authenticate, validateQueueBulkRequest, async (req, res) => {
     try {
-        const { leadIds, content } = req.body || {};
-        const options = (req.body && typeof req.body.options === 'object' && req.body.options !== null)
-            ? { ...req.body.options }
+        const payload = req.validatedData || {};
+        const leadIds = Array.isArray(payload.leadIds) ? payload.leadIds : (Array.isArray(req.body?.leadIds) ? req.body.leadIds : []);
+        const content = typeof payload.content === 'string' ? payload.content : String(req.body?.content || '');
+        const optionsSource = (payload.options && typeof payload.options === 'object')
+            ? payload.options
+            : req.body?.options;
+        const options = (optionsSource && typeof optionsSource === 'object' && !Array.isArray(optionsSource))
+            ? { ...optionsSource }
             : {};
 
         const parseNonNegative = (value) => {
