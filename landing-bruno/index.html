@@ -1418,6 +1418,18 @@
             gap: 18px;
         }
 
+        .method-grid {
+            grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+            gap: 24px;
+            align-items: center;
+        }
+
+        .method-copy {
+            order: 2;
+            max-width: 40rem;
+            justify-self: end;
+        }
+
         .pain-surface,
         .method-board,
         .positioning-rail,
@@ -1793,6 +1805,73 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+        }
+
+        .method-preview {
+            position: relative;
+            order: 1;
+            width: 100%;
+            max-width: 620px;
+            justify-self: start;
+            align-self: center;
+            padding: 0 0 0 22px;
+            border: none;
+            background: none;
+            box-shadow: none;
+            backdrop-filter: none;
+            perspective: 1800px;
+        }
+
+        .method-preview::before {
+            content: '';
+            position: absolute;
+            inset: 8% 10% 12% 4%;
+            border-radius: 999px;
+            background:
+                radial-gradient(circle at 30% 44%, rgba(0, 255, 163, 0.28), transparent 36%),
+                radial-gradient(circle at 62% 56%, rgba(0, 255, 163, 0.18), transparent 42%);
+            filter: blur(44px);
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.96;
+        }
+
+        .method-preview-media {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            transform-style: preserve-3d;
+        }
+
+        .method-preview-media::after {
+            content: '';
+            position: absolute;
+            inset: auto 6% -8% 12%;
+            height: 18%;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(0, 255, 163, 0.22), transparent 70%);
+            filter: blur(24px);
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        .method-preview-image {
+            display: block;
+            width: 100%;
+            height: auto;
+            transform: perspective(1800px) rotateX(9deg) rotateY(30deg) rotateZ(-4deg) scale(0.97);
+            transform-origin: 84% 50%;
+            transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1), filter 0.55s ease;
+            filter:
+                drop-shadow(-34px 34px 80px rgba(0, 0, 0, 0.48))
+                drop-shadow(0 0 54px rgba(0, 255, 163, 0.34));
+        }
+
+        .method-preview:hover .method-preview-image {
+            transform: perspective(1800px) rotateX(5deg) rotateY(18deg) rotateZ(-2deg) scale(1);
+            filter:
+                drop-shadow(-38px 38px 88px rgba(0, 0, 0, 0.52))
+                drop-shadow(0 0 62px rgba(0, 255, 163, 0.4));
         }
 
         .method-step {
@@ -2391,6 +2470,24 @@
                 margin-top: 0;
             }
 
+            .method-copy {
+                order: 1;
+                max-width: 100%;
+                justify-self: stretch;
+            }
+
+            .method-preview {
+                order: 2;
+                max-width: min(100%, 560px);
+                justify-self: center;
+                margin-top: 10px;
+                padding-left: 0;
+            }
+
+            .method-preview-image {
+                transform: perspective(1400px) rotateX(5deg) rotateY(10deg) rotateZ(-2deg) scale(0.99);
+            }
+
             .pain-visual-media {
                 max-width: min(100%, 580px);
                 margin: 0 auto;
@@ -2475,6 +2572,24 @@
                 padding: 0;
                 border-radius: 0;
                 margin-top: 0;
+            }
+
+            .method-preview {
+                max-width: 100%;
+                margin-top: 6px;
+                padding-left: 0;
+            }
+
+            .method-preview::before {
+                inset: 10% 10% 14% 10%;
+                filter: blur(28px);
+            }
+
+            .method-preview-image {
+                transform: perspective(1200px) rotateX(3deg) rotateY(8deg) rotateZ(-1deg) scale(1);
+                filter:
+                    drop-shadow(-14px 20px 36px rgba(0, 0, 0, 0.36))
+                    drop-shadow(0 0 26px rgba(0, 255, 163, 0.24));
             }
 
             .pain-visual-media {
@@ -4812,7 +4927,7 @@
 
         <section class="story-block container mechanism-block" id="mecanismo">
             <div class="method-grid">
-                <div>
+                <div class="method-copy">
                     <span class="story-eyebrow">Mecanismo simples</span>
                     <h2 class="story-heading story-heading--md">Não é sobre responder mais mensagens. É sobre conduzir <span class="copy-gradient">mais vendas com controle</span>.</h2>
                     <p class="story-lead">O ZapVender junta <span class="copy-emphasis">organização comercial e automação</span> no canal onde a venda já acontece: o WhatsApp.</p>
@@ -4821,35 +4936,9 @@
                         <a href="#beneficios" class="btn btn-ghost">Entender o método do ZapVender</a>
                     </div>
                 </div>
-                <aside class="method-board">
-                    <span class="surface-tag">Como a operação se organiza</span>
-                    <div class="method-step">
-                        <span class="method-step-number">1</span>
-                        <div>
-                            <strong>Entrada com contexto</strong>
-                            <p>Cada lead chega com uma etapa visível, em vez de virar só mais uma conversa na lista.</p>
-                        </div>
-                    </div>
-                    <div class="method-step">
-                        <span class="method-step-number">2</span>
-                        <div>
-                            <strong>Prioridade e dono definidos</strong>
-                            <p>O time passa a saber quem assume, o que está quente e onde cada conversa precisa avançar.</p>
-                        </div>
-                    </div>
-                    <div class="method-step">
-                        <span class="method-step-number">3</span>
-                        <div>
-                            <strong>Retomadas e rotinas automatizadas</strong>
-                            <p>O que hoje se perde entre o atendimento manual e a correria vira sequência organizada.</p>
-                        </div>
-                    </div>
-                    <div class="method-tags">
-                        <span class="method-tag">Funil visual</span>
-                        <span class="method-tag">Responsável por conversa</span>
-                        <span class="method-tag">Etiquetas e prioridades</span>
-                        <span class="method-tag">Follow-up programado</span>
-                        <span class="method-tag">Fluxos ajustados ao processo</span>
+                <aside class="method-preview" aria-label="Preview da tela de contatos do ZapVender">
+                    <div class="method-preview-media">
+                        <img src="assets/images/contatos-preview.png" alt="Preview da área de contatos do ZapVender" class="method-preview-image">
                     </div>
                 </aside>
             </div>
