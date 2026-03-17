@@ -231,6 +231,40 @@ const WHATSAPP_SESSION_RATE_LIMIT_MAX_PER_MINUTE = parsePositiveIntInRange(
 );
 const METRICS_ENABLED = parseBooleanEnv(process.env.METRICS_ENABLED, false);
 const METRICS_BEARER_TOKEN = String(process.env.METRICS_BEARER_TOKEN || '').trim();
+const OPS_ALERTS_ENABLED = parseBooleanEnv(
+    process.env.OPS_ALERTS_ENABLED,
+    process.env.NODE_ENV === 'production'
+);
+const OPS_ALERTS_POLL_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERTS_POLL_MS,
+    60000,
+    5000,
+    60 * 60 * 1000
+);
+const OPS_ALERTS_COOLDOWN_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERTS_COOLDOWN_MS,
+    5 * 60 * 1000,
+    10000,
+    24 * 60 * 60 * 1000
+);
+const OPS_ALERT_QUEUE_PENDING_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_QUEUE_PENDING_WARN,
+    3000,
+    1,
+    100000000
+);
+const OPS_ALERT_QUEUE_FAILED_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_QUEUE_FAILED_WARN,
+    200,
+    1,
+    100000000
+);
+const OPS_ALERT_FLOW_RUNNING_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_FLOW_RUNNING_WARN,
+    300,
+    1,
+    100000000
+);
 const APP_LOG_LEVEL = parseLogLevel(
     process.env.LOG_LEVEL,
     process.env.NODE_ENV === 'production' ? 'info' : 'debug'
@@ -1650,6 +1684,105 @@ const corsOptionsDelegate = (req, callback) => {
 
 app.use(cors(corsOptionsDelegate));
 
+async function getOpsRuntimeSnapshot() {
+    const connectedSessions = Array.from(sessions.values()).filter((session) => session?.isConnected === true).length;
+    const totalSessions = sessions.size;
+
+    const queueStatsRow = await queryOne(`
+        SELECT
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
+            SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
+        FROM message_queue
+    `);
+    const runningFlowsRow = await queryOne(`
+        SELECT COUNT(*)::int AS total
+        FROM flow_executions
+        WHERE status = 'running'
+    `);
+
+    return {
+        totalSessions,
+        connectedSessions,
+        queuePending: Number(queueStatsRow?.pending || 0) || 0,
+        queueProcessing: Number(queueStatsRow?.processing || 0) || 0,
+        queueSent: Number(queueStatsRow?.sent || 0) || 0,
+        queueFailed: Number(queueStatsRow?.failed || 0) || 0,
+        flowRunning: Number(runningFlowsRow?.total || 0) || 0
+    };
+}
+
+function buildOpsThresholdState(snapshot = {}) {
+    const queuePending = Number(snapshot.queuePending || 0) || 0;
+    const queueFailed = Number(snapshot.queueFailed || 0) || 0;
+    const flowRunning = Number(snapshot.flowRunning || 0) || 0;
+
+    return {
+        queuePendingExceeded: queuePending >= OPS_ALERT_QUEUE_PENDING_WARN ? 1 : 0,
+        queueFailedExceeded: queueFailed >= OPS_ALERT_QUEUE_FAILED_WARN ? 1 : 0,
+        flowRunningExceeded: flowRunning >= OPS_ALERT_FLOW_RUNNING_WARN ? 1 : 0
+    };
+}
+
+function buildOpsMetricsLines(snapshot = {}, thresholdState = {}) {
+    const totalSessions = Number(snapshot.totalSessions || 0) || 0;
+    const connectedSessions = Number(snapshot.connectedSessions || 0) || 0;
+    const queuePending = Number(snapshot.queuePending || 0) || 0;
+    const queueProcessing = Number(snapshot.queueProcessing || 0) || 0;
+    const queueSent = Number(snapshot.queueSent || 0) || 0;
+    const queueFailed = Number(snapshot.queueFailed || 0) || 0;
+    const flowRunning = Number(snapshot.flowRunning || 0) || 0;
+
+    return [
+        '# HELP zapvender_process_uptime_seconds Node process uptime in seconds',
+        '# TYPE zapvender_process_uptime_seconds gauge',
+        `zapvender_process_uptime_seconds ${Math.floor(process.uptime())}`,
+        '# HELP zapvender_whatsapp_sessions_total Total WhatsApp sessions loaded in runtime',
+        '# TYPE zapvender_whatsapp_sessions_total gauge',
+        `zapvender_whatsapp_sessions_total ${totalSessions}`,
+        '# HELP zapvender_whatsapp_sessions_connected Connected WhatsApp sessions in runtime',
+        '# TYPE zapvender_whatsapp_sessions_connected gauge',
+        `zapvender_whatsapp_sessions_connected ${connectedSessions}`,
+        '# HELP zapvender_queue_pending_messages Pending messages in queue',
+        '# TYPE zapvender_queue_pending_messages gauge',
+        `zapvender_queue_pending_messages ${queuePending}`,
+        '# HELP zapvender_queue_processing_messages Processing messages in queue',
+        '# TYPE zapvender_queue_processing_messages gauge',
+        `zapvender_queue_processing_messages ${queueProcessing}`,
+        '# HELP zapvender_queue_sent_messages Sent messages in queue table',
+        '# TYPE zapvender_queue_sent_messages gauge',
+        `zapvender_queue_sent_messages ${queueSent}`,
+        '# HELP zapvender_queue_failed_messages Failed messages in queue table',
+        '# TYPE zapvender_queue_failed_messages gauge',
+        `zapvender_queue_failed_messages ${queueFailed}`,
+        '# HELP zapvender_flow_executions_running Running flow executions',
+        '# TYPE zapvender_flow_executions_running gauge',
+        `zapvender_flow_executions_running ${flowRunning}`,
+        '# HELP zapvender_ops_alerts_enabled Ops alerts worker enabled (1=true)',
+        '# TYPE zapvender_ops_alerts_enabled gauge',
+        `zapvender_ops_alerts_enabled ${OPS_ALERTS_ENABLED ? 1 : 0}`,
+        '# HELP zapvender_ops_alert_queue_pending_warn_threshold Alert threshold for pending queue messages',
+        '# TYPE zapvender_ops_alert_queue_pending_warn_threshold gauge',
+        `zapvender_ops_alert_queue_pending_warn_threshold ${OPS_ALERT_QUEUE_PENDING_WARN}`,
+        '# HELP zapvender_ops_alert_queue_failed_warn_threshold Alert threshold for failed queue messages',
+        '# TYPE zapvender_ops_alert_queue_failed_warn_threshold gauge',
+        `zapvender_ops_alert_queue_failed_warn_threshold ${OPS_ALERT_QUEUE_FAILED_WARN}`,
+        '# HELP zapvender_ops_alert_flow_running_warn_threshold Alert threshold for running flows',
+        '# TYPE zapvender_ops_alert_flow_running_warn_threshold gauge',
+        `zapvender_ops_alert_flow_running_warn_threshold ${OPS_ALERT_FLOW_RUNNING_WARN}`,
+        '# HELP zapvender_ops_alert_queue_pending_exceeded Queue pending threshold exceeded (1=true)',
+        '# TYPE zapvender_ops_alert_queue_pending_exceeded gauge',
+        `zapvender_ops_alert_queue_pending_exceeded ${Number(thresholdState.queuePendingExceeded || 0)}`,
+        '# HELP zapvender_ops_alert_queue_failed_exceeded Queue failed threshold exceeded (1=true)',
+        '# TYPE zapvender_ops_alert_queue_failed_exceeded gauge',
+        `zapvender_ops_alert_queue_failed_exceeded ${Number(thresholdState.queueFailedExceeded || 0)}`,
+        '# HELP zapvender_ops_alert_flow_running_exceeded Flow running threshold exceeded (1=true)',
+        '# TYPE zapvender_ops_alert_flow_running_exceeded gauge',
+        `zapvender_ops_alert_flow_running_exceeded ${Number(thresholdState.flowRunningExceeded || 0)}`
+    ];
+}
+
 
 
 app.get('/metrics', async (req, res) => {
@@ -1673,54 +1806,9 @@ app.get('/metrics', async (req, res) => {
     }
 
     try {
-        const connectedSessions = Array.from(sessions.values()).filter((session) => session?.isConnected === true).length;
-        const totalSessions = sessions.size;
-        const queueStatsRow = await queryOne(`
-            SELECT
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-                SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
-                SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-            FROM message_queue
-        `);
-        const runningFlowsRow = await queryOne(`
-            SELECT COUNT(*)::int AS total
-            FROM flow_executions
-            WHERE status = 'running'
-        `);
-
-        const queuePending = Number(queueStatsRow?.pending || 0) || 0;
-        const queueProcessing = Number(queueStatsRow?.processing || 0) || 0;
-        const queueSent = Number(queueStatsRow?.sent || 0) || 0;
-        const queueFailed = Number(queueStatsRow?.failed || 0) || 0;
-        const flowRunning = Number(runningFlowsRow?.total || 0) || 0;
-
-        const metricsLines = [
-            '# HELP zapvender_process_uptime_seconds Node process uptime in seconds',
-            '# TYPE zapvender_process_uptime_seconds gauge',
-            `zapvender_process_uptime_seconds ${Math.floor(process.uptime())}`,
-            '# HELP zapvender_whatsapp_sessions_total Total WhatsApp sessions loaded in runtime',
-            '# TYPE zapvender_whatsapp_sessions_total gauge',
-            `zapvender_whatsapp_sessions_total ${totalSessions}`,
-            '# HELP zapvender_whatsapp_sessions_connected Connected WhatsApp sessions in runtime',
-            '# TYPE zapvender_whatsapp_sessions_connected gauge',
-            `zapvender_whatsapp_sessions_connected ${connectedSessions}`,
-            '# HELP zapvender_queue_pending_messages Pending messages in queue',
-            '# TYPE zapvender_queue_pending_messages gauge',
-            `zapvender_queue_pending_messages ${queuePending}`,
-            '# HELP zapvender_queue_processing_messages Processing messages in queue',
-            '# TYPE zapvender_queue_processing_messages gauge',
-            `zapvender_queue_processing_messages ${queueProcessing}`,
-            '# HELP zapvender_queue_sent_messages Sent messages in queue table',
-            '# TYPE zapvender_queue_sent_messages gauge',
-            `zapvender_queue_sent_messages ${queueSent}`,
-            '# HELP zapvender_queue_failed_messages Failed messages in queue table',
-            '# TYPE zapvender_queue_failed_messages gauge',
-            `zapvender_queue_failed_messages ${queueFailed}`,
-            '# HELP zapvender_flow_executions_running Running flow executions',
-            '# TYPE zapvender_flow_executions_running gauge',
-            `zapvender_flow_executions_running ${flowRunning}`
-        ];
+        const snapshot = await getOpsRuntimeSnapshot();
+        const thresholdState = buildOpsThresholdState(snapshot);
+        const metricsLines = buildOpsMetricsLines(snapshot, thresholdState);
 
         res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
         return res.send(`${metricsLines.join('\n')}\n`);
@@ -2167,7 +2255,8 @@ const reconnectAttempts = whatsappService.reconnectAttempts;
 
 const qrTimeouts = whatsappService.qrTimeouts;
 
-const logger = pino({ level: WHATSAPP_LOG_LEVEL || APP_LOG_LEVEL });
+const opsLogger = pino({ level: APP_LOG_LEVEL });
+const waLogger = pino({ level: WHATSAPP_LOG_LEVEL || APP_LOG_LEVEL });
 
 const typingStatus = new Map();
 
@@ -2198,6 +2287,11 @@ let flowAwaitingInputRecoveryIntervalId = null;
 let flowAwaitingInputRecoveryBootstrapTimeoutId = null;
 let flowAwaitingInputRecoveryIsRunning = false;
 let flowAwaitingInputRecoveryLastSummary = null;
+let opsAlertsIntervalId = null;
+let opsAlertsBootstrapTimeoutId = null;
+let opsAlertsIsRunning = false;
+let opsAlertsLastSummary = null;
+const opsAlertsLastTriggerByKey = new Map();
 const FLOW_RECOVERY_DELAY_MS = parseInt(process.env.FLOW_RECOVERY_DELAY_MS || '', 10) || 2500;
 const FLOW_RECOVERY_WINDOW_MS = parseInt(process.env.FLOW_RECOVERY_WINDOW_MS || '', 10) || (5 * 60 * 1000);
 const FLOW_RECOVERY_TRACKER_LIMIT = 4000;
@@ -2228,6 +2322,38 @@ const WHATSAPP_MANUAL_RECONNECT_CATCHUP_MAX_CONVERSATIONS = parsePositiveIntEnv(
     process.env.WHATSAPP_MANUAL_RECONNECT_CATCHUP_MAX_CONVERSATIONS,
     Math.max(200, WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS)
 );
+
+function normalizeErrorForLog(error, fallback = 'unknown') {
+    const message = String(error?.message || error || '').trim();
+    return message ? message.slice(0, 400) : fallback;
+}
+
+function normalizeEventName(value, fallback = 'app.event') {
+    const event = String(value || '').trim().toLowerCase();
+    return event ? event.slice(0, 120) : fallback;
+}
+
+function logStructured(level, event, fields = {}, message = '') {
+    const normalizedLevel = String(level || '').trim().toLowerCase();
+    const method = typeof opsLogger?.[normalizedLevel] === 'function' ? normalizedLevel : 'info';
+    const payload = {
+        event: normalizeEventName(event)
+    };
+
+    if (fields && typeof fields === 'object') {
+        for (const [key, value] of Object.entries(fields)) {
+            if (value === undefined) continue;
+            payload[key] = value;
+        }
+    }
+
+    if (message) {
+        opsLogger[method](payload, String(message).slice(0, 300));
+        return;
+    }
+
+    opsLogger[method](payload);
+}
 
 function setSessionStartupError(sessionId, payload = {}) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
@@ -5189,7 +5315,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
             ...(Array.isArray(socketVersion) ? { version: socketVersion } : {}),
 
-            logger,
+            waLogger,
 
 // printQRInTerminal: true, // Depreciado no Baileys
 
@@ -5197,7 +5323,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 creds: state.creds,
 
-                keys: makeCacheableSignalKeyStore(state.keys, logger)
+                keys: makeCacheableSignalKeyStore(state.keys, waLogger)
 
             },
 
@@ -8846,6 +8972,203 @@ function stopFlowAwaitingInputRecoveryWorker() {
     }
 }
 
+function shouldEmitOpsAlert(alertKey, now = Date.now()) {
+    const normalizedAlertKey = String(alertKey || '').trim().toLowerCase();
+    if (!normalizedAlertKey) return false;
+
+    const lastEmittedAt = Number(opsAlertsLastTriggerByKey.get(normalizedAlertKey) || 0);
+    if (lastEmittedAt > 0 && (now - lastEmittedAt) < OPS_ALERTS_COOLDOWN_MS) {
+        return false;
+    }
+
+    opsAlertsLastTriggerByKey.set(normalizedAlertKey, now);
+
+    if (opsAlertsLastTriggerByKey.size > 200) {
+        const oldestKey = opsAlertsLastTriggerByKey.keys().next().value;
+        if (oldestKey) {
+            opsAlertsLastTriggerByKey.delete(oldestKey);
+        }
+    }
+
+    return true;
+}
+
+function buildOpsAlertsFromSnapshot(snapshot = {}, thresholdState = {}) {
+    const alerts = [];
+    const queuePending = Number(snapshot.queuePending || 0) || 0;
+    const queueFailed = Number(snapshot.queueFailed || 0) || 0;
+    const flowRunning = Number(snapshot.flowRunning || 0) || 0;
+
+    if (Number(thresholdState.queuePendingExceeded || 0) === 1) {
+        alerts.push({
+            key: 'queue_pending_high',
+            metric: 'zapvender_queue_pending_messages',
+            value: queuePending,
+            threshold: OPS_ALERT_QUEUE_PENDING_WARN,
+            message: 'Fila pendente acima do limite'
+        });
+    }
+
+    if (Number(thresholdState.queueFailedExceeded || 0) === 1) {
+        alerts.push({
+            key: 'queue_failed_high',
+            metric: 'zapvender_queue_failed_messages',
+            value: queueFailed,
+            threshold: OPS_ALERT_QUEUE_FAILED_WARN,
+            message: 'Fila com mensagens com falha acima do limite'
+        });
+    }
+
+    if (Number(thresholdState.flowRunningExceeded || 0) === 1) {
+        alerts.push({
+            key: 'flow_running_high',
+            metric: 'zapvender_flow_executions_running',
+            value: flowRunning,
+            threshold: OPS_ALERT_FLOW_RUNNING_WARN,
+            message: 'Fluxos em execucao acima do limite'
+        });
+    }
+
+    return alerts;
+}
+
+async function runOpsAlertsCycle(options = {}) {
+    const trigger = String(options.trigger || 'ops-alert-worker').trim() || 'ops-alert-worker';
+    const force = options.force === true;
+
+    if (!OPS_ALERTS_ENABLED && !force) {
+        return { skipped: 'disabled', trigger };
+    }
+    if (opsAlertsIsRunning) {
+        return { skipped: 'in_flight', trigger };
+    }
+
+    opsAlertsIsRunning = true;
+    const startedAtMs = Date.now();
+    const summary = {
+        trigger,
+        alertsEvaluated: 0,
+        alertsTriggered: 0,
+        alertsSuppressedByCooldown: 0,
+        elapsedMs: 0
+    };
+
+    try {
+        const snapshot = await getOpsRuntimeSnapshot();
+        const thresholdState = buildOpsThresholdState(snapshot);
+        const alerts = buildOpsAlertsFromSnapshot(snapshot, thresholdState);
+        summary.alertsEvaluated = alerts.length;
+
+        const now = Date.now();
+        for (const alert of alerts) {
+            if (!shouldEmitOpsAlert(alert.key, now)) {
+                summary.alertsSuppressedByCooldown += 1;
+                continue;
+            }
+
+            summary.alertsTriggered += 1;
+            logStructured(
+                'warn',
+                'ops.alert.threshold_exceeded',
+                {
+                    trigger,
+                    alertKey: alert.key,
+                    metric: alert.metric,
+                    value: alert.value,
+                    threshold: alert.threshold,
+                    cooldownMs: OPS_ALERTS_COOLDOWN_MS
+                },
+                alert.message
+            );
+        }
+
+        return summary;
+    } catch (error) {
+        summary.error = normalizeErrorForLog(error);
+        logStructured(
+            'error',
+            'ops.alert.cycle_failed',
+            {
+                trigger,
+                error: summary.error
+            },
+            'Falha no ciclo de alertas operacionais'
+        );
+        return summary;
+    } finally {
+        summary.elapsedMs = Math.max(0, Date.now() - startedAtMs);
+        opsAlertsLastSummary = {
+            ...summary,
+            completedAt: new Date().toISOString()
+        };
+        opsAlertsIsRunning = false;
+    }
+}
+
+function startOpsAlertsWorker() {
+    if (opsAlertsIntervalId) return;
+
+    if (!OPS_ALERTS_ENABLED) {
+        logStructured(
+            'info',
+            'ops.alert.worker_disabled',
+            { reason: 'config_disabled' },
+            'Worker de alertas operacionais desabilitado por configuracao'
+        );
+        return;
+    }
+
+    const runCycle = () => {
+        runOpsAlertsCycle({
+            trigger: 'ops-alert-worker'
+        }).catch((error) => {
+            logStructured(
+                'error',
+                'ops.alert.worker_cycle_failed',
+                { error: normalizeErrorForLog(error) },
+                'Falha no ciclo periodico de alertas operacionais'
+            );
+        });
+    };
+
+    opsAlertsIntervalId = setInterval(runCycle, OPS_ALERTS_POLL_MS);
+
+    const bootstrapDelayMs = Math.max(
+        3000,
+        Math.min(15000, Math.floor(OPS_ALERTS_POLL_MS / 2))
+    );
+    opsAlertsBootstrapTimeoutId = setTimeout(() => {
+        opsAlertsBootstrapTimeoutId = null;
+        runCycle();
+    }, bootstrapDelayMs);
+
+    logStructured(
+        'info',
+        'ops.alert.worker_started',
+        {
+            pollMs: OPS_ALERTS_POLL_MS,
+            cooldownMs: OPS_ALERTS_COOLDOWN_MS,
+            queuePendingWarn: OPS_ALERT_QUEUE_PENDING_WARN,
+            queueFailedWarn: OPS_ALERT_QUEUE_FAILED_WARN,
+            flowRunningWarn: OPS_ALERT_FLOW_RUNNING_WARN
+        },
+        'Worker de alertas operacionais ativo'
+    );
+}
+
+function stopOpsAlertsWorker() {
+    if (opsAlertsBootstrapTimeoutId) {
+        clearTimeout(opsAlertsBootstrapTimeoutId);
+        opsAlertsBootstrapTimeoutId = null;
+    }
+    if (opsAlertsIntervalId) {
+        clearInterval(opsAlertsIntervalId);
+        opsAlertsIntervalId = null;
+    }
+    opsAlertsIsRunning = false;
+    opsAlertsLastTriggerByKey.clear();
+}
+
 function normalizeHistorySyncMessageBatch(messages, limit = WHATSAPP_HISTORY_SYNC_MESSAGES_LIMIT) {
     if (!Array.isArray(messages) || messages.length === 0) return [];
 
@@ -9128,9 +9451,15 @@ async function runWithConversationPostgresLock(conversationId, task) {
             lockWaitMs = Date.now() - lockStartedAtMs;
         } catch (lockError) {
             lockWaitMs = Date.now() - lockStartedAtMs;
-            console.warn(
-                `[flow-lock] Falha ao adquirir lock Postgres da conversa ${conversationId || 'n/a'} `
-                + `(espera=${lockWaitMs}ms). Seguindo com lock local: ${lockError.message}`
+            logStructured(
+                'warn',
+                'flow.lock.postgres_acquire_failed',
+                {
+                    conversationId: Number(conversationId || 0) || null,
+                    lockWaitMs,
+                    error: normalizeErrorForLog(lockError)
+                },
+                'Falha ao adquirir lock Postgres da conversa; seguindo com lock local'
             );
         }
 
@@ -9149,9 +9478,14 @@ async function runWithConversationPostgresLock(conversationId, task) {
                         lockKeyPart
                     ]);
                 } catch (unlockError) {
-                    console.error(
-                        `[flow-lock] Falha ao liberar lock Postgres da conversa ${conversationId || 'n/a'}:`,
-                        unlockError.message
+                    logStructured(
+                        'error',
+                        'flow.lock.postgres_release_failed',
+                        {
+                            conversationId: Number(conversationId || 0) || null,
+                            error: normalizeErrorForLog(unlockError)
+                        },
+                        'Falha ao liberar lock Postgres da conversa'
                     );
                 }
             }
@@ -9231,9 +9565,16 @@ async function claimIncomingMessageReceipt(options = {}) {
 
         return { acquired: true, token: lockToken, reason: 'claimed' };
     } catch (error) {
-        console.warn(
-            `[flow-idempotency] Falha ao registrar receipt para ${normalizedSessionId}:${normalizedMessageId}. `
-            + `Seguindo em modo local: ${error.message}`
+        logStructured(
+            'warn',
+            'flow.idempotency.receipt_claim_failed',
+            {
+                sessionId: normalizedSessionId,
+                messageId: normalizedMessageId,
+                source: normalizedSource,
+                error: normalizeErrorForLog(error)
+            },
+            'Falha ao registrar receipt; seguindo em modo local'
         );
         return { acquired: true, token: '', reason: 'fallback_local' };
     }
@@ -9317,11 +9658,24 @@ async function cleanupIncomingMessageReceipts(options = {}) {
 
         const deleted = Number(result?.changes || 0) || 0;
         if (deleted > 0) {
-            console.log(`[flow-idempotency] Cleanup incoming_message_receipts removeu ${deleted} registro(s).`);
+            logStructured(
+                'info',
+                'flow.idempotency.receipt_cleanup',
+                {
+                    deleted,
+                    retentionMs: INCOMING_MESSAGE_RECEIPTS_RETENTION_MS
+                },
+                'Cleanup de incoming_message_receipts executado'
+            );
         }
         return { deleted };
     } catch (error) {
-        console.warn('[flow-idempotency] Falha ao limpar incoming_message_receipts:', error.message);
+        logStructured(
+            'warn',
+            'flow.idempotency.receipt_cleanup_failed',
+            { error: normalizeErrorForLog(error) },
+            'Falha ao limpar incoming_message_receipts'
+        );
         return { deleted: 0, skipped: 'error' };
     } finally {
         incomingMessageReceiptsCleanupInFlight = false;
@@ -9337,26 +9691,23 @@ function logFlowInboundTelemetry(payload = {}) {
     const flowMs = Math.max(0, Math.round(Number(payload.flowMs || 0) || 0));
     const automationsMs = Math.max(0, Math.round(Number(payload.automationsMs || 0) || 0));
     const lockWaitMs = Math.max(0, Math.round(Number(payload.lockWaitMs || 0) || 0));
-    const outsideHours = payload.outsideHours === true ? '1' : '0';
-    const fromMe = payload.isFromMe === true ? '1' : '0';
-
-    const parts = [
-        `session=${sanitizeSessionId(payload.sessionId) || 'n/a'}`,
-        `conversation=${Number(payload.conversationId || 0) || 'n/a'}`,
-        `message=${String(payload.messageId || '').trim() || 'n/a'}`,
-        `source=${String(payload.source || 'live').trim().toLowerCase() || 'live'}`,
-        `from_me=${fromMe}`,
-        `outside_hours=${outsideHours}`,
-        `total_ms=${totalMs}`,
-        `flow_ms=${flowMs}`,
-        `automations_ms=${automationsMs}`,
-        `lock_wait_ms=${lockWaitMs}`
-    ];
+    const fields = {
+        sessionId: sanitizeSessionId(payload.sessionId) || 'n/a',
+        conversationId: Number(payload.conversationId || 0) || null,
+        messageId: String(payload.messageId || '').trim() || 'n/a',
+        source: String(payload.source || 'live').trim().toLowerCase() || 'live',
+        fromMe: payload.isFromMe === true,
+        outsideHours: payload.outsideHours === true,
+        totalMs,
+        flowMs,
+        automationsMs,
+        lockWaitMs
+    };
 
     if (totalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
-        console.warn(`[flow-telemetry][slow] ${parts.join(' ')}`);
+        logStructured('warn', 'flow.inbound.telemetry_slow', fields, 'Inbound flow lento');
     } else {
-        console.log(`[flow-telemetry] ${parts.join(' ')}`);
+        logStructured('info', 'flow.inbound.telemetry', fields);
     }
 }
 
@@ -10388,9 +10739,16 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
                     automationsSchedulingDurationMs += Date.now() - automationsStartedAtMs;
                     const automationTotalMs = Date.now() - automationStartedAtMs;
                     if (!FLOW_INBOUND_TELEMETRY_ENABLED && automationTotalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
-                        console.warn(
-                            `[flow-telemetry][slow] session=${sessionId} conversation=${conversation.id} `
-                            + `message=${incomingMessageId || 'n/a'} scope=automation total_ms=${automationTotalMs}`
+                        logStructured(
+                            'warn',
+                            'flow.inbound.automation_slow',
+                            {
+                                sessionId,
+                                conversationId: Number(conversation.id || 0) || null,
+                                messageId: String(incomingMessageId || '').trim() || 'n/a',
+                                totalMs: automationTotalMs
+                            },
+                            'Automacao do inbound acima do limite de latencia'
                         );
                     }
                 });
@@ -10423,9 +10781,15 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
                     });
                 }
             } catch (receiptFinalizeError) {
-                console.warn(
-                    `[flow-idempotency] Falha ao finalizar receipt ${sessionId}:${incomingMessageId || 'n/a'}:`,
-                    receiptFinalizeError.message
+                logStructured(
+                    'warn',
+                    'flow.idempotency.receipt_finalize_failed',
+                    {
+                        sessionId: sanitizeSessionId(sessionId),
+                        messageId: String(incomingMessageId || '').trim() || 'n/a',
+                        error: normalizeErrorForLog(receiptFinalizeError)
+                    },
+                    'Falha ao finalizar incoming message receipt'
                 );
             }
         }
@@ -11155,6 +11519,7 @@ function sessionExists(sessionId) {
     startTenantIntegrityAuditWorker();
     startInboxReconciliationWorker();
     startFlowAwaitingInputRecoveryWorker();
+    startOpsAlertsWorker();
     if (BACKUP_AUTO_ENABLED) {
         try {
             scheduleBackup(BACKUP_INTERVAL_HOURS);
@@ -21662,6 +22027,7 @@ process.on('uncaughtException', (error) => {
         queueService.stopProcessing();
         stopInboxReconciliationWorker();
         stopFlowAwaitingInputRecoveryWorker();
+        stopOpsAlertsWorker();
         await webhookQueueService.shutdown();
 
         for (const [sessionId] of sessions.entries()) {
@@ -21693,6 +22059,7 @@ process.on('uncaughtException', (error) => {
         queueService.stopProcessing();
         stopInboxReconciliationWorker();
         stopFlowAwaitingInputRecoveryWorker();
+        stopOpsAlertsWorker();
         await webhookQueueService.shutdown();
 
         for (const [sessionId] of sessions.entries()) {

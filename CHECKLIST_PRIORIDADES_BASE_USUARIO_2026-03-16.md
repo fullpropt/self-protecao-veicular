@@ -39,7 +39,8 @@ Status do bloco: [~] Parcial
   Evidencia: `incomingMessageProcessingLocks` + `FLOW_INBOUND_POSTGRES_LOCK_ENABLED` em `server/index.js`.
 - [x] Ajustes de warmup/backoff e melhorias de menu textual implementados.
   Evidencia: `WHATSAPP_SESSION_SEND_WARMUP_MS`, `WHATSAPP_SESSION_DISPATCH_BACKOFF_MS` e commits recentes de fluxo/menu.
-- [ ] Validacao operacional continua (SLO/alertas) para comprovar eliminacao total de engasgos em todos os servicos.
+- [~] Validacao operacional continua (SLO/alertas) para comprovar eliminacao total de engasgos em todos os servicos.
+  Evidencia: worker `startOpsAlertsWorker` e limiares operacionais no `/metrics` em `server/index.js`.
 
 Status do bloco: [~] Parcial (tecnicamente avancado)
 
@@ -51,8 +52,10 @@ Status do bloco: [~] Parcial (tecnicamente avancado)
   Evidencia: logs `[flow-telemetry]` em `server/index.js`.
 - [x] Metricas ativas em producao no servico principal (`METRICS_ENABLED=true` + token).
   Evidencia: variaveis aplicadas no Railway em 2026-03-17 e validacao com `/metrics` retornando `200` com bearer token e `401` sem token.
-- [ ] Logging estruturado consistente em producao (sem depender de `console.*`).
-  Evidencia: `pino` esta em `level: 'silent'` no runtime principal.
+- [x] Alertas operacionais de fila/fluxo com cooldown implementados.
+  Evidencia: `runOpsAlertsCycle`, `buildOpsThresholdState` e metricas `zapvender_ops_alert_*` em `server/index.js`.
+- [~] Logging estruturado aplicado nos pontos criticos de inbound/locks/idempotencia.
+  Evidencia: `logStructured(...)` com eventos `flow.inbound.*`, `flow.idempotency.*` e `flow.lock.*` em `server/index.js`.
 
 Status do bloco: [~] Parcial
 
@@ -108,5 +111,5 @@ Status do bloco: [~] Parcial baixo
 
 Proximo foco recomendado:
 1. Fechar P0 Seguranca com rotacao completa de segredos externos (revogacao + troca + evidencia).
-2. Evoluir P0 Observabilidade para alertas (SLO, filtros e alarmes de fila/latencia/erro).
+2. Consolidar observabilidade com dashboard + notificacao externa (Grafana/Alertmanager/Sentry).
 3. Iniciar P1 Refatoracao incremental (`server/index.js` e `server/database/models.js` por dominio).
