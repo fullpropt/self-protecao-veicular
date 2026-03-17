@@ -477,13 +477,6 @@ function DashboardStyles() {
           font-weight: 700;
           color: #f5fbf8;
         }
-        .account-health-account-meta {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          color: rgba(214, 228, 239, 0.72);
-          font-size: 12px;
-        }
         .account-health-pill,
         .account-health-risk-badge {
           display: inline-flex;
@@ -739,8 +732,8 @@ function DashboardStyles() {
         }
         .account-health-summary-main {
           min-width: 0;
-          display: grid;
-          gap: 7px;
+          display: flex;
+          align-items: center;
         }
         .account-health-summary-title-row {
           display: flex;
@@ -748,13 +741,6 @@ function DashboardStyles() {
           gap: 8px;
           flex-wrap: wrap;
           min-width: 0;
-        }
-        .account-health-summary-note {
-          font-size: 12px;
-          color: rgba(214, 228, 239, 0.78);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
         }
         .account-health-summary-metrics {
           display: flex;

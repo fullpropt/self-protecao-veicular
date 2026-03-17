@@ -544,19 +544,6 @@ function renderAccountHealthPlaceholder(message: string) {
     }
 }
 
-function normalizeAccountHealthPhone(value: unknown) {
-    const raw = String(value || '').trim();
-    if (!raw) return '-';
-    const digits = raw.replace(/\D/g, '');
-    if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
-        return formatPhone(digits.slice(2));
-    }
-    if (digits.length === 10 || digits.length === 11) {
-        return formatPhone(digits);
-    }
-    return raw;
-}
-
 function getAccountHealthStatusClass(account: AccountHealthAccount) {
     const status = String(account.status || '').trim().toLowerCase();
     if (status === 'connected') return 'is-connected';
@@ -627,7 +614,6 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
     list.innerHTML = accounts.map((account) => {
         const sessionName = escapeHtml(String(account.session_name || account.session_id || 'Conta sem nome'));
         const sessionId = escapeHtml(String(account.session_id || '-'));
-        const phone = escapeHtml(normalizeAccountHealthPhone(account.phone));
         const statusLabel = escapeHtml(String(account.status_label || 'Indisponível'));
         const statusClass = getAccountHealthStatusClass(account);
         const riskClass = getAccountHealthRiskClass(account.risk_level);
@@ -647,11 +633,6 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
         const possibleBlockedText = possibleBlockedContacts > 0
             ? `${formatNumber(possibleBlockedContacts)} contato(s)`
             : 'Nenhum sinal forte';
-        const summaryNote = cooldownActive
-            ? `Cooldown até ${escapeHtml(formatAccountHealthTime(account.cooldown_until, 'time'))}`
-            : (account.last_sent_at
-                ? `Último disparo ${escapeHtml(formatDate(account.last_sent_at, 'time'))}`
-                : 'Sem disparos hoje');
         const accountRiskClass = getAccountHealthRiskClass(account.risk_level).replace('is-', '');
         const accountClasses = [
             'account-health-account',
@@ -667,11 +648,6 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
                             <span class="account-health-account-name">${sessionName}</span>
                             <span class="account-health-pill ${statusClass}">${statusLabel}</span>
                             ${account.campaign_enabled === false ? '<span class="account-health-pill is-paused">Disparo pausado</span>' : ''}
-                        </div>
-                        <div class="account-health-account-meta">
-                            <span>${phone}</span>
-                            <span>Sessão: ${sessionId}</span>
-                            <span class="account-health-summary-note">${summaryNote}</span>
                         </div>
                     </div>
 
@@ -1129,7 +1105,7 @@ function getSelectedCustomEventsPeriod() {
 
 function formatCustomEventLastTriggered(value: string | null | undefined) {
     if (!value) return 'Nunca';
-    return `${timeAgo(value)} (${formatDate(value, 'datetime')})`;
+    return timeAgo(value);
 }
 
 function renderCustomEventsEmptyState() {
@@ -1202,7 +1178,7 @@ function renderCustomEventsList(response: CustomEventsStatsResponse) {
                             </div>
                         </div>
                         <div class="events-row-meta">
-                            <div class="events-row-last">Último disparo: ${lastTriggered}</div>
+                            <div class="events-row-last">${lastTriggered}</div>
                         </div>
                     </div>
                 `;
