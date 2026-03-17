@@ -146,6 +146,50 @@ function DashboardStyles() {
         .custom-event-status { font-size: 11px; border-radius: 999px; padding: 3px 8px; border: 1px solid rgba(var(--primary-rgb), 0.25); color: var(--gray-500); background: rgba(12, 24, 40, 0.58); white-space: nowrap; }
         .custom-event-status.active { border-color: rgba(var(--primary-rgb), 0.45); color: #d8f4e6; background: rgba(var(--primary-rgb), 0.13); }
         .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.4); color: var(--gray-800); }
+        .events-personalized-card.is-sidebar {
+          display: flex;
+          flex-direction: column;
+          min-height: 100%;
+        }
+        .events-personalized-card.is-sidebar .events-header {
+          align-items: flex-start;
+          margin-bottom: 14px;
+        }
+        .events-personalized-card.is-sidebar .events-controls {
+          width: 100%;
+          margin-left: 0;
+          justify-content: flex-end;
+        }
+        .events-personalized-card.is-sidebar .events-controls .form-select {
+          min-width: 0;
+          flex: 1 1 150px;
+        }
+        .events-personalized-card.is-sidebar #customEventsList {
+          flex: 1 1 auto;
+        }
+        .events-personalized-card.is-sidebar .events-list {
+          gap: 8px;
+        }
+        .events-personalized-card.is-sidebar .events-row {
+          grid-template-columns: 1fr;
+          gap: 8px;
+          padding: 10px 12px;
+        }
+        .events-personalized-card.is-sidebar .events-row-main {
+          display: grid;
+          gap: 4px;
+        }
+        .events-personalized-card.is-sidebar .events-row-name,
+        .events-personalized-card.is-sidebar .events-row-count,
+        .events-personalized-card.is-sidebar .events-row-last {
+          white-space: normal;
+        }
+        .events-personalized-card.is-sidebar .events-row-actions {
+          justify-content: flex-end;
+        }
+        .events-personalized-card.is-sidebar .events-empty {
+          padding: 24px 12px;
+        }
         .onboarding-card {
           margin-bottom: 24px;
           padding: 22px;
@@ -493,6 +537,8 @@ function DashboardHeader() {
 }
 
 function StatsPeriod() {
+  const globals = window as Window & DashboardGlobals;
+
   return (
     <div className="dashboard-botconversa">
       <div className="stats-period-card">
@@ -520,54 +566,32 @@ function StatsPeriod() {
           <canvas id="statsChart" style={{ maxHeight: '200px' }}></canvas>
         </div>
       </div>
-      <div className="stats-general-card">
-        <h3>Estatísticas gerais</h3>
-        <div className="stats-general-item">
-          <span className="stats-general-label">Contatos com interação</span>
-          <span className="stats-general-value" id="statsContacts">0</span>
+      <div className="events-personalized-card is-sidebar">
+        <div className="events-header">
+          <h3>
+            Eventos personalizados{' '}
+            <span
+              className="info-icon"
+              title="Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas."
+            >
+              <span className="icon icon-info icon-sm"></span>
+            </span>
+          </h3>
+          <div className="events-controls">
+            <select className="form-select" id="customEventsPeriod" style={{ width: 'auto' }}>
+              <option value="this_month">Este mês</option>
+              <option value="week">Semana</option>
+              <option value="year">Ano</option>
+              <option value="last_30_days">Últimos 30 dias</option>
+            </select>
+            <button className="btn btn-primary btn-sm events-create-btn" type="button" onClick={() => globals.openCustomEventModal?.()}>
+              Criar
+            </button>
+          </div>
         </div>
-        <div className="stats-general-item">
-          <span className="stats-general-label">Mensagens do contato</span>
-          <span className="stats-general-value" id="statsMessages">0</span>
+        <div id="customEventsList">
+          <div className="events-loading">Carregando eventos personalizados...</div>
         </div>
-        <div className="stats-general-item">
-          <span className="stats-general-label">Interações por inscrito</span>
-          <span className="stats-general-value" id="statsInteractionsPer">0</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EventsCard() {
-  const globals = window as Window & DashboardGlobals;
-
-  return (
-    <div className="events-personalized-card" style={{ marginBottom: '24px' }}>
-      <div className="events-header">
-        <h3>
-          Eventos personalizados{' '}
-          <span
-            className="info-icon"
-            title="Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas."
-          >
-            <span className="icon icon-info icon-sm"></span>
-          </span>
-        </h3>
-        <div className="events-controls">
-          <select className="form-select" id="customEventsPeriod" style={{ width: 'auto' }}>
-            <option value="this_month">Este mês</option>
-            <option value="week">Semana</option>
-            <option value="year">Ano</option>
-            <option value="last_30_days">Últimos 30 dias</option>
-          </select>
-          <button className="btn btn-primary btn-sm events-create-btn" type="button" onClick={() => globals.openCustomEventModal?.()}>
-            Criar
-          </button>
-        </div>
-      </div>
-      <div id="customEventsList">
-        <div className="events-loading">Carregando eventos personalizados...</div>
       </div>
     </div>
   );
@@ -1232,7 +1256,6 @@ export default function Dashboard() {
         <DashboardHeader />
         <OnboardingCard />
         <StatsPeriod />
-        <EventsCard />
         <StatsCards />
         <Funnel />
       </main>
