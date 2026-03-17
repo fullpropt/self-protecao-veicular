@@ -652,8 +652,6 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
             : (account.last_sent_at
                 ? `Ultimo disparo ${escapeHtml(formatDate(account.last_sent_at, 'time'))}`
                 : 'Sem disparos hoje');
-        const shouldOpen = account.risk_level === 'critical' || account.risk_level === 'attention' || cooldownActive;
-        const openAttribute = shouldOpen ? ' open' : '';
         const accountRiskClass = getAccountHealthRiskClass(account.risk_level).replace('is-', '');
         const accountClasses = [
             'account-health-account',
@@ -662,7 +660,7 @@ function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | nul
         ].filter(Boolean).join(' ');
 
         return `
-            <details class="${accountClasses}"${openAttribute}>
+            <details class="${accountClasses}">
                 <summary class="account-health-summary-row">
                     <div class="account-health-summary-main">
                         <div class="account-health-summary-title-row">

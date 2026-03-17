@@ -522,31 +522,57 @@ function DashboardStyles() {
           justify-content: flex-start;
         }
         .account-health-metric-chip {
+          position: relative;
+          overflow: hidden;
           min-width: 86px;
-          padding: 8px 10px;
+          padding: 8px 10px 8px 12px;
           border-radius: 12px;
           border: 1px solid rgba(148, 163, 184, 0.16);
-          background: rgba(255, 255, 255, 0.03);
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 10px 24px rgba(2, 6, 23, 0.12);
         }
-        .account-health-metric-chip.is-sent {
-          background: linear-gradient(180deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.04));
-          border-color: rgba(59, 130, 246, 0.2);
+        .account-health-metric-chip::before {
+          content: '';
+          position: absolute;
+          top: 9px;
+          left: 0;
+          bottom: 9px;
+          width: 2px;
+          border-radius: 999px;
+          background: rgba(226, 232, 240, 0.18);
         }
-        .account-health-metric-chip.is-replied {
-          background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04));
-          border-color: rgba(16, 185, 129, 0.2);
+        .account-health-metric-chip.is-sent::before {
+          background: rgba(226, 232, 240, 0.16);
         }
-        .account-health-metric-chip.is-rate {
-          background: linear-gradient(180deg, rgba(45, 212, 191, 0.12), rgba(45, 212, 191, 0.04));
-          border-color: rgba(45, 212, 191, 0.2);
+        .account-health-metric-chip.is-replied::before {
+          background: rgba(226, 232, 240, 0.24);
+        }
+        .account-health-metric-chip.is-rate::before {
+          background: rgba(226, 232, 240, 0.2);
         }
         .account-health-metric-chip.is-usage {
-          background: linear-gradient(180deg, rgba(250, 204, 21, 0.1), rgba(250, 204, 21, 0.03));
-          border-color: rgba(250, 204, 21, 0.2);
+          border-style: solid;
+        }
+        .account-health-metric-chip.is-usage::before {
+          width: 3px;
+          background: rgba(226, 232, 240, 0.22);
         }
         .account-health-metric-chip.is-blocked {
-          background: linear-gradient(180deg, rgba(249, 115, 22, 0.14), rgba(250, 204, 21, 0.04));
-          border-color: rgba(249, 115, 22, 0.24);
+          border-style: dashed;
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.024));
+        }
+        .account-health-metric-chip.is-blocked::before {
+          width: 3px;
+          background:
+            repeating-linear-gradient(
+              180deg,
+              rgba(226, 232, 240, 0.34) 0 5px,
+              rgba(226, 232, 240, 0.08) 5px 9px
+            );
         }
         .account-health-metric-chip-label {
           display: block;
@@ -666,12 +692,12 @@ function DashboardStyles() {
         .events-summary { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: var(--gray-500); }
         .events-summary strong { color: var(--gray-700); }
         .events-list { display: flex; flex-direction: column; gap: 10px; }
-        .events-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(12, 24, 40, 0.58); }
-        .events-row-main { min-width: 0; }
-        .events-row-name { font-weight: 700; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .events-row-key { font-size: 11px; color: var(--gray-500); }
+        .events-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(12, 24, 40, 0.58); }
+        .events-row-main { min-width: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .events-row-name { font-weight: 700; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+        .events-row-key { display: none; }
         .events-row-count { font-size: 13px; color: var(--gray-600); white-space: nowrap; }
-        .events-row-last { font-size: 12px; color: var(--gray-500); white-space: nowrap; }
+        .events-row-last { font-size: 12px; color: var(--gray-500); white-space: nowrap; line-height: 1.2; }
         .events-row-actions { display: inline-flex; gap: 6px; }
         .events-loading, .events-error { padding: 14px; text-align: center; border: 1px dashed var(--border-color); border-radius: 10px; color: var(--gray-500); }
         .info-icon { cursor: help; opacity: 0.7; }
@@ -1003,6 +1029,7 @@ function DashboardStyles() {
           .events-controls { width: 100%; margin-left: 0; }
           .events-controls .form-select, .events-controls .btn { width: 100%; }
           .events-row { grid-template-columns: 1fr; gap: 8px; }
+          .events-row-main { display: grid; gap: 4px; }
           .events-row-count, .events-row-last { white-space: normal; }
           .events-row-actions { justify-content: flex-end; }
           .events-empty { padding: 20px 10px; }
