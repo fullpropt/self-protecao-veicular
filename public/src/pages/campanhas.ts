@@ -153,9 +153,7 @@ const CAMPAIGNS_LIVE_REFRESH_MS = 4000;
 const FIXED_CAMPAIGN_MESSAGE_VARIABLES: ReadonlyArray<CampaignMessageVariable> = Object.freeze([
     { key: 'nome', label: 'Nome do contato' },
     { key: 'telefone', label: 'Telefone' },
-    { key: 'email', label: 'Email' },
-    { key: 'veiculo', label: 'Veículo' },
-    { key: 'placa', label: 'Placa' }
+    { key: 'email', label: 'Email' }
 ]);
 
 function getCampaignsCacheKey() {

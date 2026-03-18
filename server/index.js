@@ -11234,7 +11234,7 @@ async function requireActiveWhatsAppPlan(req, res, next) {
         if (!hasActivePlan) {
             return res.status(402).json({
                 success: false,
-                error: 'Sua assinatura nÃ£o estÃ¡ ativa. Reative para poder usar a aplicaÃ§Ã£o.',
+                error: 'Sua assinatura n\u00E3o est\u00E1 ativa. Reative para poder usar a aplica\u00E7\u00E3o.',
                 code: 'PLAN_INACTIVE'
             });
         }
@@ -11252,7 +11252,7 @@ async function ensureSocketActiveWhatsAppPlan(socket, sessionId = null) {
         if (!hasActivePlan) {
             const normalizedSessionId = sanitizeSessionId(sessionId);
             socket.emit('error', {
-                message: 'Sua assinatura nÃ£o estÃ¡ ativa. Reative para poder usar a aplicaÃ§Ã£o.',
+                message: 'Sua assinatura n\u00E3o est\u00E1 ativa. Reative para poder usar a aplica\u00E7\u00E3o.',
                 code: 'PLAN_INACTIVE'
             });
             socket.emit('session-status', {
