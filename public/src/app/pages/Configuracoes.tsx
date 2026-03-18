@@ -310,13 +310,9 @@ export default function Configuracoes() {
             cursor: pointer;
         }
         .variable-tag:hover { background: rgba(var(--primary-rgb), 0.2); }
-        .connection-status-card { background: var(--surface-muted); border-radius: var(--border-radius); padding: 30px; border: 1px solid var(--border-color); }
         .connection-icon { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; margin-bottom: 20px; }
         .connection-icon.success { background: var(--success); color: #052216; }
         .connection-icon.disconnected { background: var(--gray-200); color: var(--gray-800); }
-        .connection-status-card h4 { margin: 0 0 12px; font-size: 20px; }
-        .connection-status-card p { margin: 0 0 12px; color: var(--gray-800); line-height: 1.5; }
-        .connection-info { font-size: 13px; color: var(--gray-700); background: var(--gray-50); padding: 15px; border-radius: 8px; margin: 15px 0 !important; border: 1px solid var(--border-color); }
         .connection-accounts-list {
             display: grid;
             gap: 12px;
@@ -556,19 +552,13 @@ export default function Configuracoes() {
       
                   <div className="settings-panels">
                       <div className="settings-panel active" id="panel-conexao">
-                          <h3 className="settings-section-title">Contas</h3>
-                          <div className="connection-status-card" id="connectionStatusCard">
-                              <h4 style={{ marginTop: 0 }}>Contas WhatsApp</h4>
-                              <p className="connection-info">
-                                  Gerencie nome de exibição, participação em campanhas, peso e limite diário de cada conta.
-                              </p>
-                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                                  <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.refreshWhatsAppAccounts?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar lista</button>
-                                  <Link to="/whatsapp" className="btn btn-primary">Ir para WhatsApp</Link>
-                              </div>
-                              <div className="connection-accounts-list" id="connectionAccountsList">
-                                  <p style={{ color: 'var(--gray-500)', margin: 0 }}>Carregando contas...</p>
-                              </div>
+                          <h4 style={{ margin: '0 0 14px', fontSize: '20px' }}>Contas WhatsApp</h4>
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                              <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.refreshWhatsAppAccounts?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar lista</button>
+                              <Link to="/whatsapp" className="btn btn-primary">Ir para WhatsApp</Link>
+                          </div>
+                          <div className="connection-accounts-list" id="connectionAccountsList">
+                              <p style={{ color: 'var(--gray-500)', margin: 0 }}>Carregando contas...</p>
                           </div>
                       </div>
       
