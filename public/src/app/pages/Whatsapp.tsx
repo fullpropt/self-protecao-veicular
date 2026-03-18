@@ -82,7 +82,7 @@ export default function Whatsapp() {
   };
 
   return (
-    <div className="whatsapp-react">
+    <div className="whatsapp-react workspace-surface-page">
             <style>{`
         .whatsapp-react {
             --primary: #1ef2a3;

@@ -403,9 +403,9 @@ export default function CompleteRegistration() {
               <button
                 type="button"
                 className="complete-registration-btn secondary"
-                onClick={() => { window.location.hash = '#/planos'; }}
+                onClick={() => { window.location.hash = '#/home'; }}
               >
-                Ver planos
+                Ver pagina inicial
               </button>
             </div>
           </>
@@ -500,10 +500,10 @@ export default function CompleteRegistration() {
               <button
                 type="button"
                 className="complete-registration-btn secondary"
-                onClick={() => { window.location.hash = '#/planos'; }}
+                onClick={() => { window.location.hash = '#/home'; }}
                 disabled={busy}
               >
-                Voltar aos planos
+                Voltar para a pagina inicial
               </button>
             </div>
           </form>
@@ -514,9 +514,9 @@ export default function CompleteRegistration() {
             <button
               type="button"
               className="complete-registration-btn secondary"
-              onClick={() => { window.location.hash = '#/planos'; }}
+              onClick={() => { window.location.hash = '#/home'; }}
             >
-              Voltar aos planos
+              Voltar para a pagina inicial
             </button>
           </div>
         ) : null}

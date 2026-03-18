@@ -277,7 +277,7 @@ export default function PreCheckout() {
       <div className="precheckout-bg-layer" aria-hidden="true"></div>
       <div className="precheckout-shell">
         <header className="precheckout-header">
-          <a href="#/planos" className="precheckout-brand-link" aria-label="Voltar para planos">
+          <a href="#/home" className="precheckout-brand-link" aria-label="Voltar para a pagina inicial">
             <img src={brandFullLogoUrl} alt={brandName} />
           </a>
         </header>
@@ -308,7 +308,7 @@ export default function PreCheckout() {
         <footer className="precheckout-footer" aria-label="Rodapé principal">
           <div className="precheckout-footer-grid">
             <section className="precheckout-footer-brand-col" aria-label="Marca e posicionamento">
-              <a href="#/planos" className="precheckout-footer-brand" aria-label={`${brandName} página inicial de planos`}>
+              <a href="#/home" className="precheckout-footer-brand" aria-label={`${brandName} pagina inicial`}>
                 <img src={brandLogoUrl} alt="" aria-hidden="true" />
                 <span>{brandName}</span>
               </a>
@@ -321,9 +321,9 @@ export default function PreCheckout() {
             <nav className="precheckout-footer-col" aria-label="Links de produto">
               <h3>Produto</h3>
               <ul>
-                <li><a href="#/planos">Motor de Automação</a></li>
-                <li><a href="#/planos">Segurança API</a></li>
-                <li><a href="#/planos">Log e Métricas</a></li>
+                <li><a href="#/home">Motor de Automação</a></li>
+                <li><a href="#/home">Segurança API</a></li>
+                <li><a href="#/home">Log e Métricas</a></li>
               </ul>
             </nav>
 

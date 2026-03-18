@@ -18,7 +18,7 @@ export default function FooterPremium({ onNavigateSection }: FooterPremiumProps)
       <div className="premium-footer-shell">
         <div className="premium-footer-grid">
           <section className="premium-footer-col premium-footer-brand-col" aria-label="Marca e posicionamento">
-            <Link to="/planos" className="premium-footer-brand" aria-label={`${brandName} pagina inicial de planos`}>
+            <Link to="/home" className="premium-footer-brand" aria-label={`${brandName} pagina inicial`}>
               <img src={brandLogoUrl} alt="" aria-hidden="true" />
               <span>{brandName}</span>
             </Link>

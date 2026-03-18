@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { clearPersistedAuthSession, clearSessionAuthStorage } from '../../core/authPersistence';
 import { brandLogoUrl, brandName } from '../lib/brand';
@@ -336,6 +336,17 @@ export default function AdminDashboard() {
   const [userActionConfirmDraft, setUserActionConfirmDraft] = useState<UserActionConfirmDraft | null>(null);
   const [accountActionConfirmDraft, setAccountActionConfirmDraft] = useState<AccountActionConfirmDraft | null>(null);
 
+  const handleModalOverlayClick = (
+    event: MouseEvent<HTMLDivElement>,
+    onClose: () => void,
+    disabled = false
+  ) => {
+    if (disabled) return;
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  };
+
   const summary = useMemo(() => overview?.summary || {}, [overview]);
   const accounts = useMemo(() => (Array.isArray(overview?.accounts) ? overview.accounts : []), [overview]);
 
@@ -457,7 +468,7 @@ export default function AdminDashboard() {
     }
     clearSessionAuthStorage();
     clearPersistedAuthSession();
-    window.location.hash = '#/planos';
+    window.location.hash = '#/home';
   };
   const openAccountEditor = (account: AppAdminAccount) => {
     setOverviewError('');
@@ -1348,7 +1359,7 @@ export default function AdminDashboard() {
         )}
       </main>
       {emailPreview && (
-        <div className="modal-overlay active">
+        <div className="modal-overlay active" onClick={(event) => handleModalOverlayClick(event, () => setEmailPreview(null))}>
           <div className="modal modal-lg">
             <div className="modal-header">
               <h3 className="modal-title">Pre-visualizacao do e-mail</h3>
@@ -1387,7 +1398,7 @@ export default function AdminDashboard() {
         </div>
       )}
       {accountDraft && (
-        <div className="modal-overlay active">
+        <div className="modal-overlay active" onClick={(event) => handleModalOverlayClick(event, () => setAccountDraft(null))}>
           <div className="modal modal-lg">
             <div className="modal-header">
               <h3 className="modal-title">Editar conta</h3>
@@ -1462,7 +1473,7 @@ export default function AdminDashboard() {
       )}
 
       {userDraft && (
-        <div className="modal-overlay active">
+        <div className="modal-overlay active" onClick={(event) => handleModalOverlayClick(event, () => setUserDraft(null))}>
           <div className="modal">
             <div className="modal-header">
               <h3 className="modal-title">Editar usuário</h3>
@@ -1511,7 +1522,7 @@ export default function AdminDashboard() {
         </div>
       )}
       {accountActionConfirmDraft && (
-        <div className="modal-overlay active">
+        <div className="modal-overlay active" onClick={(event) => handleModalOverlayClick(event, () => setAccountActionConfirmDraft(null), Boolean(accountActionBusy))}>
           <div className="modal">
             <div className="modal-header">
               <h3 className="modal-title">{accountActionConfirmDraft.mode === 'deactivate' ? 'Confirmar desativação da conta' : 'Confirmar exclusão da conta'}</h3>
@@ -1539,7 +1550,7 @@ export default function AdminDashboard() {
         </div>
       )}
       {userActionConfirmDraft && (
-        <div className="modal-overlay active">
+        <div className="modal-overlay active" onClick={(event) => handleModalOverlayClick(event, () => setUserActionConfirmDraft(null), Boolean(userActionBusy))}>
           <div className="modal">
             <div className="modal-header">
               <h3 className="modal-title">{userActionConfirmDraft.isActive ? 'Confirmar desativação' : 'Confirmar exclusão'}</h3>

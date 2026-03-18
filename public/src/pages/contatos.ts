@@ -865,8 +865,6 @@ function initContacts() {
     bindContactsPaginationControls();
     bindContactsMobileCascadeBehavior();
     bindImportTagColumnMappingControls();
-    renderContactsPlanUsage();
-    void loadContactsPlanUsage();
     loadContactFields();
     void loadContactsSessionFilters().finally(() => {
         void loadContacts({
@@ -1651,8 +1649,6 @@ function updateStats() {
             allContacts.filter(c => c.phone).length
         );
     }
-
-    renderContactsPlanUsage();
 }
 
 function syncSelectionUi() {

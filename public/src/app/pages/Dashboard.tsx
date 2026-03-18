@@ -1,9 +1,11 @@
 ﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useRef } from 'react';
 import { brandLogoUrl, brandName } from '../lib/brand';
 
 type DashboardGlobals = {
   initDashboard?: () => void;
+  initOnboardingCard?: () => void;
   loadDashboardData?: () => void;
   loadCustomEvents?: (options?: { silent?: boolean }) => void;
   toggleOnboardingStep?: (stepId: string, checked?: boolean) => void;
@@ -24,6 +26,22 @@ type DashboardGlobals = {
   logout?: () => void;
 };
 
+function readDashboardHeaderUserName() {
+  if (typeof window === 'undefined') return 'Usuário';
+
+  const userName = String(window.sessionStorage.getItem('selfDashboardUser') || '').trim();
+  return userName || 'Usuário';
+}
+
+function formatDashboardHeaderDate(date = new Date()) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  }).format(date);
+}
+
 function DashboardStyles() {
   return (
     <style>{`
@@ -36,8 +54,25 @@ function DashboardStyles() {
         }
         .dashboard-botconversa { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
         @media (max-width: 900px) { .dashboard-botconversa { grid-template-columns: 1fr; } }
-        .stats-period-card, .stats-general-card, .events-personalized-card { background: var(--surface); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-md); padding: 24px; border: 1px solid var(--border-color); }
-        .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 600; }
+        .stats-period-card, .stats-general-card, .events-personalized-card { position: relative; overflow: hidden; background: var(--surface); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-md); padding: 24px; border: 1px solid var(--border-color); }
+        .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: #f5fbf8; }
+        .stats-period-card {
+          border-color: rgba(var(--primary-rgb), 0.2);
+          background: linear-gradient(180deg, rgba(18, 36, 58, 0.98) 0%, rgba(14, 29, 47, 0.98) 100%);
+          box-shadow:
+            0 22px 48px rgba(2, 8, 20, 0.28),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+            0 0 0 1px rgba(var(--primary-rgb), 0.06),
+            0 0 18px rgba(var(--primary-rgb), 0.08);
+        }
+        .stats-period-card::after {
+          content: '';
+          position: absolute;
+          inset: auto 24px 24px 24px;
+          height: 1px;
+          background: rgba(var(--primary-rgb), 0.22);
+          pointer-events: none;
+        }
         .stats-period-controls {
           display: grid;
           grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) minmax(180px, 1fr) auto;
@@ -91,6 +126,30 @@ function DashboardStyles() {
         .chart-type-toggle .chart-btn .chart-btn-label {
           line-height: 1;
         }
+        .stats-period-chart {
+          position: relative;
+          min-height: 228px;
+          padding: 16px 14px 10px;
+          border-radius: 18px;
+          border: 1px solid rgba(var(--primary-rgb), 0.22);
+          background: linear-gradient(180deg, rgba(23, 42, 66, 0.98) 0%, rgba(16, 31, 51, 0.98) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.16),
+            0 0 0 1px rgba(var(--primary-rgb), 0.04),
+            inset 0 0 28px rgba(var(--primary-rgb), 0.04);
+        }
+        .stats-period-chart::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: none;
+          pointer-events: none;
+        }
+        .stats-period-chart canvas {
+          position: relative;
+          z-index: 1;
+        }
         @media (max-width: 900px) {
           .stats-period-controls {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -98,6 +157,32 @@ function DashboardStyles() {
           .stats-period-controls .chart-type-toggle {
             grid-column: 1 / -1;
             justify-self: start;
+          }
+          .account-health-summary-row {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+          .account-health-summary-side {
+            justify-self: start;
+          }
+          .account-health-detail-grid {
+            grid-template-columns: 1fr;
+          }
+          .account-health-risk {
+            justify-items: start;
+            min-width: 0;
+          }
+          .account-health-risk-text {
+            text-align: left;
+          }
+          .account-health-metrics {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .account-health-ops {
+            grid-template-columns: 1fr;
+          }
+          .account-health-dispatch-row {
+            grid-template-columns: 1fr;
           }
         }
         .stats-general-card { display: flex; flex-direction: column; gap: 0; }
@@ -126,35 +211,781 @@ function DashboardStyles() {
           margin-left: 12px;
           flex-shrink: 0;
         }
-        .events-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+        .dashboard-react .stats-grid .stat-card {
+          position: relative;
+          overflow: hidden;
+          border-color: rgba(var(--primary-rgb), 0.16);
+          background: transparent !important;
+          box-shadow:
+            0 0 0 1px rgba(var(--primary-rgb), 0.08),
+            0 0 16px rgba(var(--primary-rgb), 0.08);
+        }
+        .dashboard-react .stats-grid .stat-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.72) 0%, rgba(var(--primary-rgb), 0.26) 38%, rgba(255, 255, 255, 0.22) 100%);
+          opacity: 0.72;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
+        .dashboard-react .stats-grid .stat-card:hover {
+          box-shadow:
+            0 0 0 1px rgba(var(--primary-rgb), 0.12),
+            0 0 18px rgba(var(--primary-rgb), 0.12);
+        }
+        .dashboard-react .stats-grid .stat-icon {
+          position: relative;
+          width: 48px;
+          height: 48px;
+          border-radius: 15px;
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          background: rgba(255, 255, 255, 0.03);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 12px 24px rgba(1, 3, 7, 0.22);
+          color: rgba(235, 241, 245, 0.9);
+        }
+        .dashboard-react .stats-grid .stat-icon::after {
+          content: '';
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 4px;
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(var(--primary-rgb), 0.42);
+          box-shadow: 0 0 10px rgba(var(--primary-rgb), 0.16);
+        }
+        .dashboard-react .stats-grid .stat-icon .icon {
+          width: 20px;
+          height: 20px;
+        }
+        .dashboard-react .stats-grid .stat-icon.primary,
+        .dashboard-react .stats-grid .stat-icon.success,
+        .dashboard-react .stats-grid .stat-icon.warning,
+        .dashboard-react .stats-grid .stat-icon.info {
+          background: rgba(255, 255, 255, 0.03);
+          color: rgba(235, 241, 245, 0.9);
+        }
+        .dashboard-react .stats-grid .stat-icon.primary::after {
+          background: rgba(var(--primary-rgb), 0.42);
+        }
+        .dashboard-react .stats-grid .stat-icon.success::after {
+          background: rgba(var(--primary-rgb), 0.38);
+        }
+        .dashboard-react .stats-grid .stat-icon.warning::after {
+          background: rgba(226, 232, 240, 0.3);
+        }
+        .dashboard-react .stats-grid .stat-icon.info::after {
+          background: rgba(129, 140, 248, 0.24);
+        }
+        .dashboard-react .stats-grid .stat-content,
+        .dashboard-react .stats-grid .stat-icon {
+          position: relative;
+          z-index: 1;
+        }
+        .dashboard-react .stats-grid .stat-value {
+          color: #f3fbff;
+          letter-spacing: -0.03em;
+        }
+        .dashboard-react .stats-grid .stat-label {
+          color: rgba(214, 228, 239, 0.62);
+        }
+        .dashboard-react .stats-grid .stat-change {
+          border: 1px solid transparent;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+        }
+        .dashboard-react .stats-grid .stat-change.positive {
+          background: rgba(34, 197, 94, 0.12);
+          border-color: rgba(74, 222, 128, 0.12);
+        }
+        .dashboard-react .stats-grid .stat-change.negative {
+          background: rgba(239, 68, 68, 0.12);
+          border-color: rgba(248, 113, 113, 0.12);
+        }
+        .dashboard-react .funnel-container {
+          position: relative;
+          overflow: hidden;
+          border-color: rgba(var(--primary-rgb), 0.2);
+          background: linear-gradient(180deg, rgba(18, 36, 58, 0.98) 0%, rgba(14, 29, 47, 0.98) 100%);
+          box-shadow:
+            0 18px 42px rgba(2, 8, 20, 0.22),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+            0 0 0 1px rgba(var(--primary-rgb), 0.05),
+            0 0 18px rgba(var(--primary-rgb), 0.06);
+        }
+        .dashboard-react .funnel-container::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: none;
+          pointer-events: none;
+        }
+        .dashboard-react .funnel-title,
+        .dashboard-react .funnel-stages {
+          position: relative;
+          z-index: 1;
+        }
+        .dashboard-react .funnel-title {
+          color: #f3fbff;
+          gap: 12px;
+        }
+        .dashboard-react .funnel-title .icon {
+          color: rgba(var(--primary-rgb), 0.82);
+        }
+        .dashboard-react .funnel-stage {
+          position: relative;
+          overflow: hidden;
+          padding: 22px 16px 20px;
+          border-radius: 18px;
+          border-color: rgba(var(--primary-rgb), 0.18);
+          background: linear-gradient(180deg, rgba(23, 40, 62, 0.94) 0%, rgba(17, 31, 48, 0.94) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.1),
+            0 12px 28px rgba(2, 6, 23, 0.16);
+        }
+        .dashboard-react .funnel-stage::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: none;
+          pointer-events: none;
+        }
+        .dashboard-react .funnel-stage:hover {
+          border-color: rgba(var(--primary-rgb), 0.18);
+          background: linear-gradient(180deg, rgba(23, 40, 62, 0.94) 0%, rgba(17, 31, 48, 0.94) 100%);
+        }
+        .dashboard-react .funnel-stage.active {
+          border-color: rgba(var(--primary-rgb), 0.32);
+          background: linear-gradient(180deg, rgba(28, 47, 73, 0.96) 0%, rgba(20, 35, 54, 0.96) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.22),
+            0 18px 36px rgba(2, 8, 20, 0.22),
+            0 0 0 1px rgba(var(--primary-rgb), 0.08);
+        }
+        .dashboard-react .funnel-value,
+        .dashboard-react .funnel-label,
+        .dashboard-react .funnel-percent {
+          position: relative;
+          z-index: 1;
+        }
+        .dashboard-react .funnel-value {
+          color: #29f3c2;
+          text-shadow: 0 0 18px rgba(41, 243, 194, 0.14);
+          letter-spacing: -0.04em;
+        }
+        .dashboard-react .funnel-label {
+          color: rgba(213, 232, 224, 0.66);
+        }
+        .dashboard-react .funnel-percent {
+          color: #59f7d1;
+        }
+        .dashboard-react .funnel-arrow {
+          color: rgba(var(--primary-rgb), 0.56);
+          font-size: 18px;
+          font-weight: 500;
+          transform: translateY(-4px);
+        }
+        .account-health-card {
+          margin-bottom: 24px;
+          background: linear-gradient(180deg, rgba(18, 36, 58, 0.98) 0%, rgba(14, 29, 47, 0.98) 100%);
+          border-radius: var(--border-radius-lg);
+          box-shadow:
+            var(--shadow-md),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+            0 0 0 1px rgba(var(--primary-rgb), 0.05),
+            0 0 18px rgba(var(--primary-rgb), 0.06);
+          padding: 24px;
+          border: 1px solid rgba(var(--primary-rgb), 0.18);
+        }
+        .account-health-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: flex-start;
+          gap: 16px;
+          flex-wrap: wrap;
+          margin-bottom: 18px;
+        }
+        .account-health-header h3 {
+          margin: 0 0 6px;
+          font-size: 18px;
+        }
+        .account-health-list {
+          display: grid;
+          gap: 14px;
+        }
+        .account-health-account {
+          position: relative;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 18px;
+          background: linear-gradient(180deg, rgba(18, 36, 58, 0.94) 0%, rgba(14, 29, 47, 0.94) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+            0 10px 22px rgba(2, 8, 20, 0.16),
+            0 0 0 1px rgba(var(--primary-rgb), 0.05);
+          overflow: hidden;
+        }
+        .account-health-account::before {
+          content: '';
+          position: absolute;
+          inset: 0 auto 0 0;
+          width: 3px;
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.85), rgba(var(--primary-rgb), 0.55));
+          opacity: 0.7;
+        }
+        .account-health-account.is-critical::before {
+          background: linear-gradient(180deg, rgba(248, 113, 113, 0.9), rgba(251, 191, 36, 0.5));
+        }
+        .account-health-account.is-attention::before {
+          background: linear-gradient(180deg, rgba(250, 204, 21, 0.85), rgba(45, 212, 191, 0.45));
+        }
+        .account-health-account.is-healthy::before {
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.85), rgba(var(--primary-rgb), 0.45));
+        }
+        .account-health-account.is-paused::before {
+          background: linear-gradient(180deg, rgba(148, 163, 184, 0.8), rgba(71, 85, 105, 0.5));
+        }
+        .account-health-account.has-block-signal::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(circle at right top, rgba(250, 204, 21, 0.08), transparent 32%);
+          pointer-events: none;
+        }
+        .account-health-account-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+          flex-wrap: wrap;
+          padding: 18px 18px 14px;
+        }
+        .account-health-account-title {
+          min-width: 0;
+          flex: 1;
+        }
+        .account-health-account-name-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-bottom: 8px;
+        }
+        .account-health-account-name {
+          font-size: 16px;
+          font-weight: 700;
+          color: #f5fbf8;
+        }
+        .account-health-pill,
+        .account-health-risk-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          min-height: 28px;
+          padding: 0 10px;
+          border-radius: 999px;
+          border: 1px solid rgba(148, 163, 184, 0.24);
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.01em;
+          white-space: nowrap;
+        }
+        .account-health-pill.is-connected {
+          border-color: rgba(34, 197, 94, 0.34);
+          color: #d6ffe6;
+          background: rgba(34, 197, 94, 0.12);
+        }
+        .account-health-pill.is-warming {
+          border-color: rgba(250, 204, 21, 0.34);
+          color: #fff1b3;
+          background: rgba(250, 204, 21, 0.12);
+        }
+        .account-health-pill.is-offline {
+          border-color: rgba(248, 113, 113, 0.3);
+          color: #ffd6d6;
+          background: rgba(248, 113, 113, 0.12);
+        }
+        .account-health-pill.is-paused {
+          border-color: rgba(148, 163, 184, 0.28);
+          color: #d7e4ef;
+          background: rgba(71, 85, 105, 0.18);
+        }
+        .account-health-risk {
+          display: grid;
+          justify-items: end;
+          gap: 6px;
+          min-width: 220px;
+        }
+        .account-health-risk-badge.is-critical {
+          border-color: rgba(248, 113, 113, 0.34);
+          color: #ffd7d7;
+          background: rgba(248, 113, 113, 0.14);
+        }
+        .account-health-risk-badge.is-attention {
+          border-color: rgba(250, 204, 21, 0.34);
+          color: #fff1b3;
+          background: rgba(250, 204, 21, 0.14);
+        }
+        .account-health-risk-badge.is-healthy {
+          border-color: rgba(34, 197, 94, 0.34);
+          color: #d6ffe6;
+          background: rgba(34, 197, 94, 0.14);
+        }
+        .account-health-risk-badge.is-paused {
+          border-color: rgba(148, 163, 184, 0.28);
+          color: #d7e4ef;
+          background: rgba(71, 85, 105, 0.18);
+        }
+        .account-health-risk-text {
+          font-size: 12px;
+          color: rgba(214, 228, 239, 0.74);
+          text-align: right;
+          line-height: 1.45;
+        }
+        .account-health-metrics,
+        .account-health-ops {
+          display: grid;
+          gap: 12px;
+          padding: 0 18px 16px;
+        }
+        .account-health-metrics {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .account-health-ops {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .account-health-metric,
+        .account-health-op {
+          min-width: 0;
+          padding: 14px;
+          border-radius: 14px;
+          border: 1px solid rgba(var(--primary-rgb), 0.12);
+          background: linear-gradient(180deg, rgba(27, 46, 72, 0.88) 0%, rgba(21, 37, 58, 0.88) 100%);
+        }
+        .account-health-metric-label,
+        .account-health-op-label {
+          display: block;
+          margin-bottom: 8px;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: rgba(214, 228, 239, 0.58);
+        }
+        .account-health-metric-value,
+        .account-health-op-value {
+          display: block;
+          font-size: 22px;
+          font-weight: 700;
+          color: #f4fbf8;
+          line-height: 1.1;
+        }
+        .account-health-metric-sub,
+        .account-health-op-sub {
+          display: block;
+          margin-top: 6px;
+          font-size: 12px;
+          color: rgba(214, 228, 239, 0.68);
+          line-height: 1.4;
+        }
+        .account-health-dispatches {
+          border-top: 1px solid rgba(148, 163, 184, 0.14);
+          padding: 16px 18px 18px;
+        }
+        .account-health-dispatches-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-bottom: 12px;
+          font-size: 12px;
+          color: rgba(214, 228, 239, 0.72);
+        }
+        .account-health-dispatches-head strong {
+          font-size: 13px;
+          color: #f4fbf8;
+        }
+        .account-health-dispatch-list {
+          display: grid;
+          gap: 10px;
+        }
+        .account-health-dispatch-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(110px, 0.7fr));
+          gap: 12px;
+          align-items: center;
+          padding: 12px 14px;
+          border-radius: 14px;
+          background: linear-gradient(180deg, rgba(27, 46, 72, 0.86) 0%, rgba(21, 37, 58, 0.86) 100%);
+          border: 1px solid rgba(var(--primary-rgb), 0.1);
+        }
+        .account-health-dispatch-main {
+          min-width: 0;
+        }
+        .account-health-dispatch-name {
+          display: block;
+          font-size: 14px;
+          font-weight: 700;
+          color: #f4fbf8;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .account-health-dispatch-meta {
+          display: block;
+          margin-top: 4px;
+          font-size: 12px;
+          color: rgba(214, 228, 239, 0.64);
+        }
+        .account-health-dispatch-stat {
+          min-width: 0;
+          text-align: left;
+        }
+        .account-health-dispatch-stat strong {
+          display: block;
+          font-size: 18px;
+          color: #f4fbf8;
+        }
+        .account-health-dispatch-stat span {
+          display: block;
+          margin-top: 3px;
+          font-size: 11px;
+          color: rgba(214, 228, 239, 0.62);
+        }
+        .account-health-empty {
+          padding: 18px;
+          border-radius: 14px;
+          border: 1px dashed rgba(148, 163, 184, 0.24);
+          color: rgba(214, 228, 239, 0.72);
+          text-align: center;
+          font-size: 13px;
+        }
+        .account-health-footnote {
+          margin: 14px 0 0;
+          font-size: 12px;
+          color: rgba(214, 228, 239, 0.6);
+        }
+        .account-health-account {
+          transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+        }
+        .account-health-account.is-critical {
+          background: linear-gradient(180deg, rgba(23, 30, 44, 0.98) 0%, rgba(18, 25, 39, 0.98) 100%);
+        }
+        .account-health-account.is-attention {
+          background: linear-gradient(180deg, rgba(18, 36, 58, 0.94) 0%, rgba(14, 29, 47, 0.94) 100%);
+        }
+        .account-health-account.is-healthy {
+          background: linear-gradient(180deg, rgba(18, 36, 58, 0.94) 0%, rgba(14, 29, 47, 0.94) 100%);
+        }
+        .account-health-account.is-paused {
+          background: linear-gradient(180deg, rgba(22, 34, 51, 0.92) 0%, rgba(16, 28, 43, 0.92) 100%);
+        }
+        .account-health-account[open] {
+          border-color: rgba(var(--primary-rgb), 0.28);
+          background: linear-gradient(180deg, rgba(21, 40, 63, 0.98) 0%, rgba(16, 31, 51, 0.98) 100%);
+        }
+        .account-health-account.is-critical[open] {
+          border-color: rgba(248, 113, 113, 0.26);
+          background: linear-gradient(180deg, rgba(28, 31, 44, 0.98) 0%, rgba(24, 26, 38, 0.98) 100%);
+        }
+        .account-health-account.is-attention[open] {
+          border-color: rgba(250, 204, 21, 0.24);
+          background: linear-gradient(180deg, rgba(22, 41, 64, 0.98) 0%, rgba(18, 34, 56, 0.98) 100%);
+        }
+        .account-health-account.is-healthy[open] {
+          border-color: rgba(var(--primary-rgb), 0.22);
+          background: linear-gradient(180deg, rgba(22, 41, 64, 0.98) 0%, rgba(18, 34, 56, 0.98) 100%);
+        }
+        .account-health-summary-row {
+          list-style: none;
+          display: grid;
+          grid-template-columns: minmax(240px, 1.2fr) minmax(280px, 1.8fr) auto;
+          gap: 14px;
+          align-items: center;
+          padding: 14px 16px;
+          cursor: pointer;
+        }
+        .account-health-summary-row::-webkit-details-marker {
+          display: none;
+        }
+        .account-health-summary-row::marker {
+          content: '';
+        }
+        .account-health-summary-row:hover {
+          background: rgba(var(--primary-rgb), 0.06);
+        }
+        .account-health-summary-main {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+        }
+        .account-health-summary-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          min-width: 0;
+        }
+        .account-health-summary-metrics {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px 16px;
+          justify-content: flex-start;
+          align-items: flex-start;
+        }
+        .account-health-metric-chip {
+          display: grid;
+          gap: 2px;
+          flex: 0 0 94px;
+          min-width: 94px;
+          padding: 0;
+          border: none;
+          border-radius: 0;
+          background: none;
+          box-shadow: none;
+        }
+        .account-health-metric-chip-label {
+          display: block;
+          font-size: 10px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(214, 228, 239, 0.52);
+        }
+        .account-health-metric-chip-value {
+          display: block;
+          font-size: 16px;
+          font-weight: 700;
+          color: #f4fbf8;
+          line-height: 1.1;
+        }
+        .account-health-summary-side {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          justify-self: end;
+        }
+        .account-health-summary-caret {
+          width: 30px;
+          height: 30px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid rgba(var(--primary-rgb), 0.16);
+          background: rgba(var(--primary-rgb), 0.05);
+          transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+        }
+        .account-health-summary-caret::before {
+          content: '';
+          width: 8px;
+          height: 8px;
+          border-right: 1.8px solid rgba(214, 255, 240, 0.82);
+          border-bottom: 1.8px solid rgba(214, 255, 240, 0.82);
+          transform: rotate(45deg) translateY(-1px);
+        }
+        .account-health-account[open] .account-health-summary-caret {
+          transform: rotate(180deg);
+        }
+        .account-health-details {
+          padding: 0 16px 16px;
+          border-top: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        .account-health-detail-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+          padding-top: 14px;
+        }
+        .account-health-detail-card {
+          min-width: 0;
+          padding: 14px;
+          border-radius: 14px;
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          background: linear-gradient(180deg, rgba(25, 41, 63, 0.88) 0%, rgba(19, 33, 52, 0.88) 100%);
+        }
+        .account-health-detail-card.is-response,
+        .account-health-detail-card.is-rhythm,
+        .account-health-detail-card.is-insight {
+          background: linear-gradient(180deg, rgba(25, 41, 63, 0.88) 0%, rgba(19, 33, 52, 0.88) 100%);
+          border-color: rgba(148, 163, 184, 0.14);
+        }
+        .account-health-detail-card-title {
+          display: block;
+          margin-bottom: 10px;
+          font-size: 11px;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: rgba(214, 228, 239, 0.54);
+        }
+        .account-health-detail-list {
+          display: grid;
+          gap: 8px;
+        }
+        .account-health-detail-item {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          font-size: 12px;
+          color: rgba(214, 228, 239, 0.68);
+        }
+        .account-health-detail-item strong {
+          color: #f4fbf8;
+          font-size: 14px;
+          text-align: right;
+        }
+        .account-health-detail-text {
+          margin: 0;
+          font-size: 13px;
+          line-height: 1.5;
+          color: rgba(228, 239, 244, 0.82);
+        }
+        .account-health-dispatches {
+          margin-top: 14px;
+          padding: 14px;
+          border-radius: 14px;
+          border: 1px solid rgba(148, 163, 184, 0.12);
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+        }
+        .account-health-dispatches-head {
+          margin-bottom: 10px;
+        }
+        .account-health-dispatch-row {
+          grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(90px, 0.5fr));
+          padding: 10px 12px;
+          border-radius: 12px;
+        }
+        .events-personalized-card {
+          border-color: transparent;
+          background: linear-gradient(180deg, rgba(21, 26, 33, 0.98) 0%, rgba(15, 19, 25, 0.98) 100%);
+          box-shadow:
+            0 24px 52px rgba(1, 2, 6, 0.34),
+            0 0 22px rgba(var(--primary-rgb), 0.035),
+            inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+        .events-personalized-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(var(--primary-rgb), 0.12) 52%, rgba(148, 163, 184, 0.08) 100%);
+          opacity: 0.38;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
+        .events-header { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
         .events-header h3 { margin: 0; }
-        .events-controls { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
-        .events-summary { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: var(--gray-500); }
-        .events-summary strong { color: var(--gray-700); }
-        .events-list { display: flex; flex-direction: column; gap: 10px; }
-        .events-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(12, 24, 40, 0.58); }
-        .events-row-main { min-width: 0; }
-        .events-row-name { font-weight: 700; color: var(--dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .events-row-key { font-size: 11px; color: var(--gray-500); }
-        .events-row-count { font-size: 13px; color: var(--gray-600); white-space: nowrap; }
-        .events-row-last { font-size: 12px; color: var(--gray-500); white-space: nowrap; }
+        .events-controls { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+        .events-summary { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12px; color: rgba(214, 228, 239, 0.58); }
+        .events-summary strong { color: #f5fbf8; }
+        .events-list { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; }
+        .events-row { position: relative; overflow: hidden; display: grid; gap: 8px; padding: 10px 12px; border: 1px solid transparent; border-radius: 12px; background: linear-gradient(180deg, rgba(28, 34, 42, 0.95) 0%, rgba(21, 26, 33, 0.95) 100%); box-shadow: 0 10px 24px rgba(1, 3, 7, 0.18), 0 0 14px rgba(var(--primary-rgb), 0.025); }
+        .events-row::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(var(--primary-rgb), 0.1) 55%, rgba(148, 163, 184, 0.06) 100%);
+          opacity: 0.34;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
+        .events-row-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+        .events-row-main { min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .events-row-name { font-weight: 700; color: #f5fbf8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+        .events-row-key { display: none; }
+        .events-row-side { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
+        .events-row-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+        .events-row-count { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+        .events-row-count strong { font-size: 18px; font-weight: 800; color: #f5fbf8; line-height: 1; }
+        .events-row-count span { font-size: 11px; color: rgba(214, 228, 239, 0.56); }
+        .events-row-last { font-size: 12px; color: rgba(214, 228, 239, 0.6); white-space: nowrap; line-height: 1.2; }
         .events-row-actions { display: inline-flex; gap: 6px; }
-        .events-loading, .events-error { padding: 14px; text-align: center; border: 1px dashed var(--border-color); border-radius: 10px; color: var(--gray-500); }
+        .events-loading, .events-error { position: relative; z-index: 1; padding: 14px; text-align: center; border: 1px dashed rgba(148, 163, 184, 0.2); border-radius: 10px; color: rgba(214, 228, 239, 0.62); }
         .info-icon { cursor: help; opacity: 0.7; }
-        .events-empty { text-align: center; padding: 40px 20px; color: var(--gray-500); }
+        .events-empty { position: relative; z-index: 1; text-align: center; padding: 40px 20px; color: rgba(214, 228, 239, 0.62); }
         .events-empty-emoji { width: 48px; height: 48px; display: block; margin: 0 auto 16px; opacity: 0.6; background-color: var(--gray-400); }
-        .custom-event-status { font-size: 11px; border-radius: 999px; padding: 3px 8px; border: 1px solid rgba(var(--primary-rgb), 0.25); color: var(--gray-500); background: rgba(12, 24, 40, 0.58); white-space: nowrap; }
+        .custom-event-status { display: inline-flex; align-items: center; font-size: 11px; border-radius: 999px; padding: 2px 8px; border: 1px solid rgba(148, 163, 184, 0.24); color: rgba(214, 228, 239, 0.64); background: rgba(255, 255, 255, 0.03); white-space: nowrap; line-height: 1.2; }
         .custom-event-status.active { border-color: rgba(var(--primary-rgb), 0.45); color: #d8f4e6; background: rgba(var(--primary-rgb), 0.13); }
-        .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.4); color: var(--gray-800); }
+        .custom-event-status.inactive { border-color: rgba(148, 163, 184, 0.3); color: rgba(214, 228, 239, 0.62); }
+        .events-personalized-card.is-sidebar {
+          display: flex;
+          flex-direction: column;
+          min-height: 100%;
+        }
+        .events-personalized-card.is-sidebar .events-header {
+          align-items: flex-start;
+          margin-bottom: 14px;
+        }
+        .events-personalized-card.is-sidebar .events-controls {
+          width: 100%;
+          margin-left: 0;
+          justify-content: flex-end;
+        }
+        .events-personalized-card.is-sidebar .events-controls .form-select {
+          min-width: 0;
+          flex: 1 1 150px;
+        }
+        .events-personalized-card.is-sidebar #customEventsList {
+          flex: 1 1 auto;
+        }
+        .events-personalized-card.is-sidebar .events-list {
+          gap: 8px;
+        }
+        .events-personalized-card.is-sidebar .events-row {
+          padding: 10px 12px;
+        }
+        .events-personalized-card.is-sidebar .events-row-head {
+          gap: 8px;
+        }
+        .events-personalized-card.is-sidebar .events-row-name,
+        .events-personalized-card.is-sidebar .events-row-last {
+          white-space: normal;
+        }
+        .events-personalized-card.is-sidebar .events-row-side {
+          gap: 8px;
+        }
+        .events-personalized-card.is-sidebar .events-row-meta {
+          gap: 4px;
+        }
+        .events-personalized-card.is-sidebar .events-empty {
+          padding: 24px 12px;
+        }
         .onboarding-card {
+          position: relative;
+          overflow: hidden;
           margin-bottom: 24px;
           padding: 22px;
           border-radius: var(--border-radius-lg);
-          border: 1px solid rgba(var(--primary-rgb), 0.32);
-          box-shadow: var(--shadow-md);
+          border: 1px solid rgba(0, 240, 255, 0.22);
+          box-shadow:
+            0 18px 42px rgba(2, 6, 23, 0.34),
+            inset 0 1px 0 rgba(143, 255, 225, 0.04);
           background:
-            radial-gradient(circle at 16% 0%, rgba(var(--primary-rgb), 0.22), transparent 56%),
-            linear-gradient(165deg, rgba(9, 18, 34, 0.98), rgba(6, 14, 28, 0.98));
+            radial-gradient(circle at 14% 16%, rgba(0, 240, 255, 0.18), transparent 34%),
+            radial-gradient(circle at 78% 8%, rgba(143, 255, 225, 0.1), transparent 24%),
+            linear-gradient(90deg, rgba(4, 64, 90, 0.34), rgba(6, 26, 46, 0.14) 34%, rgba(4, 13, 26, 0) 62%),
+            linear-gradient(165deg, rgba(6, 22, 42, 0.98), rgba(4, 13, 28, 0.99));
         }
         .onboarding-card-header {
           display: flex;
@@ -168,13 +999,23 @@ function DashboardStyles() {
           align-items: center;
           gap: 8px;
         }
+        .dashboard-subtitle-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .dashboard-subtitle-row p {
+          margin: 0;
+        }
         .onboarding-toggle-btn {
           width: 30px;
           height: 30px;
-          border: 1px solid rgba(var(--primary-rgb), 0.28);
+          border: 1px solid rgba(0, 240, 255, 0.22);
           border-radius: 999px;
-          background: rgba(6, 15, 30, 0.78);
-          color: #d8f4e6;
+          background: rgba(4, 14, 29, 0.82);
+          color: #dffdf7;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -184,17 +1025,66 @@ function DashboardStyles() {
           padding: 0;
         }
         .onboarding-toggle-btn:hover {
-          border-color: rgba(var(--primary-rgb), 0.5);
-          background: rgba(var(--primary-rgb), 0.2);
+          border-color: rgba(143, 255, 225, 0.42);
+          background: rgba(0, 240, 255, 0.12);
+        }
+        .onboarding-dismiss-btn,
+        .onboarding-restore-btn {
+          width: 30px;
+          height: 30px;
+          border: 1px solid rgba(0, 240, 255, 0.22);
+          border-radius: 999px;
+          background: rgba(4, 14, 29, 0.82);
+          color: rgba(231, 248, 242, 0.88);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          line-height: 1;
+          padding: 0;
+          transition:
+            background 0.18s ease,
+            border-color 0.18s ease,
+            box-shadow 0.18s ease,
+            color 0.18s ease;
+        }
+        .onboarding-dismiss-btn {
+          font-size: 16px;
+        }
+        .onboarding-restore-btn {
+          font-size: 17px;
+          box-shadow:
+            0 0 0 1px rgba(0, 240, 255, 0.04),
+            0 0 18px rgba(0, 240, 255, 0.08);
+        }
+        .onboarding-dismiss-btn:hover,
+        .onboarding-restore-btn:hover {
+          border-color: rgba(143, 255, 225, 0.42);
+          background: rgba(0, 240, 255, 0.12);
+          color: #f4fffd;
+          box-shadow:
+            0 0 0 1px rgba(0, 240, 255, 0.06),
+            0 0 20px rgba(0, 240, 255, 0.14);
         }
         .onboarding-toggle-btn:focus-visible {
-          outline: 2px solid rgba(var(--primary-rgb), 0.48);
+          outline: 2px solid rgba(0, 240, 255, 0.34);
+          outline-offset: 2px;
+        }
+        .onboarding-dismiss-btn:focus-visible,
+        .onboarding-restore-btn:focus-visible {
+          outline: 2px solid rgba(0, 240, 255, 0.34);
           outline-offset: 2px;
         }
         .onboarding-card-header h3 {
           margin: 0;
           font-size: 20px;
-          color: #effaf7;
+          display: inline-block;
+          background: linear-gradient(90deg, #00f0ff 0%, #8fffe1 50%, #00f0ff 100%);
+          background-size: 200% auto;
+          color: transparent;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.16));
         }
         .onboarding-card-header p {
           margin: 6px 0 0;
@@ -324,9 +1214,12 @@ function DashboardStyles() {
           .events-empty-create-btn { display: none !important; }
         }
         @media (max-width: 640px) {
+          .dashboard-subtitle-row {
+            align-items: flex-start;
+          }
           .dashboard-botconversa { gap: 14px; margin-bottom: 16px; }
-          .stats-period-card, .stats-general-card, .events-personalized-card { padding: 12px; border-radius: 12px; }
-          .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3 { margin-bottom: 12px; font-size: 15px; }
+          .stats-period-card, .stats-general-card, .events-personalized-card, .account-health-card { padding: 12px; border-radius: 12px; }
+          .stats-period-card h3, .stats-general-card h3, .events-personalized-card h3, .account-health-card h3 { margin-bottom: 12px; font-size: 15px; }
           .onboarding-card { padding: 14px; border-radius: 12px; margin-bottom: 16px; }
           .onboarding-card-header { margin-bottom: 12px; }
           .onboarding-card-header h3 { font-size: 18px; }
@@ -367,6 +1260,13 @@ function DashboardStyles() {
             margin-top: 6px;
             font-size: 10px;
             padding: 2px 6px;
+          }
+          .dashboard-react .funnel-stage {
+            border-radius: 14px;
+            padding: 18px 14px 16px;
+          }
+          .dashboard-react .funnel-arrow {
+            transform: none;
           }
           .stats-period-controls {
             display: grid;
@@ -468,31 +1368,67 @@ function DashboardStyles() {
           .events-header { gap: 8px; margin-bottom: 12px; }
           .events-controls { width: 100%; margin-left: 0; }
           .events-controls .form-select, .events-controls .btn { width: 100%; }
-          .events-row { grid-template-columns: 1fr; gap: 8px; }
+          .stats-period-chart { min-height: 190px; padding: 12px 10px 8px; border-radius: 14px; }
+          .events-row-head { align-items: flex-start; }
+          .events-row-main { min-width: 0; }
+          .events-row-side { width: 100%; justify-content: space-between; }
+          .events-row-meta { gap: 4px; }
           .events-row-count, .events-row-last { white-space: normal; }
           .events-row-actions { justify-content: flex-end; }
           .events-empty { padding: 20px 10px; }
           .events-empty-emoji { width: 34px; height: 34px; margin-bottom: 10px; }
+          .account-health-summary-row,
+          .account-health-details { padding-left: 12px; padding-right: 12px; }
+          .account-health-summary-metrics { gap: 6px 12px; }
+          .account-health-metric-chip { min-width: calc(50% - 6px); flex: 0 0 calc(50% - 6px); }
+          .account-health-summary-side { width: 100%; justify-content: space-between; }
+          .account-health-detail-card,
+          .account-health-dispatches { padding: 12px; }
         }
       `}</style>
   );
 }
 
-function DashboardHeader() {
+function DashboardHeader({
+  currentDate,
+  headerUserName,
+  isOnboardingDismissed,
+  onRestoreOnboarding
+}: {
+  currentDate: string;
+  headerUserName: string;
+  isOnboardingDismissed: boolean;
+  onRestoreOnboarding: () => void;
+}) {
   return (
     <div className="page-header">
       <div className="page-title">
         <h1>Painel de Controle</h1>
-        <p>
-          Bem-vindo, <span className="user-name">Usuário</span> |{' '}
-          <span className="current-date"></span>
-        </p>
+        <div className="dashboard-subtitle-row">
+          <p>
+            Bem-vindo, <span>{headerUserName}</span> |{' '}
+            <span>{currentDate}</span>
+          </p>
+          {isOnboardingDismissed ? (
+            <button
+              type="button"
+              className="onboarding-restore-btn"
+              onClick={onRestoreOnboarding}
+              title="Reativar primeiros passos"
+              aria-label="Reativar primeiros passos"
+            >
+              <span aria-hidden="true">+</span>
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
 }
 
 function StatsPeriod() {
+  const globals = window as Window & DashboardGlobals;
+
   return (
     <div className="dashboard-botconversa">
       <div className="stats-period-card">
@@ -500,7 +1436,7 @@ function StatsPeriod() {
         <div className="stats-period-controls">
           <input type="date" className="form-input" id="statsStartDate" />
           <input type="date" className="form-input" id="statsEndDate" />
-          <select className="form-select" id="statsMetric">
+          <select className="form-select" id="statsMetric" defaultValue="mensagens">
             <option value="novos_contatos">Novos Contatos</option>
             <option value="mensagens">Mensagens</option>
             <option value="interacoes">Interações</option>
@@ -520,56 +1456,49 @@ function StatsPeriod() {
           <canvas id="statsChart" style={{ maxHeight: '200px' }}></canvas>
         </div>
       </div>
-      <div className="stats-general-card">
-        <h3>Estatísticas gerais</h3>
-        <div className="stats-general-item">
-          <span className="stats-general-label">Contatos com interação</span>
-          <span className="stats-general-value" id="statsContacts">0</span>
+      <div className="events-personalized-card is-sidebar">
+        <div className="events-header">
+          <h3>
+            Eventos personalizados{' '}
+            <span
+              className="info-icon"
+              title="Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas."
+            >
+              <span className="icon icon-info icon-sm"></span>
+            </span>
+          </h3>
+          <div className="events-controls">
+            <select className="form-select" id="customEventsPeriod" style={{ width: 'auto' }}>
+              <option value="this_month">Este mês</option>
+              <option value="week">Semana</option>
+              <option value="year">Ano</option>
+              <option value="last_30_days">Últimos 30 dias</option>
+            </select>
+            <button className="btn btn-primary btn-sm events-create-btn" type="button" onClick={() => globals.openCustomEventModal?.()}>
+              Criar
+            </button>
+          </div>
         </div>
-        <div className="stats-general-item">
-          <span className="stats-general-label">Mensagens do contato</span>
-          <span className="stats-general-value" id="statsMessages">0</span>
-        </div>
-        <div className="stats-general-item">
-          <span className="stats-general-label">Interações por inscrito</span>
-          <span className="stats-general-value" id="statsInteractionsPer">0</span>
+        <div id="customEventsList">
+          <div className="events-loading">Carregando eventos personalizados...</div>
         </div>
       </div>
     </div>
   );
 }
 
-function EventsCard() {
-  const globals = window as Window & DashboardGlobals;
-
+function AccountHealthCard() {
   return (
-    <div className="events-personalized-card" style={{ marginBottom: '24px' }}>
-      <div className="events-header">
-        <h3>
-          Eventos personalizados{' '}
-          <span
-            className="info-icon"
-            title="Crie eventos personalizados, integre-os em fluxos com o Bloco de Ação e rastreie suas estatísticas."
-          >
-            <span className="icon icon-info icon-sm"></span>
-          </span>
-        </h3>
-        <div className="events-controls">
-          <select className="form-select" id="customEventsPeriod" style={{ width: 'auto' }}>
-            <option value="this_month">Este mês</option>
-            <option value="week">Semana</option>
-            <option value="year">Ano</option>
-            <option value="last_30_days">Últimos 30 dias</option>
-          </select>
-          <button className="btn btn-primary btn-sm events-create-btn" type="button" onClick={() => globals.openCustomEventModal?.()}>
-            Criar
-          </button>
+    <section className="account-health-card">
+      <div className="account-health-header">
+        <div>
+          <h3>Saúde das contas de disparo</h3>
         </div>
       </div>
-      <div id="customEventsList">
-        <div className="events-loading">Carregando eventos personalizados...</div>
+      <div className="account-health-list" id="accountHealthList">
+        <div className="account-health-empty">Carregando saúde das contas...</div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -624,26 +1553,79 @@ function buildOnboardingCollapseStorageKey() {
   return `zapvender_dashboard_onboarding_collapsed_v1:token:${suffix}`;
 }
 
-function OnboardingCard() {
+function buildOnboardingDismissedStorageKey() {
+  const userId = String(sessionStorage.getItem('selfDashboardUserId') || '').trim();
+  if (userId) return `zapvender_dashboard_onboarding_dismissed_v1:user:${userId}`;
+
+  const email = String(sessionStorage.getItem('selfDashboardUserEmail') || '').trim().toLowerCase();
+  if (email) return `zapvender_dashboard_onboarding_dismissed_v1:email:${email}`;
+
+  const token = String(sessionStorage.getItem('selfDashboardToken') || '').trim();
+  const suffix = token ? token.slice(-14) : 'anon';
+  return `zapvender_dashboard_onboarding_dismissed_v1:token:${suffix}`;
+}
+
+function readStoredOnboardingFlag(storageKey: string) {
+  try {
+    return localStorage.getItem(storageKey) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function OnboardingCard({
+  isDismissed,
+  onDismissedChange
+}: {
+  isDismissed: boolean;
+  onDismissedChange: (nextValue: boolean) => void;
+}) {
   const globals = window as Window & DashboardGlobals;
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const collapseStorageKey = buildOnboardingCollapseStorageKey();
+  const dismissStorageKey = buildOnboardingDismissedStorageKey();
+  const [isCollapsed, setIsCollapsed] = useState(() => readStoredOnboardingFlag(collapseStorageKey));
+  const wasDismissedRef = useRef(isDismissed);
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(buildOnboardingCollapseStorageKey());
-      setIsCollapsed(saved === '1');
-    } catch (_) {
-      setIsCollapsed(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(buildOnboardingCollapseStorageKey(), isCollapsed ? '1' : '0');
+      localStorage.setItem(collapseStorageKey, isCollapsed ? '1' : '0');
     } catch (_) {
       // ignore storage failures
     }
-  }, [isCollapsed]);
+  }, [collapseStorageKey, isCollapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(dismissStorageKey, isDismissed ? '1' : '0');
+    } catch (_) {
+      // ignore storage failures
+    }
+  }, [dismissStorageKey, isDismissed]);
+
+  useEffect(() => {
+    if (wasDismissedRef.current && !isDismissed) {
+      const rehydrateOnboarding = () => {
+        globals.initOnboardingCard?.();
+      };
+
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(rehydrateOnboarding);
+      } else {
+        window.setTimeout(rehydrateOnboarding, 0);
+      }
+    }
+
+    wasDismissedRef.current = isDismissed;
+  }, [globals, isDismissed]);
+
+  const handleDismiss = () => {
+    setIsCollapsed(false);
+    onDismissedChange(true);
+  };
+
+  if (isDismissed) {
+    return null;
+  }
 
   return (
     <section className={`onboarding-card${isCollapsed ? ' is-collapsed' : ''}`} id="dashboardOnboardingCard">
@@ -665,6 +1647,15 @@ function OnboardingCard() {
             aria-expanded={!isCollapsed}
           >
             <span aria-hidden="true">{isCollapsed ? '\u25B8' : '\u25BE'}</span>
+          </button>
+          <button
+            type="button"
+            className="onboarding-dismiss-btn"
+            onClick={handleDismiss}
+            title="Fechar primeiros passos"
+            aria-label="Fechar primeiros passos"
+          >
+            <span aria-hidden="true">&times;</span>
           </button>
         </div>
       </div>
@@ -756,7 +1747,7 @@ function StatsCards() {
   return (
     <div className="stats-grid">
       <div className="stat-card">
-        <div className="stat-icon primary"><span className="icon icon-contacts"></span></div>
+        <div className="stat-icon primary"><span className="icon icon-user"></span></div>
         <div className="stat-content">
           <div className="stat-value" id="totalLeads">0</div>
           <div className="stat-label">Total de Leads</div>
@@ -772,7 +1763,7 @@ function StatsCards() {
         </div>
       </div>
       <div className="stat-card">
-        <div className="stat-icon warning"><span className="icon icon-clock"></span></div>
+        <div className="stat-icon warning"><span className="icon icon-spark"></span></div>
         <div className="stat-content">
           <div className="stat-value" id="pendingLeads">0</div>
           <div className="stat-label">Em Andamento</div>
@@ -780,7 +1771,7 @@ function StatsCards() {
         </div>
       </div>
       <div className="stat-card">
-        <div className="stat-icon info"><span className="icon icon-chart-bar"></span></div>
+        <div className="stat-icon info"><span className="icon icon-chart-line"></span></div>
         <div className="stat-content">
           <div className="stat-value" id="conversionRate">0.0%</div>
           <div className="stat-label">Conversão</div>
@@ -1111,6 +2102,12 @@ function LeadModals() {
 }
 
 export default function Dashboard() {
+  const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(() =>
+    readStoredOnboardingFlag(buildOnboardingDismissedStorageKey())
+  );
+  const dashboardUserName = readDashboardHeaderUserName();
+  const dashboardCurrentDate = formatDashboardHeaderDate();
+
   useEffect(() => {
     let cancelled = false;
 
@@ -1229,10 +2226,18 @@ export default function Dashboard() {
         </div>
       </aside>
       <main className="main-content">
-        <DashboardHeader />
-        <OnboardingCard />
+        <DashboardHeader
+          currentDate={dashboardCurrentDate}
+          headerUserName={dashboardUserName}
+          isOnboardingDismissed={isOnboardingDismissed}
+          onRestoreOnboarding={() => setIsOnboardingDismissed(false)}
+        />
+        <OnboardingCard
+          isDismissed={isOnboardingDismissed}
+          onDismissedChange={setIsOnboardingDismissed}
+        />
         <StatsPeriod />
-        <EventsCard />
+        <AccountHealthCard />
         <StatsCards />
         <Funnel />
       </main>

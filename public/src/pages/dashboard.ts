@@ -67,6 +67,57 @@ type SettingsResponse = {
     settings?: Record<string, unknown> | null;
     onboarding_video_url?: string;
 };
+type AccountHealthRiskLevel = 'critical' | 'attention' | 'healthy' | 'paused';
+type AccountHealthDispatch = {
+    campaign_id?: number | null;
+    campaign_name?: string | null;
+    sent_today?: number;
+    unique_leads_today?: number;
+    replied_today?: number;
+    response_rate?: number;
+    first_sent_at?: string | null;
+    last_sent_at?: string | null;
+};
+type AccountHealthAccount = {
+    session_id?: string;
+    session_name?: string | null;
+    phone?: string | null;
+    status?: string;
+    status_label?: string;
+    campaign_enabled?: boolean;
+    daily_limit?: number;
+    hourly_limit?: number;
+    cooldown_until?: string | null;
+    cooldown_active?: boolean;
+    sent_today?: number;
+    unique_leads_today?: number;
+    replied_today?: number;
+    response_rate?: number;
+    sent_last_hour?: number;
+    first_sent_at?: string | null;
+    last_sent_at?: string | null;
+    risk_level?: AccountHealthRiskLevel;
+    risk_label?: string;
+    risk_reason?: string;
+    daily_usage_ratio?: number | null;
+    hourly_usage_ratio?: number | null;
+    possible_blocked_contacts?: number;
+    dispatches?: AccountHealthDispatch[];
+};
+type AccountHealthSummary = {
+    total_accounts?: number;
+    critical?: number;
+    attention?: number;
+    healthy?: number;
+    paused?: number;
+    cooldown?: number;
+};
+type AccountHealthResponse = {
+    summary?: AccountHealthSummary;
+    accounts?: AccountHealthAccount[];
+    generatedAt?: string;
+    date?: string;
+};
 type OnboardingStepId =
     | 'connect_whatsapp'
     | 'create_first_contact'
@@ -473,6 +524,295 @@ function initOnboardingCard() {
     void loadOnboardingVideo({ silent: true });
 }
 
+function normalizeAccountHealthResponse(response: AccountHealthResponse | null | undefined) {
+    return {
+        summary: response?.summary || {},
+        accounts: Array.isArray(response?.accounts) ? response.accounts : [],
+        generatedAt: String(response?.generatedAt || '').trim(),
+        date: String(response?.date || '').trim()
+    };
+}
+
+function renderAccountHealthPlaceholder(message: string) {
+    const list = document.getElementById('accountHealthList') as HTMLElement | null;
+    const summary = document.getElementById('accountHealthSummary') as HTMLElement | null;
+    if (summary) {
+        summary.innerHTML = `<span class="account-health-summary-item">${escapeHtml(message)}</span>`;
+    }
+    if (list) {
+        list.innerHTML = `<div class="account-health-empty">${escapeHtml(message)}</div>`;
+    }
+}
+
+function getAccountHealthStatusClass(account: AccountHealthAccount) {
+    const status = String(account.status || '').trim().toLowerCase();
+    if (status === 'connected') return 'is-connected';
+    if (status === 'warming_up') return 'is-warming';
+    return 'is-offline';
+}
+
+function getAccountHealthRiskClass(level: unknown) {
+    const normalized = String(level || '').trim().toLowerCase();
+    if (normalized === 'critical') return 'is-critical';
+    if (normalized === 'attention') return 'is-attention';
+    if (normalized === 'paused') return 'is-paused';
+    return 'is-healthy';
+}
+
+function formatAccountHealthLimit(currentValue: unknown, limitValue: unknown) {
+    const current = toNonNegativeInt(currentValue);
+    const limit = toNonNegativeInt(limitValue);
+    if (limit > 0) {
+        return `${formatNumber(current)} / ${formatNumber(limit)}`;
+    }
+    return formatNumber(current);
+}
+
+function formatAccountHealthLimitHint(limitValue: unknown, ratioValue: unknown, unlimitedText: string) {
+    const limit = toNonNegativeInt(limitValue);
+    const ratio = Number(ratioValue);
+    if (limit > 0 && Number.isFinite(ratio)) {
+        return `${formatPercent(ratio * 100)} do limite configurado`;
+    }
+    return unlimitedText;
+}
+
+function formatAccountHealthTime(value: unknown, format: 'time' | 'datetime' = 'time') {
+    const normalized = String(value || '').trim();
+    return normalized ? formatDate(normalized, format) : '-';
+}
+
+function renderAccountHealthSummary(summaryInput: AccountHealthSummary | null | undefined, generatedAt: string) {
+    const summary = document.getElementById('accountHealthSummary') as HTMLElement | null;
+    if (!summary) return;
+
+    const totalAccounts = toNonNegativeInt(summaryInput?.total_accounts);
+    const critical = toNonNegativeInt(summaryInput?.critical);
+    const attention = toNonNegativeInt(summaryInput?.attention);
+    const cooldown = toNonNegativeInt(summaryInput?.cooldown);
+    const updatedAtLabel = generatedAt ? formatDate(generatedAt, 'time') : '-';
+
+    summary.innerHTML = [
+        `<span class="account-health-summary-item is-total"><strong>${formatNumber(totalAccounts)}</strong> conta(s)</span>`,
+        `<span class="account-health-summary-item is-critical"><strong>${formatNumber(critical)}</strong> em risco alto</span>`,
+        `<span class="account-health-summary-item is-attention"><strong>${formatNumber(attention)}</strong> pedem atenção</span>`,
+        `<span class="account-health-summary-item is-cooldown"><strong>${formatNumber(cooldown)}</strong> em cooldown</span>`,
+        `<span class="account-health-summary-item is-updated">Atualizado <strong>${escapeHtml(updatedAtLabel)}</strong></span>`
+    ].join('');
+}
+
+function renderAccountHealthAccounts(accountsInput: AccountHealthAccount[] | null | undefined) {
+    const list = document.getElementById('accountHealthList') as HTMLElement | null;
+    if (!list) return;
+
+    const accounts = Array.isArray(accountsInput) ? accountsInput : [];
+    if (!accounts.length) {
+        list.innerHTML = '<div class="account-health-empty">Nenhuma conta de disparo encontrada para monitoramento.</div>';
+        return;
+    }
+
+    list.innerHTML = accounts.map((account) => {
+        const sessionName = escapeHtml(String(account.session_name || account.session_id || 'Conta sem nome'));
+        const sessionId = escapeHtml(String(account.session_id || '-'));
+        const statusLabel = escapeHtml(String(account.status_label || 'Indisponível'));
+        const statusClass = getAccountHealthStatusClass(account);
+        const riskClass = getAccountHealthRiskClass(account.risk_level);
+        const riskLabel = escapeHtml(String(account.risk_label || 'Monitorando'));
+        const riskReason = escapeHtml(String(account.risk_reason || 'Sem observações para esta conta.'));
+        const sentToday = toNonNegativeInt(account.sent_today);
+        const repliedToday = toNonNegativeInt(account.replied_today);
+        const uniqueLeadsToday = toNonNegativeInt(account.unique_leads_today);
+        const sentLastHour = toNonNegativeInt(account.sent_last_hour);
+        const responseRate = Number(account.response_rate || 0);
+        const dispatches = Array.isArray(account.dispatches) ? account.dispatches : [];
+        const cooldownActive = account.cooldown_active === true;
+        const possibleBlockedContacts = toNonNegativeInt(account.possible_blocked_contacts);
+        const dailyUsage = formatAccountHealthLimit(account.sent_today, account.daily_limit);
+        const hourlyUsage = formatAccountHealthLimit(account.sent_last_hour, account.hourly_limit);
+        const cooldownValue = cooldownActive ? formatAccountHealthTime(account.cooldown_until, 'time') : 'Livre';
+        const possibleBlockedText = possibleBlockedContacts > 0
+            ? `${formatNumber(possibleBlockedContacts)} contato(s)`
+            : 'Nenhum sinal forte';
+        const accountRiskClass = getAccountHealthRiskClass(account.risk_level).replace('is-', '');
+        const accountClasses = [
+            'account-health-account',
+            `is-${accountRiskClass}`,
+            possibleBlockedContacts > 0 ? 'has-block-signal' : ''
+        ].filter(Boolean).join(' ');
+
+        return `
+            <details class="${accountClasses}">
+                <summary class="account-health-summary-row">
+                    <div class="account-health-summary-main">
+                        <div class="account-health-summary-title-row">
+                            <span class="account-health-account-name">${sessionName}</span>
+                            <span class="account-health-pill ${statusClass}">${statusLabel}</span>
+                            ${account.campaign_enabled === false ? '<span class="account-health-pill is-paused">Disparo pausado</span>' : ''}
+                        </div>
+                    </div>
+
+                    <div class="account-health-summary-metrics">
+                        <span class="account-health-metric-chip is-sent">
+                            <span class="account-health-metric-chip-label">Enviadas</span>
+                            <strong class="account-health-metric-chip-value">${formatNumber(sentToday)}</strong>
+                        </span>
+                        <span class="account-health-metric-chip is-replied">
+                            <span class="account-health-metric-chip-label">Responderam</span>
+                            <strong class="account-health-metric-chip-value">${formatNumber(repliedToday)}</strong>
+                        </span>
+                        <span class="account-health-metric-chip is-rate">
+                            <span class="account-health-metric-chip-label">Taxa</span>
+                            <strong class="account-health-metric-chip-value">${formatPercent(responseRate)}</strong>
+                        </span>
+                        <span class="account-health-metric-chip is-usage">
+                            <span class="account-health-metric-chip-label">Uso dia</span>
+                            <strong class="account-health-metric-chip-value">${escapeHtml(dailyUsage)}</strong>
+                        </span>
+                        ${possibleBlockedContacts > 0 ? `
+                            <span class="account-health-metric-chip is-blocked">
+                                <span class="account-health-metric-chip-label">Sem entrega</span>
+                                <strong class="account-health-metric-chip-value">${formatNumber(possibleBlockedContacts)}</strong>
+                            </span>
+                        ` : ''}
+                    </div>
+
+                    <div class="account-health-summary-side">
+                        <span class="account-health-risk-badge ${riskClass}">${riskLabel}</span>
+                        <span class="account-health-summary-caret" aria-hidden="true"></span>
+                    </div>
+                </summary>
+
+                <div class="account-health-details">
+                    <div class="account-health-detail-grid">
+                        <section class="account-health-detail-card is-response">
+                            <span class="account-health-detail-card-title">Resposta do dia</span>
+                            <div class="account-health-detail-list">
+                                <div class="account-health-detail-item">
+                                    <span>Contatos impactados</span>
+                                    <strong>${formatNumber(uniqueLeadsToday)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Responderam</span>
+                                    <strong>${formatNumber(repliedToday)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Taxa de resposta</span>
+                                    <strong>${formatPercent(responseRate)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Último disparo</span>
+                                    <strong>${account.last_sent_at ? escapeHtml(formatDate(account.last_sent_at, 'time')) : '-'}</strong>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="account-health-detail-card is-rhythm">
+                            <span class="account-health-detail-card-title">Ritmo da conta</span>
+                            <div class="account-health-detail-list">
+                                <div class="account-health-detail-item">
+                                    <span>Uso diario</span>
+                                    <strong>${escapeHtml(dailyUsage)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Uso por hora</span>
+                                    <strong>${escapeHtml(hourlyUsage)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Cooldown</span>
+                                    <strong>${escapeHtml(cooldownValue)}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Ultima hora</span>
+                                    <strong>${formatNumber(sentLastHour)}</strong>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="account-health-detail-card is-insight">
+                            <span class="account-health-detail-card-title">Leitura e alertas</span>
+                            <p class="account-health-detail-text">${riskReason}</p>
+                            <div class="account-health-detail-list" style="margin-top: 12px;">
+                                <div class="account-health-detail-item">
+                                    <span>Status da sessao</span>
+                                    <strong>${statusLabel}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Sessão</span>
+                                    <strong>${sessionId}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Limite diario</span>
+                                    <strong>${escapeHtml(formatAccountHealthLimitHint(account.daily_limit, account.daily_usage_ratio, 'Nao configurado'))}</strong>
+                                </div>
+                                <div class="account-health-detail-item">
+                                    <span>Possivel bloqueio</span>
+                                    <strong>${escapeHtml(possibleBlockedText)}</strong>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="account-health-dispatches">
+                        <div class="account-health-dispatches-head">
+                            <strong>Disparos do dia</strong>
+                        </div>
+                        <div class="account-health-dispatch-list">
+                            ${dispatches.length
+                                ? dispatches.map((dispatch) => `
+                                    <article class="account-health-dispatch-row">
+                                        <div class="account-health-dispatch-main">
+                                            <span class="account-health-dispatch-name">${escapeHtml(String(dispatch.campaign_name || 'Envios avulsos'))}</span>
+                                            <span class="account-health-dispatch-meta">${dispatch.last_sent_at ? `Último envio ${escapeHtml(formatDate(dispatch.last_sent_at, 'time'))}` : 'Sem horário registrado'}</span>
+                                        </div>
+                                        <div class="account-health-dispatch-stat">
+                                            <strong>${formatNumber(toNonNegativeInt(dispatch.sent_today))}</strong>
+                                            <span>enviadas</span>
+                                        </div>
+                                        <div class="account-health-dispatch-stat">
+                                            <strong>${formatNumber(toNonNegativeInt(dispatch.replied_today))}</strong>
+                                            <span>responderam</span>
+                                        </div>
+                                        <div class="account-health-dispatch-stat">
+                                            <strong>${formatPercent(Number(dispatch.response_rate || 0))}</strong>
+                                            <span>taxa</span>
+                                        </div>
+                                    </article>
+                                `).join('')
+                                : '<div class="account-health-empty">Nenhum disparo enviado hoje nesta conta.</div>'
+                            }
+                        </div>
+                    </div>
+                </div>
+            </details>
+        `;
+    }).join('');
+}
+
+async function loadAccountHealth(options: { silent?: boolean } = {}) {
+    const hasCard = Boolean(document.getElementById('accountHealthList'));
+    if (!hasCard) return;
+
+    const hasRenderedContent = Boolean(document.querySelector('#accountHealthList .account-health-account'));
+    if (!hasRenderedContent) {
+        renderAccountHealthPlaceholder('Carregando saúde das contas...');
+    }
+
+    try {
+        const response: AccountHealthResponse = await api.get('/api/dashboard/account-health');
+        const normalized = normalizeAccountHealthResponse(response);
+        renderAccountHealthSummary(normalized.summary, normalized.generatedAt);
+        renderAccountHealthAccounts(normalized.accounts);
+    } catch (error) {
+        if (!hasRenderedContent) {
+            renderAccountHealthPlaceholder('Não foi possível carregar a saúde das contas.');
+        }
+        if (!options.silent) {
+            showToast('warning', 'Aviso', 'Não foi possível carregar saúde das contas');
+        }
+        console.error(error);
+    }
+}
+
 function normalizeDateInputValue(value: string | null | undefined) {
     const normalized = String(value || '').trim();
     return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
@@ -514,11 +854,11 @@ function buildStatsChartFallback(startDate: string, endDate: string) {
 }
 
 function getSelectedStatsMetric(): StatsMetric {
-    const metricRaw = (document.getElementById('statsMetric') as HTMLSelectElement | null)?.value || 'novos_contatos';
+    const metricRaw = (document.getElementById('statsMetric') as HTMLSelectElement | null)?.value || 'mensagens';
     if (metricRaw === 'mensagens' || metricRaw === 'interacoes' || metricRaw === 'novos_contatos') {
         return metricRaw;
     }
-    return 'novos_contatos';
+    return 'mensagens';
 }
 
 function getStatsRangeFromControls() {
@@ -533,19 +873,28 @@ function getStatsRangeFromControls() {
 function getStatsMetricColors(metric: StatsMetric) {
     if (metric === 'mensagens') {
         return {
-            borderColor: '#22c55e',
-            backgroundColor: 'rgba(34, 197, 94, 0.16)'
+            borderColor: '#2ef2b6',
+            backgroundColor: 'rgba(46, 242, 182, 0.18)',
+            glowColor: 'rgba(46, 242, 182, 0.36)',
+            pointColor: '#c7fff0',
+            gridColor: 'rgba(46, 242, 182, 0.1)'
         };
     }
     if (metric === 'interacoes') {
         return {
-            borderColor: '#38bdf8',
-            backgroundColor: 'rgba(56, 189, 248, 0.16)'
+            borderColor: '#38d8ff',
+            backgroundColor: 'rgba(56, 216, 255, 0.18)',
+            glowColor: 'rgba(56, 216, 255, 0.34)',
+            pointColor: '#d5f8ff',
+            gridColor: 'rgba(56, 216, 255, 0.1)'
         };
     }
     return {
-        borderColor: '#667eea',
-        backgroundColor: 'rgba(102, 126, 234, 0.16)'
+        borderColor: '#7c9cff',
+        backgroundColor: 'rgba(124, 156, 255, 0.18)',
+        glowColor: 'rgba(124, 156, 255, 0.34)',
+        pointColor: '#ecf2ff',
+        gridColor: 'rgba(124, 156, 255, 0.1)'
     };
 }
 
@@ -560,6 +909,8 @@ function updateChartTypeButtonsState() {
 function renderStatsChart(labels: string[], values: number[], metric: StatsMetric) {
     const ctx = document.getElementById('statsChart') as HTMLCanvasElement | null;
     if (!ctx || typeof Chart === 'undefined') return;
+    const canvasCtx = ctx.getContext('2d');
+    if (!canvasCtx) return;
 
     const chartLib = Chart as unknown as {
         getChart?: (canvas: HTMLCanvasElement) => { destroy: () => void } | undefined;
@@ -572,32 +923,91 @@ function renderStatsChart(labels: string[], values: number[], metric: StatsMetri
     }
 
     const palette = getStatsMetricColors(metric);
+    const areaGradient = canvasCtx.createLinearGradient(0, 0, 0, Math.max(ctx.height || 220, 220));
+    areaGradient.addColorStop(0, palette.backgroundColor);
+    areaGradient.addColorStop(0.48, palette.glowColor);
+    areaGradient.addColorStop(1, 'rgba(7, 16, 30, 0.02)');
+
+    const neonGlowPlugin = {
+        id: 'dashboardNeonGlow',
+        beforeDatasetsDraw(chart: { ctx: CanvasRenderingContext2D }) {
+            chart.ctx.save();
+            chart.ctx.shadowColor = palette.glowColor;
+            chart.ctx.shadowBlur = statsChartType === 'line' ? 18 : 10;
+            chart.ctx.shadowOffsetX = 0;
+            chart.ctx.shadowOffsetY = 0;
+        },
+        afterDatasetsDraw(chart: { ctx: CanvasRenderingContext2D }) {
+            chart.ctx.restore();
+        }
+    };
+
     const dataset = {
         label: STATS_METRIC_LABELS[metric],
         data: values,
         borderColor: palette.borderColor,
-        backgroundColor: palette.backgroundColor,
-        borderWidth: 2,
+        backgroundColor: areaGradient,
+        borderWidth: statsChartType === 'line' ? 2.4 : 0,
         fill: statsChartType === 'line',
-        tension: statsChartType === 'line' ? 0.3 : 0,
-        pointRadius: statsChartType === 'line' ? 3 : 0,
-        pointHoverRadius: statsChartType === 'line' ? 5 : 0
+        tension: statsChartType === 'line' ? 0.36 : 0,
+        pointRadius: statsChartType === 'line' ? 3.2 : 0,
+        pointHoverRadius: statsChartType === 'line' ? 5.5 : 0,
+        pointBackgroundColor: palette.pointColor,
+        pointBorderColor: palette.borderColor,
+        pointBorderWidth: statsChartType === 'line' ? 1.4 : 0,
+        pointHoverBackgroundColor: '#ffffff',
+        pointHoverBorderColor: palette.borderColor,
+        pointHoverBorderWidth: 2,
+        barThickness: statsChartType === 'bar' ? 18 : undefined,
+        maxBarThickness: statsChartType === 'bar' ? 22 : undefined,
+        borderRadius: statsChartType === 'bar' ? 14 : 0
     };
 
     statsChartInstance = new Chart(ctx, {
         type: statsChartType,
         data: { labels, datasets: [dataset] },
+        plugins: [neonGlowPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            layout: {
+                padding: { top: 8, left: 2, right: 6, bottom: 0 }
+            },
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(6, 14, 28, 0.92)',
+                    borderColor: palette.glowColor,
+                    borderWidth: 1,
+                    padding: 10,
+                    titleColor: '#e8f7ff',
+                    bodyColor: '#d6ecff',
+                    displayColors: false
+                }
             },
             scales: {
+                x: {
+                    grid: {
+                        color: 'rgba(125, 211, 252, 0.045)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: 'rgba(214, 228, 239, 0.52)'
+                    }
+                },
                 y: {
                     beginAtZero: true,
+                    grid: {
+                        color: palette.gridColor,
+                        drawBorder: false
+                    },
                     ticks: {
-                        precision: 0
+                        precision: 0,
+                        color: 'rgba(214, 228, 239, 0.58)'
                     }
                 }
             }
@@ -689,7 +1099,7 @@ function getSelectedCustomEventsPeriod() {
 
 function formatCustomEventLastTriggered(value: string | null | undefined) {
     if (!value) return 'Nunca';
-    return `${timeAgo(value)} (${formatDate(value, 'datetime')})`;
+    return timeAgo(value);
 }
 
 function renderCustomEventsEmptyState() {
@@ -740,20 +1150,29 @@ function renderCustomEventsList(response: CustomEventsStatsResponse) {
 
                 return `
                     <div class="events-row">
-                        <div class="events-row-main">
-                            <div class="events-row-name">${eventName}</div>
-                            ${eventKey ? `<div class="events-row-key">${eventKey}</div>` : ''}
-                            <div class="events-row-last">Último disparo: ${lastTriggered}</div>
+                        <div class="events-row-head">
+                            <div class="events-row-main">
+                                <div class="events-row-name">${eventName}</div>
+                                <span class="custom-event-status ${statusClass}">${statusLabel}</span>
+                                ${eventKey ? `<div class="events-row-key">${eventKey}</div>` : ''}
+                            </div>
+                            <div class="events-row-side">
+                                <div class="events-row-count">
+                                    <strong>${formatNumber(eventTotal)}</strong>
+                                    <span>no período</span>
+                                </div>
+                                <div class="events-row-actions">
+                                    <button class="btn btn-sm btn-outline btn-icon" title="Editar evento" onclick="openCustomEventModal(${eventId})">
+                                        <span class="icon icon-edit icon-sm"></span>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger btn-icon" title="Excluir evento" onclick="deleteCustomEvent(${eventId})">
+                                        <span class="icon icon-delete icon-sm"></span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <span class="custom-event-status ${statusClass}">${statusLabel}</span>
-                        <div class="events-row-count">${formatNumber(eventTotal)} no período</div>
-                        <div class="events-row-actions">
-                            <button class="btn btn-sm btn-outline btn-icon" title="Editar evento" onclick="openCustomEventModal(${eventId})">
-                                <span class="icon icon-edit icon-sm"></span>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger btn-icon" title="Excluir evento" onclick="deleteCustomEvent(${eventId})">
-                                <span class="icon icon-delete icon-sm"></span>
-                            </button>
+                        <div class="events-row-meta">
+                            <div class="events-row-last">${lastTriggered}</div>
                         </div>
                     </div>
                 `;
@@ -895,9 +1314,13 @@ function initDashboard() {
     const defaults = getDefaultStatsRange();
     const statsStart = document.getElementById('statsStartDate') as HTMLInputElement | null;
     const statsEnd = document.getElementById('statsEndDate') as HTMLInputElement | null;
+    const statsMetric = document.getElementById('statsMetric') as HTMLSelectElement | null;
     const customEventsPeriod = document.getElementById('customEventsPeriod') as HTMLSelectElement | null;
     if (statsStart && !normalizeDateInputValue(statsStart.value)) statsStart.value = defaults.startDate;
     if (statsEnd && !normalizeDateInputValue(statsEnd.value)) statsEnd.value = defaults.endDate;
+    if (statsMetric && !['mensagens', 'interacoes', 'novos_contatos'].includes(String(statsMetric.value || '').trim().toLowerCase())) {
+        statsMetric.value = 'mensagens';
+    }
     if (customEventsPeriod && !CUSTOM_EVENT_PERIODS[String(customEventsPeriod.value || '').trim().toLowerCase()]) {
         customEventsPeriod.value = 'this_month';
     }
@@ -941,6 +1364,7 @@ async function loadDashboardData() {
             loadDashboardLeadSummary({ silent: true }),
             leadsTablePromise,
             updateStatsPeriodChart({ silent: true }),
+            loadAccountHealth({ silent: true }),
             loadCustomEvents({ silent: true }),
             loadOnboardingVideo({ silent: true })
         ]);
@@ -1422,6 +1846,7 @@ async function confirmReset() {
 
 const windowAny = window as Window & {
     initDashboard?: () => void;
+    initOnboardingCard?: () => void;
     loadDashboardData?: () => Promise<void>;
     loadCustomEvents?: (options?: { silent?: boolean }) => Promise<void>;
     toggleOnboardingStep?: (stepId: string, checked?: boolean) => void;
@@ -1446,6 +1871,7 @@ const windowAny = window as Window & {
     confirmReset?: () => Promise<void>;
 };
 windowAny.initDashboard = initDashboard;
+windowAny.initOnboardingCard = initOnboardingCard;
 windowAny.loadDashboardData = loadDashboardData;
 windowAny.loadCustomEvents = loadCustomEvents;
 windowAny.toggleOnboardingStep = toggleOnboardingStep;

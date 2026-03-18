@@ -68,7 +68,7 @@ function onReady(callback: () => void) {
 
 
 function getPostLogoutUrl() {
-    return '#/planos';
+    return '#/home';
 }
 
 function getQueryParams() {

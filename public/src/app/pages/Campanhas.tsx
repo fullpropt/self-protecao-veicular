@@ -49,24 +49,166 @@ export default function Campanhas() {
   return (
     <div className="campanhas-react">
       <style>{`
-.campaign-card {
-            background: var(--surface);
-            border: 1px solid var(--border-color);
+        .campanhas-react .page-title h1 {
+          color: #f5fbf8;
+          letter-spacing: -0.03em;
+        }
+        .campanhas-react .page-title p {
+          color: rgba(214, 228, 239, 0.68);
+        }
+        .campanhas-react .page-actions .btn {
+          min-height: 40px;
+        }
+        .campanhas-react .stats-grid .stat-card {
+          position: relative;
+          overflow: hidden;
+          border-color: rgba(var(--primary-rgb), 0.16);
+          background: transparent !important;
+          box-shadow:
+            0 0 0 1px rgba(var(--primary-rgb), 0.08),
+            0 0 16px rgba(var(--primary-rgb), 0.08);
+        }
+        .campanhas-react .stats-grid .stat-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.72) 0%, rgba(var(--primary-rgb), 0.24) 38%, rgba(255, 255, 255, 0.18) 100%);
+          opacity: 0.72;
+          -webkit-mask:
+            linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
+        .campanhas-react .stats-grid .stat-card:hover {
+          box-shadow:
+            0 0 0 1px rgba(var(--primary-rgb), 0.12),
+            0 0 18px rgba(var(--primary-rgb), 0.12);
+        }
+        .campanhas-react .stats-grid .stat-icon {
+          position: relative;
+          width: 48px;
+          height: 48px;
+          border-radius: 15px;
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          background: rgba(255, 255, 255, 0.03);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 12px 24px rgba(1, 3, 7, 0.22);
+          color: rgba(235, 241, 245, 0.9);
+        }
+        .campanhas-react .stats-grid .stat-icon::after {
+          content: '';
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 4px;
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(var(--primary-rgb), 0.42);
+          box-shadow: 0 0 10px rgba(var(--primary-rgb), 0.16);
+        }
+        .campanhas-react .stats-grid .stat-icon .icon {
+          width: 20px;
+          height: 20px;
+        }
+        .campanhas-react .stats-grid .stat-icon.primary,
+        .campanhas-react .stats-grid .stat-icon.success,
+        .campanhas-react .stats-grid .stat-icon.warning,
+        .campanhas-react .stats-grid .stat-icon.info {
+          background: rgba(255, 255, 255, 0.03);
+          color: rgba(235, 241, 245, 0.9);
+        }
+        .campanhas-react .stats-grid .stat-icon.primary::after,
+        .campanhas-react .stats-grid .stat-icon.success::after {
+          background: rgba(var(--primary-rgb), 0.42);
+        }
+        .campanhas-react .stats-grid .stat-icon.warning::after {
+          background: rgba(226, 232, 240, 0.3);
+        }
+        .campanhas-react .stats-grid .stat-icon.info::after {
+          background: rgba(129, 140, 248, 0.24);
+        }
+        .campanhas-react .stats-grid .stat-content,
+        .campanhas-react .stats-grid .stat-icon {
+          position: relative;
+          z-index: 1;
+        }
+        .campanhas-react .stats-grid .stat-value {
+          color: #f3fbff;
+          letter-spacing: -0.03em;
+        }
+        .campanhas-react .stats-grid .stat-label {
+          color: rgba(214, 228, 239, 0.62);
+        }
+        .campanhas-react .empty-state {
+          position: relative;
+          overflow: hidden;
+          border-color: rgba(var(--primary-rgb), 0.18);
+          background: linear-gradient(180deg, rgba(18, 36, 58, 0.98) 0%, rgba(14, 29, 47, 0.98) 100%);
+          box-shadow:
+            0 22px 48px rgba(2, 8, 20, 0.24),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.12),
+            0 0 18px rgba(var(--primary-rgb), 0.06);
+        }
+        .campanhas-react .empty-state::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.05), transparent 22%);
+          pointer-events: none;
+        }
+        .campanhas-react .empty-state-icon,
+        .campanhas-react .empty-state p {
+          position: relative;
+          z-index: 1;
+        }
+        .campanhas-react .empty-state p {
+          color: rgba(214, 228, 239, 0.68);
+        }
+        .campanhas-react .empty-state-icon {
+          color: rgba(var(--primary-rgb), 0.74);
+        }
+        .campaign-card {
+            position: relative;
+            background: linear-gradient(180deg, rgba(18, 36, 58, 0.98) 0%, rgba(14, 29, 47, 0.99) 100%);
+            border: 1px solid rgba(var(--primary-rgb), 0.18);
             border-radius: var(--border-radius-lg);
-            box-shadow: var(--shadow-md);
+            box-shadow:
+                0 22px 48px rgba(2, 8, 20, 0.24),
+                inset 0 1px 0 rgba(var(--primary-rgb), 0.12),
+                0 0 18px rgba(var(--primary-rgb), 0.06);
             overflow: hidden;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .campaign-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.05), transparent 24%);
+            pointer-events: none;
         }
         .campaign-card:hover {
             transform: translateY(-2px);
-            box-shadow: var(--shadow-lg);
+            border-color: rgba(var(--primary-rgb), 0.26);
+            box-shadow:
+                0 26px 56px rgba(2, 8, 20, 0.28),
+                inset 0 1px 0 rgba(var(--primary-rgb), 0.14),
+                0 0 24px rgba(var(--primary-rgb), 0.08);
         }
         .campaign-header {
-            border-bottom: 1px solid var(--border-color);
+            position: relative;
+            z-index: 1;
+            border-bottom: 1px solid rgba(var(--primary-rgb), 0.14);
         }
         .campaign-header-toggle {
             width: 100%;
-            padding: 20px;
+            padding: 20px 20px 18px;
             border: none;
             background: transparent;
             color: inherit;
@@ -83,7 +225,7 @@ export default function Campanhas() {
         .campaign-header-meta {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             flex-shrink: 0;
         }
         .campaign-expand-icon {
@@ -93,10 +235,11 @@ export default function Campanhas() {
             border-radius: 999px;
             font-size: 10px;
             line-height: 1;
-            color: var(--gray-500);
+            color: rgba(214, 228, 239, 0.58);
             align-items: center;
             justify-content: center;
-            background: rgba(var(--primary-rgb), 0.14);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(var(--primary-rgb), 0.12);
             transition: transform 0.2s ease;
         }
         .campaign-card.is-expanded .campaign-expand-icon {
@@ -110,69 +253,118 @@ export default function Campanhas() {
             font-weight: 700;
             margin: 0 0 5px;
             line-height: 1.25;
+            color: #f5fbf8;
+            letter-spacing: -0.02em;
             overflow-wrap: anywhere;
         }
         .campaign-date {
             font-size: 12px;
-            color: var(--gray-500);
+            color: rgba(214, 228, 239, 0.54);
         }
         .campaign-body {
             padding: 20px;
             min-width: 0;
+            position: relative;
+            z-index: 1;
         }
         .campaign-description {
-            color: var(--gray-600);
-            margin-bottom: 15px;
-            line-height: 1.45;
+            color: rgba(214, 228, 239, 0.66);
+            margin-bottom: 16px;
+            line-height: 1.5;
             overflow-wrap: anywhere;
+        }
+        .campaign-status-badge,
+        .campaign-type-badge {
+            min-height: 28px;
+            padding: 5px 12px;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                0 8px 18px rgba(3, 10, 23, 0.14);
+        }
+        .campaign-status-badge.badge-success {
+            background: rgba(34, 197, 94, 0.14);
+            border-color: rgba(74, 222, 128, 0.14);
+            color: #00e889;
+        }
+        .campaign-status-badge.badge-warning {
+            background: rgba(245, 158, 11, 0.16);
+            border-color: rgba(251, 191, 36, 0.14);
+            color: #f59e0b;
+        }
+        .campaign-status-badge.badge-info {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(96, 165, 250, 0.14);
+            color: #60a5fa;
+        }
+        .campaign-status-badge.badge-secondary,
+        .campaign-type-badge {
+            background: rgba(148, 163, 184, 0.1);
+            border-color: rgba(148, 163, 184, 0.14);
+            color: rgba(226, 232, 240, 0.74);
+        }
+        .campaign-type-badge {
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 10px;
         }
         .campaign-stats {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             width: 100%;
         }
         .campaign-stat {
             text-align: center;
-            padding: 10px;
-            background: var(--gray-50);
-            border-radius: var(--border-radius);
+            padding: 12px 10px;
+            background: rgba(7, 17, 29, 0.54);
+            border: 1px solid rgba(var(--primary-rgb), 0.1);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
             min-width: 0;
-            min-height: 74px;
+            min-height: 82px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
         .campaign-stat-value {
-            font-size: 20px;
+            font-size: 24px;
             font-weight: 700;
             line-height: 1.1;
+            letter-spacing: -0.03em;
+            color: #f3fbff;
             overflow-wrap: anywhere;
         }
         .campaign-stat-label {
             font-size: 11px;
-            color: var(--gray-500);
+            color: rgba(214, 228, 239, 0.56);
             text-transform: uppercase;
+            letter-spacing: 0.06em;
             line-height: 1.2;
             overflow-wrap: anywhere;
         }
         .campaign-progress {
-            margin-top: 15px;
+            margin-top: 2px;
         }
         .campaign-progress-track {
             position: relative;
-            height: 20px;
+            height: 22px;
             border-radius: 999px;
             overflow: hidden;
-            border: 1px solid var(--border-color);
-            background: color-mix(in srgb, var(--gray-100) 88%, transparent);
+            border: 1px solid rgba(var(--primary-rgb), 0.16);
+            background: rgba(7, 17, 29, 0.78);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
         }
         .campaign-progress-fill {
             position: absolute;
             inset: 0 auto 0 0;
             border-radius: inherit;
-            background: var(--success);
+            background: linear-gradient(90deg, #18d99b 0%, #1ff0b7 100%);
+            box-shadow: 0 0 14px rgba(var(--primary-rgb), 0.22);
             transition: width 220ms ease;
         }
         .campaign-progress-label {
@@ -187,37 +379,69 @@ export default function Campanhas() {
             pointer-events: none;
         }
         .campaign-progress-label.on-fill {
-            color: #fff;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+            color: #08131d;
+            text-shadow: none;
         }
         .campaign-progress-label.on-track {
-            color: var(--gray-700);
+            color: rgba(214, 228, 239, 0.7);
         }
         .campaign-footer {
-            padding: 15px 20px;
-            background: var(--gray-50);
+            position: relative;
+            z-index: 1;
+            padding: 14px 20px 18px;
+            background: rgba(8, 19, 33, 0.62);
+            border-top: 1px solid rgba(var(--primary-rgb), 0.14);
+            display: grid;
+            gap: 12px;
+        }
+        .campaign-footer-top {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            gap: 10px;
+            align-items: center;
+            gap: 12px;
             flex-wrap: wrap;
-        }
-        .campaign-footer > .badge {
-            flex-shrink: 0;
         }
         .campaign-actions {
             display: flex;
+            align-items: center;
             gap: 8px;
             flex-wrap: wrap;
-            justify-content: flex-end;
             margin-left: auto;
-            flex: 1 1 220px;
-            min-width: 0;
         }
         .campaign-actions .btn {
-            flex: 0 1 auto;
+            flex: 0 0 auto;
             min-width: 0;
             white-space: nowrap;
+        }
+        .campaign-action-icon {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 12px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+        .campaign-action-icon .icon {
+            width: 15px;
+            height: 15px;
+        }
+        .campaign-footer-primary {
+            width: 100%;
+        }
+        .campaign-primary-action {
+            width: 100%;
+            min-height: 40px;
+            justify-content: center;
+            border-radius: 14px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            box-shadow: 0 10px 24px rgba(3, 10, 23, 0.18);
+        }
+        .campaign-primary-action.btn-success {
+            box-shadow: 0 14px 28px rgba(16, 185, 129, 0.18);
+        }
+        .campaign-primary-action.btn-warning {
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.92) 0%, rgba(234, 179, 8, 0.92) 100%);
+            color: #fff;
         }
         @media (max-width: 900px) {
             .campaign-stats {
@@ -225,16 +449,13 @@ export default function Campanhas() {
                 gap: 10px;
             }
             .campaign-footer {
-                flex-direction: column;
-                align-items: stretch;
+                gap: 10px;
             }
-            .campaign-footer > .badge {
-                margin-bottom: 4px;
+            .campaign-footer-top {
+                align-items: flex-start;
             }
             .campaign-actions {
-                width: 100%;
                 margin-left: 0;
-                justify-content: flex-start;
             }
         }
         @media (max-width: 768px) {
@@ -287,9 +508,6 @@ export default function Campanhas() {
                 font-size: 10px;
                 padding: 2px 6px;
             }
-            .campaign-header {
-                border-bottom: 1px solid var(--border-color);
-            }
             .campaign-header-toggle {
                 padding: 16px;
             }
@@ -297,18 +515,25 @@ export default function Campanhas() {
                 padding: 16px;
             }
             .campaign-footer {
-                padding: 12px 16px;
+                padding: 12px 16px 16px;
             }
             .campaign-stats {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
                 gap: 10px;
             }
+            .campaign-footer-top {
+                flex-direction: column;
+                align-items: stretch;
+            }
             .campaign-actions {
                 gap: 6px;
+                width: 100%;
+                justify-content: flex-end;
             }
-            .campaign-actions .btn {
-                flex: 1 1 calc(50% - 3px);
-                min-width: 0;
+            .campaign-action-icon {
+                width: 34px;
+                height: 34px;
+                border-radius: 11px;
             }
         }
         @media (max-width: 420px) {

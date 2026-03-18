@@ -64,7 +64,7 @@ export default function FlowBuilder() {
   };
 
   return (
-    <div className="flow-builder-react is-selector-screen">
+    <div className="flow-builder-react is-selector-screen workspace-surface-page">
       <style>{`
         .flow-builder-react {
             --primary: #1ef2a3;
@@ -746,9 +746,9 @@ export default function FlowBuilder() {
         }
 
         .flow-builder-react .sidebar-footer {
-            margin-top: auto;
-            padding: 15px;
-            border-top: 1px solid rgba(148, 163, 184, 0.2);
+            margin-top: 34px;
+            padding: 8px 15px 20px;
+            border-top: none;
         }
 
         .flow-builder-react .btn-logout {
@@ -2704,8 +2704,11 @@ export default function FlowBuilder() {
             width: 100%;
             height: 100%;
             padding: 16px;
-            background: rgba(2, 6, 23, 0.74);
-            backdrop-filter: blur(2px);
+            background:
+                radial-gradient(circle at top, rgba(var(--primary-rgb), 0.12), transparent 34%),
+                rgba(1, 7, 20, 0.82);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -2716,17 +2719,30 @@ export default function FlowBuilder() {
         }
         
         .modal {
+            position: relative;
             background: linear-gradient(
                 180deg,
-                rgba(18, 33, 54, 0.98) 0%,
-                rgba(12, 24, 40, 0.98) 100%
+                rgba(18, 36, 58, 0.98) 0%,
+                rgba(11, 24, 40, 0.99) 100%
             );
-            border: 1px solid rgba(148, 163, 184, 0.28);
+            border: 1px solid rgba(var(--primary-rgb), 0.18);
             border-radius: 16px;
             width: min(680px, 100%);
             max-height: 82vh;
             overflow: hidden;
-            box-shadow: 0 22px 48px rgba(2, 6, 23, 0.45);
+            box-shadow:
+                0 32px 80px rgba(2, 8, 20, 0.38),
+                inset 0 1px 0 rgba(var(--primary-rgb), 0.12),
+                0 0 24px rgba(var(--primary-rgb), 0.08);
+        }
+
+        .modal::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.05), transparent 26%);
+            pointer-events: none;
         }
         
         .modal-header {
@@ -2734,30 +2750,36 @@ export default function FlowBuilder() {
             justify-content: space-between;
             align-items: center;
             padding: 20px;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+            border-bottom: 1px solid rgba(var(--primary-rgb), 0.14);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+            position: relative;
+            z-index: 1;
         }
         
         .modal-header h2 {
             font-size: 18px;
-            color: #e7edf7;
-            letter-spacing: 0.01em;
+            color: #f5fbf8;
+            letter-spacing: -0.02em;
         }
         
         .modal-close {
-            width: 34px;
-            height: 34px;
-            border-radius: 8px;
-            border: 1px solid rgba(100, 116, 139, 0.32);
-            background: rgba(15, 23, 42, 0.72);
-            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            border: 1px solid rgba(var(--primary-rgb), 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            font-size: 20px;
             line-height: 1;
-            color: #cbd5e1;
+            color: rgba(214, 228, 239, 0.72);
             cursor: pointer;
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                0 12px 24px rgba(1, 3, 7, 0.18);
             transition: all 0.2s;
         }
 
         .modal-close:hover {
-            border-color: rgba(var(--primary-rgb), 0.48);
+            border-color: rgba(var(--primary-rgb), 0.3);
             background: rgba(var(--primary-rgb), 0.14);
             color: #eafff3;
         }
@@ -2767,14 +2789,18 @@ export default function FlowBuilder() {
             max-height: 60vh;
             overflow-y: auto;
             overflow-x: hidden;
+            position: relative;
+            z-index: 1;
         }
 
         .modal-footer {
             display: flex;
             justify-content: center;
             padding: 16px 20px;
-            border-top: 1px solid rgba(148, 163, 184, 0.2);
-            background: rgba(2, 6, 23, 0.28);
+            border-top: 1px solid rgba(var(--primary-rgb), 0.14);
+            background: rgba(8, 19, 33, 0.62);
+            position: relative;
+            z-index: 1;
         }
 
         .flow-dialog-modal {

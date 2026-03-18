@@ -533,34 +533,60 @@ function initSidebar() {
 // MODAIS
 // ============================================
 
+let modalInteractionsBound = false;
+
+function syncModalBodyOverflow() {
+    const hasModalOpen = Boolean(document.querySelector('.modal-overlay.active'));
+    document.body.style.overflow = hasModalOpen ? 'hidden' : '';
+}
+
+function dismissModalElement(overlay: HTMLElement | null) {
+    if (!overlay) return;
+
+    const closeBtn = overlay.querySelector('.modal-close') as HTMLButtonElement | null;
+    if (closeBtn && !closeBtn.disabled) {
+        closeBtn.click();
+        return;
+    }
+
+    if (overlay.id) {
+        closeModal(overlay.id);
+        return;
+    }
+
+    overlay.classList.remove('active');
+    syncModalBodyOverflow();
+}
+
 function initModals() {
-    // Fechar modal ao clicar no overlay
-    document.querySelectorAll('.modal-overlay').forEach(overlay => {
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                closeModal((overlay as HTMLElement).id);
-            }
-        });
-    });
-    
-    // Fechar modal com botão X
-    document.querySelectorAll('.modal-close').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const modal = btn.closest('.modal-overlay') as HTMLElement | null;
-            if (modal) {
-                closeModal(modal.id);
-            }
-        });
+    if (modalInteractionsBound) return;
+    modalInteractionsBound = true;
+
+    document.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+
+        if (target.classList.contains('modal-overlay')) {
+            dismissModalElement(target);
+            return;
+        }
+
+        const closeBtn = target.closest('.modal-close') as HTMLButtonElement | null;
+        if (!closeBtn || closeBtn.disabled) return;
+
+        const modal = closeBtn.closest('.modal-overlay') as HTMLElement | null;
+        if (modal?.id) {
+            closeModal(modal.id);
+        }
     });
     
     // Fechar modal com ESC
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            const activeModal = document.querySelector('.modal-overlay.active');
-            if (activeModal) {
-                closeModal(activeModal.id);
-            }
-        }
+        if (e.key !== 'Escape') return;
+
+        const activeModals = Array.from(document.querySelectorAll('.modal-overlay.active')) as HTMLElement[];
+        const activeModal = activeModals.length ? activeModals[activeModals.length - 1] : null;
+        dismissModalElement(activeModal);
     });
 }
 
@@ -568,7 +594,7 @@ function openModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
+        syncModalBodyOverflow();
     }
 }
 
@@ -576,7 +602,7 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('active');
-        document.body.style.overflow = '';
+        syncModalBodyOverflow();
     }
 }
 

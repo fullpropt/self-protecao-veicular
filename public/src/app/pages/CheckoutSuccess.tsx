@@ -307,9 +307,9 @@ export default function CheckoutSuccess() {
           <button
             type="button"
             className="checkout-success-btn secondary"
-            onClick={() => { window.location.hash = '#/planos'; }}
+            onClick={() => { window.location.hash = '#/home'; }}
           >
-            Voltar para os planos
+            Voltar para a pagina inicial
           </button>
         </div>
 

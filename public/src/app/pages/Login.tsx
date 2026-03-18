@@ -347,7 +347,7 @@ export default function Login() {
 
         <div className="auth-switch">
           {'Ainda n\u00E3o tem conta?'}
-            <button type="button" className="auth-switch-link" onClick={() => { window.location.hash = '#/planos'; }}>
+            <button type="button" className="auth-switch-link" onClick={() => { window.location.hash = '#/home'; }}>
               Cadastrar
             </button>
           </div>

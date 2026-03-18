@@ -2096,12 +2096,15 @@ function renderCampaigns() {
         const replyRate = c.read > 0 ? (c.replied / c.read * 100) : 0;
         const isExpanded = !collapseDetails || expandedCampaignId === c.id;
         const actionButtonHtml = c.status === 'active'
-            ? `<button class="btn btn-sm btn-warning" onclick="pauseCampaign(${c.id})"><span class="icon icon-pause icon-sm"></span> Pausar</button>`
+            ? `<button class="btn btn-sm btn-warning campaign-primary-action" onclick="pauseCampaign(${c.id})"><span class="icon icon-pause icon-sm"></span> Pausar</button>`
             : isCampaignFinalized(c)
-                ? `<button class="btn btn-sm btn-success" onclick="restartCampaign(${c.id})"><span class="icon icon-refresh icon-sm"></span> Reiniciar campanha</button>`
+                ? `<button class="btn btn-sm btn-success campaign-primary-action" onclick="restartCampaign(${c.id})"><span class="icon icon-refresh icon-sm"></span> Reiniciar campanha</button>`
                 : c.status === 'paused' || c.status === 'draft' || c.status === 'completed'
-                    ? `<button class="btn btn-sm btn-success" onclick="startCampaign(${c.id})"><span class="icon icon-play icon-sm"></span> Iniciar</button>`
+                    ? `<button class="btn btn-sm btn-success campaign-primary-action" onclick="startCampaign(${c.id})"><span class="icon icon-play icon-sm"></span> Iniciar</button>`
                     : '';
+        const primaryActionHtml = actionButtonHtml
+            ? `<div class="campaign-footer-primary">${actionButtonHtml}</div>`
+            : '';
 
         return `
             <div class="campaign-card${isExpanded ? ' is-expanded' : ''}">
@@ -2118,7 +2121,7 @@ function renderCampaigns() {
                             <div class="campaign-date">Criada em ${formatDate(c.created_at, 'short')}</div>
                         </div>
                         <div class="campaign-header-meta">
-                            <span class="badge badge-${getCampaignStatusBadgeVariant(displayStatus)}">
+                            <span class="badge campaign-status-badge badge-${getCampaignStatusBadgeVariant(displayStatus)}">
                                 ${getCampaignStatusLabel(displayStatus)}
                             </span>
                             <span class="campaign-expand-icon" aria-hidden="true">&#9662;</span>
@@ -2161,13 +2164,15 @@ function renderCampaigns() {
                         </div>
                     </div>
                     <div class="campaign-footer">
-                        <span class="badge badge-secondary">${getCampaignTypeLabel(c.type)}</span>
-                        <div class="campaign-actions">
-                            <button class="btn btn-sm btn-outline" onclick="viewCampaign(${c.id})"><span class="icon icon-eye icon-sm"></span> Ver</button>
-                            <button class="btn btn-sm btn-outline" onclick="editCampaign(${c.id})"><span class="icon icon-edit icon-sm"></span> Editar</button>
-                            ${actionButtonHtml}
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteCampaign(${c.id})"><span class="icon icon-delete icon-sm"></span></button>
+                        <div class="campaign-footer-top">
+                            <span class="badge campaign-type-badge">${getCampaignTypeLabel(c.type)}</span>
+                            <div class="campaign-actions">
+                                <button class="btn btn-sm btn-icon btn-outline campaign-action-icon" onclick="viewCampaign(${c.id})" title="Ver campanha" aria-label="Ver campanha"><span class="icon icon-eye icon-sm"></span></button>
+                                <button class="btn btn-sm btn-icon btn-outline campaign-action-icon" onclick="editCampaign(${c.id})" title="Editar campanha" aria-label="Editar campanha"><span class="icon icon-edit icon-sm"></span></button>
+                                <button class="btn btn-sm btn-icon btn-outline-danger campaign-action-icon" onclick="deleteCampaign(${c.id})" title="Excluir campanha" aria-label="Excluir campanha"><span class="icon icon-delete icon-sm"></span></button>
+                            </div>
                         </div>
+                        ${primaryActionHtml}
                     </div>
                 </div>
             </div>

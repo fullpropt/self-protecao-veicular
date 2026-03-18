@@ -82,7 +82,7 @@ export default function Configuracoes() {
   const SHOW_NOTIFICATIONS_TAB = true;
 
   return (
-    <div className="configuracoes-react">
+    <div className="configuracoes-react workspace-surface-page">
       <style>{`
 .settings-container {
             display: grid;

@@ -45,7 +45,7 @@ export default function Inbox() {
   const globals = window as Window & InboxGlobals;
 
   return (
-    <div className="inbox-react">
+    <div className="inbox-react workspace-surface-page">
       <style>{`
         .inbox-react {
             --inbox-scroll-track: rgba(7, 13, 23, 0.94);
