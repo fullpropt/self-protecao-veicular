@@ -1,9 +1,9 @@
 .public-checkout-page {
   min-height: 100vh;
   background:
-    radial-gradient(960px 540px at 10% 8%, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0) 54%),
-    radial-gradient(820px 480px at 88% 10%, rgba(14, 165, 233, 0.08) 0%, rgba(14, 165, 233, 0) 52%),
-    linear-gradient(180deg, #04111d 0%, #07121d 50%, #050c14 100%);
+    radial-gradient(1120px 640px at 8% 8%, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.02) 40%, rgba(16, 185, 129, 0) 64%),
+    radial-gradient(920px 540px at 92% 10%, rgba(14, 165, 233, 0.13) 0%, rgba(14, 165, 233, 0.02) 38%, rgba(14, 165, 233, 0) 62%),
+    linear-gradient(180deg, #020a14 0%, #030d18 42%, #020811 100%);
   color: #e8eef5;
   padding: 32px 18px 56px;
 }
@@ -31,10 +31,27 @@
 .public-checkout-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.75fr) minmax(360px, 0.95fr);
-  gap: 28px;
+  gap: 30px;
   width: min(1320px, 100%);
   margin: 0 auto;
   align-items: start;
+  position: relative;
+  isolation: isolate;
+  padding: 18px 14px;
+  border-radius: 38px;
+}
+
+.public-checkout-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(4, 12, 22, 0.74), rgba(2, 8, 16, 0.8));
+  border: 1px solid rgba(101, 138, 170, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 28px 52px rgba(1, 7, 14, 0.34);
+  z-index: -1;
 }
 
 .public-checkout-main {
@@ -47,12 +64,37 @@
 .public-checkout-card,
 .public-checkout-summary {
   border-radius: 30px;
-  border: 1px solid rgba(116, 147, 171, 0.45);
-  background: linear-gradient(168deg, rgba(10, 24, 40, 0.98) 0%, rgba(6, 14, 24, 0.98) 100%);
+  border: 1px solid rgba(168, 198, 224, 0.46);
+  background: linear-gradient(167deg, rgba(13, 30, 48, 0.98) 0%, rgba(8, 20, 33, 0.985) 58%, rgba(5, 12, 22, 0.99) 100%);
   box-shadow:
-    0 24px 58px rgba(1, 8, 19, 0.62),
-    0 0 0 1px rgba(132, 164, 186, 0.14) inset,
-    0 0 34px rgba(6, 84, 134, 0.14);
+    0 30px 68px rgba(0, 0, 0, 0.56),
+    0 0 0 1px rgba(214, 229, 242, 0.16) inset,
+    0 0 0 2px rgba(29, 90, 136, 0.24),
+    0 14px 30px rgba(5, 60, 108, 0.22);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(2px);
+}
+
+.public-checkout-card::before,
+.public-checkout-summary::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 24%),
+    radial-gradient(380px 180px at 8% -8%, rgba(123, 208, 255, 0.14), rgba(123, 208, 255, 0) 68%),
+    radial-gradient(340px 170px at 96% 0%, rgba(45, 212, 191, 0.1), rgba(45, 212, 191, 0) 68%);
+  opacity: 0.92;
+  z-index: 0;
+}
+
+.public-checkout-card > *,
+.public-checkout-summary > * {
+  position: relative;
+  z-index: 1;
 }
 
 .public-checkout-card {
@@ -444,7 +486,9 @@
 @media (max-width: 960px) {
   .public-checkout-grid {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 22px;
+    padding: 14px 10px;
+    border-radius: 28px;
   }
 
   .public-checkout-form {
@@ -480,6 +524,11 @@
 @media (max-width: 640px) {
   .public-checkout-page {
     padding: 18px 12px 42px;
+  }
+
+  .public-checkout-grid {
+    padding: 10px 6px;
+    border-radius: 20px;
   }
 
   .public-checkout-card,
