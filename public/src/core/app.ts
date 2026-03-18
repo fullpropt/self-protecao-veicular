@@ -35,6 +35,13 @@ type ApiRequestOptions = RequestInit & {
     body?: any;
     headers?: Record<string, string>;
 };
+type ToastDisplayOptions = {
+    duration?: number;
+    iconClass?: string;
+    iconLabel?: string;
+    avatarUrl?: string;
+    avatarAlt?: string;
+};
 
 type AppDialogMode = 'alert' | 'confirm' | 'prompt';
 type AppDialogRequest = {
@@ -865,38 +872,114 @@ function showAppPrompt(message: string, options: { title?: string; defaultValue?
 // TOAST NOTIFICATIONS
 // ============================================
 
-function showToast(type: 'success' | 'error' | 'warning' | 'info', title: string, message: string, duration = 5000) {
+function sanitizeToastIconClass(value: unknown) {
+    const normalized = String(value || '').trim().replace(/[^a-zA-Z0-9_\-\s]/g, '');
+    return normalized || '';
+}
+
+function sanitizeToastAvatarUrl(value: unknown) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('/uploads/')) return raw;
+    return '';
+}
+
+function resolveToastOptions(durationOrOptions: number | ToastDisplayOptions | undefined) {
+    if (typeof durationOrOptions === 'number') {
+        return {
+            duration: durationOrOptions,
+            options: {} as ToastDisplayOptions
+        };
+    }
+
+    const options = durationOrOptions && typeof durationOrOptions === 'object'
+        ? durationOrOptions
+        : ({} as ToastDisplayOptions);
+    const explicitDuration = Number(options.duration);
+
+    return {
+        duration: Number.isFinite(explicitDuration) && explicitDuration > 0 ? explicitDuration : 5000,
+        options
+    };
+}
+
+function showToast(
+    type: 'success' | 'error' | 'warning' | 'info',
+    title: string,
+    message: string,
+    durationOrOptions: number | ToastDisplayOptions = 5000
+) {
     let container = document.querySelector('.toast-container') as HTMLElement | null;
     if (!container) {
         container = document.createElement('div');
         container.className = 'toast-container';
         document.body.appendChild(container);
     }
-    
+
     const icons = {
         success: 'OK',
         error: 'ERRO',
         warning: 'AVISO',
         info: 'INFO'
     };
-    
+
+    const { duration, options } = resolveToastOptions(durationOrOptions);
+    const sanitizedAvatarUrl = sanitizeToastAvatarUrl(options.avatarUrl);
+    const sanitizedIconClass = sanitizeToastIconClass(options.iconClass);
+    const iconLabel = String(options.iconLabel || icons[type] || icons.info).trim() || icons.info;
+    const avatarAlt = String(options.avatarAlt || title || 'Notificacao').trim() || 'Notificacao';
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `
-        <span class="toast-icon">${icons[type] || icons.info}</span>
-        <div class="toast-content">
-            <div class="toast-title">${title}</div>
-            <div class="toast-message">${message}</div>
-        </div>
-        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
-    `;
-    
+
+    const iconElement = document.createElement('span');
+    iconElement.className = 'toast-icon';
+    if (sanitizedAvatarUrl) {
+        const avatarImage = document.createElement('img');
+        avatarImage.className = 'toast-avatar';
+        avatarImage.src = sanitizedAvatarUrl;
+        avatarImage.alt = avatarAlt;
+        avatarImage.loading = 'lazy';
+        iconElement.appendChild(avatarImage);
+    } else if (sanitizedIconClass) {
+        iconElement.className = `toast-icon ${sanitizedIconClass}`;
+        iconElement.setAttribute('aria-label', iconLabel);
+        iconElement.setAttribute('title', iconLabel);
+    } else {
+        iconElement.textContent = iconLabel;
+    }
+
+    const contentElement = document.createElement('div');
+    contentElement.className = 'toast-content';
+
+    const titleElement = document.createElement('div');
+    titleElement.className = 'toast-title';
+    titleElement.textContent = String(title || '');
+
+    const messageElement = document.createElement('div');
+    messageElement.className = 'toast-message';
+    messageElement.textContent = String(message || '');
+
+    const closeElement = document.createElement('button');
+    closeElement.className = 'toast-close';
+    closeElement.type = 'button';
+    closeElement.textContent = '×';
+    closeElement.addEventListener('click', () => toast.remove());
+
+    contentElement.appendChild(titleElement);
+    contentElement.appendChild(messageElement);
+
+    toast.appendChild(iconElement);
+    toast.appendChild(contentElement);
+    toast.appendChild(closeElement);
+
     container.appendChild(toast);
-    
+
     // Animar entrada
     setTimeout(() => toast.classList.add('show'), 10);
-    
-    // Remover após duração
+
+    // Remover apos duracao
     setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);

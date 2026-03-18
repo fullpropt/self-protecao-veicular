@@ -14,6 +14,7 @@ type Contact = {
     jid: string;
     number: string;
     name?: string;
+    avatarUrl?: string;
     lastMessage?: string;
     lastMessageTime?: number;
     unreadCount?: number;
@@ -43,12 +44,21 @@ type SocketMessage = Message & {
     fromNumber?: string;
     pushName?: string;
     mediaType?: string;
+    leadAvatarUrl?: string;
+    lead_avatar_url?: string;
 };
 
 type NotificationPreferences = {
     notifyNewLead: boolean;
     notifyNewMessage: boolean;
     notifySound: boolean;
+};
+type ToastDisplayOptions = {
+    duration?: number;
+    iconClass?: string;
+    iconLabel?: string;
+    avatarUrl?: string;
+    avatarAlt?: string;
 };
 
 const DEFAULT_SESSION_ID = 'default_whatsapp_session';
@@ -100,6 +110,14 @@ function parseNotificationFlag(value: unknown, fallback: boolean) {
         if (['false', '0', 'no', 'off'].includes(normalized)) return false;
     }
     return fallback;
+}
+
+function sanitizeAvatarUrl(value: unknown) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('/uploads/')) return raw;
+    return '';
 }
 
 function getSettingsStorageKeyCandidates() {
@@ -562,10 +580,14 @@ function renderMessages() {
 function handleNewMessage(message: SocketMessage) {
     // Atualizar contato na lista
     const contactIndex = contacts.findIndex(c => c.jid === message.from || c.number === message.fromNumber);
+    const messageAvatarUrl = sanitizeAvatarUrl(message.leadAvatarUrl || message.lead_avatar_url || '');
     
     if (contactIndex >= 0) {
         contacts[contactIndex].lastMessage = message.text?.substring(0, 50) || 'Nova mensagem';
         contacts[contactIndex].lastMessageTime = message.timestamp || Date.now();
+        if (messageAvatarUrl) {
+            contacts[contactIndex].avatarUrl = messageAvatarUrl;
+        }
         
         if (!message.isFromMe && currentContact?.jid !== message.from) {
             contacts[contactIndex].unreadCount = (contacts[contactIndex].unreadCount || 0) + 1;
@@ -576,6 +598,7 @@ function handleNewMessage(message: SocketMessage) {
             jid: message.from,
             number: message.fromNumber,
             name: message.pushName || message.fromNumber,
+            avatarUrl: messageAvatarUrl || undefined,
             lastMessage: message.text?.substring(0, 50) || 'Nova mensagem',
             lastMessageTime: message.timestamp || Date.now(),
             unreadCount: message.isFromMe ? 0 : 1,
@@ -620,10 +643,22 @@ function handleNewMessage(message: SocketMessage) {
         message.pushName || message.fromNumber || message.from || 'Contato'
     );
     const previewText = buildNotificationPreviewText(message.text, (message as any).mediaType || (message as any).media_type);
+    const toastAvatarUrl = sanitizeAvatarUrl(
+        message.leadAvatarUrl
+        || message.lead_avatar_url
+        || contacts[contactIndex]?.avatarUrl
+        || currentContact?.avatarUrl
+        || ''
+    );
 
     // Notificacao de novo lead
     if (isNewLeadMessage && notificationPreferences.notifyNewLead) {
-        showToast('info', `Novo lead: ${leadLabel}`, previewText);
+        showToast('info', `Novo lead: ${leadLabel}`, previewText, {
+            avatarUrl: toastAvatarUrl || undefined,
+            avatarAlt: leadLabel,
+            iconClass: 'icon icon-contacts icon-sm',
+            iconLabel: 'Contatos'
+        });
     }
 
     // Notificacao visual de nova mensagem
@@ -633,7 +668,12 @@ function handleNewMessage(message: SocketMessage) {
         && !isCurrentContactMessage
         && !(isNewLeadMessage && notificationPreferences.notifyNewLead)
     ) {
-        showToast('info', `Nova mensagem de ${leadLabel}`, previewText);
+        showToast('info', `Nova mensagem de ${leadLabel}`, previewText, {
+            avatarUrl: toastAvatarUrl || undefined,
+            avatarAlt: leadLabel,
+            iconClass: 'icon icon-inbox icon-sm',
+            iconLabel: 'Inbox'
+        });
     }
 
     // Notificacao sonora
@@ -880,7 +920,36 @@ function playNotificationSound() {
     } catch (e) {}
 }
 
-function showToast(type: 'success' | 'error' | 'warning' | 'info', title: string, message: string) {
+function sanitizeToastIconClass(value: unknown) {
+    const normalized = String(value || '').trim().replace(/[^a-zA-Z0-9_\-\s]/g, '');
+    return normalized || '';
+}
+
+function resolveToastOptions(durationOrOptions: number | ToastDisplayOptions | undefined) {
+    if (typeof durationOrOptions === 'number') {
+        return {
+            duration: durationOrOptions,
+            options: {} as ToastDisplayOptions
+        };
+    }
+
+    const options = durationOrOptions && typeof durationOrOptions === 'object'
+        ? durationOrOptions
+        : ({} as ToastDisplayOptions);
+    const explicitDuration = Number(options.duration);
+
+    return {
+        duration: Number.isFinite(explicitDuration) && explicitDuration > 0 ? explicitDuration : 4000,
+        options
+    };
+}
+
+function showToast(
+    type: 'success' | 'error' | 'warning' | 'info',
+    title: string,
+    message: string,
+    durationOrOptions: number | ToastDisplayOptions = 4000
+) {
     const container = document.getElementById('toastContainer') as HTMLElement | null;
     if (!container) return;
     
@@ -890,23 +959,55 @@ function showToast(type: 'success' | 'error' | 'warning' | 'info', title: string
         warning: 'AVISO',
         info: 'INFO'
     };
+    const { duration, options } = resolveToastOptions(durationOrOptions);
+    const sanitizedAvatarUrl = sanitizeAvatarUrl(options.avatarUrl);
+    const sanitizedIconClass = sanitizeToastIconClass(options.iconClass);
+    const iconLabel = String(options.iconLabel || icons[type]).trim() || icons.info;
+    const avatarAlt = String(options.avatarAlt || title || 'Notificacao').trim() || 'Notificacao';
     
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `
-        <span class="toast-icon">${icons[type]}</span>
-        <div class="toast-content">
-            <div class="toast-title">${title}</div>
-            <div class="toast-message">${message}</div>
-        </div>
-    `;
+
+    const iconElement = document.createElement('span');
+    iconElement.className = 'toast-icon';
+    if (sanitizedAvatarUrl) {
+        const avatarImage = document.createElement('img');
+        avatarImage.className = 'toast-avatar';
+        avatarImage.src = sanitizedAvatarUrl;
+        avatarImage.alt = avatarAlt;
+        avatarImage.loading = 'lazy';
+        iconElement.appendChild(avatarImage);
+    } else if (sanitizedIconClass) {
+        iconElement.className = `toast-icon ${sanitizedIconClass}`;
+        iconElement.setAttribute('aria-label', iconLabel);
+        iconElement.setAttribute('title', iconLabel);
+    } else {
+        iconElement.textContent = iconLabel;
+    }
+
+    const contentElement = document.createElement('div');
+    contentElement.className = 'toast-content';
+
+    const titleElement = document.createElement('div');
+    titleElement.className = 'toast-title';
+    titleElement.textContent = String(title || '');
+
+    const messageElement = document.createElement('div');
+    messageElement.className = 'toast-message';
+    messageElement.textContent = String(message || '');
+
+    contentElement.appendChild(titleElement);
+    contentElement.appendChild(messageElement);
+
+    toast.appendChild(iconElement);
+    toast.appendChild(contentElement);
     
     container.appendChild(toast);
     
     setTimeout(() => {
         toast.style.animation = 'toastSlideIn 0.3s ease-out reverse';
         setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    }, duration);
 }
 
 const windowAny = window as Window & {

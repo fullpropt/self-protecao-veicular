@@ -10424,6 +10424,13 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 
     // Emitir para clientes
 
+    const leadCustomFields = parseLeadCustomFields(lead?.custom_fields);
+    const leadAvatarUrl = normalizeLeadAvatarUrl(
+        lead?.avatar_url
+        || leadCustomFields?.[LEAD_AVATAR_CUSTOM_FIELD_KEY]
+        || leadCustomFields?.avatarUrl
+    ) || null;
+
     const messageForClient = {
 
         id: savedMessage.id,
@@ -10454,6 +10461,8 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         leadId: lead.id,
 
         leadName: lead.name,
+
+        leadAvatarUrl,
 
         conversationId: conversation.id
 

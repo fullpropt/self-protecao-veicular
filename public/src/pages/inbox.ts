@@ -1830,7 +1830,7 @@ function initSocket() {
             const incomingLeadId = Number(data?.leadId || 0);
             const incomingSessionId = sanitizeSessionId(data?.sessionId || data?.session_id || '');
             const isFromMe = parseNotificationFlag(data?.isFromMe ?? data?.is_from_me, false);
-            const hadConversationBefore = conversations.some((conversation) => {
+            const matchedConversation = conversations.find((conversation) => {
                 const conversationId = Number(conversation?.id || 0);
                 if (incomingConversationId > 0 && conversationId === incomingConversationId) {
                     return true;
@@ -1844,6 +1844,7 @@ function initSocket() {
                 if (!incomingSessionId) return true;
                 return resolveConversationSessionId(conversation) === incomingSessionId;
             });
+            const hadConversationBefore = Boolean(matchedConversation);
             const isCurrent =
                 currentConversation &&
                 (
@@ -1871,9 +1872,21 @@ function initSocket() {
                     data?.text,
                     data?.mediaType || data?.media_type
                 );
+                const toastAvatarUrl = sanitizeAvatarUrl(
+                    data?.leadAvatarUrl
+                    || data?.lead_avatar_url
+                    || matchedConversation?.avatarUrl
+                    || currentConversation?.avatarUrl
+                    || ''
+                );
 
                 if (isNewLeadMessage && notificationPreferences.notifyNewLead) {
-                    showToast('info', `Novo lead: ${leadLabel}`, previewText);
+                    showToast('info', `Novo lead: ${leadLabel}`, previewText, {
+                        avatarUrl: toastAvatarUrl || undefined,
+                        avatarAlt: leadLabel,
+                        iconClass: 'icon icon-contacts icon-sm',
+                        iconLabel: 'Contatos'
+                    });
                 }
 
                 if (
@@ -1881,7 +1894,12 @@ function initSocket() {
                     && !isCurrent
                     && !(isNewLeadMessage && notificationPreferences.notifyNewLead)
                 ) {
-                    showToast('info', `Nova mensagem de ${leadLabel}`, previewText);
+                    showToast('info', `Nova mensagem de ${leadLabel}`, previewText, {
+                        avatarUrl: toastAvatarUrl || undefined,
+                        avatarAlt: leadLabel,
+                        iconClass: 'icon icon-inbox icon-sm',
+                        iconLabel: 'Inbox'
+                    });
                 }
 
                 if (notificationPreferences.notifyNewMessage && notificationPreferences.notifySound) {
