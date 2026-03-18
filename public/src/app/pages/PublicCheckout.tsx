@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
-import { brandFullLogoUrl, brandName } from '../lib/brand';
+import { brandFullLogoUrl, brandLogoUrl, brandName } from '../lib/brand';
 import {
   extractWhatsappDigits,
   formatPreCheckoutWhatsappInput,
@@ -430,6 +430,7 @@ export default function PublicCheckout() {
   const renewalLabel = effectiveTrialDays > 0
     ? `Em ${effectiveTrialDays} dias · ${formatCurrencyBRL(effectiveAmountCents)}`
     : `A cada 30 dias · ${formatCurrencyBRL(effectiveAmountCents)}`;
+  const currentYear = new Date().getFullYear();
 
   return (
     <div className="public-checkout-page" style={themeStyle}>
@@ -529,6 +530,41 @@ export default function PublicCheckout() {
             </ul>
           </aside>
         </div>
+
+        <footer className="public-checkout-footer" aria-label="Rodape principal">
+          <div className="public-checkout-footer-grid">
+            <section className="public-checkout-footer-brand-col" aria-label="Marca e posicionamento">
+              <a href="#/home" className="public-checkout-footer-brand" aria-label={`${brandName} pagina inicial`}>
+                <img src={brandLogoUrl} alt="" aria-hidden="true" />
+                <span>{brandName}</span>
+              </a>
+              <p>
+                Plataforma para escalar atendimento e vendas no WhatsApp com velocidade, controle e previsibilidade.
+              </p>
+            </section>
+
+            <nav className="public-checkout-footer-col" aria-label="Links de produto">
+              <h3>Produto</h3>
+              <ul>
+                <li><a href="#/home">Automacao</a></li>
+                <li><a href="#/home">Fluxos</a></li>
+                <li><a href="#/home">Inbox</a></li>
+              </ul>
+            </nav>
+
+            <nav className="public-checkout-footer-col" aria-label="Links legais">
+              <h3>Legal</h3>
+              <ul>
+                <li><a href="#/login?tab=privacy">Privacidade</a></li>
+                <li><a href="#/login?tab=terms">Termos de uso</a></li>
+              </ul>
+            </nav>
+          </div>
+
+          <div className="public-checkout-footer-bottom">
+            <span>{`© ${currentYear} ${brandName}. Todos os direitos reservados.`}</span>
+          </div>
+        </footer>
       </div>
     </div>
   );
