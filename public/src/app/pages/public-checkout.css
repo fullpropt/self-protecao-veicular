@@ -109,6 +109,15 @@
 
 .public-checkout-form {
   margin-top: 26px;
+  display: grid;
+  gap: 16px;
+}
+
+.public-checkout-form-card {
+  border-radius: 20px;
+  border: 1px solid rgba(78, 102, 118, 0.28);
+  background: rgba(8, 18, 30, 0.72);
+  padding: 18px;
 }
 
 .public-checkout-section-title {
@@ -120,6 +129,10 @@
 
 .public-checkout-section-title + .public-checkout-form-grid {
   margin-bottom: 24px;
+}
+
+.public-checkout-form-card .public-checkout-section-title + .public-checkout-form-grid {
+  margin-bottom: 0;
 }
 
 .public-checkout-form-grid {

@@ -453,59 +453,63 @@ export default function PublicCheckout() {
             </div>
 
             <form className="public-checkout-form" onSubmit={handleSubmit} noValidate>
-              <div className="public-checkout-section-title">Dados da conta</div>
-              <div className="public-checkout-form-grid">
-                <Field label="Nome completo" error={validationErrors.fullName} full>
-                  <input className="public-checkout-input" autoComplete="name" value={values.fullName} onChange={(event) => handleChange('fullName', event.target.value)} />
-                </Field>
-                <Field label="E-mail" error={validationErrors.email}>
-                  <input className="public-checkout-input" type="email" autoComplete="email" value={values.email} onChange={(event) => handleChange('email', event.target.value)} />
-                </Field>
-                <Field label="Celular com DDD" error={validationErrors.whatsapp}>
-                  <input className="public-checkout-input" type="tel" autoComplete="tel" value={values.whatsapp} onChange={(event) => handleChange('whatsapp', event.target.value)} />
-                </Field>
-                <Field label="Empresa" full>
-                  <input className="public-checkout-input" autoComplete="organization" value={values.companyName} onChange={(event) => handleChange('companyName', event.target.value)} />
-                </Field>
-                <Field label="Documento">
-                  <select className="public-checkout-select" value={values.documentType} onChange={(event) => handleChange('documentType', event.target.value)}>
-                    <option value="cpf">CPF</option>
-                    <option value="cnpj">CNPJ</option>
-                  </select>
-                </Field>
-                <Field label="Número do documento" error={validationErrors.documentNumber}>
-                  <input className="public-checkout-input" inputMode="numeric" value={values.documentNumber} onChange={(event) => handleChange('documentNumber', event.target.value)} />
-                </Field>
-              </div>
-
-              <div className="public-checkout-section-title">Pagamento</div>
-              <div className="public-checkout-form-grid">
-                <Field label="Nome impresso no cartão" error={validationErrors.cardHolderName} full>
-                  <input className="public-checkout-input" autoComplete="cc-name" value={values.cardHolderName} onChange={(event) => handleChange('cardHolderName', event.target.value)} />
-                </Field>
-                <Field label="Número do cartão" error={validationErrors.cardNumber} full>
-                  <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-number" value={values.cardNumber} onChange={(event) => handleChange('cardNumber', event.target.value)} />
-                </Field>
-                <Field label="Validade (MM/AA)" error={validationErrors.cardExpiry}>
-                  <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-exp" value={values.cardExpiry} onChange={(event) => handleChange('cardExpiry', event.target.value)} />
-                </Field>
-                <Field label="CVV" error={validationErrors.cardCvv}>
-                  <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-csc" value={values.cardCvv} onChange={(event) => handleChange('cardCvv', event.target.value)} />
-                </Field>
-              </div>
-
-              {isLoadingConfig ? <div className="public-checkout-banner">Carregando configuração do checkout...</div> : null}
-              {configError ? <div className="public-checkout-error">{configError}</div> : null}
-              {!isLoadingConfig && !configError && effectiveTrialDays > 0 ? (
-                <div className="public-checkout-banner">
-                  Seu plano entra com <strong>{effectiveTrialDays} dias grátis</strong>. O Pagar.me pode realizar apenas uma verificação temporária do cartão durante a ativação.
+              <section className="public-checkout-form-card" aria-labelledby="checkoutAccountDataTitle">
+                <div className="public-checkout-section-title" id="checkoutAccountDataTitle">Dados da conta</div>
+                <div className="public-checkout-form-grid">
+                  <Field label="Nome completo" error={validationErrors.fullName} full>
+                    <input className="public-checkout-input" autoComplete="name" value={values.fullName} onChange={(event) => handleChange('fullName', event.target.value)} />
+                  </Field>
+                  <Field label="E-mail" error={validationErrors.email}>
+                    <input className="public-checkout-input" type="email" autoComplete="email" value={values.email} onChange={(event) => handleChange('email', event.target.value)} />
+                  </Field>
+                  <Field label="Celular com DDD" error={validationErrors.whatsapp}>
+                    <input className="public-checkout-input" type="tel" autoComplete="tel" value={values.whatsapp} onChange={(event) => handleChange('whatsapp', event.target.value)} />
+                  </Field>
+                  <Field label="Empresa" full>
+                    <input className="public-checkout-input" autoComplete="organization" value={values.companyName} onChange={(event) => handleChange('companyName', event.target.value)} />
+                  </Field>
+                  <Field label="Documento">
+                    <select className="public-checkout-select" value={values.documentType} onChange={(event) => handleChange('documentType', event.target.value)}>
+                      <option value="cpf">CPF</option>
+                      <option value="cnpj">CNPJ</option>
+                    </select>
+                  </Field>
+                  <Field label="Número do documento" error={validationErrors.documentNumber}>
+                    <input className="public-checkout-input" inputMode="numeric" value={values.documentNumber} onChange={(event) => handleChange('documentNumber', event.target.value)} />
+                  </Field>
                 </div>
-              ) : null}
-              {submitError ? <div className="public-checkout-error">{submitError}</div> : null}
+              </section>
 
-              <button className="public-checkout-submit" type="submit" disabled={isSubmitting || isLoadingConfig}>
-                {isSubmitting ? 'Ativando assinatura...' : effectiveTrialDays > 0 ? `Iniciar ${effectiveTrialDays} dias grátis` : 'Concluir assinatura'}
-              </button>
+              <section className="public-checkout-form-card" aria-labelledby="checkoutPaymentDataTitle">
+                <div className="public-checkout-section-title" id="checkoutPaymentDataTitle">Pagamento</div>
+                <div className="public-checkout-form-grid">
+                  <Field label="Nome impresso no cartão" error={validationErrors.cardHolderName} full>
+                    <input className="public-checkout-input" autoComplete="cc-name" value={values.cardHolderName} onChange={(event) => handleChange('cardHolderName', event.target.value)} />
+                  </Field>
+                  <Field label="Número do cartão" error={validationErrors.cardNumber} full>
+                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-number" value={values.cardNumber} onChange={(event) => handleChange('cardNumber', event.target.value)} />
+                  </Field>
+                  <Field label="Validade (MM/AA)" error={validationErrors.cardExpiry}>
+                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-exp" value={values.cardExpiry} onChange={(event) => handleChange('cardExpiry', event.target.value)} />
+                  </Field>
+                  <Field label="CVV" error={validationErrors.cardCvv}>
+                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-csc" value={values.cardCvv} onChange={(event) => handleChange('cardCvv', event.target.value)} />
+                  </Field>
+                </div>
+
+                {isLoadingConfig ? <div className="public-checkout-banner">Carregando configuração do checkout...</div> : null}
+                {configError ? <div className="public-checkout-error">{configError}</div> : null}
+                {!isLoadingConfig && !configError && effectiveTrialDays > 0 ? (
+                  <div className="public-checkout-banner">
+                    Seu plano entra com <strong>{effectiveTrialDays} dias grátis</strong>. O Pagar.me pode realizar apenas uma verificação temporária do cartão durante a ativação.
+                  </div>
+                ) : null}
+                {submitError ? <div className="public-checkout-error">{submitError}</div> : null}
+
+                <button className="public-checkout-submit" type="submit" disabled={isSubmitting || isLoadingConfig}>
+                  {isSubmitting ? 'Ativando assinatura...' : effectiveTrialDays > 0 ? `Iniciar ${effectiveTrialDays} dias grátis` : 'Concluir assinatura'}
+                </button>
+              </section>
             </form>
           </section>
 
