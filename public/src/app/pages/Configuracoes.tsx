@@ -691,13 +691,9 @@ export default function Configuracoes() {
 
                               <div className="mb-4" id="contactVariablesList"></div>
 
-                              <div className="copy-card">
-                                  <div className="copy-card-header">
-                                      <span className="copy-card-title">Respostas cadastradas</span>
-                                  </div>
-                                  <div id="templatesList"></div>
-                                  <p className="text-muted" id="templatesEmpty" style={{ marginTop: '12px' }}>Nenhuma resposta rápida cadastrada.</p>
-                              </div>
+                              <h4 style={{ margin: '0 0 14px', fontSize: '20px' }}>Respostas cadastradas</h4>
+                              <div id="templatesList"></div>
+                              <p className="text-muted" id="templatesEmpty" style={{ marginTop: '12px' }}>Nenhuma resposta rápida cadastrada.</p>
 
                               <button className="btn btn-outline w-100 mt-3" onClick={() => globals.openModal?.('addTemplateModal')}><span className="icon icon-add icon-sm"></span> Nova resposta rápida</button>
                           </div>
@@ -800,10 +796,8 @@ export default function Configuracoes() {
                                   </Link>
                               </div>
 
-                              <div className="copy-card">
-                                  <div className="connection-accounts-list" id="businessHoursAccountsList">
-                                      <p style={{ margin: 0, color: 'var(--gray-500)' }}>Carregando contas...</p>
-                                  </div>
+                              <div className="connection-accounts-list" id="businessHoursAccountsList">
+                                  <p style={{ margin: 0, color: 'var(--gray-500)' }}>Carregando contas...</p>
                               </div>
                           </div>
                       </div>
@@ -970,9 +964,6 @@ export default function Configuracoes() {
                       <div className="settings-panel" id="panel-plan">
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-dashboard icon-sm"></span> Plano da Conta</h3>
-                              <p className="text-muted mb-4">
-                                  A situação do plano do admin principal será atualizada e confirmada via API.
-                              </p>
                               <div id="planStatusCard">
                                   <p style={{ color: 'var(--gray-500)', margin: 0 }}>Carregando situação do plano...</p>
                               </div>

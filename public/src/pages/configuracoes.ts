@@ -1021,51 +1021,46 @@ function renderPlanStatus() {
     const planTone = getPlanTone(data.planName);
 
     container.innerHTML = `
-        <div class="copy-card settings-plan-card" style="margin-bottom: 0;">
-            <div class="copy-card-header" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <span class="copy-card-title">Situação do Plano</span>
-            </div>
-            <div class="settings-plan-shell">
-                <div class="settings-plan-hero settings-plan-hero--${escapeHtml(planTone)}">
-                    <div class="settings-plan-hero-top">
-                        <span class="settings-plan-hero-label">Plano atual</span>
-                        <span class="badge ${statusBadgeClass}">${escapeHtml(data.statusLabel)}</span>
+        <div class="settings-plan-shell">
+            <div class="settings-plan-hero settings-plan-hero--${escapeHtml(planTone)}">
+                <div class="settings-plan-hero-top">
+                    <span class="settings-plan-hero-label">Plano atual</span>
+                    <span class="badge ${statusBadgeClass}">${escapeHtml(data.statusLabel)}</span>
+                </div>
+                <strong class="settings-plan-hero-name">${escapeHtml(data.planName)}</strong>
+                <div class="settings-plan-hero-grid">
+                    <div class="settings-plan-hero-metric">
+                        <span class="settings-plan-hero-metric-label">Conexões WhatsApp</span>
+                        <strong class="settings-plan-hero-metric-value">${escapeHtml(formatPlanMetricValue(data.whatsappSessions))}</strong>
+                        <span class="settings-plan-hero-metric-hint">${escapeHtml(formatPlanMetricHint(data.whatsappSessions))}</span>
                     </div>
-                    <strong class="settings-plan-hero-name">${escapeHtml(data.planName)}</strong>
-                    <div class="settings-plan-hero-grid">
-                        <div class="settings-plan-hero-metric">
-                            <span class="settings-plan-hero-metric-label">Conexões WhatsApp</span>
-                            <strong class="settings-plan-hero-metric-value">${escapeHtml(formatPlanMetricValue(data.whatsappSessions))}</strong>
-                            <span class="settings-plan-hero-metric-hint">${escapeHtml(formatPlanMetricHint(data.whatsappSessions))}</span>
-                        </div>
-                        <div class="settings-plan-hero-metric">
-                            <span class="settings-plan-hero-metric-label">Contatos</span>
-                            <strong class="settings-plan-hero-metric-value">${escapeHtml(formatPlanMetricValue(data.contacts))}</strong>
-                            <span class="settings-plan-hero-metric-hint">${escapeHtml(formatPlanMetricHint(data.contacts))}</span>
-                        </div>
+                    <div class="settings-plan-hero-metric">
+                        <span class="settings-plan-hero-metric-label">Contatos</span>
+                        <strong class="settings-plan-hero-metric-value">${escapeHtml(formatPlanMetricValue(data.contacts))}</strong>
+                        <span class="settings-plan-hero-metric-hint">${escapeHtml(formatPlanMetricHint(data.contacts))}</span>
                     </div>
-                    <p class="settings-plan-hero-copy">${escapeHtml(data.message)}</p>
                 </div>
+                <p class="settings-plan-hero-copy">${escapeHtml(data.message)}</p>
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Admin principal</label>
-                    <input type="text" class="form-input" value="${escapeHtml(data.ownerName)}" readonly />
-                </div>
-                <div class="form-group">
-                    <label class="form-label">E-mail do admin principal</label>
-                    <input type="text" class="form-input" value="${escapeHtml(data.ownerEmail)}" readonly />
-                </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Admin principal</label>
+                <input type="text" class="form-input" value="${escapeHtml(data.ownerName)}" readonly />
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Renovação</label>
-                    <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.renewalDate))}" readonly />
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Última confirmação</label>
-                    <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.lastVerifiedAt))}" readonly />
-                </div>
+            <div class="form-group">
+                <label class="form-label">E-mail do admin principal</label>
+                <input type="text" class="form-input" value="${escapeHtml(data.ownerEmail)}" readonly />
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Renovação</label>
+                <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.renewalDate))}" readonly />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Última confirmação</label>
+                <input type="text" class="form-input" value="${escapeHtml(formatPlanDateTime(data.lastVerifiedAt))}" readonly />
             </div>
         </div>
     `;
