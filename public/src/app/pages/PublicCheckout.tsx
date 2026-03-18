@@ -438,17 +438,6 @@ export default function PublicCheckout() {
           <img src={brandFullLogoUrl} alt={brandName} />
         </a>
 
-        <div className="public-checkout-order-strip" aria-label="Detalhes do pedido">
-          <div className="public-checkout-order-left">
-            <span className="public-checkout-order-icon" aria-hidden="true">🛒</span>
-            <div className="public-checkout-order-text">
-              <span>Detalhes do pedido</span>
-              <strong>{plan.name}</strong>
-            </div>
-          </div>
-          <span className="public-checkout-order-locale">Brasil / R$</span>
-        </div>
-
         <div className="public-checkout-grid">
           <div className="public-checkout-main">
             <form className="public-checkout-form" onSubmit={handleSubmit} noValidate>

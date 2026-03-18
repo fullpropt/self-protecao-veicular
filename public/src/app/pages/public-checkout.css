@@ -15,13 +15,15 @@
 }
 
 .public-checkout-brand {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  margin-bottom: 14px;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 22px;
 }
 
 .public-checkout-brand img {
-  width: clamp(180px, 25vw, 220px);
+  width: clamp(120px, 18vw, 160px);
   height: auto;
   display: block;
 }
@@ -35,58 +37,6 @@
 .public-checkout-main {
   display: grid;
   gap: 18px;
-}
-
-.public-checkout-order-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-radius: 18px;
-  border: 1px solid rgba(86, 112, 126, 0.28);
-  background: linear-gradient(180deg, rgba(8, 18, 30, 0.92) 0%, rgba(8, 14, 24, 0.92) 100%);
-  padding: 12px 16px;
-  margin-bottom: 18px;
-}
-
-.public-checkout-order-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.public-checkout-order-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(var(--primary-rgb), 0.14);
-  border: 1px solid rgba(var(--primary-rgb), 0.28);
-  font-size: 18px;
-}
-
-.public-checkout-order-text {
-  display: grid;
-  gap: 2px;
-}
-
-.public-checkout-order-text span {
-  color: #95a9b9;
-  font-size: 12px;
-}
-
-.public-checkout-order-text strong {
-  color: #f6fbff;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.public-checkout-order-locale {
-  color: #d7e3ed;
-  font-size: 13px;
-  text-decoration: underline;
 }
 
 .public-checkout-card,
@@ -417,11 +367,6 @@
   .public-checkout-summary {
     padding: 20px;
     border-radius: 22px;
-  }
-
-  .public-checkout-order-strip {
-    flex-direction: column;
-    align-items: flex-start;
   }
 
   .public-checkout-trust,
