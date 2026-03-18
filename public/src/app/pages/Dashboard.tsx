@@ -26,6 +26,22 @@ type DashboardGlobals = {
   logout?: () => void;
 };
 
+function readDashboardHeaderUserName() {
+  if (typeof window === 'undefined') return 'Usuário';
+
+  const userName = String(window.sessionStorage.getItem('selfDashboardUser') || '').trim();
+  return userName || 'Usuário';
+}
+
+function formatDashboardHeaderDate(date = new Date()) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  }).format(date);
+}
+
 function DashboardStyles() {
   return (
     <style>{`
@@ -1374,9 +1390,13 @@ function DashboardStyles() {
 }
 
 function DashboardHeader({
+  currentDate,
+  headerUserName,
   isOnboardingDismissed,
   onRestoreOnboarding
 }: {
+  currentDate: string;
+  headerUserName: string;
   isOnboardingDismissed: boolean;
   onRestoreOnboarding: () => void;
 }) {
@@ -1386,8 +1406,8 @@ function DashboardHeader({
         <h1>Painel de Controle</h1>
         <div className="dashboard-subtitle-row">
           <p>
-            Bem-vindo, <span className="user-name">Usuário</span> |{' '}
-            <span className="current-date"></span>
+            Bem-vindo, <span>{headerUserName}</span> |{' '}
+            <span>{currentDate}</span>
           </p>
           {isOnboardingDismissed ? (
             <button
@@ -2085,6 +2105,8 @@ export default function Dashboard() {
   const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(() =>
     readStoredOnboardingFlag(buildOnboardingDismissedStorageKey())
   );
+  const dashboardUserName = readDashboardHeaderUserName();
+  const dashboardCurrentDate = formatDashboardHeaderDate();
 
   useEffect(() => {
     let cancelled = false;
@@ -2205,6 +2227,8 @@ export default function Dashboard() {
       </aside>
       <main className="main-content">
         <DashboardHeader
+          currentDate={dashboardCurrentDate}
+          headerUserName={dashboardUserName}
           isOnboardingDismissed={isOnboardingDismissed}
           onRestoreOnboarding={() => setIsOnboardingDismissed(false)}
         />
