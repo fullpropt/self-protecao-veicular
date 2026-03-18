@@ -2874,18 +2874,6 @@ function buildWhatsappPreviewBubbleHtml(options: {
     `;
 }
 
-function buildWhatsappPreviewOutgoingBubbleHtml(text: string) {
-    const bubbleText = getWhatsappPreviewMessageText(text, '1');
-    return `
-        <div class="flow-whatsapp-preview-row flow-whatsapp-preview-row-outgoing">
-            <div class="flow-whatsapp-preview-bubble flow-whatsapp-preview-bubble-outgoing">
-                <div class="flow-whatsapp-preview-bubble-text">${buildWhatsappPreviewTextHtml(bubbleText)}</div>
-                <div class="flow-whatsapp-preview-bubble-time">15:03</div>
-            </div>
-        </div>
-    `;
-}
-
 function buildWhatsappPreviewMenuText(prompt: string, items: string[]) {
     const safePrompt = getWhatsappPreviewMessageText(prompt, 'Escolha uma opção no menu abaixo:');
     const safeItems = Array.isArray(items) ? items.filter(Boolean).slice(0, 10) : [];
@@ -2971,7 +2959,6 @@ function renderWhatsappPreview() {
                 footer: menuFooter,
                 realTone: true
             });
-            bodyHtml += buildWhatsappPreviewOutgoingBubbleHtml(menuItems.length > 1 ? '2' : '1');
         } else {
             let message = 'Este bloco não envia uma mensagem visual no WhatsApp.';
             if (isIntentTrigger(node)) {
