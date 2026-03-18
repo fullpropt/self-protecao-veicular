@@ -418,7 +418,7 @@ function openStyledFlowDialog(options: FlowDialogOptions): Promise<any> {
         activeFlowDialogDismiss = () => finish(cancelResult());
 
         title.textContent = String(
-            options.title || (isPromptSelect ? 'Preencha os dados' : isPrompt ? 'Digite um valor' : isSelect ? 'Selecione uma opção' : isAlert ? 'Aviso' : 'Confirmacao')
+            options.title || (isPromptSelect ? 'Preencha os dados' : isPrompt ? 'Digite um valor' : isSelect ? 'Selecione uma opção' : isAlert ? 'Aviso' : 'Confirmação')
         );
         message.textContent = String(options.message || '');
 
@@ -513,7 +513,7 @@ function showFlowAlertDialog(message: string, title = 'Aviso') {
     });
 }
 
-function showFlowConfirmDialog(message: string, title = 'Confirmacao') {
+function showFlowConfirmDialog(message: string, title = 'Confirmação') {
     return openStyledFlowDialog({
         mode: 'confirm',
         title,
@@ -2201,9 +2201,9 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
             label: 'Fim',
             collapsed: false,
             content: '',
-            menuPrompt: 'Se desejar, escolha uma opcao no menu abaixo:',
+            menuPrompt: 'Se desejar, escolha uma opção no menu abaixo:',
             menuButtonText: 'Ver Menu',
-            menuSectionTitle: 'Finalizacao',
+            menuSectionTitle: 'Finalização',
             endOptions: ['Voltar ao menu principal']
         }
     };
@@ -3310,32 +3310,32 @@ function renderProperties() {
 
     if (selectedNode.type === 'end') {
         const endMessage = String(getNodePropValue('content', selectedNode.data.content || ''));
-        const endMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Se desejar, escolha uma opcao no menu abaixo:'));
+        const endMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Se desejar, escolha uma opção no menu abaixo:'));
         const endMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
-        const endMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Finalizacao'));
+        const endMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Finalização'));
         const endOptions = coerceEndOptionListForEditor(
             getNodePropValue('endOptions', (selectedNode.data as any).endOptions || [])
         );
 
         html += `
             <div class="property-group">
-                <label>Mensagem de finalizacao</label>
+                <label>Mensagem de finalização</label>
                 <textarea oninput="updateNodeProperty('content', this.value)" placeholder="Obrigado pelo contato!">${escapeHtml(endMessage)}</textarea>
             </div>
             <div class="property-group">
-                <label>Mensagem das opcoes</label>
-                <textarea oninput="updateNodeProperty('menuPrompt', this.value)" placeholder="Se desejar, escolha uma opcao no menu abaixo:">${escapeHtml(endMenuPrompt)}</textarea>
+                <label>Mensagem das opções</label>
+                <textarea oninput="updateNodeProperty('menuPrompt', this.value)" placeholder="Se desejar, escolha uma opção no menu abaixo:">${escapeHtml(endMenuPrompt)}</textarea>
             </div>
             <div class="property-group">
-                <label>Texto do botao</label>
+                <label>Texto do botão</label>
                 <input type="text" value="${escapeHtml(endMenuButtonText)}" oninput="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
             </div>
             <div class="property-group">
-                <label>Titulo da secao de opcoes</label>
-                <input type="text" value="${escapeHtml(endMenuSectionTitle)}" oninput="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Finalizacao">
+                <label>Título da seção de opções</label>
+                <input type="text" value="${escapeHtml(endMenuSectionTitle)}" oninput="updateNodeProperty('menuSectionTitle', this.value)" placeholder="Finalização">
             </div>
             <div class="property-group">
-                <label>Opcoes finais</label>
+                <label>Opções finais</label>
                 <div class="intent-routes-editor">
                     ${endOptions.map((option, index) => `
                         <div class="intent-menu-option-row">
@@ -3343,11 +3343,11 @@ function renderProperties() {
                                 class="intent-route-name-input"
                                 type="text"
                                 value="${escapeHtml(String(option || ''))}"
-                                title="${escapeHtml(String(option || '').trim() || ('Opcao ' + (index + 1)))}"
+                                title="${escapeHtml(String(option || '').trim() || ('Opção ' + (index + 1)))}"
                                 placeholder="Ex.: Voltar ao menu principal"
                                 oninput="updateEndNodeOption(${index}, this.value)"
                             >
-                            <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opcao" onclick="removeEndNodeOption(${index})">×</button>
+                            <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opção" onclick="removeEndNodeOption(${index})">×</button>
                         </div>
                     `).join('')}
                     <div class="intent-menu-option-row">
@@ -3357,17 +3357,17 @@ function renderProperties() {
                             value="${escapeHtml(END_NODE_FIXED_OPTION_LABEL)}"
                             readonly
                             disabled
-                            title="Opcao fixa"
+                            title="Opção fixa"
                         >
                         <span class="property-helper-text" style="margin:0; white-space:nowrap;">Fixa</span>
                     </div>
-                    <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addEndNodeOption()">+ Adicionar opcao</button>
+                    <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addEndNodeOption()">+ Adicionar opção</button>
                 </div>
-                <small style="display:block; margin-top:6px; color:#7b8aa3;">A opcao "${END_NODE_FIXED_OPTION_LABEL}" sempre encerra o fluxo. As demais opcoes podem seguir para outros blocos.</small>
+                <small style="display:block; margin-top:6px; color:#7b8aa3;">A opção "${END_NODE_FIXED_OPTION_LABEL}" sempre encerra o fluxo. As demais opções podem seguir para outros blocos.</small>
             </div>
             <div class="property-group">
                 <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
-                    Confirmar alteracoes
+                    Confirmar alterações
                 </button>
             </div>
         `;
@@ -4908,9 +4908,9 @@ function normalizeLoadedFlowData(options: { flowBuilderMode?: FlowBuilderMode } 
 
         if (node.type === 'end') {
             node.data.content = String((node.data as any)?.content || '').trim();
-            node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Se desejar, escolha uma opcao no menu abaixo:';
+            node.data.menuPrompt = String((node.data as any)?.menuPrompt || '').trim() || 'Se desejar, escolha uma opção no menu abaixo:';
             node.data.menuButtonText = String((node.data as any)?.menuButtonText || '').trim() || 'Ver Menu';
-            node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Finalizacao';
+            node.data.menuSectionTitle = String((node.data as any)?.menuSectionTitle || '').trim() || 'Finalização';
             node.data.endOptions = coerceEndOptionListForEditor((node.data as any)?.endOptions);
         }
 

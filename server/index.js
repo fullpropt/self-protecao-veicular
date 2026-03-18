@@ -10709,11 +10709,11 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
             const sectionsInput = options.listSections || options.sections || [];
             const sections = normalizeListSectionsForSend(sectionsInput, lead, renderedTextMessage);
             if (sections.length === 0) {
-                throw new Error('Mensagem de menu sem opcoes validas');
+                throw new Error('Mensagem de menu sem opções válidas');
             }
 
             const fallbackText = buildInlineListFallbackText(
-                renderedTextMessage || 'Selecione uma opcao:',
+                renderedTextMessage || 'Selecione uma opção:',
                 sections
             );
             result = await session.socket.sendMessage(jid, { text: fallbackText });
@@ -11074,7 +11074,7 @@ function sessionExists(sessionId) {
 
         if (mediaType === 'list') {
             content = buildInlineListFallbackText(
-                content || 'Escolha uma opcao no menu abaixo:',
+                content || 'Escolha uma opção no menu abaixo:',
                 listSections
             );
             mediaType = 'text';

@@ -50,7 +50,7 @@ function createFlowMenuTextService(options = {}) {
                 : '';
 
             normalizedSections.push({
-                title: sectionTitle || `Opcoes ${normalizedSections.length + 1}`,
+                title: sectionTitle || `Opções ${normalizedSections.length + 1}`,
                 rows
             });
         }
@@ -78,8 +78,8 @@ function createFlowMenuTextService(options = {}) {
     }
 
     function buildInlineListFallbackText(description = '', sections = []) {
-        const prompt = String(description || '').trim() || 'Escolha uma opcao no menu abaixo:';
-        const lines = [prompt, ''];
+        const prompt = String(description || '').trim() || 'Escolha uma opção no menu abaixo:';
+        const numberedLines = [];
         let index = 1;
 
         for (const section of (Array.isArray(sections) ? sections : [])) {
@@ -87,14 +87,18 @@ function createFlowMenuTextService(options = {}) {
             for (const row of rows) {
                 const title = String(row?.title || '').trim();
                 if (!title) continue;
-                lines.push(`${index}. ${title}`);
+                numberedLines.push(`${index}. ${title}`);
                 index += 1;
             }
         }
 
-        if (index > 1) {
+        const lines = [prompt];
+        if (numberedLines.length > 0) {
             lines.push('');
-            lines.push('Responda com o numero da opcao.');
+            lines.push('*Opções disponíveis:*');
+            lines.push(...numberedLines);
+            lines.push('');
+            lines.push('_Responda com o número da opção desejada._');
         }
 
         return lines.join('\n').trim();
