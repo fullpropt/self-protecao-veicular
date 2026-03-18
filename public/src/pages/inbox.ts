@@ -36,6 +36,12 @@ type ChatMessage = {
     media_filename?: string;
 };
 
+type NotificationPreferences = {
+    notifyNewLead: boolean;
+    notifyNewMessage: boolean;
+    notifySound: boolean;
+};
+
 type ConversationsResponse = { conversations?: Array<Record<string, any>> };
 type MessagesResponse = { messages?: Array<Record<string, any>> };
 type InboxLeadsResponse = { leads?: Array<Record<string, any>>; total?: number };
@@ -148,6 +154,13 @@ const INBOX_SEARCH_CONTACTS_BATCH_SIZE = 200;
 const INBOX_SEARCH_CONTACTS_MAX_PAGES = 20;
 const INBOX_NEW_CONVERSATION_PREVIEW = 'Clique para iniciar uma nova conversa';
 const INBOX_START_CONVERSATION_MAX_RESULTS = 300;
+const LEGACY_SETTINGS_STORAGE_KEY = 'selfSettings';
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+    notifyNewLead: true,
+    notifyNewMessage: true,
+    notifySound: true
+};
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', is_default: true, source: 'name' },
@@ -272,6 +285,68 @@ function buildOwnerFallbackSessionId(ownerUserId: unknown, fallback = 'default_w
         return fallback;
     }
     return `owner_${Math.floor(parsedOwnerUserId)}_session`;
+}
+
+function parseNotificationFlag(value: unknown, fallback: boolean) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value > 0;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+    }
+    return fallback;
+}
+
+function getSettingsStorageKeyCandidates() {
+    const ownerUserId = getOwnerUserIdFromSessionToken();
+    const keys: string[] = [];
+
+    if (ownerUserId > 0) {
+        keys.push(`self_settings_owner_${ownerUserId}`);
+    }
+
+    keys.push(LEGACY_SETTINGS_STORAGE_KEY);
+    return Array.from(new Set(keys));
+}
+
+function readStoredSettingsForNotifications() {
+    for (const storageKey of getSettingsStorageKeyCandidates()) {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) continue;
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return parsed as Record<string, unknown>;
+            }
+        } catch (_) {
+            // Ignore malformed payload and try next candidate key.
+        }
+    }
+    return null;
+}
+
+function getNotificationPreferences(): NotificationPreferences {
+    const storedSettings = readStoredSettingsForNotifications();
+    const notifications = (storedSettings && typeof storedSettings === 'object')
+        ? ((storedSettings as any).notifications || {})
+        : {};
+
+    return {
+        notifyNewLead: parseNotificationFlag(notifications.notifyNewLead, DEFAULT_NOTIFICATION_PREFERENCES.notifyNewLead),
+        notifyNewMessage: parseNotificationFlag(notifications.notifyNewMessage, DEFAULT_NOTIFICATION_PREFERENCES.notifyNewMessage),
+        notifySound: parseNotificationFlag(notifications.notifySound, DEFAULT_NOTIFICATION_PREFERENCES.notifySound)
+    };
+}
+
+function playNotificationSound() {
+    try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleQoAHIvO7bqVNQAAEYHJ8cSqRwAABnfE9M6zVQAAA3HB9tO4XQAAAGy+99e8YwAAAGi8+Nm/ZwAAAGW6+du/aQAAAGO5+ty/agAAAGK4+t2/awAAAGG3+96/bAAAAGC2++C/bQAAAF+1++G/bgAAAF60++K/bwAAAF2z++O/cAAAAFyy++S/cQAAAFux++W/cgAAAFqw++a/cwAAAGWv++e/dAAAAFiu++i/dQAAAFet++m/dgAAAFas++q/dwAAAFWr++u/eAAAAFSq++y/eQAAAFOp++2/egAAAFKo++6/ewAAAFGn+++/fAAAAFCm+/C/fQAAAE+l+/G/fgAAAE6k+/K/fwAAAE2j+/O/gAAAAEyi+/S/gQAAAEuh+/W/ggAAAEqg+/a/gwAAAEmf+/e/hAAAAEie+/i/hQAAAEed+/m/hgAAAEac+/q/hwAAAEWb+/u/iAAAAESa+/y/iQAAAEOZ+/2/igAAAEKY+/6/iwAAAEGX+/+/jAAAAECW/AC/jQAAAD+V/AG/jgAAAD6U/AK/jwAAAD2T/AO/kAAAADyS/AS/kQAAADuR/AW/kgAAADqQ/Aa/kwAAADmP/Ae/lAAAADiO/Ai/lQAAADeN/Am/lgAAADaM/Aq/lwAAADWL/Au/mAAAADSK/Ay/mQAAADOJ/A2/mgAAADKI/A6/mwAAADGH/A+/nAAAADCG/BC/nQAAAC+F/BG/ngAAAC6E/BK/nwAAAC2D/BO/oAAAACyC/BS/oQAAAC');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+    } catch (_) {
+        // best-effort
+    }
 }
 
 function getStoredInboxSessionFilter() {
@@ -1728,7 +1803,21 @@ function initSocket() {
             const incomingConversationId = Number(data?.conversationId || 0);
             const incomingLeadId = Number(data?.leadId || 0);
             const incomingSessionId = sanitizeSessionId(data?.sessionId || data?.session_id || '');
-            const isFromMe = Boolean(data?.isFromMe);
+            const isFromMe = parseNotificationFlag(data?.isFromMe ?? data?.is_from_me, false);
+            const hadConversationBefore = conversations.some((conversation) => {
+                const conversationId = Number(conversation?.id || 0);
+                if (incomingConversationId > 0 && conversationId === incomingConversationId) {
+                    return true;
+                }
+
+                const leadId = Number(conversation?.leadId || 0);
+                if (!(incomingLeadId > 0 && leadId === incomingLeadId)) {
+                    return false;
+                }
+
+                if (!incomingSessionId) return true;
+                return resolveConversationSessionId(conversation) === incomingSessionId;
+            });
             const isCurrent =
                 currentConversation &&
                 (
@@ -1740,6 +1829,38 @@ function initSocket() {
                         && incomingSessionId === resolveConversationSessionId(currentConversation)
                     )
                 );
+
+            if (!isFromMe) {
+                const notificationPreferences = getNotificationPreferences();
+                const isNewLeadMessage = !hadConversationBefore;
+                const leadLabel = String(
+                    data?.leadName
+                    || data?.pushName
+                    || currentConversation?.name
+                    || data?.fromNumber
+                    || data?.from
+                    || 'Contato'
+                ).trim();
+                const incomingText = String(data?.text || '').trim();
+
+                if (isNewLeadMessage && notificationPreferences.notifyNewLead) {
+                    showToast('info', 'Novo lead', `${leadLabel} enviou uma mensagem`);
+                }
+
+                if (
+                    notificationPreferences.notifyNewMessage
+                    && !isCurrent
+                    && !(isNewLeadMessage && notificationPreferences.notifyNewLead)
+                ) {
+                    const preview = incomingText || 'Nova mensagem recebida';
+                    showToast('info', 'Nova mensagem', `${leadLabel}: ${preview}`);
+                }
+
+                if (notificationPreferences.notifyNewMessage && notificationPreferences.notifySound) {
+                    playNotificationSound();
+                }
+            }
+
             if (isCurrent) {
                 const mediaType = String(data.mediaType || data.media_type || 'text');
                 const mediaUrl = data.mediaUrl || data.media_url || null;

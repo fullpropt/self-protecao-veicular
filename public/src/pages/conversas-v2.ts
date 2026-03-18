@@ -64,6 +64,7 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
     notifyNewMessage: true,
     notifySound: true
 };
+const LEGACY_SETTINGS_STORAGE_KEY = 'selfSettings';
 
 function getOwnerUserIdFromSessionToken() {
     const token = String(sessionStorage.getItem('selfDashboardToken') || '').trim();
@@ -101,22 +102,45 @@ function parseNotificationFlag(value: unknown, fallback: boolean) {
     return fallback;
 }
 
-function getNotificationPreferences(): NotificationPreferences {
-    try {
-        const raw = localStorage.getItem('selfSettings');
-        if (!raw) return { ...DEFAULT_NOTIFICATION_PREFERENCES };
-        const parsed = JSON.parse(raw);
-        const notifications = (parsed && typeof parsed === 'object')
-            ? (parsed.notifications || {})
-            : {};
-        return {
-            notifyNewLead: parseNotificationFlag(notifications.notifyNewLead, DEFAULT_NOTIFICATION_PREFERENCES.notifyNewLead),
-            notifyNewMessage: parseNotificationFlag(notifications.notifyNewMessage, DEFAULT_NOTIFICATION_PREFERENCES.notifyNewMessage),
-            notifySound: parseNotificationFlag(notifications.notifySound, DEFAULT_NOTIFICATION_PREFERENCES.notifySound)
-        };
-    } catch (_) {
-        return { ...DEFAULT_NOTIFICATION_PREFERENCES };
+function getSettingsStorageKeyCandidates() {
+    const ownerUserId = getOwnerUserIdFromSessionToken();
+    const keys: string[] = [];
+
+    if (ownerUserId > 0) {
+        keys.push(`self_settings_owner_${ownerUserId}`);
     }
+
+    keys.push(LEGACY_SETTINGS_STORAGE_KEY);
+    return Array.from(new Set(keys));
+}
+
+function readStoredSettingsForNotifications() {
+    for (const storageKey of getSettingsStorageKeyCandidates()) {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) continue;
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return parsed as Record<string, unknown>;
+            }
+        } catch (_) {
+            // Ignore malformed payload and try next candidate key.
+        }
+    }
+    return null;
+}
+
+function getNotificationPreferences(): NotificationPreferences {
+    const storedSettings = readStoredSettingsForNotifications();
+    const notifications = (storedSettings && typeof storedSettings === 'object')
+        ? ((storedSettings as any).notifications || {})
+        : {};
+
+    return {
+        notifyNewLead: parseNotificationFlag(notifications.notifyNewLead, DEFAULT_NOTIFICATION_PREFERENCES.notifyNewLead),
+        notifyNewMessage: parseNotificationFlag(notifications.notifyNewMessage, DEFAULT_NOTIFICATION_PREFERENCES.notifyNewMessage),
+        notifySound: parseNotificationFlag(notifications.notifySound, DEFAULT_NOTIFICATION_PREFERENCES.notifySound)
+    };
 }
 
 function getSessionId() {
@@ -558,18 +582,35 @@ function handleNewMessage(message: SocketMessage) {
     }
     
     const notificationPreferences = getNotificationPreferences();
+    const isCurrentContactMessage = Boolean(
+        currentContact
+        && (
+            currentContact.jid === message.from
+            || currentContact.number === message.fromNumber
+        )
+    );
+    const isNewLeadMessage = !message.isFromMe && contactIndex < 0;
+    const leadLabel = String(message.pushName || message.fromNumber || message.from || 'Contato').trim();
 
     // Notificacao de novo lead
-    if (!message.isFromMe && contactIndex < 0 && notificationPreferences.notifyNewLead) {
-        const leadLabel = String(message.pushName || message.fromNumber || message.from || 'Contato').trim();
+    if (isNewLeadMessage && notificationPreferences.notifyNewLead) {
         showToast('info', 'Novo lead', `${leadLabel} enviou uma mensagem`);
     }
 
+    // Notificacao visual de nova mensagem
+    if (
+        !message.isFromMe
+        && notificationPreferences.notifyNewMessage
+        && !isCurrentContactMessage
+        && !(isNewLeadMessage && notificationPreferences.notifyNewLead)
+    ) {
+        const preview = String(message.text || '').trim() || 'Nova mensagem recebida';
+        showToast('info', 'Nova mensagem', `${leadLabel}: ${preview}`);
+    }
+
     // Notificacao sonora
-    if (!message.isFromMe) {
-        if (notificationPreferences.notifyNewMessage && notificationPreferences.notifySound) {
-            playNotificationSound();
-        }
+    if (!message.isFromMe && notificationPreferences.notifyNewMessage && notificationPreferences.notifySound) {
+        playNotificationSound();
     }
 }
 
