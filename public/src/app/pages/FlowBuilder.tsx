@@ -1608,6 +1608,10 @@ export default function FlowBuilder() {
             justify-content: flex-start;
         }
 
+        .flow-whatsapp-preview-row-outgoing {
+            justify-content: flex-end;
+        }
+
         .flow-whatsapp-preview-bubble {
             position: relative;
             max-width: 88%;
@@ -1616,6 +1620,16 @@ export default function FlowBuilder() {
             padding: 12px 14px 18px;
             box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
             color: #0f172a;
+        }
+
+        .flow-whatsapp-preview-bubble-outgoing {
+            border-radius: 18px 18px 6px 18px;
+            background: #dcf8c6;
+            min-width: 78px;
+        }
+
+        .flow-whatsapp-preview-bubble-outgoing .flow-whatsapp-preview-bubble-time {
+            right: 10px;
         }
 
         .flow-whatsapp-preview-bubble-title {
@@ -1722,10 +1736,21 @@ export default function FlowBuilder() {
         .flow-whatsapp-preview-sheet-item {
             padding: 12px 14px;
             border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
         }
 
         .flow-whatsapp-preview-sheet-item:last-child {
             border-bottom: none;
+        }
+
+        .flow-whatsapp-preview-sheet-item-index {
+            min-width: 18px;
+            font-size: 13px;
+            line-height: 1.4;
+            font-weight: 800;
+            color: #128c7e;
         }
 
         .flow-whatsapp-preview-sheet-item-title {
@@ -1738,6 +1763,14 @@ export default function FlowBuilder() {
             padding: 14px;
             font-size: 13px;
             color: var(--gray);
+        }
+
+        .flow-whatsapp-preview-sheet-tip {
+            padding: 10px 14px;
+            border-top: 1px solid rgba(148, 163, 184, 0.14);
+            font-size: 11px;
+            color: #0f766e;
+            background: rgba(18, 140, 126, 0.06);
         }
 
         .flow-preview-helper-card,

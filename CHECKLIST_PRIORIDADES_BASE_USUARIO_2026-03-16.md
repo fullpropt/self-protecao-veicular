@@ -76,13 +76,14 @@ Status do bloco: [x] Concluido
 
 - [~] Quebra de `server/index.js` por dominio iniciada.
   Evidencia: extraidos blocos de observabilidade/alertas para `server/services/opsMonitoringService.js`, de menu textual para `server/services/flowMenuTextService.js` e o pipeline de automacao inbound para `server/services/inboundMessagePipelineService.js`, com `server/index.js` usando wrappers.
-- [ ] Quebra de `server/database/models.js` por modulo de dominio.
+- [~] Quebra de `server/database/models.js` por modulo de dominio iniciada.
+  Evidencia: extraidos modulos `server/database/models/leadModel.js`, `server/database/models/conversationModel.js`, `server/database/models/messageModel.js`, `server/database/models/automationModel.js`, `server/database/models/flowModel.js`, `server/database/models/customEventModel.js`, `server/database/models/messageQueueModel.js`, `server/database/models/tagModel.js`, `server/database/models/incomingWebhookCredentialModel.js`, `server/database/models/webhookModel.js` e `server/database/models/webhookDeliveryQueueModel.js`, mantendo `server/database/models.js` como fachada de export; em 2026-03-18 foram extraidos helpers adicionais para `server/database/models/helpers/leadModelHelpers.js`, `server/database/models/helpers/flowModelHelpers.js`, `server/database/models/helpers/scalarHelpers.js` e `server/database/models/helpers/incomingWebhookSecretHelpers.js`.
 
 Evidencia atual:
-- `server/index.js` com ~17495 linhas.
-- `server/database/models.js` com ~4553 linhas.
+- `server/index.js` com ~17463 linhas.
+- `server/database/models.js` com ~450 linhas.
 
-Status do bloco: [~] Parcial inicial
+Status do bloco: [~] Parcial (avanco consistente)
 
 ## P2 - Escala estrutural
 
@@ -113,6 +114,6 @@ Status do bloco: [~] Parcial baixo
 - Blocos nao iniciados: 0/7
 
 Proximo foco recomendado:
-1. Iniciar P1 Refatoracao incremental (`server/index.js` e `server/database/models.js` por dominio).
+1. Continuar P1 Refatoracao incremental (proximo recorte de `server/index.js` por dominio, com `server/database/models.js` ja enxuto).
 2. Avancar P2 Escala estrutural com separacao formal de worker dedicado por servico.
 3. Evoluir P2 Produto/expansao com onboarding guiado e feature flags por tenant.

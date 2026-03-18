@@ -53,6 +53,7 @@ const {
     Flow,
     CustomEvent,
     Tag,
+    Webhook,
     IncomingWebhookCredential,
     Settings,
     User,
@@ -73,13 +74,13 @@ const queueService = require('./services/queueService');
 
 const flowService = require('./services/flowService');
 const aiFlowDraftService = require('./services/aiFlowDraftService');
-const openAiFlowDraftService = require('./services/openAiFlowDraftService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
 const { createOpsMonitoringService } = require('./services/opsMonitoringService');
 const { createFlowMenuTextService } = require('./services/flowMenuTextService');
 const { createInboundMessagePipelineService } = require('./services/inboundMessagePipelineService');
+const { createIncomingWebhookService } = require('./services/incomingWebhookService');
 const stripeCheckoutService = require('./services/stripeCheckoutService');
 const pagarmeCheckoutService = require('./services/pagarmeCheckoutService');
 const planLimitsService = require('./services/planLimitsService');
@@ -151,6 +152,17 @@ const {
     validateStripeWebhook,
     validatePagarmeWebhook
 } = require('./middleware/validator');
+const { createAdminAuditRoutes } = require('./routes/adminAuditRoutes');
+const { createAdminDashboardRoutes } = require('./routes/adminDashboardRoutes');
+const { createAutomationRoutes } = require('./routes/automationRoutes');
+const { createContactFieldRoutes } = require('./routes/contactFieldRoutes');
+const { createFlowRoutes } = require('./routes/flowRoutes');
+const { createMessageRoutes } = require('./routes/messageRoutes');
+const { createQueueRoutes } = require('./routes/queueRoutes');
+const { createSettingsRoutes } = require('./routes/settingsRoutes');
+const { createTagRoutes } = require('./routes/tagRoutes');
+const { createTemplateRoutes } = require('./routes/templateRoutes');
+const { createWebhookRoutes } = require('./routes/webhookRoutes');
 
 
 
@@ -210,6 +222,15 @@ const APP_BRAND_NAME = 'ZapVender';
 const WHATSAPP_BROWSER_VERSION = '120.0.0';
 const WHATSAPP_BROWSER_NAME_MAX_LENGTH = 40;
 const BUSINESS_HOURS_CACHE_TTL_MS = 30000;
+
+const incomingWebhookService = createIncomingWebhookService({
+    IncomingWebhookCredential,
+    normalizeOwnerUserId,
+    normalizeImportedLeadPhone,
+    parsePositiveIntInRange,
+    parseLeadTagsForMerge,
+    parseLeadCustomFields
+});
 const OUTSIDE_HOURS_AUTO_REPLY_COOLDOWN_MS = 30 * 60 * 1000;
 const DEFAULT_BUSINESS_HOURS_AUTO_REPLY = 'Ol\u00E1! Nosso atendimento est\u00E1 fora do hor\u00E1rio de funcionamento no momento. Retornaremos assim que estivermos online.';
 const LEAD_AVATAR_SYNC_TTL_MS = parseInt(process.env.LEAD_AVATAR_SYNC_TTL_MS || '', 10) || (6 * 60 * 60 * 1000);
@@ -1546,7 +1567,7 @@ async function bootstrapDatabase() {
         }
 
         try {
-            await ensureLegacyIncomingWebhookCredentialBridge();
+            await incomingWebhookService.ensureLegacyIncomingWebhookCredentialBridge();
         } catch (incomingWebhookBridgeError) {
             console.error('[IncomingWebhook] Falha ao sincronizar credencial legada:', incomingWebhookBridgeError.message);
         }
@@ -10687,11 +10708,11 @@ async function sendMessage(sessionId, to, message, type = 'text', options = {}) 
             const sectionsInput = options.listSections || options.sections || [];
             const sections = normalizeListSectionsForSend(sectionsInput, lead, renderedTextMessage);
             if (sections.length === 0) {
-                throw new Error('Mensagem de menu sem opcoes validas');
+                throw new Error('Mensagem de menu sem opções válidas');
             }
 
             const fallbackText = buildInlineListFallbackText(
-                renderedTextMessage || 'Selecione uma opcao:',
+                renderedTextMessage || 'Selecione uma opção:',
                 sections
             );
             result = await session.socket.sendMessage(jid, { text: fallbackText });
@@ -11052,7 +11073,7 @@ function sessionExists(sessionId) {
 
         if (mediaType === 'list') {
             content = buildInlineListFallbackText(
-                content || 'Escolha uma opcao no menu abaixo:',
+                content || 'Escolha uma opção no menu abaixo:',
                 listSections
             );
             mediaType = 'text';
@@ -14811,128 +14832,12 @@ function normalizeTagColorInput(value) {
     return '#5a2a6b';
 }
 
-const DEFAULT_CONTACT_FIELDS = Object.freeze([
-    {
-        key: 'nome',
-        label: 'Nome',
-        source: 'name',
-        is_default: true,
-        required: true,
-        placeholder: 'Nome completo'
-    },
-    {
-        key: 'telefone',
-        label: 'Telefone',
-        source: 'phone',
-        is_default: true,
-        required: true,
-        placeholder: 'Somente n\u00FAmeros com DDD'
-    },
-    {
-        key: 'email',
-        label: 'Email',
-        source: 'email',
-        is_default: true,
-        required: false,
-        placeholder: 'email@exemplo.com'
-    }
-]);
-
-function normalizeContactFieldLabelInput(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-}
-
-function normalizeContactFieldPlaceholderInput(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-}
-
-function normalizeContactFieldKey(value) {
-    return String(value || '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '')
-        .slice(0, 40);
-}
-
-function sanitizeContactFieldDefinition(rawField) {
-    if (!rawField || typeof rawField !== 'object' || Array.isArray(rawField)) return null;
-
-    const label = normalizeContactFieldLabelInput(rawField.label || rawField.name || rawField.key);
-    const key = normalizeContactFieldKey(rawField.key || label);
-    if (!label || !key || key === '__system') return null;
-    if (DEFAULT_CONTACT_FIELDS.some((field) => field.key === key)) return null;
-
-    return {
-        key,
-        label,
-        placeholder: normalizeContactFieldPlaceholderInput(rawField.placeholder)
-    };
-}
-
-function sanitizeStoredContactFields(rawValue) {
-    const sourceList = Array.isArray(rawValue)
-        ? rawValue
-        : (rawValue && typeof rawValue === 'object' && Array.isArray(rawValue.fields) ? rawValue.fields : []);
-
-    const dedupe = new Set();
-    const result = [];
-
-    for (const item of sourceList) {
-        const sanitized = sanitizeContactFieldDefinition(item);
-        if (!sanitized) continue;
-        if (dedupe.has(sanitized.key)) continue;
-        dedupe.add(sanitized.key);
-        result.push(sanitized);
-    }
-
-    return result;
-}
-
-async function getContactFieldConfig(ownerUserId = null) {
-    const settingsKey = buildScopedSettingsKey('contact_data_fields', ownerUserId);
-    const raw = await Settings.get(settingsKey);
-    const customFields = sanitizeStoredContactFields(raw);
-    const defaultFields = DEFAULT_CONTACT_FIELDS.map((field) => ({ ...field }));
-    const fields = [
-        ...defaultFields,
-        ...customFields.map((field) => ({
-            ...field,
-            source: 'custom',
-            is_default: false,
-            required: false
-        }))
-    ];
-
-    return { fields, defaultFields, customFields };
-}
-
-app.get('/api/contact-fields', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const payload = await getContactFieldConfig(ownerScopeUserId);
-        res.json({ success: true, ...payload });
-    } catch (error) {
-        console.error('Falha ao carregar campos de contato:', error);
-        res.status(500).json({ success: false, error: 'Erro ao carregar campos de contato' });
-    }
-});
-
-app.put('/api/contact-fields', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const settingsKey = buildScopedSettingsKey('contact_data_fields', ownerScopeUserId);
-        const incoming = Array.isArray(req.body?.fields) ? req.body.fields : [];
-        const customFields = sanitizeStoredContactFields(incoming);
-        await Settings.set(settingsKey, customFields, 'json');
-        const payload = await getContactFieldConfig(ownerScopeUserId);
-        res.json({ success: true, ...payload });
-    } catch (error) {
-        console.error('Falha ao salvar campos de contato:', error);
-        res.status(500).json({ success: false, error: 'Erro ao salvar campos de contato' });
-    }
-});
+app.use(createContactFieldRoutes({
+    authenticate,
+    resolveRequesterOwnerUserId,
+    buildScopedSettingsKey,
+    Settings
+}));
 
 // API DE LEADS
 
@@ -16892,218 +16797,22 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
 
 // ============================================
 
-async function listCampaignsWithTagFilterInScope(ownerScopeUserId = null) {
-    const normalizedOwnerScopeUserId = normalizeOwnerUserId(ownerScopeUserId);
-    const params = [];
-    let sql = `
-        SELECT c.id, c.tag_filter
-        FROM campaigns c
-        WHERE c.tag_filter IS NOT NULL
-          AND TRIM(c.tag_filter) <> ''
-    `;
-
-    if (normalizedOwnerScopeUserId) {
-        sql += `
-          AND (
-              c.created_by = ?
-              OR EXISTS (
-                  SELECT 1
-                  FROM users owner_scope
-                  WHERE owner_scope.id = c.created_by
-                    AND (owner_scope.owner_user_id = ? OR owner_scope.id = ?)
-              )
-          )
-        `;
-        params.push(normalizedOwnerScopeUserId, normalizedOwnerScopeUserId, normalizedOwnerScopeUserId);
-    }
-
-    return await query(sql, params);
-}
-
-async function rewriteCampaignTagFiltersByTagName(currentTagName, nextTagName = null, ownerScopeUserId = null) {
-    const currentTagKey = normalizeCampaignTag(currentTagName);
-    if (!currentTagKey) return;
-
-    const normalizedNextTagName = normalizeCampaignTagLabel(nextTagName);
-    const campaigns = await listCampaignsWithTagFilterInScope(ownerScopeUserId);
-
-    for (const campaign of campaigns || []) {
-        const existingFilters = parseCampaignTagFilters(campaign?.tag_filter);
-        if (!existingFilters.length) continue;
-
-        let hasChanges = false;
-        const seen = new Set();
-        const nextFilters = [];
-
-        for (const tagName of existingFilters) {
-            const tagKey = normalizeCampaignTag(tagName);
-            if (!tagKey) continue;
-
-            if (tagKey === currentTagKey) {
-                hasChanges = true;
-                if (normalizedNextTagName) {
-                    const normalizedNextTagKey = normalizeCampaignTag(normalizedNextTagName);
-                    if (normalizedNextTagKey && !seen.has(normalizedNextTagKey)) {
-                        seen.add(normalizedNextTagKey);
-                        nextFilters.push(normalizedNextTagName);
-                    }
-                }
-                continue;
-            }
-
-            if (seen.has(tagKey)) continue;
-            seen.add(tagKey);
-            nextFilters.push(tagName);
-        }
-
-        if (!hasChanges) continue;
-
-        await run(
-            `UPDATE campaigns
-             SET tag_filter = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?`,
-            [normalizeCampaignTagFilterInput(nextFilters), campaign.id]
-        );
-    }
-}
-
-app.get('/api/tags', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const tagScope = {
-            owner_user_id: ownerScopeUserId || undefined
-        };
-
-        try {
-            await Tag.syncFromLeads(tagScope);
-        } catch (syncError) {
-            console.warn('Falha ao sincronizar tags a partir dos leads:', syncError);
-        }
-        const tags = await Tag.list(tagScope);
-        res.json({ success: true, tags });
-    } catch (error) {
-        console.error('Falha ao listar tags:', error);
-        res.status(500).json({ success: false, error: 'Erro ao carregar tags' });
-    }
-});
-
-app.post('/api/tags', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const requesterUserId = getRequesterUserId(req);
-        const tagScope = {
-            owner_user_id: ownerScopeUserId || undefined
-        };
-        const name = normalizeTagNameInput(req.body?.name);
-        const color = normalizeTagColorInput(req.body?.color);
-        const description = normalizeTagDescriptionInput(req.body?.description);
-
-        if (!name) {
-            return res.status(400).json({ success: false, error: 'Nome da tag Ã© obrigatÃ³rio' });
-        }
-
-        const existing = await Tag.findByName(name, tagScope);
-        if (existing) {
-            return res.status(409).json({ success: false, error: 'JÃ¡ existe uma tag com este nome' });
-        }
-
-        const tag = await Tag.create(
-            { name, color, description, created_by: requesterUserId || undefined },
-            { ...tagScope, created_by: requesterUserId || undefined }
-        );
-        res.status(201).json({ success: true, tag });
-    } catch (error) {
-        console.error('Falha ao criar tag:', error);
-        res.status(500).json({ success: false, error: 'Erro ao criar tag' });
-    }
-});
-
-app.put('/api/tags/:id', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const tagScope = {
-            owner_user_id: ownerScopeUserId || undefined
-        };
-        const tagId = parseInt(req.params.id, 10);
-        if (!Number.isInteger(tagId) || tagId <= 0) {
-            return res.status(400).json({ success: false, error: 'ID de tag invÃ¡lido' });
-        }
-
-        const currentTag = await Tag.findById(tagId, tagScope);
-        if (!currentTag) {
-            return res.status(404).json({ success: false, error: 'Tag nÃ£o encontrada' });
-        }
-
-        const payload = {};
-        if (Object.prototype.hasOwnProperty.call(req.body, 'name')) {
-            const nextName = normalizeTagNameInput(req.body.name);
-            if (!nextName) {
-                return res.status(400).json({ success: false, error: 'Nome da tag Ã© obrigatÃ³rio' });
-            }
-
-            const duplicate = await Tag.findByName(nextName, tagScope);
-            if (duplicate && Number(duplicate.id) !== tagId) {
-                return res.status(409).json({ success: false, error: 'JÃ¡ existe uma tag com este nome' });
-            }
-            payload.name = nextName;
-        }
-        if (Object.prototype.hasOwnProperty.call(req.body, 'color')) {
-            payload.color = normalizeTagColorInput(req.body.color);
-        }
-        if (Object.prototype.hasOwnProperty.call(req.body, 'description')) {
-            payload.description = normalizeTagDescriptionInput(req.body.description);
-        }
-
-        const updatedTag = await Tag.update(tagId, payload, tagScope);
-        if (!updatedTag) {
-            return res.status(404).json({ success: false, error: 'Tag nÃ£o encontrada' });
-        }
-
-        if (
-            payload.name &&
-            normalizeTagNameInput(currentTag.name).toLowerCase() !== normalizeTagNameInput(updatedTag.name).toLowerCase()
-        ) {
-            await Tag.renameInLeads(currentTag.name, updatedTag.name, tagScope);
-            await rewriteCampaignTagFiltersByTagName(currentTag.name, updatedTag.name, ownerScopeUserId || null);
-        }
-
-        res.json({ success: true, tag: updatedTag });
-    } catch (error) {
-        console.error('Falha ao atualizar tag:', error);
-        res.status(500).json({ success: false, error: 'Erro ao atualizar tag' });
-    }
-});
-
-app.delete('/api/tags/:id', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const tagScope = {
-            owner_user_id: ownerScopeUserId || undefined
-        };
-        const tagId = parseInt(req.params.id, 10);
-        if (!Number.isInteger(tagId) || tagId <= 0) {
-            return res.status(400).json({ success: false, error: 'ID de tag invÃ¡lido' });
-        }
-
-        const currentTag = await Tag.findById(tagId, tagScope);
-        if (!currentTag) {
-            return res.status(404).json({ success: false, error: 'Tag nÃ£o encontrada' });
-        }
-
-        const deleted = await Tag.delete(tagId, tagScope);
-        if (!deleted) {
-            return res.status(404).json({ success: false, error: 'Tag nao encontrada' });
-        }
-
-        await Tag.removeFromLeads(currentTag.name, tagScope);
-        await rewriteCampaignTagFiltersByTagName(currentTag.name, null, ownerScopeUserId || null);
-
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Falha ao remover tag:', error);
-        res.status(500).json({ success: false, error: 'Erro ao remover tag' });
-    }
-});
+app.use(createTagRoutes({
+    authenticate,
+    Tag,
+    query,
+    run,
+    normalizeOwnerUserId,
+    normalizeCampaignTag,
+    normalizeCampaignTagLabel,
+    parseCampaignTagFilters,
+    normalizeCampaignTagFilterInput,
+    resolveRequesterOwnerUserId,
+    getRequesterUserId,
+    normalizeTagNameInput,
+    normalizeTagColorInput,
+    normalizeTagDescriptionInput
+}));
 
 
 
@@ -17113,513 +16822,39 @@ app.delete('/api/tags/:id', authenticate, async (req, res) => {
 
 // ============================================
 
-
-
-app.get('/api/conversations', authenticate, async (req, res) => {
-    const { status, assigned_to, session_id, limit, offset } = req.query;
-    const scopedUserId = getScopedUserId(req);
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const requestedAssignedTo = assigned_to ? parseInt(assigned_to) : undefined;
-    const resolvedAssignedTo = scopedUserId || requestedAssignedTo;
-    const conversations = await Conversation.list({
-        status,
-        assigned_to: resolvedAssignedTo,
-        owner_user_id: ownerScopeUserId || undefined,
-        session_id,
-        limit: limit ? parseInt(limit) : 100,
-        offset: offset ? parseInt(offset) : 0
-    });
-    const lastMessages = await Message.getLastMessagesByConversationIds(
-        conversations.map((conversation) => conversation.id)
-    );
-    const lastMessageByConversationId = new Map(
-        lastMessages.map((message) => [Number(message.conversation_id), message])
-    );
-
-    const previewForMedia = (mediaType) => {
-        switch (mediaType) {
-            case 'image':
-                return '[imagem]';
-            case 'video':
-                return '[video]';
-            case 'audio':
-                return '[audio]';
-            case 'document':
-                return '[documento]';
-            case 'sticker':
-                return '[sticker]';
-            default:
-                return '[mensagem]';
-        }
-    };
-
-    const normalizePhoneSuffix = (value) => {
-        if (!value) return '';
-        const digits = String(value).replace(/\D/g, '');
-        if (!digits) return '';
-        return digits.length >= 11 ? digits.slice(-11) : digits;
-    };
-
-    const normalized = conversations.map((c) => {
-        const lastMessage = lastMessageByConversationId.get(Number(c.id)) || null;
-        const decrypted = resolveMessageContentWithFallback(lastMessage);
-
-        let metadata = {};
-        try {
-            metadata = c?.metadata ? JSON.parse(c.metadata) : {};
-        } catch (_) {
-            metadata = {};
-        }
-        const metadataLastMessage = normalizeText(metadata?.last_message || '');
-        const metadataLastMessageAt = normalizeText(metadata?.last_message_at || '');
-        const lastMessageWasFromMe = Boolean(lastMessage?.is_from_me);
-        const unreadCount = lastMessageWasFromMe ? 0 : Math.max(0, Number(c?.unread_count || 0));
-
-        const lastMessageText =
-            (decrypted || '').trim() ||
-            (lastMessage ? previewForMedia(lastMessage.media_type) : '') ||
-            metadataLastMessage ||
-            (unreadCount > 0 ? '[mensagem recebida]' : '');
-
-        const lastMessageAt =
-            lastMessage?.sent_at ||
-            lastMessage?.created_at ||
-            metadataLastMessageAt ||
-            c?.updated_at ||
-            c?.created_at ||
-            null;
-
-        const leadCustomFields = parseLeadCustomFields(c?.lead_custom_fields);
-        const avatarUrl = normalizeLeadAvatarUrl(
-            leadCustomFields?.[LEAD_AVATAR_CUSTOM_FIELD_KEY] || leadCustomFields?.avatarUrl
-        );
-
-        let name = normalizeText(c.lead_name);
-        const sessionPhone = getSessionPhone(c.session_id);
-        const phoneDigits = normalizePhoneDigits(c.phone);
-        const sessionDigits = normalizePhoneDigits(sessionPhone);
-        if (isSelfPhone(phoneDigits, sessionDigits)) {
-            const sessionName = normalizeText(getSessionDisplayName(c.session_id) || 'UsuÃ¡rio');
-            name = sessionName ? `${sessionName} (VocÃª)` : 'VocÃª';
-        }
-
-        return {
-            ...c,
-            unread: unreadCount,
-            lastMessage: normalizeText(lastMessageText),
-            lastMessageAt,
-            name,
-            phone: c.phone,
-            avatar_url: avatarUrl || null
-        };
-    }).filter((conv) => {
-        if (!conv.lastMessageAt && !conv.lastMessage && Number(conv?.unread || 0) <= 0) {
-            return false;
-        }
-        return true;
-    });
-
-    const deduped = new Map();
-    for (const conv of normalized) {
-        const phoneKey = normalizePhoneSuffix(conv.phone);
-        const sessionKey = sanitizeSessionId(conv.session_id || conv.sessionId || '');
-        const baseKey = phoneKey || String(conv.lead_id || conv.id);
-        const key = sessionKey ? `${sessionKey}::${baseKey}` : baseKey;
-        if (!deduped.has(key)) {
-            deduped.set(key, conv);
-            continue;
-        }
-        const existing = deduped.get(key);
-        const existingTime = existing?.lastMessageAt ? new Date(existing.lastMessageAt).getTime() : 0;
-        const currentTime = conv?.lastMessageAt ? new Date(conv.lastMessageAt).getTime() : 0;
-        if (currentTime >= existingTime) {
-            deduped.set(key, conv);
-        }
-    }
-
-    const sorted = Array.from(deduped.values()).sort((a, b) => {
-        const aTime = a?.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-        const bTime = b?.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-        return bTime - aTime;
-    });
-
-    res.json({ success: true, conversations: sorted });
-});
-
-
-
-
-
-app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
-
-    const conversationId = parseInt(req.params.id, 10);
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-
-    if (!conversationId) {
-
-        return res.status(400).json({ error: 'ID de conversa invalido' });
-
-    }
-
-    try {
-        const conversation = await Conversation.findById(conversationId);
-        const hasAccess = conversation
-            ? await canAccessConversationInOwnerScope(req, conversation, ownerScopeUserId)
-            : false;
-        if (!conversation || !hasAccess) {
-            return res.status(404).json({ error: 'Conversa nao encontrada' });
-        }
-
-        await markConversationAsReadWithMetadata(conversation);
-
-        res.json({ success: true });
-
-    } catch (error) {
-
-        res.status(500).json({ error: error.message });
-
-    }
-
-});
-
-app.post('/api/send', authenticate, validateApiSendRequest, async (req, res) => {
-
-    const validatedPayload = req.validatedData || {};
-    const sessionId = String(validatedPayload.sessionId || req.body?.sessionId || '').trim();
-    const to = validatedPayload.to || req.body?.to;
-    const message = validatedPayload.message || req.body?.message;
-    const type = validatedPayload.type || req.body?.type;
-    const options = req.body?.options;
-    const scopedUserId = getScopedUserId(req);
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-
-    
-
-    if (!sessionId || !to || !message) {
-
-        return res.status(400).json({ error: 'ParÃ¢metros obrigatÃ³rios: sessionId, to, message' });
-
-    }
-
-    
-
-    try {
-        const normalizedSessionId = sanitizeSessionId(sessionId);
-        if (ownerScopeUserId && normalizedSessionId) {
-            const allowedSession = await WhatsAppSession.findBySessionId(normalizedSessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!allowedSession) {
-                return res.status(403).json({ error: 'Sem permissao para usar esta conta WhatsApp' });
-            }
-        }
-
-        const sendOptions = {
-            ...(options || {}),
-            ...(scopedUserId ? { assigned_to: scopedUserId } : {})
-        };
-
-        const result = await sendMessage(sessionId, to, message, type || 'text', sendOptions);
-
-        const responseTimestamp = result?.savedMessage?.sent_at || result?.sentAt || new Date().toISOString();
-        res.json({
-
-            success: true,
-
-            messageId: result.key.id,
-
-            timestamp: responseTimestamp,
-            sentAt: responseTimestamp
-
-        });
-
-    } catch (error) {
-
-        res.status(500).json({ error: error.message });
-
-    }
-
-});
-
-
-
-app.post('/api/messages/send', authenticate, async (req, res) => {
-
-    const { leadId, phone, content, type, options, sessionId } = req.body;
-    const scopedUserId = getScopedUserId(req);
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-
-
-
-    let to = phone;
-
-    if (!to && leadId) {
-
-        const lead = await Lead.findById(leadId);
-        const hasAccess = lead
-            ? await canAccessLeadRecordInOwnerScope(req, lead, ownerScopeUserId)
-            : false;
-        if (!lead || !hasAccess) {
-            return res.status(404).json({ error: 'Lead nao encontrado' });
-        }
-
-        to = lead?.phone;
-
-    }
-
-
-
-    if (!to || !content) {
-
-        return res.status(400).json({ error: 'ParÃ¢metros obrigatÃ³rios: phone/to e content' });
-
-    }
-
-
-
-    try {
-
-        const resolvedSessionId = resolveSessionIdOrDefault(sessionId);
-        if (ownerScopeUserId && resolvedSessionId) {
-            const allowedSession = await WhatsAppSession.findBySessionId(resolvedSessionId, {
-                owner_user_id: ownerScopeUserId
-            });
-            if (!allowedSession) {
-                return res.status(403).json({ error: 'Sem permissao para usar esta conta WhatsApp' });
-            }
-        }
-        const sendOptions = {
-            ...(options || {}),
-            ...(scopedUserId ? { assigned_to: scopedUserId } : {})
-        };
-        const result = await sendMessage(resolvedSessionId, to, content, type || 'text', sendOptions);
-
-        const responseTimestamp = result?.savedMessage?.sent_at || result?.sentAt || new Date().toISOString();
-        res.json({
-
-            success: true,
-
-            messageId: result.key.id,
-
-            timestamp: responseTimestamp,
-            sentAt: responseTimestamp
-
-        });
-
-    } catch (error) {
-
-        res.status(500).json({ error: error.message });
-
-    }
-
-});
-
-
-
-async function countMissingStickerMediaForConversation(conversationId) {
-    const normalizedConversationId = Number(conversationId);
-    if (!Number.isFinite(normalizedConversationId) || normalizedConversationId <= 0) return 0;
-
-    try {
-        const rows = await query(`
-            SELECT COUNT(*) AS total
-            FROM messages
-            WHERE conversation_id = ?
-              AND LOWER(COALESCE(media_type, '')) = 'sticker'
-              AND COALESCE(TRIM(media_url), '') = ''
-        `, [normalizedConversationId]);
-
-        return Math.max(0, Number(rows?.[0]?.total || 0) || 0);
-    } catch (error) {
-        console.warn(`[rehydrate-sticker] Falha ao contar stickers pendentes na conversa ${normalizedConversationId}:`, error.message);
-        return 0;
-    }
-}
-
-app.get('/api/messages/:leadId', authenticate, async (req, res) => {
-    const leadId = Number(req.params.leadId);
-    const limit = parseInt(req.query.limit) || 100;
-    const conversationId = Number(req.query.conversation_id || req.query.conversationId);
-    const hasConversationId = Number.isFinite(conversationId) && conversationId > 0;
-    const sessionId = sanitizeSessionId(req.query.session_id || req.query.sessionId);
-    const contactJid = normalizeJid(req.query.contact_jid || req.query.contactJid);
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-
-    let messages = [];
-    let resolvedConversation = null;
-    let resolvedLead = null;
-
-    if (hasConversationId) {
-        const conversation = await Conversation.findById(conversationId);
-        const conversationSessionId = sanitizeSessionId(conversation?.session_id);
-        if (conversation && (!sessionId || conversationSessionId === sessionId)) {
-            resolvedConversation = conversation;
-        }
-        if (resolvedConversation) {
-            resolvedLead = await Lead.findById(resolvedConversation.lead_id);
-            messages = await Message.listByConversation(resolvedConversation.id, { limit });
-        }
-    } else if (Number.isFinite(leadId) && leadId > 0) {
-        resolvedLead = await Lead.findById(leadId);
-        const conversation = await Conversation.findByLeadId(leadId, sessionId || null);
-        if (conversation) {
-            resolvedConversation = conversation;
-            messages = await Message.listByConversation(conversation.id, { limit });
-        } else {
-            messages = [];
-        }
-    }
-
-    const hasConversationAccess = resolvedConversation
-        ? await canAccessConversationInOwnerScope(req, resolvedConversation, ownerScopeUserId)
-        : false;
-
-    if (resolvedLead && !hasConversationAccess && !(await canAccessAssignedRecordInOwnerScope(req, resolvedLead.assigned_to, ownerScopeUserId))) {
-        return res.status(404).json({ success: false, error: 'Lead nao encontrado' });
-    }
-    if (!resolvedLead && resolvedConversation && !hasConversationAccess) {
-        return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
-    }
-
-    const backfillSessionId = sanitizeSessionId(
-        sessionId || resolvedConversation?.session_id
-    );
-    const hasMissingMedia = messages.some((item) => {
-        const mediaType = String(item?.media_type || '').trim().toLowerCase();
-        if (!mediaType || mediaType === 'text') return false;
-        return !String(item?.media_url || '').trim();
-    });
-    if ((messages.length === 0 || hasMissingMedia) && resolvedConversation && backfillSessionId) {
-        const backfillResult = await backfillConversationMessagesFromStore({
-            sessionId: backfillSessionId,
-            conversation: resolvedConversation,
-            lead: resolvedLead,
-            contactJid,
-            limit: Math.max(limit, 50)
-        });
-        if ((backfillResult.inserted || 0) > 0 || (backfillResult.hydratedMedia || 0) > 0) {
-            messages = await Message.listByConversation(resolvedConversation.id, { limit });
-        }
-    }
-
-    const decrypted = messages.map(m => {
-        const raw = resolveMessageContentWithFallback(m);
-        let text = raw;
-        if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
-            text = previewForMedia(m.media_type);
-        }
-        text = normalizeText(text);
-        return {
-            ...m,
-            content: text
-        };
-    });
-
-    res.json({ success: true, messages: decrypted });
-});
-
-app.post('/api/messages/:leadId/rehydrate-missing-media', authenticate, async (req, res) => {
-    const leadId = Number(req.params.leadId);
-    const payload = req.body || {};
-    const requestedLimit = Number(payload.limit || req.query.limit);
-    const limit = Math.max(50, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 250, 500));
-    const conversationId = Number(
-        payload.conversation_id ||
-        payload.conversationId ||
-        req.query.conversation_id ||
-        req.query.conversationId
-    );
-    const hasConversationId = Number.isFinite(conversationId) && conversationId > 0;
-    const sessionId = sanitizeSessionId(
-        payload.session_id ||
-        payload.sessionId ||
-        req.query.session_id ||
-        req.query.sessionId
-    );
-    const contactJid = normalizeJid(
-        payload.contact_jid ||
-        payload.contactJid ||
-        req.query.contact_jid ||
-        req.query.contactJid
-    );
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-
-    let resolvedConversation = null;
-    let resolvedLead = null;
-
-    if (hasConversationId) {
-        const conversation = await Conversation.findById(conversationId);
-        const conversationSessionId = sanitizeSessionId(conversation?.session_id);
-        if (conversation && (!sessionId || conversationSessionId === sessionId)) {
-            resolvedConversation = conversation;
-        }
-        if (resolvedConversation) {
-            resolvedLead = await Lead.findById(resolvedConversation.lead_id);
-        }
-    } else if (Number.isFinite(leadId) && leadId > 0) {
-        resolvedLead = await Lead.findById(leadId);
-        const conversation = await Conversation.findByLeadId(leadId, sessionId || null);
-        if (conversation) {
-            resolvedConversation = conversation;
-        }
-    }
-
-    const hasConversationAccess = resolvedConversation
-        ? await canAccessConversationInOwnerScope(req, resolvedConversation, ownerScopeUserId)
-        : false;
-
-    if (resolvedLead && !hasConversationAccess && !(await canAccessAssignedRecordInOwnerScope(req, resolvedLead.assigned_to, ownerScopeUserId))) {
-        return res.status(404).json({ success: false, error: 'Lead nao encontrado' });
-    }
-    if (!resolvedLead && resolvedConversation && !hasConversationAccess) {
-        return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
-    }
-    if (!resolvedConversation) {
-        return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
-    }
-
-    const backfillSessionId = sanitizeSessionId(sessionId || resolvedConversation.session_id);
-    if (!backfillSessionId) {
-        return res.status(400).json({ success: false, error: 'Sessao da conversa nao encontrada' });
-    }
-
-    try {
-        const runtimeSession = sessions.get(backfillSessionId);
-        if (runtimeSession?.socket && runtimeSession?.store) {
-            try {
-                await triggerChatSync(backfillSessionId, runtimeSession.socket, runtimeSession.store, 0);
-            } catch (syncError) {
-                console.warn(`[${backfillSessionId}] Falha no sync manual para reidratacao de midia:`, syncError.message);
-            }
-        }
-
-        const missingStickersBefore = await countMissingStickerMediaForConversation(resolvedConversation.id);
-        const backfillResult = await backfillConversationMessagesFromStore({
-            sessionId: backfillSessionId,
-            conversation: resolvedConversation,
-            lead: resolvedLead,
-            contactJid: contactJid || resolvedLead?.jid || resolvedLead?.phone || '',
-            limit
-        });
-        const missingStickersAfter = await countMissingStickerMediaForConversation(resolvedConversation.id);
-
-        return res.json({
-            success: true,
-            conversationId: resolvedConversation.id,
-            leadId: resolvedLead?.id || resolvedConversation.lead_id || null,
-            sessionId: backfillSessionId,
-            limit,
-            backfill: backfillResult || createStoreBackfillResult(),
-            missingStickersBefore,
-            missingStickersAfter
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            error: error?.message || 'Falha ao reidratar midias da conversa'
-        });
-    }
-});
+app.use(createMessageRoutes({
+    authenticate,
+    validateApiSendRequest,
+    getScopedUserId,
+    resolveRequesterOwnerUserId,
+    Conversation,
+    Message,
+    Lead,
+    WhatsAppSession,
+    canAccessConversationInOwnerScope,
+    canAccessLeadRecordInOwnerScope,
+    canAccessAssignedRecordInOwnerScope,
+    markConversationAsReadWithMetadata,
+    sendMessage,
+    sanitizeSessionId,
+    resolveSessionIdOrDefault,
+    resolveMessageContentWithFallback,
+    normalizeText,
+    parseLeadCustomFields,
+    normalizeLeadAvatarUrl,
+    LEAD_AVATAR_CUSTOM_FIELD_KEY,
+    getSessionPhone,
+    normalizePhoneDigits,
+    isSelfPhone,
+    getSessionDisplayName,
+    normalizeJid,
+    backfillConversationMessagesFromStore,
+    query,
+    sessions,
+    triggerChatSync,
+    createStoreBackfillResult,
+    previewForMedia
+}));
 
 
 
@@ -17629,284 +16864,22 @@ app.post('/api/messages/:leadId/rehydrate-missing-media', authenticate, async (r
 
 // ============================================
 
-
-
-app.get('/api/queue/status', authenticate, async (req, res) => {
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    res.json({
-        success: true,
-        ...(await queueService.getStatus({
-            ownerUserId: ownerScopeUserId || undefined
-        }))
-    });
-
-});
-
-
-
-app.post('/api/queue/add', authenticate, async (req, res) => {
-    try {
-        const {
-            leadId,
-            conversationId,
-            campaignId,
-            content,
-            mediaType,
-            mediaUrl,
-            priority,
-            scheduledAt,
-            sessionId,
-            isFirstContact,
-            assignmentMeta
-        } = req.body || {};
-
-        const normalizedLeadId = Number(leadId);
-        if (!Number.isInteger(normalizedLeadId) || normalizedLeadId <= 0) {
-            return res.status(400).json({ success: false, error: 'leadId invalido' });
-        }
-
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const lead = await Lead.findById(normalizedLeadId);
-        if (!lead) {
-            return res.status(404).json({ success: false, error: 'Lead nao encontrado' });
-        }
-
-        const hasLeadAccess = await canAccessLeadRecordInOwnerScope(req, lead, ownerScopeUserId || null);
-        if (!hasLeadAccess) {
-            return res.status(403).json({ success: false, error: 'Sem permissao para enfileirar mensagens para este lead' });
-        }
-
-        const normalizedConversationId = Number(conversationId);
-        let resolvedConversationId = null;
-        if (Number.isInteger(normalizedConversationId) && normalizedConversationId > 0) {
-            const conversation = await Conversation.findById(normalizedConversationId);
-            if (!conversation) {
-                return res.status(404).json({ success: false, error: 'Conversa nao encontrada' });
-            }
-
-            const hasConversationAccess = await canAccessConversationInOwnerScope(req, conversation, ownerScopeUserId || null);
-            if (!hasConversationAccess) {
-                return res.status(403).json({ success: false, error: 'Sem permissao para enfileirar nesta conversa' });
-            }
-
-            if (Number(conversation.lead_id) !== normalizedLeadId) {
-                return res.status(400).json({ success: false, error: 'Conversa informada nao pertence ao lead' });
-            }
-
-            resolvedConversationId = normalizedConversationId;
-        }
-
-        let resolvedSessionId = sanitizeSessionId(sessionId);
-        if (resolvedSessionId) {
-            const hasSessionAccess = await canAccessSessionRecordInOwnerScope(req, resolvedSessionId, ownerScopeUserId || null);
-            if (!hasSessionAccess) {
-                return res.status(403).json({ success: false, error: 'Sem permissao para usar esta conta de WhatsApp' });
-            }
-        } else {
-            const allocation = await senderAllocatorService.allocateForSingleLead({
-                leadId: normalizedLeadId,
-                campaignId,
-                strategy: 'round_robin',
-                ownerUserId: ownerScopeUserId || undefined
-            });
-            resolvedSessionId = sanitizeSessionId(allocation?.sessionId);
-        }
-
-        const result = await queueService.add({
-            leadId: normalizedLeadId,
-            conversationId: resolvedConversationId,
-            campaignId,
-            sessionId: resolvedSessionId || null,
-            isFirstContact: isFirstContact !== false,
-            assignmentMeta: assignmentMeta || null,
-            content,
-            mediaType,
-            mediaUrl,
-            priority,
-            scheduledAt
-        });
-
-        return res.json({ success: true, ...result });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            error: error?.message || 'Falha ao adicionar mensagem na fila'
-        });
-    }
-
-});
-
-
-
-app.post('/api/queue/bulk', authenticate, validateQueueBulkRequest, async (req, res) => {
-    try {
-        const payload = req.validatedData || {};
-        const leadIds = Array.isArray(payload.leadIds) ? payload.leadIds : (Array.isArray(req.body?.leadIds) ? req.body.leadIds : []);
-        const content = typeof payload.content === 'string' ? payload.content : String(req.body?.content || '');
-        const optionsSource = (payload.options && typeof payload.options === 'object')
-            ? payload.options
-            : req.body?.options;
-        const options = (optionsSource && typeof optionsSource === 'object' && !Array.isArray(optionsSource))
-            ? { ...optionsSource }
-            : {};
-
-        const parseNonNegative = (value) => {
-            const parsed = Number(value);
-            return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-        };
-
-        const legacyDelay = parseNonNegative(req.body?.delay);
-        const legacyDelayMin = parseNonNegative(req.body?.delayMin ?? req.body?.delay_min);
-        const legacyDelayMax = parseNonNegative(req.body?.delayMax ?? req.body?.delay_max);
-
-        if (options.delayMs === undefined && legacyDelay !== null) {
-            options.delayMs = legacyDelay;
-        }
-        if (options.delayMinMs === undefined && legacyDelayMin !== null) {
-            options.delayMinMs = legacyDelayMin;
-        }
-        if (options.delayMaxMs === undefined && legacyDelayMax !== null) {
-            options.delayMaxMs = legacyDelayMax;
-        }
-
-        const hasSessionAssignments = options.sessionAssignments && typeof options.sessionAssignments === 'object';
-        const normalizedLeadIds = Array.from(
-            new Set(
-                Array.isArray(leadIds)
-                    ? leadIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
-                    : []
-            )
-        );
-        if (!normalizedLeadIds.length) {
-            return res.status(400).json({ success: false, error: 'leadIds invalido' });
-        }
-
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const leadRows = await query(
-            'SELECT id, assigned_to, owner_user_id FROM leads WHERE id = ANY(?::int[])',
-            [normalizedLeadIds]
-        );
-        const leadById = new Map((leadRows || []).map((lead) => [Number(lead.id), lead]));
-        const missingLeadIds = normalizedLeadIds.filter((id) => !leadById.has(id));
-        if (missingLeadIds.length > 0) {
-            return res.status(404).json({
-                success: false,
-                error: 'Um ou mais leads nao foram encontrados',
-                missing_lead_ids: missingLeadIds
-            });
-        }
-
-        for (const leadIdValue of normalizedLeadIds) {
-            const leadRecord = leadById.get(leadIdValue);
-            const allowed = await canAccessLeadRecordInOwnerScope(req, leadRecord, ownerScopeUserId || null);
-            if (!allowed) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'Sem permissao para enfileirar para um ou mais leads'
-                });
-            }
-        }
-
-        const fixedSessionId = sanitizeSessionId(
-            options.sessionId || options.session_id || req.body?.sessionId || req.body?.session_id
-        );
-        const senderAccounts = normalizeSenderAccountsPayload(
-            options.senderAccounts || options.sender_accounts || req.body?.sender_accounts || req.body?.senderAccounts
-        );
-        const distributionStrategy = normalizeCampaignDistributionStrategy(
-            options.distributionStrategy || options.distribution_strategy || req.body?.distribution_strategy,
-            fixedSessionId ? 'single' : (senderAccounts.length ? 'weighted_round_robin' : 'round_robin')
-        );
-
-        const sessionIdsToValidate = new Set();
-        if (fixedSessionId) sessionIdsToValidate.add(fixedSessionId);
-        for (const account of senderAccounts) {
-            const accountSessionId = sanitizeSessionId(account?.session_id || account?.sessionId);
-            if (accountSessionId) sessionIdsToValidate.add(accountSessionId);
-        }
-        if (hasSessionAssignments) {
-            for (const leadIdValue of normalizedLeadIds) {
-                const assignedSessionId = sanitizeSessionId(
-                    options.sessionAssignments[String(leadIdValue)]
-                    || options.sessionAssignments[leadIdValue]
-                );
-                if (assignedSessionId) sessionIdsToValidate.add(assignedSessionId);
-            }
-        }
-
-        for (const sessionIdToValidate of sessionIdsToValidate) {
-            const hasSessionAccess = await canAccessSessionRecordInOwnerScope(req, sessionIdToValidate, ownerScopeUserId || null);
-            if (!hasSessionAccess) {
-                return res.status(403).json({
-                    success: false,
-                    error: `Sem permissao para usar a conta de WhatsApp ${sessionIdToValidate}`
-                });
-            }
-        }
-
-        let distribution = { strategyUsed: fixedSessionId ? 'single' : distributionStrategy, summary: {} };
-        if (!hasSessionAssignments) {
-            const allocationPlan = await senderAllocatorService.buildDistributionPlan({
-                leadIds: normalizedLeadIds,
-                campaignId: options.campaignId || req.body?.campaignId || null,
-                senderAccounts,
-                strategy: distributionStrategy,
-                sessionId: fixedSessionId || null,
-                ownerUserId: ownerScopeUserId || undefined
-            });
-            options.sessionAssignments = allocationPlan.assignmentsByLead;
-            options.assignmentMetaByLead = allocationPlan.assignmentMetaByLead;
-            distribution = {
-                strategyUsed: allocationPlan.strategyUsed,
-                summary: allocationPlan.summary || {}
-            };
-        }
-
-        options.ownerUserId = ownerScopeUserId || undefined;
-        const results = await queueService.addBulk(normalizedLeadIds, content, options);
-
-        return res.json({
-            success: true,
-            queued: results.length,
-            distribution: {
-                strategy: distribution.strategyUsed,
-                by_session: distribution.summary
-            }
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            error: error?.message || 'Falha ao enfileirar disparo em massa'
-        });
-    }
-
-});
-
-
-
-app.delete('/api/queue/:id', authenticate, async (req, res) => {
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const cancelled = await queueService.cancel(req.params.id, {
-        ownerUserId: ownerScopeUserId || undefined
-    });
-    if (!cancelled) {
-        return res.status(404).json({ success: false, error: 'Mensagem da fila nao encontrada' });
-    }
-    res.json({ success: true });
-
-});
-
-
-
-app.delete('/api/queue', authenticate, async (req, res) => {
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const count = await queueService.cancelAll({
-        ownerUserId: ownerScopeUserId || undefined
-    });
-
-    res.json({ success: true, cancelled: count });
-
-});
+app.use(createQueueRoutes({
+    authenticate,
+    validateQueueBulkRequest,
+    queueService,
+    resolveRequesterOwnerUserId,
+    Lead,
+    Conversation,
+    canAccessLeadRecordInOwnerScope,
+    canAccessConversationInOwnerScope,
+    sanitizeSessionId,
+    canAccessSessionRecordInOwnerScope,
+    senderAllocatorService,
+    query,
+    normalizeSenderAccountsPayload,
+    normalizeCampaignDistributionStrategy
+}));
 
 
 
@@ -17916,86 +16889,13 @@ app.delete('/api/queue', authenticate, async (req, res) => {
 
 // ============================================
 
-
-
-app.get('/api/templates', authenticate, async (req, res) => {
-
-    const scopedUserId = getScopedUserId(req);
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const templates = await Template.list({
-        ...req.query,
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    res.json({ success: true, templates });
-
-});
-
-
-
-app.post('/api/templates', authenticate, async (req, res) => {
-
-    const payload = {
-        ...req.body,
-        created_by: req.user?.id
-    };
-    const result = await Template.create(payload);
-
-    const template = await Template.findById(result.id);
-
-    res.json({ success: true, template });
-
-});
-
-
-
-app.put('/api/templates/:id', authenticate, async (req, res) => {
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const existing = await Template.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: getScopedUserId(req) || undefined
-    });
-    if (!existing) {
-        return res.status(404).json({ error: 'Template nao encontrado' });
-    }
-    if (!canAccessCreatedRecord(req, existing.created_by)) {
-        return res.status(403).json({ error: 'Sem permissao para editar este template' });
-    }
-
-    await Template.update(req.params.id, req.body);
-
-    const template = await Template.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: getScopedUserId(req) || undefined
-    });
-
-    res.json({ success: true, template });
-
-});
-
-
-
-app.delete('/api/templates/:id', authenticate, async (req, res) => {
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const existing = await Template.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: getScopedUserId(req) || undefined
-    });
-    if (!existing) {
-        return res.status(404).json({ error: 'Template nao encontrado' });
-    }
-    if (!canAccessCreatedRecord(req, existing.created_by)) {
-        return res.status(403).json({ error: 'Sem permissao para remover este template' });
-    }
-
-    await Template.delete(req.params.id);
-
-    res.json({ success: true });
-
-});
-
-
+app.use(createTemplateRoutes({
+    authenticate,
+    Template,
+    getScopedUserId,
+    resolveRequesterOwnerUserId,
+    canAccessCreatedRecord
+}));
 
 // ============================================
 
@@ -19629,186 +18529,16 @@ app.delete('/api/campaigns/:id', authenticate, async (req, res) => {
 
 // ============================================
 
-
-
-app.get('/api/automations', authenticate, async (req, res) => {
-
-    const { is_active, trigger_type, limit, offset, search } = req.query;
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-
-    const automations = await Automation.list({
-
-        is_active: is_active !== undefined ? parseInt(is_active) : undefined,
-
-        trigger_type,
-
-        search,
-
-        owner_user_id: ownerScopeUserId || undefined,
-
-        limit: limit ? parseInt(limit) : 50,
-
-        offset: offset ? parseInt(offset) : 0
-
-    });
-
-
-
-    res.json({ success: true, automations: automations.map(enrichAutomationForResponse) });
-
-});
-
-
-
-app.get('/api/automations/:id', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const automation = await Automation.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-
-    if (!automation) {
-
-        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
-
-    }
-
-    if (!canAccessCreatedRecord(req, automation.created_by)) {
-        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
-    }
-
-    res.json({ success: true, automation: enrichAutomationForResponse(automation) });
-
-});
-
-
-
-app.post('/api/automations', authenticate, async (req, res) => {
-
-    try {
-
-        const payload = {
-
-            ...req.body,
-
-            created_by: req.user?.id
-
-        };
-
-        if (Object.prototype.hasOwnProperty.call(payload, 'session_ids') || Object.prototype.hasOwnProperty.call(payload, 'session_scope')) {
-            payload.session_scope = normalizeAutomationSessionScopeInput(
-                Object.prototype.hasOwnProperty.call(payload, 'session_ids') ? payload.session_ids : payload.session_scope
-            );
-            delete payload.session_ids;
-        }
-        if (Object.prototype.hasOwnProperty.call(payload, 'tag_filters') || Object.prototype.hasOwnProperty.call(payload, 'tag_filter')) {
-            payload.tag_filter = normalizeAutomationTagFilterInput(
-                Object.prototype.hasOwnProperty.call(payload, 'tag_filters') ? payload.tag_filters : payload.tag_filter
-            );
-            delete payload.tag_filters;
-        }
-
-        const triggerType = String(payload.trigger_type || '').trim().toLowerCase();
-        if (!isSupportedAutomationTriggerType(triggerType)) {
-            return res.status(400).json({
-                error: 'Trigger de automacao invalido. Use new_lead, status_change, message_received, keyword, schedule ou inactivity.'
-            });
-        }
-        payload.trigger_type = triggerType;
-
-        const result = await Automation.create(payload);
-
-        const automation = await Automation.findById(result.id);
-
-        res.json({ success: true, automation: enrichAutomationForResponse(automation) });
-
-    } catch (error) {
-
-        res.status(400).json({ error: error.message });
-
-    }
-
-});
-
-
-
-app.put('/api/automations/:id', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const automation = await Automation.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-
-    if (!automation) {
-
-        return res.status(404).json({ error: 'AutomaÃ§Ã£o nÃ£o encontrada' });
-
-    }
-
-    if (!canAccessCreatedRecord(req, automation.created_by)) {
-        return res.status(403).json({ error: 'Sem permissao para editar esta automacao' });
-    }
-
-
-    const payload = {
-        ...req.body
-    };
-
-    if (Object.prototype.hasOwnProperty.call(payload, 'session_ids') || Object.prototype.hasOwnProperty.call(payload, 'session_scope')) {
-        payload.session_scope = normalizeAutomationSessionScopeInput(
-            Object.prototype.hasOwnProperty.call(payload, 'session_ids') ? payload.session_ids : payload.session_scope
-        );
-        delete payload.session_ids;
-    }
-    if (Object.prototype.hasOwnProperty.call(payload, 'tag_filters') || Object.prototype.hasOwnProperty.call(payload, 'tag_filter')) {
-        payload.tag_filter = normalizeAutomationTagFilterInput(
-            Object.prototype.hasOwnProperty.call(payload, 'tag_filters') ? payload.tag_filters : payload.tag_filter
-        );
-        delete payload.tag_filters;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(payload, 'trigger_type')) {
-        const triggerType = String(payload.trigger_type || '').trim().toLowerCase();
-        if (!isSupportedAutomationTriggerType(triggerType)) {
-            return res.status(400).json({
-                error: 'Trigger de automacao invalido. Use new_lead, status_change, message_received, keyword, schedule ou inactivity.'
-            });
-        }
-        payload.trigger_type = triggerType;
-    }
-
-    await Automation.update(req.params.id, payload);
-
-    const updatedAutomation = await Automation.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-
-    res.json({ success: true, automation: enrichAutomationForResponse(updatedAutomation) });
-
-});
-
-
-
-app.delete('/api/automations/:id', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const automation = await Automation.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-    if (!automation) {
-        return res.status(404).json({ error: 'Automacao nao encontrada' });
-    }
-    if (!canAccessCreatedRecord(req, automation.created_by)) {
-        return res.status(403).json({ error: 'Sem permissao para remover esta automacao' });
-    }
-
-    await Automation.delete(req.params.id);
-
-    res.json({ success: true });
-
-});
-
-
+app.use(createAutomationRoutes({
+    authenticate,
+    Automation,
+    resolveRequesterOwnerUserId,
+    canAccessCreatedRecord,
+    normalizeAutomationSessionScopeInput,
+    normalizeAutomationTagFilterInput,
+    isSupportedAutomationTriggerType,
+    enrichAutomationForResponse
+}));
 
 // ============================================
 
@@ -19816,246 +18546,17 @@ app.delete('/api/automations/:id', authenticate, async (req, res) => {
 
 // ============================================
 
-
-app.post('/api/ai/flows/generate', authenticate, async (req, res) => {
-
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const prompt = String(req.body?.prompt || '').trim();
-        const preset = String(req.body?.preset || '').trim();
-
-        if (!prompt) {
-            return res.status(400).json({ success: false, error: 'Prompt e obrigatorio' });
-        }
-
-        if (prompt.length > 5000) {
-            return res.status(400).json({ success: false, error: 'Prompt muito longo (maximo 5000 caracteres)' });
-        }
-
-        const aiSettingsKey = buildScopedSettingsKey('ai_assistant', ownerScopeUserId);
-        const aiSettings = await Settings.get(aiSettingsKey);
-        const normalizedAiConfig = aiFlowDraftService.normalizeAiConfig(aiSettings || {});
-        const aiConfigHasEnabledFlag = Boolean(
-            aiSettings
-            && typeof aiSettings === 'object'
-            && !Array.isArray(aiSettings)
-            && Object.prototype.hasOwnProperty.call(aiSettings, 'enabled')
-        );
-
-        if (aiConfigHasEnabledFlag && !normalizedAiConfig.enabled) {
-            return res.status(403).json({
-                success: false,
-                error: 'Ative a Inteligencia Artificial em Configuracoes para gerar fluxos.'
-            });
-        }
-
-        const generated = await openAiFlowDraftService.generateFlowDraft({
-            prompt,
-            preset: preset || null,
-            businessContext: normalizedAiConfig
-        });
-
-        res.json({
-            success: true,
-            provider: generated.provider || 'openai',
-            intent: generated.intent || null,
-            context: generated.context || {},
-            draft: generated.draft || null
-        });
-    } catch (error) {
-        console.error('Falha ao gerar rascunho de fluxo por IA:', error);
-        const statusCode = Number(error?.statusCode) || 500;
-        res.status(statusCode).json({
-            success: false,
-            error: error?.publicMessage || error?.message || 'Erro ao gerar fluxo com IA'
-        });
-    }
-
-});
-
-
-
-async function resolveFlowSessionScopePayload(req, ownerScopeUserId = null) {
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const hasSessionField = Object.prototype.hasOwnProperty.call(body, 'session_id')
-        || Object.prototype.hasOwnProperty.call(body, 'sessionId');
-
-    if (!hasSessionField) {
-        return { provided: false, sessionId: null };
-    }
-
-    const rawSessionId = body.session_id ?? body.sessionId;
-    const normalizedSessionId = sanitizeSessionId(rawSessionId);
-    if (!normalizedSessionId) {
-        return { provided: true, sessionId: null };
-    }
-
-    const canAccessSession = await canAccessSessionRecordInOwnerScope(req, normalizedSessionId, ownerScopeUserId);
-    if (!canAccessSession) {
-        return {
-            provided: true,
-            sessionId: null,
-            error: 'Conta WhatsApp nao encontrada ou sem permissao'
-        };
-    }
-
-    return { provided: true, sessionId: normalizedSessionId };
-}
-
-app.get('/api/flows', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const requestedSessionId = sanitizeSessionId(req.query?.session_id || req.query?.sessionId);
-    if (requestedSessionId) {
-        const canAccessSession = await canAccessSessionRecordInOwnerScope(req, requestedSessionId, ownerScopeUserId);
-        if (!canAccessSession) {
-            return res.status(403).json({ error: 'Sem permissao para acessar esta conta WhatsApp' });
-        }
-    }
-
-    const flows = await Flow.list({
-        ...req.query,
-        session_id: requestedSessionId || undefined,
-        owner_user_id: ownerScopeUserId || undefined
-    });
-
-    res.json({ success: true, flows });
-
-});
-
-
-
-app.get('/api/flows/:id', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const flow = await Flow.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-
-    if (!flow) {
-
-        return res.status(404).json({ error: 'Fluxo nÃ£o encontrado' });
-
-    }
-
-    if (!canAccessCreatedRecord(req, flow.created_by)) {
-        return res.status(404).json({ error: 'Fluxo nÃ£o encontrado' });
-    }
-
-    res.json({ success: true, flow });
-
-});
-
-
-
-app.post('/api/flows', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const flowSessionScope = await resolveFlowSessionScopePayload(req, ownerScopeUserId);
-    if (flowSessionScope.error) {
-        return res.status(403).json({ error: flowSessionScope.error });
-    }
-    const payload = {
-        ...req.body,
-        created_by: req.user?.id,
-        owner_user_id: ownerScopeUserId || undefined,
-        session_id: flowSessionScope.provided ? flowSessionScope.sessionId : null
-    };
-    delete payload.sessionId;
-    const triggerType = String(payload?.trigger_type || '').trim().toLowerCase();
-    if (triggerType === 'webhook') {
-        return res.status(400).json({
-            error: 'Trigger webhook ainda nao esta disponivel por HTTP. Use new_contact, keyword ou manual.'
-        });
-    }
-    const result = await Flow.create(payload);
-
-    const flow = await Flow.findById(result.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-
-    res.json({
-        success: true,
-        flow,
-        meta: {
-            deactivated_flow_ids: Array.isArray(result?.deactivated_flow_ids) ? result.deactivated_flow_ids : []
-        }
-    });
-
-});
-
-
-
-app.put('/api/flows/:id', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const existing = await Flow.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-    if (!existing) {
-        return res.status(404).json({ error: 'Fluxo nao encontrado' });
-    }
-    if (!canAccessCreatedRecord(req, existing.created_by)) {
-        return res.status(403).json({ error: 'Sem permissao para editar este fluxo' });
-    }
-
-    const flowSessionScope = await resolveFlowSessionScopePayload(req, ownerScopeUserId);
-    if (flowSessionScope.error) {
-        return res.status(403).json({ error: flowSessionScope.error });
-    }
-    const payload = {
-        ...req.body
-    };
-    payload.owner_user_id = ownerScopeUserId || undefined;
-    if (flowSessionScope.provided) {
-        payload.session_id = flowSessionScope.sessionId;
-    }
-    delete payload.sessionId;
-    if (Object.prototype.hasOwnProperty.call(payload, 'trigger_type')) {
-        const triggerType = String(payload?.trigger_type || '').trim().toLowerCase();
-        if (triggerType === 'webhook') {
-            return res.status(400).json({
-                error: 'Trigger webhook ainda nao esta disponivel por HTTP. Use new_contact, keyword ou manual.'
-            });
-        }
-    }
-
-    const updateResult = await Flow.update(req.params.id, payload);
-
-    const flow = await Flow.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-
-    res.json({
-        success: true,
-        flow,
-        meta: {
-            deactivated_flow_ids: Array.isArray(updateResult?.deactivated_flow_ids) ? updateResult.deactivated_flow_ids : []
-        }
-    });
-
-});
-
-
-
-app.delete('/api/flows/:id', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const existing = await Flow.findById(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined
-    });
-    if (!existing) {
-        return res.status(404).json({ error: 'Fluxo nao encontrado' });
-    }
-    if (!canAccessCreatedRecord(req, existing.created_by)) {
-        return res.status(403).json({ error: 'Sem permissao para remover este fluxo' });
-    }
-
-    await Flow.delete(req.params.id);
-
-    res.json({ success: true });
-
-});
+app.use(createFlowRoutes({
+    authenticate,
+    Flow,
+    Settings,
+    aiFlowDraftService,
+    buildScopedSettingsKey,
+    resolveRequesterOwnerUserId,
+    sanitizeSessionId,
+    canAccessSessionRecordInOwnerScope,
+    canAccessCreatedRecord
+}));
 
 
 
@@ -20065,87 +18566,22 @@ app.delete('/api/flows/:id', authenticate, async (req, res) => {
 
 // ============================================
 
-
-
-app.get('/api/webhooks', authenticate, async (req, res) => {
-
-    const { Webhook } = require('./database/models');
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const scopedUserId = getScopedUserId(req);
-    const webhooks = await Webhook.list({
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    res.json({ success: true, webhooks });
-
-});
-
-
-
-app.post('/api/webhooks', authenticate, async (req, res) => {
-
-    const { Webhook } = require('./database/models');
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const scopedUserId = getScopedUserId(req);
-    const requesterUserId = getRequesterUserId(req);
-    const result = await Webhook.create({
-        ...(req.body && typeof req.body === 'object' ? req.body : {}),
-        created_by: requesterUserId || undefined
-    });
-
-    const webhook = await Webhook.findById(result.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    res.json({ success: true, webhook });
-
-});
-
-
-
-app.put('/api/webhooks/:id', authenticate, async (req, res) => {
-
-    const { Webhook } = require('./database/models');
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const scopedUserId = getScopedUserId(req);
-    const webhook = await Webhook.update(req.params.id, req.body, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    if (!webhook) {
-        return res.status(404).json({ error: 'Webhook nao encontrado' });
-    }
-
-    res.json({ success: true, webhook });
-
-});
-
-
-
-app.delete('/api/webhooks/:id', authenticate, async (req, res) => {
-
-    const { Webhook } = require('./database/models');
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const scopedUserId = getScopedUserId(req);
-    const deleted = await Webhook.delete(req.params.id, {
-        owner_user_id: ownerScopeUserId || undefined,
-        created_by: scopedUserId || undefined
-    });
-
-    if (!deleted) {
-        return res.status(404).json({ error: 'Webhook nao encontrado' });
-    }
-
-    res.json({ success: true });
-
-});
+app.use(createWebhookRoutes({
+    authenticate,
+    Webhook,
+    resolveRequesterOwnerUserId,
+    getScopedUserId,
+    getRequesterUserId,
+    getRequesterRole,
+    isUserAdminRole,
+    IncomingWebhookCredential,
+    resolveIncomingWebhookOwnerUserId: incomingWebhookService.resolveIncomingWebhookOwnerUserId,
+    normalizeIncomingWebhookSecret: incomingWebhookService.normalizeIncomingWebhookSecret,
+    serializeIncomingWebhookCredentialForApi: incomingWebhookService.serializeIncomingWebhookCredentialForApi,
+    resolveIncomingWebhookOwnerContext: incomingWebhookService.resolveIncomingWebhookOwnerContext,
+    normalizeIncomingWebhookLeadPayload: incomingWebhookService.normalizeIncomingWebhookLeadPayload,
+    Lead
+}));
 
 
 
@@ -20443,253 +18879,27 @@ app.get('/api/admin/dashboard/overview', authenticate, async (req, res) => {
     }
 });
 
-app.get('/api/admin/dashboard/email-settings', authenticate, async (req, res) => {
-    if (!ensureApplicationAdmin(req, res)) return;
-
-    try {
-        const currentSettings = await loadEmailDeliverySettings();
-        res.json({
-            success: true,
-            settings: sanitizeEmailDeliverySettingsForResponse(currentSettings)
-        });
-    } catch (error) {
-        console.error('[admin/dashboard/email-settings:get] falha:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Falha ao carregar configuracoes de email'
-        });
-    }
-});
-
-app.put('/api/admin/dashboard/email-settings', authenticate, async (req, res) => {
-    if (!ensureApplicationAdmin(req, res)) return;
-
-    try {
-        const currentSettings = await loadEmailDeliverySettings();
-        const normalized = normalizeEmailDeliverySettingsInput(req.body, currentSettings);
-
-        if (normalized.provider === 'sendgrid') {
-            if (!normalized.sendgridFromEmail || !isValidEmailAddress(normalized.sendgridFromEmail)) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Informe um email remetente valido para o SendGrid'
-                });
-            }
-
-            if (!String(normalized.sendgridApiKey || '').trim()) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Informe a SENDGRID_API_KEY para enviar emails'
-                });
-            }
-        }
-
-        if (normalized.provider === 'mailgun') {
-            if (!String(normalized.mailgunDomain || '').trim()) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Informe o MAILGUN_DOMAIN para enviar emails'
-                });
-            }
-
-            if (!normalized.mailgunFromEmail || !isValidEmailAddress(normalized.mailgunFromEmail)) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Informe um email remetente valido para o Mailgun'
-                });
-            }
-
-            if (!String(normalized.mailgunApiKey || '').trim()) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Informe a MAILGUN_API_KEY para enviar emails'
-                });
-            }
-        }
-
-        const serialized = serializeEmailDeliverySettingsForStorage(normalized);
-        await Settings.set(EMAIL_DELIVERY_SETTINGS_KEY, serialized, 'json');
-
-        const refreshed = await loadEmailDeliverySettings();
-        res.json({
-            success: true,
-            settings: sanitizeEmailDeliverySettingsForResponse(refreshed)
-        });
-    } catch (error) {
-        console.error('[admin/dashboard/email-settings:put] falha:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Falha ao salvar configuracoes de email'
-        });
-    }
-});
-
-app.post('/api/admin/dashboard/email-settings/preview', authenticate, async (req, res) => {
-    if (!ensureApplicationAdmin(req, res)) return;
-
-    try {
-        const currentSettings = await loadEmailDeliverySettings();
-        const normalized = normalizeEmailDeliverySettingsInput(req.body, currentSettings);
-        const runtimeSettings = buildRuntimeEmailDeliveryConfig(normalized);
-
-        const tokenPayload = createEmailConfirmationTokenPayload();
-        const baseAppUrl = resolveAppUrl(req) || String(process.env.APP_URL || 'https://zapvender.com').trim();
-        const confirmationUrl = buildEmailConfirmationUrl(baseAppUrl, tokenPayload.token);
-
-        const rawPreviewEmail = String(req.body?.previewEmail || req.body?.email || req.user?.email || '').trim().toLowerCase();
-        const previewEmail = isValidEmailAddress(rawPreviewEmail) ? rawPreviewEmail : 'contato@empresa.com';
-        const previewName = String(req.body?.previewName || req.body?.name || 'Usuario').trim() || 'Usuario';
-
-        const context = buildEmailTemplateContext(
-            {
-                id: req.user?.id || null,
-                name: previewName,
-                email: previewEmail
-            },
-            confirmationUrl,
-            {
-                appName: runtimeSettings.appName,
-                expiresInText: tokenPayload.expiresInText,
-                appUrl: baseAppUrl
-            }
-        );
-        const content = buildRenderedEmailContent(context, runtimeSettings);
-
-        return res.json({
-            success: true,
-            preview: {
-                subject: content.subject,
-                html: content.html,
-                text: content.text
-            }
-        });
-    } catch (error) {
-        console.error('[admin/dashboard/email-settings:preview] falha:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'Falha ao gerar pre-visualizacao do email'
-        });
-    }
-});
-
-app.post('/api/admin/dashboard/email-settings/test', authenticate, async (req, res) => {
-    if (!ensureApplicationAdmin(req, res)) return;
-
-    try {
-        const targetEmail = String(req.body?.email || req.user?.email || '').trim().toLowerCase();
-        if (!targetEmail || !isValidEmailAddress(targetEmail)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Informe um email valido para o envio de teste'
-            });
-        }
-
-        const runtimeSettings = await getRegistrationEmailRuntimeConfig();
-        const tokenPayload = createEmailConfirmationTokenPayload();
-
-        await sendRegistrationConfirmationEmail(
-            req,
-            {
-                id: req.user?.id || null,
-                name: 'Teste de configuracao',
-                email: targetEmail
-            },
-            tokenPayload,
-            {
-                emailSettings: runtimeSettings
-            }
-        );
-
-        res.json({
-            success: true,
-            message: 'Email de teste enviado com sucesso',
-            email: targetEmail,
-            provider: runtimeSettings.provider
-        });
-    } catch (error) {
-        if (error instanceof MailMktIntegrationError) {
-            return res.status(error.statusCode || 502).json({
-                success: false,
-                error: error.message || 'Falha ao enviar email de teste',
-                retryable: error.retryable !== false
-            });
-        }
-
-        console.error('[admin/dashboard/email-settings:test] falha:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Falha ao enviar email de teste'
-        });
-    }
-});
-
-app.get('/api/admin/dashboard/email-support-inbox', authenticate, async (req, res) => {
-    if (!ensureApplicationAdmin(req, res)) return;
-
-    try {
-        const limit = Math.max(1, Math.min(100, Number(req.query?.limit || 30) || 30));
-        const offset = Math.max(0, Number(req.query?.offset || 0) || 0);
-        const unreadOnly = ['1', 'true', 'yes', 'sim', 'on'].includes(
-            String(req.query?.unread_only ?? req.query?.unreadOnly ?? '').trim().toLowerCase()
-        );
-
-        const [messages, unreadCount] = await Promise.all([
-            SupportInboxMessage.list({
-                limit,
-                offset,
-                unread_only: unreadOnly
-            }),
-            SupportInboxMessage.count({
-                unread_only: true
-            })
-        ]);
-
-        res.json({
-            success: true,
-            inbox: {
-                messages,
-                unreadCount
-            }
-        });
-    } catch (error) {
-        console.error('[admin/dashboard/email-support-inbox:get] falha:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Falha ao carregar caixa de entrada de suporte'
-        });
-    }
-});
-
-app.post('/api/admin/dashboard/email-support-inbox/:id/read', authenticate, async (req, res) => {
-    if (!ensureApplicationAdmin(req, res)) return;
-
-    try {
-        const messageId = parseInt(String(req.params?.id || ''), 10);
-        if (!Number.isInteger(messageId) || messageId <= 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'Mensagem invalida'
-            });
-        }
-
-        const isRead = req.body?.isRead === false || req.body?.is_read === 0 || req.body?.is_read === false
-            ? false
-            : true;
-        await SupportInboxMessage.markRead(messageId, isRead);
-        const message = await SupportInboxMessage.findById(messageId);
-
-        res.json({
-            success: true,
-            supportMessage: message
-        });
-    } catch (error) {
-        console.error('[admin/dashboard/email-support-inbox:read] falha:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Falha ao atualizar status da mensagem'
-        });
-    }
-});
+app.use(createAdminDashboardRoutes({
+    authenticate,
+    ensureApplicationAdmin,
+    loadEmailDeliverySettings,
+    sanitizeEmailDeliverySettingsForResponse,
+    normalizeEmailDeliverySettingsInput,
+    isValidEmailAddress,
+    serializeEmailDeliverySettingsForStorage,
+    Settings,
+    emailDeliverySettingsKey: EMAIL_DELIVERY_SETTINGS_KEY,
+    buildRuntimeEmailDeliveryConfig,
+    createEmailConfirmationTokenPayload,
+    resolveAppUrl,
+    buildEmailConfirmationUrl,
+    buildEmailTemplateContext,
+    buildRenderedEmailContent,
+    getRegistrationEmailRuntimeConfig,
+    sendRegistrationConfirmationEmail,
+    MailMktIntegrationError,
+    SupportInboxMessage
+}));
 
 app.put('/api/admin/dashboard/users/:id', authenticate, async (req, res) => {
     if (!ensureApplicationAdmin(req, res)) return;
@@ -21312,405 +19522,17 @@ app.delete('/api/admin/dashboard/accounts/:ownerUserId', authenticate, async (re
 
 // ============================================
 
-app.get('/api/admin/audits/tenant-integrity', authenticate, async (req, res) => {
-    const requesterRole = getRequesterRole(req);
-    if (!isUserAdminRole(requesterRole)) {
-        return res.status(403).json({ error: 'Sem permissao para acessar auditoria de integridade' });
-    }
-
-    const workerState = buildTenantIntegrityAuditWorkerState();
-    const response = {
-        success: true,
-        worker: {
-            enabled: workerState.enabled,
-            intervalMs: workerState.intervalMs,
-            sampleLimit: workerState.sampleLimit,
-            leaderLockEnabled: workerState.leaderLockEnabled,
-            leaderLockHeld: workerState.leaderLockHeld,
-            running: workerState.running,
-            lastRunAt: workerState.lastRunAt,
-            lastError: workerState.lastError,
-            lastRunRecordId: workerState.lastRunRecordId,
-            lastPersistError: workerState.lastPersistError,
-            hasLastResult: !!workerState.lastResult
-        },
-        manualRun: {
-            defaultScope: 'owner',
-            allowGlobal: TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL
-        }
-    };
-
-    if (TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL && workerState.lastResult) {
-        response.worker.lastResult = workerState.lastResult;
-    }
-
-    res.json(response);
-});
-
-app.get('/api/admin/audits/tenant-integrity/history', authenticate, async (req, res) => {
-    const requesterRole = getRequesterRole(req);
-    if (!isUserAdminRole(requesterRole)) {
-        return res.status(403).json({ error: 'Sem permissao para acessar historico da auditoria' });
-    }
-
-    try {
-        const requestedScope = String(req.query?.scope || 'owner').trim().toLowerCase();
-        const requestedLimit = req.query?.limit || 20;
-        const includeResult = ['1', 'true', 'sim', 'yes', 'on'].includes(String(req.query?.includeResult || '').trim().toLowerCase());
-        const onlyIssues = ['1', 'true', 'sim', 'yes', 'on'].includes(String(req.query?.onlyIssues || '').trim().toLowerCase());
-
-        let ownerScopeUserId = null;
-        if (requestedScope !== 'global') {
-            ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-            if (!ownerScopeUserId) {
-                return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
-            }
-        } else if (!TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL) {
-            return res.status(403).json({ error: 'Consulta global do historico desabilitada' });
-        }
-
-        const runs = await tenantIntegrityAuditService.listAuditRuns({
-            scope: requestedScope === 'global' ? 'global' : 'owner',
-            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
-            limit: requestedLimit,
-            includeResult,
-            onlyIssues
-        });
-
-        res.json({
-            success: true,
-            scope: requestedScope === 'global' ? 'global' : 'owner',
-            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
-            count: Array.isArray(runs) ? runs.length : 0,
-            runs
-        });
-    } catch (error) {
-        console.error('[TenantIntegrityAudit][history-endpoint] falha:', error);
-        res.status(500).json({ error: 'Falha ao consultar historico da auditoria', details: error.message });
-    }
-});
-
-app.post('/api/admin/audits/tenant-integrity/run', authenticate, async (req, res) => {
-    const requesterRole = getRequesterRole(req);
-    if (!isUserAdminRole(requesterRole)) {
-        return res.status(403).json({ error: 'Sem permissao para executar auditoria de integridade' });
-    }
-
-    try {
-        const body = req.body && typeof req.body === 'object' ? req.body : {};
-        const requestedScope = String(body.scope || req.query?.scope || 'owner').trim().toLowerCase();
-        const requestedSampleLimit = body.sampleLimit || req.query?.sampleLimit || TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT;
-
-        let ownerScopeUserId = null;
-        if (requestedScope !== 'global') {
-            ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-            if (!ownerScopeUserId) {
-                return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
-            }
-        } else if (!TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL) {
-            return res.status(403).json({ error: 'Execucao manual global de auditoria desabilitada' });
-        }
-
-        const audit = await runTenantIntegrityAudit({
-            trigger: 'manual-endpoint',
-            ownerUserId: requestedScope === 'global' ? null : ownerScopeUserId,
-            sampleLimit: requestedSampleLimit,
-            cacheAsWorker: false
-        });
-
-        res.json({
-            success: true,
-            audit,
-            worker: buildTenantIntegrityAuditWorkerState()
-        });
-    } catch (error) {
-        console.error('[TenantIntegrityAudit][manual-endpoint] falha:', error);
-        res.status(500).json({ error: 'Falha ao executar auditoria de integridade', details: error.message });
-    }
-});
-
-
-
-// Webhook de entrada (para receber dados externos)
-
-function resolveIncomingWebhookOwnerUserId() {
-    const value = normalizeOwnerUserId(process.env.WEBHOOK_INCOMING_OWNER_USER_ID);
-    return value || null;
-}
-
-function normalizeIncomingWebhookSecret(value) {
-    return String(value || '').trim();
-}
-
-function extractIncomingWebhookSecret(req, payload = null) {
-    const sourcePayload = payload && typeof payload === 'object' ? payload : {};
-    const bodySecret = normalizeIncomingWebhookSecret(sourcePayload.secret);
-    if (bodySecret) {
-        return bodySecret;
-    }
-
-    const headerSecret = normalizeIncomingWebhookSecret(
-        req.get('x-webhook-secret')
-        || req.get('x-incoming-webhook-secret')
-        || req.get('x-api-key')
-    );
-    if (headerSecret) {
-        return headerSecret;
-    }
-
-    const authorization = normalizeIncomingWebhookSecret(req.get('authorization'));
-    if (authorization && /^bearer\s+/i.test(authorization)) {
-        return normalizeIncomingWebhookSecret(authorization.replace(/^bearer\s+/i, ''));
-    }
-
-    return '';
-}
-
-function timingSafeIncomingWebhookSecretEquals(inputSecret, expectedSecret) {
-    const left = normalizeIncomingWebhookSecret(inputSecret);
-    const right = normalizeIncomingWebhookSecret(expectedSecret);
-    if (!left || !right) return false;
-
-    const leftBuffer = Buffer.from(left, 'utf8');
-    const rightBuffer = Buffer.from(right, 'utf8');
-    if (leftBuffer.length !== rightBuffer.length) return false;
-
-    try {
-        return crypto.timingSafeEqual(leftBuffer, rightBuffer);
-    } catch (_) {
-        return false;
-    }
-}
-
-function maskIncomingWebhookSecret(prefix = '', suffix = '') {
-    const normalizedPrefix = String(prefix || '').trim();
-    const normalizedSuffix = String(suffix || '').trim();
-    if (!normalizedPrefix && !normalizedSuffix) return '';
-    return `${normalizedPrefix}***${normalizedSuffix}`;
-}
-
-function serializeIncomingWebhookCredentialForApi(credential) {
-    if (!credential) return null;
-    return {
-        id: Number(credential.id || 0) || null,
-        owner_user_id: Number(credential.owner_user_id || 0) || null,
-        secret_masked: maskIncomingWebhookSecret(credential.secret_prefix, credential.secret_suffix),
-        secret_prefix: String(credential.secret_prefix || '').trim(),
-        secret_suffix: String(credential.secret_suffix || '').trim(),
-        created_by: Number(credential.created_by || 0) || null,
-        last_rotated_at: credential.last_rotated_at || null,
-        last_used_at: credential.last_used_at || null,
-        created_at: credential.created_at || null,
-        updated_at: credential.updated_at || null
-    };
-}
-
-async function ensureLegacyIncomingWebhookCredentialBridge() {
-    const legacySecret = normalizeIncomingWebhookSecret(process.env.WEBHOOK_SECRET);
-    const legacyOwnerUserId = resolveIncomingWebhookOwnerUserId();
-
-    if (!legacySecret || !legacyOwnerUserId) {
-        return;
-    }
-
-    const existingOwnerCredential = await IncomingWebhookCredential.findByOwnerUserId(legacyOwnerUserId);
-    if (existingOwnerCredential) {
-        return;
-    }
-
-    try {
-        await IncomingWebhookCredential.upsertForOwner(legacyOwnerUserId, {
-            secret: legacySecret
-        });
-        console.log(`[IncomingWebhook] Credencial legada sincronizada para owner ${legacyOwnerUserId}`);
-    } catch (error) {
-        console.warn(`[IncomingWebhook] Nao foi possivel sincronizar credencial legada do owner ${legacyOwnerUserId}: ${error.message}`);
-    }
-}
-
-async function resolveIncomingWebhookOwnerContext(req, payload = null) {
-    const sourcePayload = payload && typeof payload === 'object' ? payload : {};
-    const secret = extractIncomingWebhookSecret(req, sourcePayload);
-    if (!secret) {
-        return {
-            ownerUserId: null,
-            source: 'missing-secret'
-        };
-    }
-
-    let tableLookupFailed = false;
-    try {
-        const credential = await IncomingWebhookCredential.findOwnerBySecret(secret);
-        const ownerUserId = normalizeOwnerUserId(credential?.owner_user_id);
-        if (ownerUserId) {
-            return {
-                ownerUserId,
-                source: 'owner-secret',
-                credential
-            };
-        }
-    } catch (error) {
-        tableLookupFailed = true;
-        console.error('[IncomingWebhook] Falha ao validar credencial por owner:', error.message);
-    }
-
-    const legacySecret = normalizeIncomingWebhookSecret(process.env.WEBHOOK_SECRET);
-    const legacyOwnerUserId = resolveIncomingWebhookOwnerUserId();
-    if (
-        legacySecret
-        && legacyOwnerUserId
-        && timingSafeIncomingWebhookSecretEquals(secret, legacySecret)
-    ) {
-        return {
-            ownerUserId: legacyOwnerUserId,
-            source: 'legacy-secret'
-        };
-    }
-
-    return {
-        ownerUserId: null,
-        source: tableLookupFailed ? 'lookup-error' : 'invalid-secret'
-    };
-}
-
-function normalizeIncomingWebhookLeadPayload(rawData, ownerUserId) {
-    const sourceData = rawData && typeof rawData === 'object' ? rawData : {};
-    const phone = normalizeImportedLeadPhone(
-        sourceData.phone
-        || sourceData.telefone
-        || sourceData.whatsapp
-        || sourceData.celular
-        || sourceData.numero
-    );
-
-    const name = String(sourceData.name || sourceData.nome || '').trim() || 'Sem nome';
-    const email = String(sourceData.email || '').trim().toLowerCase();
-    const status = parsePositiveIntInRange(sourceData.status, 1, 1, 4);
-    const tags = Array.from(new Set(parseLeadTagsForMerge(sourceData.tags)));
-    const customFields = parseLeadCustomFields(sourceData.custom_fields);
-
-    const payload = {
-        name,
-        phone,
-        email,
-        status,
-        tags,
-        source: 'webhook',
-        assigned_to: ownerUserId,
-        owner_user_id: ownerUserId
-    };
-
-    if (Object.keys(customFields).length > 0) {
-        payload.custom_fields = customFields;
-    }
-
-    return payload;
-}
-
-app.get('/api/webhooks/incoming/credential', authenticate, async (req, res) => {
-    try {
-        const requesterRole = getRequesterRole(req);
-        if (!isUserAdminRole(requesterRole)) {
-            return res.status(403).json({ error: 'Sem permissao para gerenciar webhook de entrada' });
-        }
-
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        if (!ownerScopeUserId) {
-            return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
-        }
-
-        const credential = await IncomingWebhookCredential.findByOwnerUserId(ownerScopeUserId);
-        const legacyOwnerUserId = resolveIncomingWebhookOwnerUserId();
-        const legacySecretConfigured = normalizeIncomingWebhookSecret(process.env.WEBHOOK_SECRET).length > 0;
-
-        return res.json({
-            success: true,
-            credential: serializeIncomingWebhookCredentialForApi(credential),
-            legacy_fallback: {
-                configured: legacySecretConfigured && !!legacyOwnerUserId,
-                owner_user_id: legacyOwnerUserId || null,
-                active_for_owner: legacySecretConfigured
-                    && !!legacyOwnerUserId
-                    && legacyOwnerUserId === ownerScopeUserId
-            }
-        });
-    } catch (error) {
-        console.error('[IncomingWebhook] Falha ao consultar credencial:', error);
-        return res.status(500).json({ error: 'Falha ao consultar credencial do webhook de entrada' });
-    }
-});
-
-app.post('/api/webhooks/incoming/credential/regenerate', authenticate, async (req, res) => {
-    try {
-        const requesterRole = getRequesterRole(req);
-        if (!isUserAdminRole(requesterRole)) {
-            return res.status(403).json({ error: 'Sem permissao para gerenciar webhook de entrada' });
-        }
-
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        if (!ownerScopeUserId) {
-            return res.status(400).json({ error: 'Nao foi possivel resolver owner da conta' });
-        }
-
-        const incomingBody = req.body && typeof req.body === 'object' ? req.body : {};
-        const requestedSecret = normalizeIncomingWebhookSecret(incomingBody.secret);
-        if (
-            requestedSecret
-            && !IncomingWebhookCredential.isValidSecret(requestedSecret)
-        ) {
-            return res.status(400).json({
-                error: `Secret invalido (minimo ${IncomingWebhookCredential.MIN_SECRET_LENGTH} caracteres)`
-            });
-        }
-
-        const result = await IncomingWebhookCredential.upsertForOwner(ownerScopeUserId, {
-            secret: requestedSecret || undefined,
-            created_by: getRequesterUserId(req) || undefined
-        });
-
-        return res.json({
-            success: true,
-            secret: result.secret,
-            credential: serializeIncomingWebhookCredentialForApi(result.credential)
-        });
-    } catch (error) {
-        console.error('[IncomingWebhook] Falha ao regenerar credencial:', error);
-        return res.status(400).json({ error: error.message || 'Falha ao regenerar credencial do webhook de entrada' });
-    }
-});
-
-app.post('/api/webhook/incoming', async (req, res) => {
-    const payload = req.body && typeof req.body === 'object' ? req.body : {};
-    const event = String(payload.event || '').trim().toLowerCase();
-    const data = payload.data;
-    const ownerContext = await resolveIncomingWebhookOwnerContext(req, payload);
-    if (!ownerContext.ownerUserId) {
-        if (ownerContext.source === 'lookup-error') {
-            return res.status(503).json({ error: 'Webhook incoming indisponivel' });
-        }
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    if (event === 'lead.create' && data) {
-        try {
-            const ownerUserId = ownerContext.ownerUserId;
-            const leadPayload = normalizeIncomingWebhookLeadPayload(data, ownerUserId);
-            if (!leadPayload.phone) {
-                return res.status(400).json({ error: 'Telefone obrigatorio para lead.create' });
-            }
-
-            const result = await Lead.create(leadPayload);
-            return res.json({ success: true, leadId: result.id });
-        } catch (error) {
-            return res.status(Number(error?.statusCode || 400) || 400).json({
-                error: error.message,
-                ...(error?.code ? { code: error.code } : {})
-            });
-        }
-    }
-
-    return res.json({ success: true, received: true });
-});
+app.use(createAdminAuditRoutes({
+    authenticate,
+    getRequesterRole,
+    isUserAdminRole,
+    buildTenantIntegrityAuditWorkerState,
+    tenantIntegrityAuditService,
+    resolveRequesterOwnerUserId,
+    tenantIntegrityAuditAllowGlobalManual: TENANT_INTEGRITY_AUDIT_ALLOW_GLOBAL_MANUAL,
+    tenantIntegrityAuditSampleLimit: TENANT_INTEGRITY_AUDIT_SAMPLE_LIMIT,
+    runTenantIntegrityAudit
+}));
 
 
 
@@ -21845,193 +19667,24 @@ async function buildOwnerPlanStatus(ownerScopeUserId) {
     };
 }
 
-app.get('/api/plan/status', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const ownerAdmin = await User.findById(ownerScopeUserId || req.user?.id);
-        const plan = await buildOwnerPlanStatus(ownerScopeUserId);
-
-        res.json({
-            success: true,
-            owner_admin: ownerAdmin ? {
-                id: ownerAdmin.id,
-                name: ownerAdmin.name,
-                email: ownerAdmin.email
-            } : null,
-            plan
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Erro ao carregar status do plano' });
-    }
-});
-
-app.post('/api/plan/status/refresh', authenticate, async (req, res) => {
-    try {
-        const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-        const nowIso = new Date().toISOString();
-        const ownerAdmin = await User.findById(ownerScopeUserId || req.user?.id);
-        let plan = await buildOwnerPlanStatus(ownerScopeUserId);
-
-        if (String(plan?.provider || '').trim().toLowerCase() === 'stripe') {
-            const subscriptionId = String(plan?.external_reference || '').trim();
-            if (subscriptionId) {
-                const subscription = await stripeCheckoutService.retrieveSubscription(subscriptionId);
-                const registration = await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
-                    || await CheckoutRegistration.findByStripeCustomerId(subscription?.customer);
-                const priceId = String(subscription?.items?.data?.[0]?.price?.id || '').trim();
-                const inferredPlan = stripeCheckoutService.inferPlanByPriceId(priceId);
-
-                await syncStripePlanStatusByIdentifiers({
-                    subscriptionId,
-                    customerId: String(subscription?.customer || '').trim(),
-                    priceId,
-                    planKey: registration?.stripe_plan_key || inferredPlan?.key || '',
-                    planCode: registration?.stripe_plan_code || inferredPlan?.code || '',
-                    planName: registration?.stripe_plan_name || inferredPlan?.name || '',
-                    subscriptionStatus: stripeCheckoutService.normalizePlanStatus(subscription?.status),
-                    renewalDate: Number(subscription?.current_period_end || 0) > 0
-                        ? new Date(Number(subscription.current_period_end) * 1000).toISOString()
-                        : null
-                });
-                plan = await buildOwnerPlanStatus(ownerScopeUserId);
-            } else {
-                await Settings.set(
-                    buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
-                    nowIso,
-                    'string'
-                );
-                plan = await buildOwnerPlanStatus(ownerScopeUserId);
-            }
-        } else if (String(plan?.provider || '').trim().toLowerCase() === 'pagarme') {
-            const subscriptionId = String(plan?.external_reference || '').trim();
-            if (subscriptionId) {
-                const subscription = await pagarmeCheckoutService.retrieveSubscription(subscriptionId);
-                const subscriptionPayload = await pagarmeCheckoutService.resolveSubscriptionPayload(subscription);
-                const registration = await CheckoutRegistration.findByStripeSubscriptionId(subscriptionId)
-                    || await CheckoutRegistration.findByStripeCustomerId(subscriptionPayload?.customerId || '');
-
-                await syncPagarmePlanStatusByIdentifiers({
-                    subscriptionId,
-                    customerId: String(subscriptionPayload?.customerId || '').trim(),
-                    customerEmail: String(subscriptionPayload?.customerEmail || '').trim().toLowerCase(),
-                    priceId: String(subscriptionPayload?.priceId || '').trim(),
-                    planKey: subscriptionPayload?.planKey || registration?.stripe_plan_key || '',
-                    planCode: subscriptionPayload?.planCode || registration?.stripe_plan_code || '',
-                    planName: subscriptionPayload?.planName || registration?.stripe_plan_name || '',
-                    subscriptionStatus: subscriptionPayload?.subscriptionStatus || 'active',
-                    renewalDate: subscriptionPayload?.renewalDate || null,
-                    metadata: {
-                        ...(subscriptionPayload?.metadata && typeof subscriptionPayload.metadata === 'object'
-                            ? subscriptionPayload.metadata
-                            : {}),
-                        provider: 'pagarme'
-                    }
-                });
-                plan = await buildOwnerPlanStatus(ownerScopeUserId);
-            } else {
-                await Settings.set(
-                    buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
-                    nowIso,
-                    'string'
-                );
-                plan = await buildOwnerPlanStatus(ownerScopeUserId);
-            }
-        } else {
-            await Settings.set(
-                buildScopedSettingsKey('plan_last_verified_at', ownerScopeUserId),
-                nowIso,
-                'string'
-            );
-            plan = await buildOwnerPlanStatus(ownerScopeUserId);
-        }
-
-        res.json({
-            success: true,
-            owner_admin: ownerAdmin ? {
-                id: ownerAdmin.id,
-                name: ownerAdmin.name,
-                email: ownerAdmin.email
-            } : null,
-            plan
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Erro ao atualizar status do plano' });
-    }
-});
-
-app.get('/api/settings', authenticate, async (req, res) => {
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const settings = normalizeSettingsForResponse(await Settings.getAll(), ownerScopeUserId);
-
-    res.json({ success: true, settings });
-
-});
-
-
-
-app.put('/api/settings', authenticate, async (req, res) => {
-
-    const requesterRole = getRequesterRole(req);
-    if (!isUserAdminRole(requesterRole)) {
-        return res.status(403).json({
-            success: false,
-            error: 'Sem permissao para atualizar configuracoes da conta'
-        });
-    }
-
-    const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
-    const incomingSettings = req.body && typeof req.body === 'object' ? req.body : {};
-    const changedKeys = Object.keys(incomingSettings);
-
-    for (const [key, value] of Object.entries(incomingSettings)) {
-
-        const type = typeof value === 'number' ? 'number' : 
-
-                     typeof value === 'boolean' ? 'boolean' :
-
-                     typeof value === 'object' ? 'json' : 'string';
-
-        await Settings.set(buildScopedSettingsKey(key, ownerScopeUserId), value, type);
-
-    }
-
-    
-
-    // Atualizar serviÃ§o de fila se necessÃ¡rio
-
-    const hasQueueSettings =
-        Object.prototype.hasOwnProperty.call(incomingSettings, 'bulk_message_delay') ||
-        Object.prototype.hasOwnProperty.call(incomingSettings, 'max_messages_per_minute');
-
-    if (hasQueueSettings && !ownerScopeUserId) {
-
-        await queueService.updateSettings({
-
-            delay: incomingSettings.bulk_message_delay,
-
-            maxPerMinute: incomingSettings.max_messages_per_minute
-
-        });
-
-    }
-
-    const touchedBusinessHours = changedKeys.some((key) => String(key || '').startsWith('business_hours_'));
-    if (touchedBusinessHours) {
-        invalidateBusinessHoursSettingsCache(ownerScopeUserId || null);
-        if (typeof queueService.invalidateBusinessHoursCache === 'function') {
-            queueService.invalidateBusinessHoursCache(ownerScopeUserId || null);
-        }
-    }
-
-    
-
-    res.json({
-        success: true,
-        settings: normalizeSettingsForResponse(await Settings.getAll(), ownerScopeUserId)
-    });
-
-});
+app.use(createSettingsRoutes({
+    authenticate,
+    resolveRequesterOwnerUserId,
+    User,
+    buildOwnerPlanStatus,
+    stripeCheckoutService,
+    pagarmeCheckoutService,
+    CheckoutRegistration,
+    syncStripePlanStatusByIdentifiers,
+    syncPagarmePlanStatusByIdentifiers,
+    Settings,
+    buildScopedSettingsKey,
+    normalizeSettingsForResponse,
+    getRequesterRole,
+    isUserAdminRole,
+    queueService,
+    invalidateBusinessHoursSettingsCache
+}));
 
 
 

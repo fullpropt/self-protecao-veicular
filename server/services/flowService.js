@@ -51,10 +51,10 @@ const FLOW_OUTPUT_ACTION_ERROR_MODES = new Set(['continue', 'required', 'fail_al
 const FLOW_INPUT_RESPONSE_MODES = new Set(['text', 'menu']);
 const FLOW_MENU_ROW_PREFIX = 'flow-handle:';
 const FLOW_MENU_BUTTON_TEXT_DEFAULT = 'Ver Menu';
-const FLOW_MENU_SECTION_TITLE_DEFAULT = 'Opcoes';
-const FLOW_MENU_PROMPT_DEFAULT = 'Selecione uma opcao no menu abaixo:';
-const FLOW_END_MENU_PROMPT_DEFAULT = 'Se desejar, escolha uma opcao no menu abaixo:';
-const FLOW_END_MENU_SECTION_TITLE_DEFAULT = 'Finalizacao';
+const FLOW_MENU_SECTION_TITLE_DEFAULT = 'Opções';
+const FLOW_MENU_PROMPT_DEFAULT = 'Selecione uma opção no menu abaixo:';
+const FLOW_END_MENU_PROMPT_DEFAULT = 'Se desejar, escolha uma opção no menu abaixo:';
+const FLOW_END_MENU_SECTION_TITLE_DEFAULT = 'Finalização';
 const FLOW_END_MENU_ROW_PREFIX = 'flow-end-option:';
 const FLOW_END_MENU_MAX_CUSTOM_OPTIONS = 9;
 const FLOW_END_MENU_FIXED_FINALIZE_LABEL = 'Finalizar';
@@ -1407,7 +1407,14 @@ class FlowService extends EventEmitter {
             return prompt;
         }
 
-        return `${prompt}\n\n${numberedOptions.join('\n')}\n\nResponda com o numero da opcao.`;
+        return [
+            prompt,
+            '',
+            '*Opções disponíveis:*',
+            ...numberedOptions,
+            '',
+            '_Responda com o número da opção desejada._'
+        ].join('\n');
     }
 
     resolveMenuButtonText(node = null, execution = null) {
@@ -1420,7 +1427,7 @@ class FlowService extends EventEmitter {
         const rawText = this.replaceVariables(node?.data?.menuSectionTitle || '', execution?.variables || {});
         const sanitized = sanitizeOutgoingFlowText(rawText);
         if (sanitized) return sanitized;
-        if (this.isIntentRoutingNode(node)) return 'Intencoes';
+        if (this.isIntentRoutingNode(node)) return 'Intenções';
         return FLOW_MENU_SECTION_TITLE_DEFAULT;
     }
 
