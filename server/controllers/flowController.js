@@ -2,7 +2,6 @@ function createFlowController(options = {}) {
     const Flow = options.Flow;
     const Settings = options.Settings;
     const aiFlowDraftService = options.aiFlowDraftService;
-    const openAiFlowDraftService = options.openAiFlowDraftService;
     const buildScopedSettingsKey = options.buildScopedSettingsKey;
     const resolveRequesterOwnerUserId = options.resolveRequesterOwnerUserId;
     const sanitizeSessionId = options.sanitizeSessionId;
@@ -68,7 +67,7 @@ function createFlowController(options = {}) {
                     });
                 }
 
-                const generated = await openAiFlowDraftService.generateFlowDraft({
+                const generated = await aiFlowDraftService.generateFlowDraft({
                     prompt,
                     preset: preset || null,
                     businessContext: normalizedAiConfig
@@ -76,7 +75,7 @@ function createFlowController(options = {}) {
 
                 return res.json({
                     success: true,
-                    provider: generated.provider || 'openai',
+                    provider: generated.provider || 'heuristic',
                     intent: generated.intent || null,
                     context: generated.context || {},
                     draft: generated.draft || null

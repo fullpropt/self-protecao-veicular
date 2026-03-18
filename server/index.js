@@ -74,7 +74,6 @@ const queueService = require('./services/queueService');
 
 const flowService = require('./services/flowService');
 const aiFlowDraftService = require('./services/aiFlowDraftService');
-const openAiFlowDraftService = require('./services/openAiFlowDraftService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
@@ -18552,7 +18551,6 @@ app.use(createFlowRoutes({
     Flow,
     Settings,
     aiFlowDraftService,
-    openAiFlowDraftService,
     buildScopedSettingsKey,
     resolveRequesterOwnerUserId,
     sanitizeSessionId,
