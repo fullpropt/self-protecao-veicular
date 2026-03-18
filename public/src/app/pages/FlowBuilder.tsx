@@ -1625,6 +1625,11 @@ export default function FlowBuilder() {
         .flow-whatsapp-preview-bubble-outgoing {
             border-radius: 18px 18px 6px 18px;
             background: #dcf8c6;
+            min-width: 78px;
+        }
+
+        .flow-whatsapp-preview-bubble-outgoing .flow-whatsapp-preview-bubble-time {
+            right: 10px;
         }
 
         .flow-whatsapp-preview-bubble-title {

@@ -2882,7 +2882,6 @@ function buildWhatsappPreviewMenuSheetHtml(sectionTitle: string, items: string[]
         <div class="flow-whatsapp-preview-sheet">
             <div class="flow-whatsapp-preview-sheet-header">
                 <span>Menu</span>
-                <span class="flow-whatsapp-preview-sheet-meta">${safeItems.length} opção${safeItems.length === 1 ? '' : 'ões'}</span>
             </div>
             <div class="flow-whatsapp-preview-sheet-section">${buildWhatsappPreviewTextHtml(sectionTitle || 'Opções')}</div>
             <div class="flow-whatsapp-preview-sheet-list">
