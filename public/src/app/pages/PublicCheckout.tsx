@@ -440,20 +440,6 @@ export default function PublicCheckout() {
 
         <div className="public-checkout-grid">
           <div className="public-checkout-main">
-            <section className="public-checkout-card public-checkout-intro-card">
-            <div className="public-checkout-eyebrow">Checkout seguro · {plan.name}</div>
-            <h1 className="public-checkout-title">
-              {effectiveTrialDays > 0 ? `${effectiveTrialDays} dias grátis para ativar` : 'Concluir assinatura'}
-            </h1>
-            <p className="public-checkout-copy">{plan.summary}</p>
-
-            <div className="public-checkout-trust">
-              <div className="public-checkout-pill"><strong>Dados preservados</strong>Nome, e-mail e telefone chegam do pré-checkout.</div>
-              <div className="public-checkout-pill"><strong>Confirmação por e-mail</strong>Após a assinatura, você recebe o link para concluir o cadastro.</div>
-              <div className="public-checkout-pill"><strong>Página própria</strong>O pagamento acontece no ZapVender, sem repetir o fluxo anterior.</div>
-            </div>
-
-            </section>
             <form className="public-checkout-form" onSubmit={handleSubmit} noValidate>
               <section className="public-checkout-card public-checkout-form-card" aria-labelledby="checkoutAccountDataTitle">
                 <div className="public-checkout-section-title" id="checkoutAccountDataTitle">Dados da conta</div>
