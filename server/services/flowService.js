@@ -57,6 +57,7 @@ const FLOW_END_MENU_PROMPT_DEFAULT = 'Se desejar, escolha uma opção no menu ab
 const FLOW_END_MENU_SECTION_TITLE_DEFAULT = 'Finalização';
 const FLOW_END_MENU_ROW_PREFIX = 'flow-end-option:';
 const FLOW_END_MENU_MAX_CUSTOM_OPTIONS = 9;
+const FLOW_END_MENU_DEFAULT_RETURN_LABEL = 'Voltar ao menu principal';
 const FLOW_END_MENU_FIXED_FINALIZE_LABEL = 'Finalizar';
 const FLOW_END_MENU_FINALIZE_TOKEN = 'finalizar';
 
@@ -231,21 +232,31 @@ function parseIntentResponseList(value = null, fallbackValue = '') {
 }
 
 function parseFlowEndOptions(value = null) {
-    if (Array.isArray(value)) {
-        return value
+    const normalize = (options = []) => {
+        const cleaned = (Array.isArray(options) ? options : [])
             .map((item) => sanitizeOutgoingFlowText(item))
             .filter(Boolean)
             .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS);
+
+        if (cleaned.length === 0) {
+            return [FLOW_END_MENU_DEFAULT_RETURN_LABEL];
+        }
+
+        cleaned[0] = sanitizeOutgoingFlowText(cleaned[0]) || FLOW_END_MENU_DEFAULT_RETURN_LABEL;
+        return cleaned;
+    };
+
+    if (Array.isArray(value)) {
+        return normalize(value);
     }
 
     const raw = sanitizeOutgoingFlowText(value || '');
-    if (!raw) return [];
+    if (!raw) return normalize([]);
 
-    return raw
+    return normalize(raw
         .split(/[,;\n|]+/)
         .map((item) => sanitizeOutgoingFlowText(item))
-        .filter(Boolean)
-        .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS);
+        .filter(Boolean));
 }
 
 function parsePathHandleIndex(handleValue = '') {
@@ -1410,7 +1421,6 @@ class FlowService extends EventEmitter {
         return [
             prompt,
             '',
-            '*Escolha uma das opções disponíveis:*',
             ...numberedOptions,
             '',
             '_Responda com o número da opção desejada._'
@@ -1482,6 +1492,10 @@ class FlowService extends EventEmitter {
             seen.add(normalized);
             unique.push(rendered);
             if (unique.length >= FLOW_END_MENU_MAX_CUSTOM_OPTIONS) break;
+        }
+
+        if (unique.length === 0) {
+            unique.push(FLOW_END_MENU_DEFAULT_RETURN_LABEL);
         }
 
         return unique;

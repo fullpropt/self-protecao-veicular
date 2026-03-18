@@ -1303,6 +1303,11 @@ export default function FlowBuilder() {
             background: rgba(148, 163, 184, 0.76);
             border-style: dashed;
         }
+
+        .port.is-hidden-dot {
+            visibility: hidden;
+            pointer-events: none;
+        }
         
         .port.input { margin-left: -7px; }
         .port.output { margin-right: -7px; }

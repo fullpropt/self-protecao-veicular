@@ -237,6 +237,7 @@ const OUTPUT_ACTION_TYPE_LABELS: Record<OutputActionType, string> = {
     webhook: 'Webhook'
 };
 const END_NODE_MAX_CUSTOM_OPTIONS = 9;
+const END_NODE_DEFAULT_RETURN_OPTION_LABEL = 'Voltar ao menu principal';
 const END_NODE_FIXED_OPTION_LABEL = 'Finalizar';
 
 let activeFlowDialogDismiss: (() => void) | null = null;
@@ -914,13 +915,25 @@ function parseEndOptionList(value: string) {
 }
 
 function coerceEndOptionListForEditor(value: unknown) {
-    if (Array.isArray(value)) {
-        return value
+    const normalize = (options: string[]) => {
+        const trimmed = options
             .map((item) => String(item ?? '').trim())
             .filter(Boolean)
             .slice(0, END_NODE_MAX_CUSTOM_OPTIONS);
+
+        if (trimmed.length === 0) {
+            return [END_NODE_DEFAULT_RETURN_OPTION_LABEL];
+        }
+
+        const first = String(trimmed[0] || '').trim() || END_NODE_DEFAULT_RETURN_OPTION_LABEL;
+        const rest = trimmed.slice(1);
+        return [first, ...rest].slice(0, END_NODE_MAX_CUSTOM_OPTIONS);
+    };
+
+    if (Array.isArray(value)) {
+        return normalize(value as string[]);
     }
-    return parseEndOptionList(String(value || ''));
+    return normalize(parseEndOptionList(String(value || '')));
 }
 
 function getEndNodeCustomOptions(node?: FlowNode | null) {
@@ -1147,6 +1160,28 @@ function getOutputHandles(node: FlowNode) {
     }
 
     return [...routeHandles, { handle: DEFAULT_HANDLE, label: 'Outra resposta' }];
+}
+
+function isEndOutputHandleReturningToTrigger(node: FlowNode, handle: string) {
+    if (node.type !== 'end') return false;
+    const normalizedHandle = edgeHandle(handle);
+    return edges.some((edge) => {
+        if (edge.source !== node.id) return false;
+        if (edgeHandle(edge.sourceHandle) !== normalizedHandle) return false;
+        const targetNode = nodes.find((candidate) => candidate.id === edge.target);
+        return targetNode?.type === 'trigger';
+    });
+}
+
+function isTriggerInputHandleConnectedFromEnd(node: FlowNode, handle: string) {
+    if (node.type !== 'trigger') return false;
+    const normalizedHandle = edgeHandle(handle);
+    return edges.some((edge) => {
+        if (edge.target !== node.id) return false;
+        if (edgeHandle(edge.targetHandle) !== normalizedHandle) return false;
+        const sourceNode = nodes.find((candidate) => candidate.id === edge.source);
+        return sourceNode?.type === 'end';
+    });
 }
 
 function edgeHandle(handle?: string) {
@@ -2235,7 +2270,13 @@ function getNodeOutputPortsMarkup(node: FlowNode) {
                         onmousedown="event.preventDefault(); event.stopPropagation();"
                         onclick="openOutputActionEditor('${node.id}', '${encodeURIComponent(edgeHandle(item.handle))}', '${encodeURIComponent(String(item.label || ''))}', event)"
                     >+</button>
-                    <div class="port output" data-port="output" data-handle="${escapeHtml(item.handle)}" data-label="${escapeHtml(item.label || '')}" title="${escapeHtml(item.label || 'Saída')}"></div>
+                    <div
+                        class="port output${isEndOutputHandleReturningToTrigger(node, item.handle) ? ' is-hidden-dot' : ''}"
+                        data-port="output"
+                        data-handle="${escapeHtml(item.handle)}"
+                        data-label="${escapeHtml(item.label || '')}"
+                        title="${escapeHtml(item.label || 'Saída')}"
+                    ></div>
                 </div>
             `).join('')}
         </div>
@@ -2250,7 +2291,7 @@ function getNodeInputPortsMarkup(node: FlowNode) {
             ${handles.map((item) => `
                 <div class="node-input-port${item.isExtra ? ' is-extra' : ''}">
                     <div
-                        class="port input${item.isExtra ? ' is-extra-input' : ''}"
+                        class="port input${item.isExtra ? ' is-extra-input' : ''}${isTriggerInputHandleConnectedFromEnd(node, item.handle) ? ' is-hidden-dot' : ''}"
                         data-port="input"
                         data-handle="${escapeHtml(item.handle)}"
                         title="${escapeHtml(item.label)}"
@@ -2881,7 +2922,6 @@ function buildWhatsappPreviewMenuText(prompt: string, items: string[]) {
 
     if (safeItems.length > 0) {
         lines.push('');
-        lines.push('*Escolha uma das opções disponíveis:*');
         safeItems.forEach((item, index) => {
             lines.push(`${index + 1}. ${item}`);
         });
@@ -3333,7 +3373,11 @@ function renderProperties() {
                                 placeholder="Ex.: Voltar ao menu principal"
                                 oninput="updateEndNodeOption(${index}, this.value)"
                             >
-                            <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opção" onclick="removeEndNodeOption(${index})">×</button>
+                            ${
+                                index === 0
+                                    ? '<span class="property-helper-text" style="margin:0; white-space:nowrap;">Fixa</span>'
+                                    : `<button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opção" onclick="removeEndNodeOption(${index})">×</button>`
+                            }
                         </div>
                     `).join('')}
                     <div class="intent-menu-option-row">
@@ -3349,7 +3393,7 @@ function renderProperties() {
                     </div>
                     <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addEndNodeOption()">+ Adicionar opção</button>
                 </div>
-                <small style="display:block; margin-top:6px; color:#7b8aa3;">A opção "${END_NODE_FIXED_OPTION_LABEL}" sempre encerra o fluxo. As demais opções podem seguir para outros blocos.</small>
+                <small style="display:block; margin-top:6px; color:#7b8aa3;">A primeira opção é fixa e mantém o padrão "${END_NODE_DEFAULT_RETURN_OPTION_LABEL}" quando ficar vazia. A opção "${END_NODE_FIXED_OPTION_LABEL}" sempre encerra o fluxo.</small>
             </div>
             <div class="property-group">
                 <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
@@ -3993,13 +4037,21 @@ function updateEndNodeOption(index: number, value: string) {
 
     const options = getEditableEndNodeOptionsDraft();
     if (!options[index]) return;
-    options[index] = String(value || '');
+    const nextValue = String(value || '');
+    if (index === 0 && !nextValue.trim()) {
+        options[index] = END_NODE_DEFAULT_RETURN_OPTION_LABEL;
+        commitEndNodeOptionsDraft(options);
+        renderProperties();
+        return;
+    }
+    options[index] = nextValue;
     commitEndNodeOptionsDraft(options);
 }
 
 function removeEndNodeOption(index: number) {
     if (isFlowReadOnlyMode()) return;
     if (!selectedNode || selectedNode.type !== 'end') return;
+    if (index === 0) return;
 
     const options = getEditableEndNodeOptionsDraft();
     if (!options[index]) return;
