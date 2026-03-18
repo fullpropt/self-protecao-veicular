@@ -438,11 +438,26 @@ export default function PublicCheckout() {
           <img src={brandFullLogoUrl} alt={brandName} />
         </a>
 
+        <div className="public-checkout-order-strip" aria-label="Detalhes do pedido">
+          <div className="public-checkout-order-left">
+            <span className="public-checkout-order-icon" aria-hidden="true">🛒</span>
+            <div className="public-checkout-order-text">
+              <span>Detalhes do pedido</span>
+              <strong>{plan.name}</strong>
+            </div>
+          </div>
+          <span className="public-checkout-order-locale">Brasil / R$</span>
+        </div>
+
         <div className="public-checkout-grid">
           <div className="public-checkout-main">
             <form className="public-checkout-form" onSubmit={handleSubmit} noValidate>
               <section className="public-checkout-card public-checkout-form-card" aria-labelledby="checkoutAccountDataTitle">
-                <div className="public-checkout-section-title" id="checkoutAccountDataTitle">Dados da conta</div>
+                <div className="public-checkout-step-header" aria-hidden="true">
+                  <span className="public-checkout-step-number">1</span>
+                  <span className="public-checkout-step-label">Dados da conta</span>
+                </div>
+                <div className="public-checkout-section-title sr-only" id="checkoutAccountDataTitle">Dados da conta</div>
                 <div className="public-checkout-form-grid">
                   <Field label="Nome completo" error={validationErrors.fullName} full>
                     <input className="public-checkout-input" autoComplete="name" value={values.fullName} onChange={(event) => handleChange('fullName', event.target.value)} />
@@ -469,7 +484,11 @@ export default function PublicCheckout() {
               </section>
 
               <section className="public-checkout-card public-checkout-form-card" aria-labelledby="checkoutPaymentDataTitle">
-                <div className="public-checkout-section-title" id="checkoutPaymentDataTitle">Pagamento</div>
+                <div className="public-checkout-step-header" aria-hidden="true">
+                  <span className="public-checkout-step-number">2</span>
+                  <span className="public-checkout-step-label">Pagamento</span>
+                </div>
+                <div className="public-checkout-section-title sr-only" id="checkoutPaymentDataTitle">Pagamento</div>
                 <div className="public-checkout-form-grid">
                   <Field label="Nome impresso no cartão" error={validationErrors.cardHolderName} full>
                     <input className="public-checkout-input" autoComplete="cc-name" value={values.cardHolderName} onChange={(event) => handleChange('cardHolderName', event.target.value)} />
@@ -502,7 +521,10 @@ export default function PublicCheckout() {
           </div>
 
           <aside className="public-checkout-summary">
-            <div className="public-checkout-eyebrow">Resumo da assinatura</div>
+            <div className="public-checkout-step-header public-checkout-step-header-summary" aria-hidden="true">
+              <span className="public-checkout-step-number">3</span>
+              <span className="public-checkout-step-label">Resumo da compra</span>
+            </div>
             <h2>{plan.name}</h2>
             <p>{plan.summary}</p>
 
