@@ -3166,14 +3166,14 @@ function normalizeText(value) {
 
     if (text.includes('?') || text.includes('\uFFFD')) {
         const fixes = [
-            [/Usu[?\uFFFD]rio/g, 'UsuÃ¡rio'],
-            [/Voc[?\uFFFD]/g, 'VocÃª'],
-            [/N[?\uFFFD]o/g, 'NÃ£o'],
-            [/n[?\uFFFD]o/g, 'nÃ£o'],
-            [/Conex[?\uFFFD]o/g, 'ConexÃ£o'],
-            [/Sess[?\uFFFD]es/g, 'SessÃµes'],
-            [/Automa[?\uFFFD][?\uFFFD]o/g, 'AutomaÃ§Ã£o'],
-            [/Prote[?\uFFFD][?\uFFFD]o/g, 'ProteÃ§Ã£o']
+            [/Usu[?\uFFFD]rio/g, 'Usuário'],
+            [/Voc[?\uFFFD]/g, 'Você'],
+            [/N[?\uFFFD]o/g, 'Não'],
+            [/n[?\uFFFD]o/g, 'não'],
+            [/Conex[?\uFFFD]o/g, 'Conexão'],
+            [/Sess[?\uFFFD]es/g, 'Sessões'],
+            [/Automa[?\uFFFD][?\uFFFD]o/g, 'Automação'],
+            [/Prote[?\uFFFD][?\uFFFD]o/g, 'Proteção']
         ];
         for (const [regex, replacement] of fixes) {
             text = text.replace(regex, replacement);
@@ -3507,7 +3507,7 @@ function shouldAutoUpdateLeadName(lead, phone, sessionDisplayName = '') {
     if (/^\d+$/.test(currentRaw)) return true;
 
     const sessionName = normalizeText(String(sessionDisplayName || '').trim());
-    if (sessionName && (currentRaw === sessionName || currentRaw === `${sessionName} (VocÃª)`)) {
+    if (sessionName && (currentRaw === sessionName || currentRaw === `${sessionName} (Você)`)) {
         return true;
     }
 
@@ -5664,7 +5664,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                         id: sock.user?.id,
 
-                        name: sock.user?.name || 'UsuÃ¡rio',
+                        name: sock.user?.name || 'Usuário',
 
                         pushName: sock.user?.verifiedName || sock.user?.name,
 
@@ -7522,7 +7522,7 @@ async function syncChatsToDatabase(sessionId, payload) {
         const isSelfChat = isSelfPhone(phoneDigits, sessionDigits);
         if (isSelfChat) {
             const safeSessionName = normalizeText(sessionDisplayName || '');
-            displayName = safeSessionName ? `${safeSessionName} (VocÃª)` : 'VocÃª';
+            displayName = safeSessionName ? `${safeSessionName} (Você)` : 'Você';
         }
 
 
@@ -10223,7 +10223,7 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
 
     const safeSessionName = normalizeText(sessionDisplayName || '');
 
-    const selfName = safeSessionName ? `${safeSessionName} (VocÃª)` : 'VocÃª';
+    const selfName = safeSessionName ? `${safeSessionName} (Você)` : 'Você';
 
     
 
@@ -11766,7 +11766,7 @@ io.on('connection', (socket) => {
             owner_user_id: ownerScopeUserId || undefined
         });
         const sessionPhone = getSessionPhone(normalizedSessionId);
-        const sessionDisplayName = normalizeText(getSessionDisplayName(normalizedSessionId) || 'UsuÃ¡rio');
+        const sessionDisplayName = normalizeText(getSessionDisplayName(normalizedSessionId) || 'Usuário');
 
         const contacts = (await Promise.all(leads.map(async (lead) => {
             const conversation = await Conversation.findByLeadId(lead.id, normalizedSessionId || null);
@@ -11784,7 +11784,7 @@ io.on('connection', (socket) => {
                 const sessionDigits = normalizePhoneDigits(sessionPhone);
                 if (isSelfPhone(phoneDigits, sessionDigits)) {
                     const safeSessionName = normalizeText(sessionDisplayName || '');
-                    displayName = safeSessionName ? `${safeSessionName} (VocÃª)` : 'VocÃª';
+                    displayName = safeSessionName ? `${safeSessionName} (Você)` : 'Você';
                 }
 
             return {
@@ -14012,7 +14012,7 @@ app.post('/api/auth/refresh', async (req, res) => {
 
         if (!user || !user.is_active) {
 
-            return res.status(401).json({ error: 'UsuÃ¡rio nÃ£o encontrado ou inativo' });
+            return res.status(401).json({ error: 'Usuário não encontrado ou inativo' });
 
         }
         markUserPresenceOnline(user.id);
@@ -14649,7 +14649,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
     try {
         const targetId = parseInt(req.params.id, 10);
         if (!Number.isInteger(targetId) || targetId <= 0) {
-            return res.status(400).json({ success: false, error: 'UsuÃ¡rio invÃ¡lido' });
+            return res.status(400).json({ success: false, error: 'Usuário inválido' });
         }
 
         const requesterRole = String(req.user?.role || '').toLowerCase();
@@ -14659,12 +14659,12 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
         const isSelf = requesterId === targetId;
 
         if (!isAdmin && !isSelf) {
-            return res.status(403).json({ success: false, error: 'Sem permissÃ£o para editar este usuÃ¡rio' });
+            return res.status(403).json({ success: false, error: 'Sem permissão para editar este usuário' });
         }
 
         const current = await User.findById(targetId);
         if (!current) {
-            return res.status(404).json({ success: false, error: 'UsuÃ¡rio nÃ£o encontrado' });
+            return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
         }
 
         if (isAdmin && !isSameUserOwner(current, requesterOwnerUserId)) {
@@ -14788,14 +14788,14 @@ app.post('/api/auth/change-password', authenticate, async (req, res) => {
     try {
         const userId = Number(req.user?.id || 0);
         if (!userId) {
-            return res.status(401).json({ success: false, error: 'UsuÃ¡rio nÃ£o autenticado' });
+            return res.status(401).json({ success: false, error: 'Usuário não autenticado' });
         }
 
         const currentPassword = String(req.body?.currentPassword || '');
         const newPassword = String(req.body?.newPassword || '');
 
         if (!currentPassword || !newPassword) {
-            return res.status(400).json({ success: false, error: 'Senha atual e nova senha sÃ£o obrigatÃ³rias' });
+            return res.status(400).json({ success: false, error: 'Senha atual e nova senha são obrigatórias' });
         }
 
         if (newPassword.length < 6) {
@@ -14805,7 +14805,7 @@ app.post('/api/auth/change-password', authenticate, async (req, res) => {
         const { verifyPassword, hashPassword } = require('./middleware/auth');
         const user = await User.findByIdWithPassword(userId);
         if (!user) {
-            return res.status(404).json({ success: false, error: 'UsuÃ¡rio nÃ£o encontrado' });
+            return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
         }
 
         if (!verifyPassword(currentPassword, user.password_hash)) {

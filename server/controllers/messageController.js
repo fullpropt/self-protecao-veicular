@@ -134,8 +134,8 @@ function createMessageController(options = {}) {
                 const phoneDigits = normalizePhoneDigits(c.phone);
                 const sessionDigits = normalizePhoneDigits(sessionPhone);
                 if (isSelfPhone(phoneDigits, sessionDigits)) {
-                    const sessionName = normalizeText(getSessionDisplayName(c.session_id) || 'UsuÃ¡rio');
-                    name = sessionName ? `${sessionName} (VocÃª)` : 'VocÃª';
+                    const sessionName = normalizeText(getSessionDisplayName(c.session_id) || 'Usuário');
+                    name = sessionName ? `${sessionName} (Você)` : 'Você';
                 }
 
                 return {
