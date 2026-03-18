@@ -746,7 +746,7 @@ export default function FlowBuilder() {
         }
 
         .flow-builder-react .sidebar-footer {
-            margin-top: 34px;
+            margin-top: 120px;
             padding: 8px 15px 20px;
             border-top: none;
         }
