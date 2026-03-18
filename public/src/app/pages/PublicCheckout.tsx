@@ -515,7 +515,6 @@ export default function PublicCheckout() {
               <span className="public-checkout-step-label">Resumo da compra</span>
             </div>
             <h2>{plan.name}</h2>
-            <p>{plan.summary}</p>
 
             <div className="public-checkout-plan-card">
               <div className="public-checkout-price-line"><span>Plano</span><strong>{plan.name}</strong></div>

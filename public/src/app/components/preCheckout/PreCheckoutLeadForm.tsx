@@ -1,6 +1,5 @@
 import type { FormEvent } from 'react';
 import {
-  PRE_CHECKOUT_OBJECTIVE_OPTIONS,
   type PreCheckoutField,
   type PreCheckoutFieldErrors,
   type PreCheckoutFormValues
@@ -142,29 +141,6 @@ export default function PreCheckoutLeadForm({
           onFieldBlur={onFieldBlur}
         />
 
-        <div className={`precheckout-field ${errors.primaryObjective ? 'has-error' : ''}`}>
-          <label htmlFor="precheckout-objective">Principal objetivo com a plataforma</label>
-          <select
-            id="precheckout-objective"
-            name="primaryObjective"
-            value={values.primaryObjective}
-            onChange={(event) => onFieldChange('primaryObjective', event.target.value)}
-            onBlur={() => onFieldBlur('primaryObjective')}
-            aria-invalid={errors.primaryObjective ? 'true' : 'false'}
-            aria-describedby={errors.primaryObjective ? 'precheckout-objective-error' : undefined}
-            required
-          >
-            <option value="">Selecione uma opção</option>
-            {PRE_CHECKOUT_OBJECTIVE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {errors.primaryObjective ? (
-            <small id="precheckout-objective-error">{errors.primaryObjective}</small>
-          ) : null}
-        </div>
 
         {submitError ? <p className="precheckout-submit-error">{submitError}</p> : null}
 

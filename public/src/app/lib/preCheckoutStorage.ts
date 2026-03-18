@@ -174,9 +174,5 @@ export function validatePreCheckout(values: PreCheckoutFormValues): PreCheckoutF
     errors.companyName = 'Informe o nome da sua empresa.';
   }
 
-  if (!values.primaryObjective) {
-    errors.primaryObjective = 'Selecione seu principal objetivo.';
-  }
-
   return errors;
 }
