@@ -1188,6 +1188,11 @@ function isTriggerInputHandleConnectedFromEnd(node: FlowNode, handle: string) {
     });
 }
 
+function isEndFixedReturnOutputHandle(node: FlowNode, handle: string) {
+    if (node.type !== 'end') return false;
+    return normalizePathHandleIndex(handle) === 1;
+}
+
 function edgeHandle(handle?: string) {
     const normalized = String(handle || '').trim();
     return normalized || DEFAULT_HANDLE;
@@ -2275,7 +2280,11 @@ function getNodeOutputPortsMarkup(node: FlowNode) {
                         onclick="openOutputActionEditor('${node.id}', '${encodeURIComponent(edgeHandle(item.handle))}', '${encodeURIComponent(String(item.label || ''))}', event)"
                     >+</button>
                     <div
-                        class="port output${isEndOutputHandleReturningToTrigger(node, item.handle) ? ' is-hidden-dot' : ''}"
+                        class="port output${
+                            isEndOutputHandleReturningToTrigger(node, item.handle) || isEndFixedReturnOutputHandle(node, item.handle)
+                                ? ' is-hidden-dot'
+                                : ''
+                        }"
                         data-port="output"
                         data-handle="${escapeHtml(item.handle)}"
                         data-label="${escapeHtml(item.label || '')}"
@@ -2295,7 +2304,7 @@ function getNodeInputPortsMarkup(node: FlowNode) {
             ${handles.map((item) => `
                 <div class="node-input-port${item.isExtra ? ' is-extra' : ''}">
                     <div
-                        class="port input${item.isExtra ? ' is-extra-input' : ''}${isTriggerInputHandleConnectedFromEnd(node, item.handle) ? ' is-hidden-dot' : ''}"
+                        class="port input${item.isExtra ? ' is-extra-input' : ''}${(node.type === 'trigger' || isTriggerInputHandleConnectedFromEnd(node, item.handle)) ? ' is-hidden-dot' : ''}"
                         data-port="input"
                         data-handle="${escapeHtml(item.handle)}"
                         title="${escapeHtml(item.label)}"
