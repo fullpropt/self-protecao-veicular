@@ -1654,7 +1654,6 @@ function renderTemplateCard(template: TemplateItem) {
     const audioUrl = mediaType === 'audio' && template.media_url ? getMediaUrl(template.media_url) : '';
     const mediaUrlAttr = template.media_url ? escapeHtml(template.media_url) : '';
     const mediaLabel = mediaType === 'audio' ? 'Audio' : 'Texto';
-    const openAttr = templatesCache.length === 1 ? ' open' : '';
 
     const body = mediaType === 'audio'
         ? `
@@ -1669,7 +1668,7 @@ function renderTemplateCard(template: TemplateItem) {
         `;
 
     return `
-        <details class="template-card" data-template-id="${template.id}" data-media-type="${mediaType}" data-media-url="${mediaUrlAttr}"${openAttr}>
+        <details class="template-card" data-template-id="${template.id}" data-media-type="${mediaType}" data-media-url="${mediaUrlAttr}">
             <summary class="template-card-summary">
                 <div class="template-card-summary-main">
                     <span class="template-card-title">${safeDisplayName}</span>
