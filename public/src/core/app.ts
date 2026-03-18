@@ -181,6 +181,8 @@ const APP: AppState = {
     user: null
 };
 
+const PLAN_INACTIVE_MESSAGE = 'Sua assinatura n\u00E3o est\u00E1 ativa. Reative para poder usar a aplica\u00E7\u00E3o.';
+
 
 function isAppShell() {
     return true;
@@ -961,10 +963,7 @@ async function apiRequest(endpoint: string, options: ApiRequestOptions = {}) {
                     ? data.code.trim().toUpperCase()
                     : '';
             if (responseCode === 'PLAN_INACTIVE') {
-                const planInactiveMessage =
-                    (data && typeof data.error === 'string' && data.error.trim())
-                        ? data.error
-                        : 'Sua assinatura não está ativa. Reative para poder usar a aplicação.';
+                const planInactiveMessage = PLAN_INACTIVE_MESSAGE;
 
                 if (!isLoginRoute()) {
                     showToast('warning', 'Assinatura inativa', planInactiveMessage);
