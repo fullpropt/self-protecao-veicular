@@ -6,6 +6,10 @@
 const { ValidationError } = require('./errorHandler');
 const { DEFAULT_WHATSAPP_SESSION_ID } = require('../config/sessionDefaults');
 
+function isPlainObject(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 /**
  * Valida se um campo é obrigatório
  */
@@ -35,6 +39,27 @@ function isPhone(value, fieldName = 'phone') {
     if (cleaned.length < 10 || cleaned.length > 13) {
         throw new ValidationError(`O campo '${fieldName}' deve ser um telefone válido`);
     }
+    return cleaned;
+}
+
+/**
+ * Valida destino de WhatsApp (telefone ou JID)
+ */
+function isWhatsAppDestination(value, fieldName = 'to') {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        throw new ValidationError(`O campo '${fieldName}' é obrigatório`);
+    }
+
+    if (/@(s\.whatsapp\.net|c\.us|lid)$/i.test(raw)) {
+        return raw;
+    }
+
+    const cleaned = raw.replace(/\D/g, '');
+    if (cleaned.length < 10 || cleaned.length > 16) {
+        throw new ValidationError(`O campo '${fieldName}' deve ser um telefone ou JID válido`);
+    }
+
     return cleaned;
 }
 
@@ -209,11 +234,126 @@ function validateLogin(req, res, next) {
         required(password, 'password');
         
         const validData = {
-            email: sanitizeString(email).toLowerCase().trim(),
+            email: isEmail(sanitizeString(email).toLowerCase().trim(), 'email'),
             password: password
         };
         
         req.validatedData = validData;
+        next();
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Validação para envio direto (rota /api/send)
+ */
+function validateApiSendRequest(req, res, next) {
+    try {
+        const { sessionId, to, message, type } = req.body || {};
+
+        required(sessionId, 'sessionId');
+        required(to, 'to');
+        required(message, 'message');
+
+        const normalizedMessage = String(message || '');
+        if (!normalizedMessage.trim()) {
+            throw new ValidationError("O campo 'message' não pode ser vazio");
+        }
+
+        const validData = {
+            sessionId: isString(sanitizeString(sessionId), 'sessionId', { min: 1, max: 120 }),
+            to: isWhatsAppDestination(to, 'to'),
+            message: isString(normalizedMessage, 'message', { min: 1, max: 4096 })
+        };
+
+        if (type) {
+            validData.type = isIn(type, 'type', ['text', 'image', 'video', 'audio', 'document', 'sticker']);
+        }
+
+        req.validatedData = validData;
+        next();
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Validação para disparo em massa (rota /api/queue/bulk)
+ */
+function validateQueueBulkRequest(req, res, next) {
+    try {
+        const payload = req.body || {};
+        const leadIds = Array.isArray(payload.leadIds) ? payload.leadIds : [];
+
+        if (leadIds.length === 0) {
+            throw new ValidationError("O campo 'leadIds' deve ser um array com pelo menos 1 item");
+        }
+
+        const normalizedLeadIds = leadIds.map((leadId) => isInteger(leadId, 'leadIds', { min: 1 }));
+        const uniqueLeadIds = Array.from(new Set(normalizedLeadIds));
+        if (uniqueLeadIds.length === 0) {
+            throw new ValidationError("O campo 'leadIds' deve conter IDs válidos");
+        }
+
+        const contentValue = String(payload.content || '');
+        if (!contentValue.trim()) {
+            throw new ValidationError("O campo 'content' não pode ser vazio");
+        }
+
+        const content = isString(contentValue, 'content', { min: 1, max: 4096 });
+
+        if (payload.options !== undefined && !isPlainObject(payload.options)) {
+            throw new ValidationError("O campo 'options' deve ser um objeto");
+        }
+
+        req.validatedData = {
+            leadIds: uniqueLeadIds,
+            content,
+            options: isPlainObject(payload.options) ? payload.options : {}
+        };
+        next();
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Validação para webhook Stripe
+ */
+function validateStripeWebhook(req, res, next) {
+    try {
+        const signature = String(req.headers['stripe-signature'] || '').trim();
+        if (!signature) {
+            throw new ValidationError('Header stripe-signature é obrigatório');
+        }
+
+        const hasBody = Buffer.isBuffer(req.body)
+            ? req.body.length > 0
+            : String(req.body || '').trim().length > 0;
+        if (!hasBody) {
+            throw new ValidationError('Payload do webhook Stripe está vazio');
+        }
+
+        next();
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * Validação para webhook Pagar.me
+ */
+function validatePagarmeWebhook(req, res, next) {
+    try {
+        if (!isPlainObject(req.body)) {
+            throw new ValidationError('Payload do webhook Pagar.me inválido');
+        }
+
+        if (Object.keys(req.body).length === 0) {
+            throw new ValidationError('Payload do webhook Pagar.me está vazio');
+        }
+
         next();
     } catch (error) {
         next(error);
@@ -252,6 +392,7 @@ module.exports = {
     required,
     isEmail,
     isPhone,
+    isWhatsAppDestination,
     isString,
     isInteger,
     isIn,
@@ -261,5 +402,9 @@ module.exports = {
     validateLeadCreation,
     validateMessageSend,
     validateLogin,
-    validatePagination
+    validatePagination,
+    validateApiSendRequest,
+    validateQueueBulkRequest,
+    validateStripeWebhook,
+    validatePagarmeWebhook
 };

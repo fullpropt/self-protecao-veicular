@@ -509,6 +509,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS leads_owner_jid_unique ON leads(owner_user_id,
 CREATE INDEX IF NOT EXISTS idx_conversations_lead ON conversations(lead_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
 CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_conversations_updated_id_desc ON conversations(updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_assigned_updated_id_desc ON conversations(assigned_to, updated_at DESC, id DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS conv_lead_session_unique ON conversations(lead_id, session_id);
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
@@ -517,9 +519,14 @@ CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_campaign ON messages(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_sent_coalesce_desc ON messages(conversation_id, COALESCE(sent_at, created_at) DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_lead_sent_coalesce_desc ON messages(lead_id, COALESCE(sent_at, created_at) DESC, id DESC);
 
 CREATE INDEX IF NOT EXISTS idx_flows_trigger ON flows(trigger_type, trigger_value);
 CREATE INDEX IF NOT EXISTS idx_flows_active ON flows(is_active);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_status_id_desc ON flow_executions(status, id DESC);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_flow_status ON flow_executions(flow_id, status);
+CREATE INDEX IF NOT EXISTS idx_flow_executions_lead ON flow_executions(lead_id);
 CREATE INDEX IF NOT EXISTS idx_automation_lead_runs_lead ON automation_lead_runs(lead_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_automation_migrations_automation ON campaign_automation_migrations(automation_id);
 CREATE INDEX IF NOT EXISTS idx_custom_events_active ON custom_events(is_active);

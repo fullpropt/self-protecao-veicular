@@ -77,6 +77,9 @@ const openAiFlowDraftService = require('./services/openAiFlowDraftService');
 const senderAllocatorService = require('./services/senderAllocatorService');
 const tenantIntegrityAuditService = require('./services/tenantIntegrityAuditService');
 const { PostgresAdvisoryLock } = require('./services/postgresAdvisoryLock');
+const { createOpsMonitoringService } = require('./services/opsMonitoringService');
+const { createFlowMenuTextService } = require('./services/flowMenuTextService');
+const { createInboundMessagePipelineService } = require('./services/inboundMessagePipelineService');
 const stripeCheckoutService = require('./services/stripeCheckoutService');
 const pagarmeCheckoutService = require('./services/pagarmeCheckoutService');
 const planLimitsService = require('./services/planLimitsService');
@@ -140,6 +143,14 @@ const {
 
 const { authenticate, requestLogger, verifyToken, rateLimit: authRateLimit } = require('./middleware/auth');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const {
+    sanitizeInput,
+    validateLogin,
+    validateApiSendRequest,
+    validateQueueBulkRequest,
+    validateStripeWebhook,
+    validatePagarmeWebhook
+} = require('./middleware/validator');
 
 
 
@@ -223,6 +234,61 @@ const WHATSAPP_SESSION_RATE_LIMIT_MAX_PER_MINUTE = parsePositiveIntInRange(
 );
 const METRICS_ENABLED = parseBooleanEnv(process.env.METRICS_ENABLED, false);
 const METRICS_BEARER_TOKEN = String(process.env.METRICS_BEARER_TOKEN || '').trim();
+const OPS_ALERTS_ENABLED = parseBooleanEnv(
+    process.env.OPS_ALERTS_ENABLED,
+    process.env.NODE_ENV === 'production'
+);
+const OPS_ALERTS_POLL_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERTS_POLL_MS,
+    60000,
+    5000,
+    60 * 60 * 1000
+);
+const OPS_ALERTS_COOLDOWN_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERTS_COOLDOWN_MS,
+    5 * 60 * 1000,
+    10000,
+    24 * 60 * 60 * 1000
+);
+const OPS_ALERT_QUEUE_PENDING_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_QUEUE_PENDING_WARN,
+    3000,
+    1,
+    100000000
+);
+const OPS_ALERT_QUEUE_FAILED_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_QUEUE_FAILED_WARN,
+    200,
+    1,
+    100000000
+);
+const OPS_ALERT_FLOW_RUNNING_WARN = parsePositiveIntInRange(
+    process.env.OPS_ALERT_FLOW_RUNNING_WARN,
+    300,
+    1,
+    100000000
+);
+const OPS_ALERT_NOTIFY_WEBHOOK_URL = String(process.env.OPS_ALERT_NOTIFY_WEBHOOK_URL || '').trim();
+const OPS_ALERT_NOTIFY_BEARER_TOKEN = String(process.env.OPS_ALERT_NOTIFY_BEARER_TOKEN || '').trim();
+const OPS_ALERT_NOTIFY_ENABLED = parseBooleanEnv(
+    process.env.OPS_ALERT_NOTIFY_ENABLED,
+    Boolean(OPS_ALERT_NOTIFY_WEBHOOK_URL)
+);
+const OPS_ALERT_NOTIFY_TIMEOUT_MS = parsePositiveIntInRange(
+    process.env.OPS_ALERT_NOTIFY_TIMEOUT_MS,
+    5000,
+    500,
+    120000
+);
+const OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT = parseBooleanEnv(
+    process.env.OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT,
+    true
+);
+const APP_LOG_LEVEL = parseLogLevel(
+    process.env.LOG_LEVEL,
+    process.env.NODE_ENV === 'production' ? 'info' : 'debug'
+);
+const WHATSAPP_LOG_LEVEL = parseLogLevel(process.env.WHATSAPP_LOG_LEVEL, 'warn');
 const FLOW_INBOUND_TELEMETRY_ENABLED = parseBooleanEnv(process.env.FLOW_INBOUND_TELEMETRY_ENABLED, false);
 const FLOW_INBOUND_TELEMETRY_SLOW_MS = parsePositiveIntInRange(
     process.env.FLOW_INBOUND_TELEMETRY_SLOW_MS,
@@ -380,6 +446,13 @@ function parseBooleanEnv(value, fallback = false) {
     const normalized = String(value).trim().toLowerCase();
     if (['1', 'true', 'yes', 'sim', 'on'].includes(normalized)) return true;
     if (['0', 'false', 'no', 'nao', 'nÃ£o', 'off'].includes(normalized)) return false;
+    return fallback;
+}
+
+function parseLogLevel(value, fallback = 'info') {
+    const normalized = String(value || '').trim().toLowerCase();
+    const validLevels = new Set(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']);
+    if (validLevels.has(normalized)) return normalized;
     return fallback;
 }
 
@@ -1630,6 +1703,39 @@ const corsOptionsDelegate = (req, callback) => {
 
 app.use(cors(corsOptionsDelegate));
 
+const opsMonitoringService = createOpsMonitoringService({
+    queryOne,
+    getSessionsMap: () => whatsappService.sessions,
+    getProcessUptimeSeconds: () => Math.floor(process.uptime()),
+    opsAlertsEnabled: OPS_ALERTS_ENABLED,
+    opsAlertsPollMs: OPS_ALERTS_POLL_MS,
+    opsAlertsCooldownMs: OPS_ALERTS_COOLDOWN_MS,
+    queuePendingWarn: OPS_ALERT_QUEUE_PENDING_WARN,
+    queueFailedWarn: OPS_ALERT_QUEUE_FAILED_WARN,
+    flowRunningWarn: OPS_ALERT_FLOW_RUNNING_WARN,
+    notifyEnabled: OPS_ALERT_NOTIFY_ENABLED,
+    notifyWebhookUrl: OPS_ALERT_NOTIFY_WEBHOOK_URL,
+    notifyBearerToken: OPS_ALERT_NOTIFY_BEARER_TOKEN,
+    notifyTimeoutMs: OPS_ALERT_NOTIFY_TIMEOUT_MS,
+    notifyIncludeSnapshot: OPS_ALERT_NOTIFY_INCLUDE_SNAPSHOT,
+    appBrandName: APP_BRAND_NAME,
+    nodeEnv: process.env.NODE_ENV,
+    logStructured,
+    normalizeErrorForLog
+});
+
+async function getOpsRuntimeSnapshot() {
+    return await opsMonitoringService.getRuntimeSnapshot();
+}
+
+function buildOpsThresholdState(snapshot = {}) {
+    return opsMonitoringService.buildThresholdState(snapshot);
+}
+
+function buildOpsMetricsLines(snapshot = {}, thresholdState = {}) {
+    return opsMonitoringService.buildMetricsLines(snapshot, thresholdState);
+}
+
 
 
 app.get('/metrics', async (req, res) => {
@@ -1653,54 +1759,9 @@ app.get('/metrics', async (req, res) => {
     }
 
     try {
-        const connectedSessions = Array.from(sessions.values()).filter((session) => session?.isConnected === true).length;
-        const totalSessions = sessions.size;
-        const queueStatsRow = await queryOne(`
-            SELECT
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
-                SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
-                SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
-                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-            FROM message_queue
-        `);
-        const runningFlowsRow = await queryOne(`
-            SELECT COUNT(*)::int AS total
-            FROM flow_executions
-            WHERE status = 'running'
-        `);
-
-        const queuePending = Number(queueStatsRow?.pending || 0) || 0;
-        const queueProcessing = Number(queueStatsRow?.processing || 0) || 0;
-        const queueSent = Number(queueStatsRow?.sent || 0) || 0;
-        const queueFailed = Number(queueStatsRow?.failed || 0) || 0;
-        const flowRunning = Number(runningFlowsRow?.total || 0) || 0;
-
-        const metricsLines = [
-            '# HELP zapvender_process_uptime_seconds Node process uptime in seconds',
-            '# TYPE zapvender_process_uptime_seconds gauge',
-            `zapvender_process_uptime_seconds ${Math.floor(process.uptime())}`,
-            '# HELP zapvender_whatsapp_sessions_total Total WhatsApp sessions loaded in runtime',
-            '# TYPE zapvender_whatsapp_sessions_total gauge',
-            `zapvender_whatsapp_sessions_total ${totalSessions}`,
-            '# HELP zapvender_whatsapp_sessions_connected Connected WhatsApp sessions in runtime',
-            '# TYPE zapvender_whatsapp_sessions_connected gauge',
-            `zapvender_whatsapp_sessions_connected ${connectedSessions}`,
-            '# HELP zapvender_queue_pending_messages Pending messages in queue',
-            '# TYPE zapvender_queue_pending_messages gauge',
-            `zapvender_queue_pending_messages ${queuePending}`,
-            '# HELP zapvender_queue_processing_messages Processing messages in queue',
-            '# TYPE zapvender_queue_processing_messages gauge',
-            `zapvender_queue_processing_messages ${queueProcessing}`,
-            '# HELP zapvender_queue_sent_messages Sent messages in queue table',
-            '# TYPE zapvender_queue_sent_messages gauge',
-            `zapvender_queue_sent_messages ${queueSent}`,
-            '# HELP zapvender_queue_failed_messages Failed messages in queue table',
-            '# TYPE zapvender_queue_failed_messages gauge',
-            `zapvender_queue_failed_messages ${queueFailed}`,
-            '# HELP zapvender_flow_executions_running Running flow executions',
-            '# TYPE zapvender_flow_executions_running gauge',
-            `zapvender_flow_executions_running ${flowRunning}`
-        ];
+        const snapshot = await getOpsRuntimeSnapshot();
+        const thresholdState = buildOpsThresholdState(snapshot);
+        const metricsLines = buildOpsMetricsLines(snapshot, thresholdState);
 
         res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
         return res.send(`${metricsLines.join('\n')}\n`);
@@ -1764,7 +1825,7 @@ app.post(CSP_REPORT_ROUTE_PATH, cspReportBodyParser, (req, res) => {
     return res.status(204).end();
 });
 
-app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/stripe/webhook', express.raw({ type: 'application/json' }), validateStripeWebhook, async (req, res) => {
     try {
         const signature = String(req.headers['stripe-signature'] || '').trim();
         const event = await stripeCheckoutService.constructWebhookEvent(req.body, signature);
@@ -1776,7 +1837,7 @@ app.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (re
     }
 });
 
-app.post('/pagarme/webhook', express.json({ type: 'application/json' }), async (req, res) => {
+app.post('/pagarme/webhook', express.json({ type: 'application/json' }), validatePagarmeWebhook, async (req, res) => {
     try {
         const event = await pagarmeCheckoutService.constructWebhookEvent(req.body);
         await handlePagarmeWebhookEvent(req, event);
@@ -2147,7 +2208,8 @@ const reconnectAttempts = whatsappService.reconnectAttempts;
 
 const qrTimeouts = whatsappService.qrTimeouts;
 
-const logger = pino({ level: 'silent' });
+const opsLogger = pino({ level: APP_LOG_LEVEL });
+const waLogger = pino({ level: WHATSAPP_LOG_LEVEL || APP_LOG_LEVEL });
 
 const typingStatus = new Map();
 
@@ -2208,6 +2270,38 @@ const WHATSAPP_MANUAL_RECONNECT_CATCHUP_MAX_CONVERSATIONS = parsePositiveIntEnv(
     process.env.WHATSAPP_MANUAL_RECONNECT_CATCHUP_MAX_CONVERSATIONS,
     Math.max(200, WHATSAPP_RECONNECT_CATCHUP_MAX_CONVERSATIONS)
 );
+
+function normalizeErrorForLog(error, fallback = 'unknown') {
+    const message = String(error?.message || error || '').trim();
+    return message ? message.slice(0, 400) : fallback;
+}
+
+function normalizeEventName(value, fallback = 'app.event') {
+    const event = String(value || '').trim().toLowerCase();
+    return event ? event.slice(0, 120) : fallback;
+}
+
+function logStructured(level, event, fields = {}, message = '') {
+    const normalizedLevel = String(level || '').trim().toLowerCase();
+    const method = typeof opsLogger?.[normalizedLevel] === 'function' ? normalizedLevel : 'info';
+    const payload = {
+        event: normalizeEventName(event)
+    };
+
+    if (fields && typeof fields === 'object') {
+        for (const [key, value] of Object.entries(fields)) {
+            if (value === undefined) continue;
+            payload[key] = value;
+        }
+    }
+
+    if (message) {
+        opsLogger[method](payload, String(message).slice(0, 300));
+        return;
+    }
+
+    opsLogger[method](payload);
+}
 
 function setSessionStartupError(sessionId, payload = {}) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
@@ -4705,6 +4799,24 @@ function decryptMessage(encrypted) {
 
 }
 
+function resolveMessageContentWithFallback(messageRow = {}) {
+
+    if (!messageRow || typeof messageRow !== 'object') return '';
+
+    const encryptedContent = messageRow.content_encrypted;
+    const fallbackContent = messageRow.content;
+
+    if (!encryptedContent) return fallbackContent || '';
+
+    const decryptedContent = decryptMessage(encryptedContent);
+    if (decryptedContent && String(decryptedContent).trim()) {
+        return decryptedContent;
+    }
+
+    return fallbackContent || '';
+
+}
+
 
 
 const formatJid = whatsappService.formatJid;
@@ -5151,7 +5263,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
             ...(Array.isArray(socketVersion) ? { version: socketVersion } : {}),
 
-            logger,
+            waLogger,
 
 // printQRInTerminal: true, // Depreciado no Baileys
 
@@ -5159,7 +5271,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 creds: state.creds,
 
-                keys: makeCacheableSignalKeyStore(state.keys, logger)
+                keys: makeCacheableSignalKeyStore(state.keys, waLogger)
 
             },
 
@@ -5185,11 +5297,7 @@ async function createSession(sessionId, socket, attempt = 0, options = {}) {
 
                 if (msg) {
 
-                    const content = msg.content_encrypted 
-
-                        ? decryptMessage(msg.content_encrypted) 
-
-                        : msg.content;
+                    const content = resolveMessageContentWithFallback(msg);
 
                     return { conversation: content };
 
@@ -6169,6 +6277,11 @@ function applyAutomationTemplate(template = '', variables = {}) {
 
 
 
+const flowMenuTextService = createFlowMenuTextService({
+    normalizeText,
+    applyLeadTemplate
+});
+
 const SUPPORTED_AUTOMATION_TRIGGER_TYPES = new Set([
     'new_lead',
     'status_change',
@@ -6183,6 +6296,21 @@ const AUTOMATION_EVENT_TYPES = {
     SCHEDULE: 'schedule',
     INACTIVITY: 'inactivity'
 };
+const inboundMessagePipelineService = createInboundMessagePipelineService({
+    runInboundAutomationSerialized,
+    runWithConversationPostgresLock,
+    getBusinessHoursSettings,
+    isWithinBusinessHours,
+    shouldSendOutsideHoursAutoReply,
+    sendMessage,
+    markOutsideHoursAutoReplySent,
+    flowService,
+    scheduleAutomations,
+    automationEventTypes: AUTOMATION_EVENT_TYPES,
+    flowInboundTelemetryEnabled: FLOW_INBOUND_TELEMETRY_ENABLED,
+    flowInboundTelemetrySlowMs: FLOW_INBOUND_TELEMETRY_SLOW_MS,
+    logStructured
+});
 const DEFAULT_AUTOMATION_SESSION_ID = DEFAULT_WHATSAPP_SESSION_ID;
 const AUTOMATION_SCHEDULE_POLL_MS = 30000;
 const LEGACY_CAMPAIGN_TRIGGER_MODE = 'legacy_campaign_trigger';
@@ -8449,9 +8577,7 @@ function isFlowNodeAwaitingInput(flow, nodeId) {
 }
 
 function resolveStoredMessageTextForFlow(messageRow = {}) {
-    let text = messageRow?.content_encrypted
-        ? decryptMessage(messageRow.content_encrypted)
-        : messageRow?.content;
+    let text = resolveMessageContentWithFallback(messageRow);
 
     if ((!text || !String(text).trim()) && messageRow?.media_type && messageRow.media_type !== 'text') {
         text = previewForMedia(messageRow.media_type);
@@ -8814,6 +8940,18 @@ function stopFlowAwaitingInputRecoveryWorker() {
     }
 }
 
+async function runOpsAlertsCycle(options = {}) {
+    return await opsMonitoringService.runCycle(options);
+}
+
+function startOpsAlertsWorker() {
+    opsMonitoringService.startWorker();
+}
+
+function stopOpsAlertsWorker() {
+    opsMonitoringService.stopWorker();
+}
+
 function normalizeHistorySyncMessageBatch(messages, limit = WHATSAPP_HISTORY_SYNC_MESSAGES_LIMIT) {
     if (!Array.isArray(messages) || messages.length === 0) return [];
 
@@ -9096,9 +9234,15 @@ async function runWithConversationPostgresLock(conversationId, task) {
             lockWaitMs = Date.now() - lockStartedAtMs;
         } catch (lockError) {
             lockWaitMs = Date.now() - lockStartedAtMs;
-            console.warn(
-                `[flow-lock] Falha ao adquirir lock Postgres da conversa ${conversationId || 'n/a'} `
-                + `(espera=${lockWaitMs}ms). Seguindo com lock local: ${lockError.message}`
+            logStructured(
+                'warn',
+                'flow.lock.postgres_acquire_failed',
+                {
+                    conversationId: Number(conversationId || 0) || null,
+                    lockWaitMs,
+                    error: normalizeErrorForLog(lockError)
+                },
+                'Falha ao adquirir lock Postgres da conversa; seguindo com lock local'
             );
         }
 
@@ -9117,9 +9261,14 @@ async function runWithConversationPostgresLock(conversationId, task) {
                         lockKeyPart
                     ]);
                 } catch (unlockError) {
-                    console.error(
-                        `[flow-lock] Falha ao liberar lock Postgres da conversa ${conversationId || 'n/a'}:`,
-                        unlockError.message
+                    logStructured(
+                        'error',
+                        'flow.lock.postgres_release_failed',
+                        {
+                            conversationId: Number(conversationId || 0) || null,
+                            error: normalizeErrorForLog(unlockError)
+                        },
+                        'Falha ao liberar lock Postgres da conversa'
                     );
                 }
             }
@@ -9199,9 +9348,16 @@ async function claimIncomingMessageReceipt(options = {}) {
 
         return { acquired: true, token: lockToken, reason: 'claimed' };
     } catch (error) {
-        console.warn(
-            `[flow-idempotency] Falha ao registrar receipt para ${normalizedSessionId}:${normalizedMessageId}. `
-            + `Seguindo em modo local: ${error.message}`
+        logStructured(
+            'warn',
+            'flow.idempotency.receipt_claim_failed',
+            {
+                sessionId: normalizedSessionId,
+                messageId: normalizedMessageId,
+                source: normalizedSource,
+                error: normalizeErrorForLog(error)
+            },
+            'Falha ao registrar receipt; seguindo em modo local'
         );
         return { acquired: true, token: '', reason: 'fallback_local' };
     }
@@ -9285,11 +9441,24 @@ async function cleanupIncomingMessageReceipts(options = {}) {
 
         const deleted = Number(result?.changes || 0) || 0;
         if (deleted > 0) {
-            console.log(`[flow-idempotency] Cleanup incoming_message_receipts removeu ${deleted} registro(s).`);
+            logStructured(
+                'info',
+                'flow.idempotency.receipt_cleanup',
+                {
+                    deleted,
+                    retentionMs: INCOMING_MESSAGE_RECEIPTS_RETENTION_MS
+                },
+                'Cleanup de incoming_message_receipts executado'
+            );
         }
         return { deleted };
     } catch (error) {
-        console.warn('[flow-idempotency] Falha ao limpar incoming_message_receipts:', error.message);
+        logStructured(
+            'warn',
+            'flow.idempotency.receipt_cleanup_failed',
+            { error: normalizeErrorForLog(error) },
+            'Falha ao limpar incoming_message_receipts'
+        );
         return { deleted: 0, skipped: 'error' };
     } finally {
         incomingMessageReceiptsCleanupInFlight = false;
@@ -9305,26 +9474,23 @@ function logFlowInboundTelemetry(payload = {}) {
     const flowMs = Math.max(0, Math.round(Number(payload.flowMs || 0) || 0));
     const automationsMs = Math.max(0, Math.round(Number(payload.automationsMs || 0) || 0));
     const lockWaitMs = Math.max(0, Math.round(Number(payload.lockWaitMs || 0) || 0));
-    const outsideHours = payload.outsideHours === true ? '1' : '0';
-    const fromMe = payload.isFromMe === true ? '1' : '0';
-
-    const parts = [
-        `session=${sanitizeSessionId(payload.sessionId) || 'n/a'}`,
-        `conversation=${Number(payload.conversationId || 0) || 'n/a'}`,
-        `message=${String(payload.messageId || '').trim() || 'n/a'}`,
-        `source=${String(payload.source || 'live').trim().toLowerCase() || 'live'}`,
-        `from_me=${fromMe}`,
-        `outside_hours=${outsideHours}`,
-        `total_ms=${totalMs}`,
-        `flow_ms=${flowMs}`,
-        `automations_ms=${automationsMs}`,
-        `lock_wait_ms=${lockWaitMs}`
-    ];
+    const fields = {
+        sessionId: sanitizeSessionId(payload.sessionId) || 'n/a',
+        conversationId: Number(payload.conversationId || 0) || null,
+        messageId: String(payload.messageId || '').trim() || 'n/a',
+        source: String(payload.source || 'live').trim().toLowerCase() || 'live',
+        fromMe: payload.isFromMe === true,
+        outsideHours: payload.outsideHours === true,
+        totalMs,
+        flowMs,
+        automationsMs,
+        lockWaitMs
+    };
 
     if (totalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
-        console.warn(`[flow-telemetry][slow] ${parts.join(' ')}`);
+        logStructured('warn', 'flow.inbound.telemetry_slow', fields, 'Inbound flow lento');
     } else {
-        console.log(`[flow-telemetry] ${parts.join(' ')}`);
+        logStructured('info', 'flow.inbound.telemetry', fields);
     }
 }
 
@@ -10296,73 +10462,25 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
         }
 
         if (!skipInboundAutomation) {
-            await runInboundAutomationSerialized(conversation.id, async () => {
-                await runWithConversationPostgresLock(conversation.id, async (lockContext = {}) => {
-                    inboundLockWaitMs += Math.max(0, Number(lockContext?.lockWaitMs || 0) || 0);
-                    const automationStartedAtMs = Date.now();
-                    console.log(`[${sessionId}] ?? Mensagem de ${lead.name || phone}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
-
-                    const businessHoursSettings = await getBusinessHoursSettings(sessionOwnerUserId || null, false, sessionId);
-                    const isOutsideBusinessHours = businessHoursSettings.enabled && !isWithinBusinessHours(businessHoursSettings);
-
-                    if (isOutsideBusinessHours && !isSelfChat) {
-                        outsideBusinessHoursBypass = true;
-                        const autoReplyText = String(businessHoursSettings.autoReplyMessage || '').trim();
-
-                        if (autoReplyText && shouldSendOutsideHoursAutoReply(conversation.id)) {
-                            try {
-                                await sendMessage(sessionId, phone, autoReplyText, 'text', {
-                                    conversationId: conversation.id
-                                });
-                                markOutsideHoursAutoReplySent(conversation.id);
-                            } catch (autoReplyError) {
-                                console.error(`[${sessionId}] Erro ao enviar resposta fora do horario:`, autoReplyError.message);
-                            }
-                        }
-
-                        return;
-                    }
-
-                    // Processar fluxo de automacao
-                    if (conversation.is_bot_active) {
-                        const flowStartedAtMs = Date.now();
-                        conversation.created = convCreated;
-
-                        await flowService.processIncomingMessage(
-                            {
-                                text,
-                                mediaType,
-                                selectionId: interactiveSelection?.id || '',
-                                selectionText: interactiveSelection?.text || ''
-                            },
-                            lead,
-                            conversation
-                        );
-                        flowProcessingDurationMs += Date.now() - flowStartedAtMs;
-                    }
-
-                    const automationsStartedAtMs = Date.now();
-                    await scheduleAutomations({
-                        event: AUTOMATION_EVENT_TYPES.MESSAGE_RECEIVED,
-                        sessionId,
-                        text,
-                        mediaType,
-                        lead,
-                        conversation,
-                        messageTimestampMs: Date.parse(messageTimestampIso) || Date.now(),
-                        leadCreated,
-                        conversationCreated: convCreated
-                    });
-                    automationsSchedulingDurationMs += Date.now() - automationsStartedAtMs;
-                    const automationTotalMs = Date.now() - automationStartedAtMs;
-                    if (!FLOW_INBOUND_TELEMETRY_ENABLED && automationTotalMs >= FLOW_INBOUND_TELEMETRY_SLOW_MS) {
-                        console.warn(
-                            `[flow-telemetry][slow] session=${sessionId} conversation=${conversation.id} `
-                            + `message=${incomingMessageId || 'n/a'} scope=automation total_ms=${automationTotalMs}`
-                        );
-                    }
-                });
+            const pipelineMetrics = await inboundMessagePipelineService.runInboundLeadAutomationStage({
+                sessionId,
+                incomingMessageId,
+                sessionOwnerUserId,
+                text,
+                mediaType,
+                interactiveSelection,
+                lead,
+                conversation,
+                convCreated,
+                phone,
+                isSelfChat,
+                messageTimestampIso,
+                leadCreated
             });
+            outsideBusinessHoursBypass = outsideBusinessHoursBypass || pipelineMetrics?.outsideBusinessHoursBypass === true;
+            flowProcessingDurationMs += Math.max(0, Number(pipelineMetrics?.flowProcessingDurationMs || 0) || 0);
+            automationsSchedulingDurationMs += Math.max(0, Number(pipelineMetrics?.automationsSchedulingDurationMs || 0) || 0);
+            inboundLockWaitMs += Math.max(0, Number(pipelineMetrics?.lockWaitMs || 0) || 0);
         }
     }
     } catch (error) {
@@ -10391,9 +10509,15 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
                     });
                 }
             } catch (receiptFinalizeError) {
-                console.warn(
-                    `[flow-idempotency] Falha ao finalizar receipt ${sessionId}:${incomingMessageId || 'n/a'}:`,
-                    receiptFinalizeError.message
+                logStructured(
+                    'warn',
+                    'flow.idempotency.receipt_finalize_failed',
+                    {
+                        sessionId: sanitizeSessionId(sessionId),
+                        messageId: String(incomingMessageId || '').trim() || 'n/a',
+                        error: normalizeErrorForLog(receiptFinalizeError)
+                    },
+                    'Falha ao finalizar incoming message receipt'
                 );
             }
         }
@@ -10429,97 +10553,15 @@ async function processIncomingMessage(sessionId, msg, options = {}) {
  * Normalizar seções de menu/lista para envio WhatsApp
  */
 function normalizeListSectionsForSend(rawSections, lead, messageText = '') {
-    const sourceSections = Array.isArray(rawSections) ? rawSections : [];
-    if (sourceSections.length === 0) return [];
-
-    const normalizedSections = [];
-    let totalRows = 0;
-
-    for (const section of sourceSections) {
-        if (totalRows >= 10) break;
-
-        const rawRows = Array.isArray(section?.rows) ? section.rows : [];
-        const rows = [];
-
-        for (const row of rawRows) {
-            if (totalRows >= 10) break;
-
-            const rowId = normalizeText(row?.rowId || row?.id || '');
-            const rawTitle = String(row?.title || row?.text || '').trim();
-            if (!rawTitle) continue;
-
-            const title = normalizeText(applyLeadTemplate(rawTitle, lead, { mensagem: messageText || rawTitle }));
-            if (!title) continue;
-
-            const rawDescription = String(row?.description || '').trim();
-            const description = rawDescription
-                ? normalizeText(applyLeadTemplate(rawDescription, lead, { mensagem: rawDescription }))
-                : '';
-
-            rows.push({
-                rowId: rowId || `option-${totalRows + 1}`,
-                title,
-                description: description || undefined
-            });
-            totalRows += 1;
-        }
-
-        if (rows.length === 0) continue;
-
-        const rawSectionTitle = String(section?.title || '').trim();
-        const sectionTitle = rawSectionTitle
-            ? normalizeText(applyLeadTemplate(rawSectionTitle, lead, { mensagem: messageText || rawSectionTitle }))
-            : '';
-
-        normalizedSections.push({
-            title: sectionTitle || `Opcoes ${normalizedSections.length + 1}`,
-            rows
-        });
-    }
-
-    return normalizedSections;
+    return flowMenuTextService.normalizeListSectionsForSend(rawSections, lead, messageText);
 }
 
 function normalizeButtonUrlForSend(value) {
-    const raw = normalizeText(String(value || '').trim());
-    if (!raw) return '';
-
-    const normalized = /^https?:\/\//i.test(raw)
-        ? raw
-        : `https://${raw}`;
-
-    try {
-        const parsed = new URL(normalized);
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            return '';
-        }
-        return parsed.toString();
-    } catch (_) {
-        return '';
-    }
+    return flowMenuTextService.normalizeButtonUrlForSend(value);
 }
 
 function buildInlineListFallbackText(description = '', sections = []) {
-    const prompt = String(description || '').trim() || 'Escolha uma opcao no menu abaixo:';
-    const lines = [prompt, ''];
-    let index = 1;
-
-    for (const section of (Array.isArray(sections) ? sections : [])) {
-        const rows = Array.isArray(section?.rows) ? section.rows : [];
-        for (const row of rows) {
-            const title = String(row?.title || '').trim();
-            if (!title) continue;
-            lines.push(`${index}. ${title}`);
-            index += 1;
-        }
-    }
-
-    if (index > 1) {
-        lines.push('');
-        lines.push('Responda com o numero da opcao.');
-    }
-
-    return lines.join('\n').trim();
+    return flowMenuTextService.buildInlineListFallbackText(description, sections);
 }
 
 /**
@@ -11123,6 +11165,7 @@ function sessionExists(sessionId) {
     startTenantIntegrityAuditWorker();
     startInboxReconciliationWorker();
     startFlowAwaitingInputRecoveryWorker();
+    startOpsAlertsWorker();
     if (BACKUP_AUTO_ENABLED) {
         try {
             scheduleBackup(BACKUP_INTERVAL_HOURS);
@@ -11650,7 +11693,7 @@ io.on('connection', (socket) => {
 
         // Descriptografar mensagens
         messages = messages.map(m => {
-            const raw = m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content;
+            const raw = resolveMessageContentWithFallback(m);
             let text = raw;
             if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
                 text = previewForMedia(m.media_type);
@@ -13130,19 +13173,11 @@ app.get('/api/status', authenticate, async (req, res) => {
 
 
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', sanitizeInput, validateLogin, async (req, res) => {
 
     try {
 
-        const { email, password } = req.body;
-
-        
-
-        if (!email || !password) {
-
-            return res.status(400).json({ error: 'Email e senha sÃ£o obrigatÃ³rios' });
-
-        }
+        const { email, password } = req.validatedData || req.body;
 
         
 
@@ -17127,9 +17162,7 @@ app.get('/api/conversations', authenticate, async (req, res) => {
 
     const normalized = conversations.map((c) => {
         const lastMessage = lastMessageByConversationId.get(Number(c.id)) || null;
-        const decrypted = lastMessage?.content_encrypted
-            ? decryptMessage(lastMessage.content_encrypted)
-            : lastMessage?.content;
+        const decrypted = resolveMessageContentWithFallback(lastMessage);
 
         let metadata = {};
         try {
@@ -17249,9 +17282,14 @@ app.post('/api/conversations/:id/read', authenticate, async (req, res) => {
 
 });
 
-app.post('/api/send', authenticate, async (req, res) => {
+app.post('/api/send', authenticate, validateApiSendRequest, async (req, res) => {
 
-    const { sessionId, to, message, type, options } = req.body;
+    const validatedPayload = req.validatedData || {};
+    const sessionId = String(validatedPayload.sessionId || req.body?.sessionId || '').trim();
+    const to = validatedPayload.to || req.body?.to;
+    const message = validatedPayload.message || req.body?.message;
+    const type = validatedPayload.type || req.body?.type;
+    const options = req.body?.options;
     const scopedUserId = getScopedUserId(req);
     const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
 
@@ -17465,7 +17503,7 @@ app.get('/api/messages/:leadId', authenticate, async (req, res) => {
     }
 
     const decrypted = messages.map(m => {
-        const raw = m.content_encrypted ? decryptMessage(m.content_encrypted) : m.content;
+        const raw = resolveMessageContentWithFallback(m);
         let text = raw;
         if ((!text || !String(text).trim()) && m.media_type && m.media_type !== 'text') {
             text = previewForMedia(m.media_type);
@@ -17700,11 +17738,16 @@ app.post('/api/queue/add', authenticate, async (req, res) => {
 
 
 
-app.post('/api/queue/bulk', authenticate, async (req, res) => {
+app.post('/api/queue/bulk', authenticate, validateQueueBulkRequest, async (req, res) => {
     try {
-        const { leadIds, content } = req.body || {};
-        const options = (req.body && typeof req.body.options === 'object' && req.body.options !== null)
-            ? { ...req.body.options }
+        const payload = req.validatedData || {};
+        const leadIds = Array.isArray(payload.leadIds) ? payload.leadIds : (Array.isArray(req.body?.leadIds) ? req.body.leadIds : []);
+        const content = typeof payload.content === 'string' ? payload.content : String(req.body?.content || '');
+        const optionsSource = (payload.options && typeof payload.options === 'object')
+            ? payload.options
+            : req.body?.options;
+        const options = (optionsSource && typeof optionsSource === 'object' && !Array.isArray(optionsSource))
+            ? { ...optionsSource }
             : {};
 
         const parseNonNegative = (value) => {
@@ -22194,6 +22237,7 @@ process.on('uncaughtException', (error) => {
         queueService.stopProcessing();
         stopInboxReconciliationWorker();
         stopFlowAwaitingInputRecoveryWorker();
+        stopOpsAlertsWorker();
         await webhookQueueService.shutdown();
 
         for (const [sessionId] of sessions.entries()) {
@@ -22225,6 +22269,7 @@ process.on('uncaughtException', (error) => {
         queueService.stopProcessing();
         stopInboxReconciliationWorker();
         stopFlowAwaitingInputRecoveryWorker();
+        stopOpsAlertsWorker();
         await webhookQueueService.shutdown();
 
         for (const [sessionId] of sessions.entries()) {
