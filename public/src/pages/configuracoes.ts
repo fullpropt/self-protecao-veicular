@@ -575,7 +575,6 @@ function renderBusinessHoursAccountsManager() {
                         />
                         <span>Ativar horário comercial</span>
                     </label>
-                    <div class="business-hours-toggle-hint">Ative para exibir e configurar mensagem e horário desta conta.</div>
                 </div>
                 ${businessHours.enabled ? `<div class="business-hours-account-body">
                     <div class="form-group business-hours-account-message">
