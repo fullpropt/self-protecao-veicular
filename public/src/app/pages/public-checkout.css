@@ -10,7 +10,7 @@
 
 .public-checkout-shell {
   width: 100%;
-  max-width: 1180px;
+  max-width: 1340px;
   margin: 0 auto;
 }
 
@@ -30,21 +30,29 @@
 
 .public-checkout-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1.75fr) minmax(360px, 0.95fr);
+  gap: 28px;
+  width: min(1320px, 100%);
+  margin: 0 auto;
+  align-items: start;
 }
 
 .public-checkout-main {
   display: grid;
   gap: 18px;
+  justify-self: center;
+  width: 100%;
 }
 
 .public-checkout-card,
 .public-checkout-summary {
-  border-radius: 28px;
-  border: 1px solid rgba(86, 112, 126, 0.32);
-  background: linear-gradient(175deg, rgba(8, 18, 30, 0.96) 0%, rgba(8, 14, 24, 0.96) 100%);
-  box-shadow: 0 32px 72px rgba(1, 8, 19, 0.48);
+  border-radius: 30px;
+  border: 1px solid rgba(116, 147, 171, 0.45);
+  background: linear-gradient(168deg, rgba(10, 24, 40, 0.98) 0%, rgba(6, 14, 24, 0.98) 100%);
+  box-shadow:
+    0 24px 58px rgba(1, 8, 19, 0.62),
+    0 0 0 1px rgba(132, 164, 186, 0.14) inset,
+    0 0 34px rgba(6, 84, 134, 0.14);
 }
 
 .public-checkout-card {
@@ -118,8 +126,11 @@
   margin-top: 0;
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-  gap: 18px;
+  gap: 20px;
   align-items: start;
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .public-checkout-form-card {
@@ -152,8 +163,8 @@
   min-height: 34px;
   border-radius: 999px;
   padding: 0 14px;
-  background: rgba(178, 199, 214, 0.2);
-  color: #e8eef5;
+  background: rgba(178, 199, 214, 0.28);
+  color: #f1f6fb;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -347,10 +358,12 @@
 @media (max-width: 960px) {
   .public-checkout-grid {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
 
   .public-checkout-form {
     grid-template-columns: 1fr;
+    max-width: none;
   }
 
   .public-checkout-summary {
