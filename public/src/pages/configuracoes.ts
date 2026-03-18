@@ -1622,12 +1622,39 @@ function getMediaUrl(url?: string | null) {
     return `${base}${url}`;
 }
 
+function getTemplatePreview(template: TemplateItem) {
+    const mediaType = template.media_type || 'text';
+    if (mediaType === 'audio') return 'Resposta em audio';
+
+    const normalizedContent = String(template.content || '').replace(/\s+/g, ' ').trim();
+    return normalizedContent || 'Sem mensagem cadastrada';
+}
+
+function syncTemplateCardSummary(card: HTMLElement) {
+    const mediaType = card.dataset.mediaType || 'text';
+    const nameInput = card.querySelector('.template-name') as HTMLInputElement | null;
+    const contentInput = card.querySelector('.template-content') as HTMLTextAreaElement | null;
+    const title = nameInput?.value.trim() || 'Sem titulo';
+    const preview = mediaType === 'audio'
+        ? 'Resposta em audio'
+        : (contentInput?.value || '').replace(/\s+/g, ' ').trim() || 'Sem mensagem cadastrada';
+    const titleElement = card.querySelector('.template-card-title');
+    const previewElement = card.querySelector('.template-card-preview');
+
+    if (titleElement) titleElement.textContent = title;
+    if (previewElement) previewElement.textContent = preview;
+}
+
 function renderTemplateCard(template: TemplateItem) {
     const safeName = escapeHtml(template.name || '');
+    const safeDisplayName = escapeHtml(template.name || 'Sem titulo');
     const mediaType = template.media_type || 'text';
     const safeContent = escapeHtml(template.content || '');
+    const safePreview = escapeHtml(getTemplatePreview(template));
     const audioUrl = mediaType === 'audio' && template.media_url ? getMediaUrl(template.media_url) : '';
     const mediaUrlAttr = template.media_url ? escapeHtml(template.media_url) : '';
+    const mediaLabel = mediaType === 'audio' ? 'Audio' : 'Texto';
+    const openAttr = templatesCache.length === 1 ? ' open' : '';
 
     const body = mediaType === 'audio'
         ? `
@@ -1642,16 +1669,28 @@ function renderTemplateCard(template: TemplateItem) {
         `;
 
     return `
-        <div class="copy-card template-card" data-template-id="${template.id}" data-media-type="${mediaType}" data-media-url="${mediaUrlAttr}">
-            <div class="copy-card-header" style="display: flex; gap: 12px; align-items: center; justify-content: space-between;">
-                <input class="form-input template-name" value="${safeName}" />
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-sm btn-outline" onclick="saveTemplate(${template.id})">Salvar</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate(${template.id})">Excluir</button>
+        <details class="template-card" data-template-id="${template.id}" data-media-type="${mediaType}" data-media-url="${mediaUrlAttr}"${openAttr}>
+            <summary class="template-card-summary">
+                <div class="template-card-summary-main">
+                    <span class="template-card-title">${safeDisplayName}</span>
+                    <span class="template-card-preview">${safePreview}</span>
                 </div>
+                <div class="template-card-summary-meta">
+                    <span class="template-card-type">${mediaLabel}</span>
+                    <span class="template-card-toggle" aria-hidden="true"></span>
+                </div>
+            </summary>
+            <div class="template-card-body">
+                <div class="template-card-editor-row">
+                    <input class="form-input template-name" value="${safeName}" placeholder="Titulo da resposta" />
+                    <div class="template-card-actions">
+                        <button type="button" class="btn btn-sm btn-outline" onclick="saveTemplate(${template.id})">Salvar</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteTemplate(${template.id})">Excluir</button>
+                    </div>
+                </div>
+                ${body}
             </div>
-            ${body}
-        </div>
+        </details>
     `;
 }
 
@@ -1690,6 +1729,7 @@ async function saveTemplateInternal(card: HTMLElement, showToastMessage = true) 
     }
 
     await api.put(`/api/templates/${id}`, payload);
+    syncTemplateCardSummary(card);
     if (showToastMessage) {
         showToast('success', 'Sucesso', 'Resposta rápida atualizada!');
     }

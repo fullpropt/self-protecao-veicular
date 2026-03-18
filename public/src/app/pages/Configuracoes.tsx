@@ -434,6 +434,113 @@ export default function Configuracoes() {
             width: auto;
             white-space: nowrap;
         }
+        .template-card {
+            border: 1px solid rgba(var(--primary-rgb), 0.18);
+            border-radius: 14px;
+            background: linear-gradient(180deg, rgba(18, 36, 58, 0.98) 0%, rgba(14, 29, 47, 0.98) 100%);
+            box-shadow: 0 16px 32px rgba(2, 8, 20, 0.18);
+            overflow: hidden;
+        }
+        .template-card + .template-card {
+            margin-top: 10px;
+        }
+        .template-card-summary {
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            cursor: pointer;
+            padding: 16px 18px;
+        }
+        .template-card-summary::-webkit-details-marker {
+            display: none;
+        }
+        .template-card-summary-main {
+            display: grid;
+            gap: 5px;
+            min-width: 0;
+        }
+        .template-card-title {
+            color: #f8fafc;
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .template-card-preview {
+            color: var(--gray-500);
+            font-size: 13px;
+            line-height: 1.5;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .template-card-summary-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .template-card-type {
+            border-radius: 999px;
+            padding: 4px 10px;
+            border: 1px solid rgba(var(--primary-rgb), 0.24);
+            background: rgba(var(--primary-rgb), 0.10);
+            color: #d8e5f8;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .template-card-toggle {
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--primary-rgb), 0.24);
+            background: rgba(var(--primary-rgb), 0.10);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #f8fafc;
+        }
+        .template-card-toggle::before {
+            content: '+';
+            font-size: 18px;
+            line-height: 1;
+            font-weight: 500;
+        }
+        .template-card[open] .template-card-toggle::before {
+            content: '-';
+        }
+        .template-card[open] .template-card-summary {
+            border-bottom: 1px solid rgba(var(--primary-rgb), 0.16);
+            background: rgba(var(--primary-rgb), 0.04);
+        }
+        .template-card-body {
+            padding: 16px 18px 18px;
+            display: grid;
+            gap: 14px;
+        }
+        .template-card-editor-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: center;
+        }
+        .template-card-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .template-card .template-content {
+            min-height: 140px;
+        }
+        .template-audio {
+            display: grid;
+            gap: 10px;
+        }
+        .template-audio audio {
+            width: 100%;
+        }
         @media (max-width: 768px) {
             .configuracoes-react .settings-nav {
                 position: static !important;
@@ -455,6 +562,22 @@ export default function Configuracoes() {
             }
             .business-hours-account-body .btn {
                 width: 100%;
+            }
+            .template-card-summary {
+                align-items: flex-start;
+            }
+            .template-card-summary-meta {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .template-card-editor-row {
+                grid-template-columns: 1fr;
+            }
+            .template-card-actions {
+                width: 100%;
+            }
+            .template-card-actions .btn {
+                flex: 1 1 0;
             }
             .settings-panel {
                 padding: 18px;
