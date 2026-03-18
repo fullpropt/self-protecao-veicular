@@ -676,10 +676,6 @@ export default function Configuracoes() {
                   <div className="settings-panels">
                       <div className="settings-panel active" id="panel-conexao">
                           <h4 style={{ margin: '0 0 14px', fontSize: '20px' }}>Contas WhatsApp</h4>
-                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                              <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.refreshWhatsAppAccounts?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar lista</button>
-                              <Link to="/whatsapp" className="btn btn-primary">Ir para WhatsApp</Link>
-                          </div>
                           <div className="connection-accounts-list" id="connectionAccountsList">
                               <p style={{ color: 'var(--gray-500)', margin: 0 }}>Carregando contas...</p>
                           </div>
@@ -902,22 +898,7 @@ export default function Configuracoes() {
                       <div className="settings-panel" id="panel-hours">
                           <div className="settings-section">
                               <h3 className="settings-section-title"><span className="icon icon-clock icon-sm"></span> Horários de funcionamento</h3>
-                              <p className="text-muted mb-3">Defina por conta quando transmissões e campanhas podem enviar mensagens.</p>
-
-                              <div className="copy-card">
-                                  <p style={{ margin: 0, color: 'var(--gray-700)' }}>
-                                      Configure início/fim do expediente por conta e ative/desative o horário comercial individualmente.
-                                  </p>
-                              </div>
-
-                              <div className="settings-users-actions" style={{ marginTop: 0 }}>
-                                  <button className="btn btn-outline" onClick={() => globals.refreshBusinessHoursAccounts?.()}>
-                                      <span className="icon icon-refresh icon-sm"></span> Atualizar lista
-                                  </button>
-                                  <Link className="btn btn-primary" to="/whatsapp">
-                                      Ir para WhatsApp
-                                  </Link>
-                              </div>
+                              <p className="text-muted mb-3">Defina por conta quando transmissões e campanhas podem enviar mensagens e adicione respostas automáticas fora do expediente.</p>
 
                               <div className="connection-accounts-list" id="businessHoursAccountsList">
                                   <p style={{ margin: 0, color: 'var(--gray-500)' }}>Carregando contas...</p>
