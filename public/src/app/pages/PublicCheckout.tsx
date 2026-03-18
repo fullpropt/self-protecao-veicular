@@ -439,7 +439,8 @@ export default function PublicCheckout() {
         </a>
 
         <div className="public-checkout-grid">
-          <section className="public-checkout-card">
+          <div className="public-checkout-main">
+            <section className="public-checkout-card public-checkout-intro-card">
             <div className="public-checkout-eyebrow">Checkout seguro · {plan.name}</div>
             <h1 className="public-checkout-title">
               {effectiveTrialDays > 0 ? `${effectiveTrialDays} dias grátis para ativar` : 'Concluir assinatura'}
@@ -452,8 +453,9 @@ export default function PublicCheckout() {
               <div className="public-checkout-pill"><strong>Página própria</strong>O pagamento acontece no ZapVender, sem repetir o fluxo anterior.</div>
             </div>
 
+            </section>
             <form className="public-checkout-form" onSubmit={handleSubmit} noValidate>
-              <section className="public-checkout-form-card" aria-labelledby="checkoutAccountDataTitle">
+              <section className="public-checkout-card public-checkout-form-card" aria-labelledby="checkoutAccountDataTitle">
                 <div className="public-checkout-section-title" id="checkoutAccountDataTitle">Dados da conta</div>
                 <div className="public-checkout-form-grid">
                   <Field label="Nome completo" error={validationErrors.fullName} full>
@@ -480,7 +482,7 @@ export default function PublicCheckout() {
                 </div>
               </section>
 
-              <section className="public-checkout-form-card" aria-labelledby="checkoutPaymentDataTitle">
+              <section className="public-checkout-card public-checkout-form-card" aria-labelledby="checkoutPaymentDataTitle">
                 <div className="public-checkout-section-title" id="checkoutPaymentDataTitle">Pagamento</div>
                 <div className="public-checkout-form-grid">
                   <Field label="Nome impresso no cartão" error={validationErrors.cardHolderName} full>
@@ -511,7 +513,7 @@ export default function PublicCheckout() {
                 </button>
               </section>
             </form>
-          </section>
+          </div>
 
           <aside className="public-checkout-summary">
             <div className="public-checkout-eyebrow">Resumo da assinatura</div>
