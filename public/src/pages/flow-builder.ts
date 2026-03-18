@@ -3310,7 +3310,6 @@ function renderProperties() {
     if (selectedNode.type === 'end') {
         const endMessage = String(getNodePropValue('content', selectedNode.data.content || ''));
         const endMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Se desejar, escolha uma opção no menu abaixo:'));
-        const endMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
         const endMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Finalização'));
         const endOptions = coerceEndOptionListForEditor(
             getNodePropValue('endOptions', (selectedNode.data as any).endOptions || [])
@@ -3324,10 +3323,6 @@ function renderProperties() {
             <div class="property-group">
                 <label>Mensagem das opções</label>
                 <textarea oninput="updateNodeProperty('menuPrompt', this.value)" placeholder="Se desejar, escolha uma opção no menu abaixo:">${escapeHtml(endMenuPrompt)}</textarea>
-            </div>
-            <div class="property-group">
-                <label>Texto do botão</label>
-                <input type="text" value="${escapeHtml(endMenuButtonText)}" oninput="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
             </div>
             <div class="property-group">
                 <label>Título da seção de opções</label>
@@ -3396,9 +3391,6 @@ function renderProperties() {
                     ? Math.max(0, Number(getNodePropValue('intentResponseDelaySeconds', selectedNode.data.intentResponseDelaySeconds)))
                     : 0;
                 const intentMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Escolha uma opção no menu abaixo:'));
-                const intentMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
-                const intentMenuButtonUrl = String(getNodePropValue('menuButtonUrl', selectedNode.data.menuButtonUrl || ''));
-                const hasIntentMenuButtonUrl = intentMenuButtonUrl.trim().length > 0;
                 const intentDefaultResponse = String(getNodePropValue('intentDefaultResponse', selectedNode.data.intentDefaultResponse || ''));
                 const intentDefaultFollowupResponse = String(getNodePropValue('intentDefaultFollowupResponse', selectedNode.data.intentDefaultFollowupResponse || ''));
                 const intentDefaultFollowupResponses = coerceIntentMessageListForEditor(
@@ -3436,39 +3428,28 @@ function renderProperties() {
                             <input type="text" value="${escapeHtml(nodeLabelValue)}" onchange="updateNodeProperty('label', this.value)">
                         </div>
                         <div class="property-group">
-                            <label>${hasIntentMenuButtonUrl ? 'Mensagem' : 'Mensagem do Menu'}</label>
+                            <label>Mensagem do Menu</label>
                             <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(intentMenuPrompt)}</textarea>
                         </div>
                         <div class="property-group">
-                            <label>Texto do Botão</label>
-                            <input type="text" value="${escapeHtml(intentMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
-                        </div>
-                        <div class="property-group">
-                            <label>Link do Botão</label>
-                            <input type="url" value="${escapeHtml(intentMenuButtonUrl)}" onchange="updateNodeProperty('menuButtonUrl', this.value)" placeholder="https://...">
-                            <span class="property-helper-text">Se preencher, o botão abre esse link e o fluxo segue pela saída padrão.</span>
-                        </div>
-                        ${hasIntentMenuButtonUrl ? '' : `
-                            <div class="property-group">
-                                <label>Opções</label>
-                                <div class="intent-routes-editor">
-                                    ${routes.map((route, index) => `
-                                        <div class="intent-menu-option-row">
-                                            <input
-                                                class="intent-route-name-input"
-                                                type="text"
-                                                value="${escapeHtml(String(route.label || ''))}"
-                                                title="${escapeHtml(String(route.label || '').trim() || ('Opção ' + (index + 1)))}"
-                                                placeholder="Ex.: Ver modelos"
-                                                onchange="updateIntentRoute(${index}, 'label', this.value)"
-                                            >
-                                            <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opção" onclick="removeIntentRoute(${index})">×</button>
-                                        </div>
-                                    `).join('')}
-                                    <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addIntentRoute()">+ Adicionar opção</button>
-                                </div>
+                            <label>Opções</label>
+                            <div class="intent-routes-editor">
+                                ${routes.map((route, index) => `
+                                    <div class="intent-menu-option-row">
+                                        <input
+                                            class="intent-route-name-input"
+                                            type="text"
+                                            value="${escapeHtml(String(route.label || ''))}"
+                                            title="${escapeHtml(String(route.label || '').trim() || ('Opção ' + (index + 1)))}"
+                                            placeholder="Ex.: Ver modelos"
+                                            onchange="updateIntentRoute(${index}, 'label', this.value)"
+                                        >
+                                        <button class="remove-btn intent-menu-option-remove-btn" type="button" title="Remover opção" onclick="removeIntentRoute(${index})">×</button>
+                                    </div>
+                                `).join('')}
+                                <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addIntentRoute()">+ Adicionar opção</button>
                             </div>
-                        `}
+                        </div>
                     `;
                 } else {
                     html += `
@@ -3698,7 +3679,6 @@ function renderProperties() {
             const waitResponseModeRaw = String(getNodePropValue('responseMode', selectedNode.data.responseMode || 'text')).trim().toLowerCase();
             const waitResponseMode = waitResponseModeRaw === 'menu' ? 'menu' : 'text';
             const waitMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Selecione uma opção no menu abaixo:'));
-            const waitMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
             const waitMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Opções'));
             const waitMenuTitle = String(getNodePropValue('menuTitle', selectedNode.data.menuTitle || ''));
             const waitMenuFooter = String(getNodePropValue('menuFooter', selectedNode.data.menuFooter || ''));
@@ -3720,10 +3700,6 @@ function renderProperties() {
                     <div class="property-group">
                         <label>Mensagem do Menu</label>
                         <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(waitMenuPrompt)}</textarea>
-                    </div>
-                    <div class="property-group">
-                        <label>Texto do Botão</label>
-                        <input type="text" value="${escapeHtml(waitMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
                     </div>
                     <div class="property-group">
                         <label>Título da Seção</label>
@@ -3748,7 +3724,6 @@ function renderProperties() {
             const conditionResponseModeRaw = String(getNodePropValue('responseMode', selectedNode.data.responseMode || 'text')).trim().toLowerCase();
             const conditionResponseMode = conditionResponseModeRaw === 'menu' ? 'menu' : 'text';
             const conditionMenuPrompt = String(getNodePropValue('menuPrompt', selectedNode.data.menuPrompt || 'Selecione uma opção no menu abaixo:'));
-            const conditionMenuButtonText = String(getNodePropValue('menuButtonText', selectedNode.data.menuButtonText || 'Ver Menu'));
             const conditionMenuSectionTitle = String(getNodePropValue('menuSectionTitle', selectedNode.data.menuSectionTitle || 'Opções'));
             const conditionMenuTitle = String(getNodePropValue('menuTitle', selectedNode.data.menuTitle || ''));
             const conditionMenuFooter = String(getNodePropValue('menuFooter', selectedNode.data.menuFooter || ''));
@@ -3778,10 +3753,6 @@ function renderProperties() {
                     <div class="property-group">
                         <label>Mensagem do Menu</label>
                         <textarea onchange="updateNodeProperty('menuPrompt', this.value)">${escapeHtml(conditionMenuPrompt)}</textarea>
-                    </div>
-                    <div class="property-group">
-                        <label>Texto do Botão</label>
-                        <input type="text" value="${escapeHtml(conditionMenuButtonText)}" onchange="updateNodeProperty('menuButtonText', this.value)" placeholder="Ver Menu">
                     </div>
                     <div class="property-group">
                         <label>Título da Seção</label>
