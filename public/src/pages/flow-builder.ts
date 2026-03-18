@@ -2794,7 +2794,15 @@ function getWhatsappPreviewNodeLabel(node: FlowNode) {
 }
 
 function buildWhatsappPreviewTextHtml(text: string) {
-    return escapeHtml(String(text || '')).replace(/\n/g, '<br>');
+    return String(text || '')
+        .split('\n')
+        .map((line) => {
+            const escaped = escapeHtml(line);
+            return escaped
+                .replace(/\*(?=\S)(.+?)(?<=\S)\*/g, '<strong>$1</strong>')
+                .replace(/_(?=\S)(.+?)(?<=\S)_/g, '<em>$1</em>');
+        })
+        .join('<br>');
 }
 
 function getIntentMenuPreviewOptions(node: FlowNode) {
@@ -2839,16 +2847,18 @@ function buildWhatsappPreviewBubbleHtml(options: {
     footer?: string;
     buttonText?: string;
     buttonIcon?: string;
+    realTone?: boolean;
 }) {
     const bubbleText = getWhatsappPreviewMessageText(options.text, 'Mensagem vazia');
     const bubbleTitle = getWhatsappPreviewMessageText(options.title, '');
     const bubbleFooter = getWhatsappPreviewMessageText(options.footer, '');
     const actionText = getWhatsappPreviewMessageText(options.buttonText, '');
     const actionIcon = getWhatsappPreviewMessageText(options.buttonIcon, '≡');
+    const bubbleToneClass = options.realTone ? ' flow-whatsapp-preview-bubble-real' : '';
 
     return `
         <div class="flow-whatsapp-preview-row">
-            <div class="flow-whatsapp-preview-bubble">
+            <div class="flow-whatsapp-preview-bubble${bubbleToneClass}">
                 ${bubbleTitle ? `<div class="flow-whatsapp-preview-bubble-title">${buildWhatsappPreviewTextHtml(bubbleTitle)}</div>` : ''}
                 <div class="flow-whatsapp-preview-bubble-text">${buildWhatsappPreviewTextHtml(bubbleText)}</div>
                 ${actionText ? `
@@ -2876,27 +2886,25 @@ function buildWhatsappPreviewOutgoingBubbleHtml(text: string) {
     `;
 }
 
-function buildWhatsappPreviewMenuSheetHtml(sectionTitle: string, items: string[]) {
+function buildWhatsappPreviewMenuText(prompt: string, items: string[]) {
+    const safePrompt = getWhatsappPreviewMessageText(prompt, 'Escolha uma opção no menu abaixo:');
     const safeItems = Array.isArray(items) ? items.filter(Boolean).slice(0, 10) : [];
-    return `
-        <div class="flow-whatsapp-preview-sheet">
-            <div class="flow-whatsapp-preview-sheet-header">
-                <span>Menu</span>
-            </div>
-            <div class="flow-whatsapp-preview-sheet-section">${buildWhatsappPreviewTextHtml(sectionTitle || 'Opções')}</div>
-            <div class="flow-whatsapp-preview-sheet-list">
-                ${safeItems.length > 0 ? safeItems.map((item, index) => `
-                    <div class="flow-whatsapp-preview-sheet-item">
-                        <span class="flow-whatsapp-preview-sheet-item-index">${index + 1}.</span>
-                        <span class="flow-whatsapp-preview-sheet-item-title">${buildWhatsappPreviewTextHtml(item)}</span>
-                    </div>
-                `).join('') : `
-                    <div class="flow-whatsapp-preview-sheet-empty">Adicione opções para visualizar o menu.</div>
-                `}
-            </div>
-            <div class="flow-whatsapp-preview-sheet-tip">Digite o número da opção no WhatsApp.</div>
-        </div>
-    `;
+    const lines = [safePrompt];
+
+    if (safeItems.length > 0) {
+        lines.push('');
+        lines.push('*Escolha uma das opções disponíveis:*');
+        safeItems.forEach((item, index) => {
+            lines.push(`${index + 1}. ${item}`);
+        });
+        lines.push('');
+        lines.push('_Responda com o número da opção desejada._');
+    } else {
+        lines.push('');
+        lines.push('_Adicione opções para visualizar o menu._');
+    }
+
+    return lines.join('\n').trim();
 }
 
 function renderWhatsappPreview() {
@@ -2952,20 +2960,17 @@ function renderWhatsappPreview() {
                 getNodePropValue('menuFooter', node.data.menuFooter || ''),
                 ''
             );
-            const sectionTitle = getWhatsappPreviewMessageText(
-                getNodePropValue('menuSectionTitle', node.data.menuSectionTitle || 'Opções'),
-                'Opções'
-            );
             const menuItems = isIntentMenuNode
                 ? getIntentMenuPreviewOptions(node)
                 : getAwaitingInputPreviewOptions(node);
+            const menuText = buildWhatsappPreviewMenuText(prompt, menuItems);
 
             bodyHtml = buildWhatsappPreviewBubbleHtml({
-                text: prompt,
+                text: menuText,
                 title: menuTitle,
-                footer: menuFooter
+                footer: menuFooter,
+                realTone: true
             });
-            bodyHtml += buildWhatsappPreviewMenuSheetHtml(sectionTitle, menuItems);
             bodyHtml += buildWhatsappPreviewOutgoingBubbleHtml(menuItems.length > 1 ? '2' : '1');
         } else {
             let message = 'Este bloco não envia uma mensagem visual no WhatsApp.';

@@ -95,7 +95,7 @@ function createFlowMenuTextService(options = {}) {
         const lines = [prompt];
         if (numberedLines.length > 0) {
             lines.push('');
-            lines.push('*Opções disponíveis:*');
+            lines.push('*Escolha uma das opções disponíveis:*');
             lines.push(...numberedLines);
             lines.push('');
             lines.push('_Responda com o número da opção desejada._');

@@ -1410,7 +1410,7 @@ class FlowService extends EventEmitter {
         return [
             prompt,
             '',
-            '*Opções disponíveis:*',
+            '*Escolha uma das opções disponíveis:*',
             ...numberedOptions,
             '',
             '_Responda com o número da opção desejada._'

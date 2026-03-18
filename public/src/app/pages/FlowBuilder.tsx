@@ -1622,6 +1622,12 @@ export default function FlowBuilder() {
             color: #0f172a;
         }
 
+        .flow-whatsapp-preview-bubble-real {
+            background: #202c33;
+            color: #e9edef;
+            box-shadow: 0 10px 24px rgba(2, 8, 20, 0.24);
+        }
+
         .flow-whatsapp-preview-bubble-outgoing {
             border-radius: 18px 18px 6px 18px;
             background: #dcf8c6;
@@ -1651,6 +1657,14 @@ export default function FlowBuilder() {
         .flow-whatsapp-preview-bubble-text {
             font-size: 14px;
             line-height: 1.45;
+        }
+
+        .flow-whatsapp-preview-bubble-text strong {
+            font-weight: 700;
+        }
+
+        .flow-whatsapp-preview-bubble-text em {
+            font-style: italic;
         }
 
         .flow-whatsapp-preview-action {
@@ -1683,12 +1697,20 @@ export default function FlowBuilder() {
             color: #64748b;
         }
 
+        .flow-whatsapp-preview-bubble-real .flow-whatsapp-preview-bubble-footer {
+            color: #b4c1cc;
+        }
+
         .flow-whatsapp-preview-bubble-time {
             position: absolute;
             right: 12px;
             bottom: 6px;
             font-size: 10px;
             color: #94a3b8;
+        }
+
+        .flow-whatsapp-preview-bubble-real .flow-whatsapp-preview-bubble-time {
+            color: #93a4b1;
         }
 
         .flow-whatsapp-preview-sheet {
