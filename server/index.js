@@ -13219,7 +13219,7 @@ app.post('/api/auth/login', sanitizeInput, validateLogin, async (req, res) => {
 
         if (!user || !verifyPassword(password, user.password_hash)) {
 
-            return res.status(401).json({ error: 'Credenciais invÃ¡lidas' });
+            return res.status(401).json({ error: 'Credenciais inválidas' });
 
         }
 
@@ -13227,7 +13227,7 @@ app.post('/api/auth/login', sanitizeInput, validateLogin, async (req, res) => {
 
         if (!user.is_active) {
 
-            return res.status(401).json({ error: 'UsuÃ¡rio desativado' });
+            return res.status(401).json({ error: 'Usuário desativado' });
 
         }
 

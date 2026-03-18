@@ -138,14 +138,14 @@ async function authenticate(req, res, next) {
         
         if (!user) {
             return res.status(401).json({ 
-                error: 'Usu?rio n?o encontrado',
+                error: 'Usuário não encontrado',
                 code: 'USER_NOT_FOUND'
             });
         }
         
         if (!user.is_active) {
             return res.status(401).json({ 
-                error: 'Usu?rio desativado',
+                error: 'Usuário desativado',
                 code: 'USER_INACTIVE'
             });
         }
