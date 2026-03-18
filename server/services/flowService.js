@@ -232,31 +232,31 @@ function parseIntentResponseList(value = null, fallbackValue = '') {
 }
 
 function parseFlowEndOptions(value = null) {
-    const normalize = (options = []) => {
-        const cleaned = (Array.isArray(options) ? options : [])
+    if (Array.isArray(value)) {
+        const first = sanitizeOutgoingFlowText(value[0]) || FLOW_END_MENU_DEFAULT_RETURN_LABEL;
+        const rest = value
+            .slice(1)
             .map((item) => sanitizeOutgoingFlowText(item))
             .filter(Boolean)
-            .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS);
-
-        if (cleaned.length === 0) {
-            return [FLOW_END_MENU_DEFAULT_RETURN_LABEL];
-        }
-
-        cleaned[0] = sanitizeOutgoingFlowText(cleaned[0]) || FLOW_END_MENU_DEFAULT_RETURN_LABEL;
-        return cleaned;
-    };
-
-    if (Array.isArray(value)) {
-        return normalize(value);
+            .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS - 1);
+        return [first, ...rest];
     }
 
     const raw = sanitizeOutgoingFlowText(value || '');
-    if (!raw) return normalize([]);
+    if (!raw) return [FLOW_END_MENU_DEFAULT_RETURN_LABEL];
 
-    return normalize(raw
+    const parsed = raw
         .split(/[,;\n|]+/)
         .map((item) => sanitizeOutgoingFlowText(item))
-        .filter(Boolean));
+        .filter(Boolean)
+        .slice(0, FLOW_END_MENU_MAX_CUSTOM_OPTIONS);
+
+    if (parsed.length === 0) {
+        return [FLOW_END_MENU_DEFAULT_RETURN_LABEL];
+    }
+
+    parsed[0] = sanitizeOutgoingFlowText(parsed[0]) || FLOW_END_MENU_DEFAULT_RETURN_LABEL;
+    return parsed;
 }
 
 function parsePathHandleIndex(handleValue = '') {

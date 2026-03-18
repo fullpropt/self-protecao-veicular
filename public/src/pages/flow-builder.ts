@@ -915,25 +915,27 @@ function parseEndOptionList(value: string) {
 }
 
 function coerceEndOptionListForEditor(value: unknown) {
-    const normalize = (options: string[]) => {
-        const trimmed = options
+    const normalize = (options: unknown[]) => {
+        const source = Array.isArray(options) ? options : [];
+        const first = String(source[0] ?? '').trim();
+        const rest = source
+            .slice(1)
             .map((item) => String(item ?? '').trim())
             .filter(Boolean)
-            .slice(0, END_NODE_MAX_CUSTOM_OPTIONS);
+            .slice(0, END_NODE_MAX_CUSTOM_OPTIONS - 1);
 
-        if (trimmed.length === 0) {
-            return [END_NODE_DEFAULT_RETURN_OPTION_LABEL];
-        }
-
-        const first = String(trimmed[0] || '').trim() || END_NODE_DEFAULT_RETURN_OPTION_LABEL;
-        const rest = trimmed.slice(1);
-        return [first, ...rest].slice(0, END_NODE_MAX_CUSTOM_OPTIONS);
+        return [first, ...rest];
     };
 
     if (Array.isArray(value)) {
-        return normalize(value as string[]);
+        return normalize(value);
     }
-    return normalize(parseEndOptionList(String(value || '')));
+
+    const parsed = parseEndOptionList(String(value || ''));
+    if (parsed.length === 0) {
+        return [''];
+    }
+    return normalize(parsed);
 }
 
 function getEndNodeCustomOptions(node?: FlowNode | null) {
@@ -1134,7 +1136,9 @@ function getOutputHandles(node: FlowNode) {
     if (node.type === 'end') {
         return getEndNodeCustomOptions(node).map((option, index) => ({
             handle: pathHandleFromIndex(index + 1),
-            label: option || `Opção ${index + 1}`
+            label: index === 0
+                ? (option || END_NODE_DEFAULT_RETURN_OPTION_LABEL)
+                : (option || `Opção ${index + 1}`)
         }));
     }
 
@@ -3369,8 +3373,8 @@ function renderProperties() {
                                 class="intent-route-name-input"
                                 type="text"
                                 value="${escapeHtml(String(option || ''))}"
-                                title="${escapeHtml(String(option || '').trim() || ('Opção ' + (index + 1)))}"
-                                placeholder="Ex.: Voltar ao menu principal"
+                                title="${escapeHtml(index === 0 ? (String(option || '').trim() || END_NODE_DEFAULT_RETURN_OPTION_LABEL) : (String(option || '').trim() || ('Opção ' + (index + 1))))}"
+                                placeholder="${escapeHtml(index === 0 ? `Se deixar vazio, será usado: ${END_NODE_DEFAULT_RETURN_OPTION_LABEL}` : 'Ex.: Voltar ao menu principal')}"
                                 oninput="updateEndNodeOption(${index}, this.value)"
                             >
                             ${
@@ -3393,7 +3397,7 @@ function renderProperties() {
                     </div>
                     <button class="add-condition-btn intent-add-route-btn" type="button" onclick="addEndNodeOption()">+ Adicionar opção</button>
                 </div>
-                <small style="display:block; margin-top:6px; color:#7b8aa3;">A primeira opção é fixa e mantém o padrão "${END_NODE_DEFAULT_RETURN_OPTION_LABEL}" quando ficar vazia. A opção "${END_NODE_FIXED_OPTION_LABEL}" sempre encerra o fluxo.</small>
+                <small style="display:block; margin-top:6px; color:#7b8aa3;">A primeira opção é fixa e pode ficar vazia no editor. Quando isso acontecer, o envio usa "${END_NODE_DEFAULT_RETURN_OPTION_LABEL}". A opção "${END_NODE_FIXED_OPTION_LABEL}" sempre encerra o fluxo.</small>
             </div>
             <div class="property-group">
                 <button class="btn-confirm-flow-block" onclick="confirmNodePropertyChanges()">
@@ -4036,15 +4040,8 @@ function updateEndNodeOption(index: number, value: string) {
     if (!selectedNode || selectedNode.type !== 'end') return;
 
     const options = getEditableEndNodeOptionsDraft();
-    if (!options[index]) return;
-    const nextValue = String(value || '');
-    if (index === 0 && !nextValue.trim()) {
-        options[index] = END_NODE_DEFAULT_RETURN_OPTION_LABEL;
-        commitEndNodeOptionsDraft(options);
-        renderProperties();
-        return;
-    }
-    options[index] = nextValue;
+    if (index < 0 || index >= options.length) return;
+    options[index] = String(value || '');
     commitEndNodeOptionsDraft(options);
 }
 
@@ -4054,7 +4051,7 @@ function removeEndNodeOption(index: number) {
     if (index === 0) return;
 
     const options = getEditableEndNodeOptionsDraft();
-    if (!options[index]) return;
+    if (index < 0 || index >= options.length) return;
     options.splice(index, 1);
     commitEndNodeOptionsDraft(options);
     renderProperties();
