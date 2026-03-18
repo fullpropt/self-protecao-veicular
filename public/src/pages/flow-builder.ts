@@ -1228,6 +1228,12 @@ function findPortByHandle(nodeEl: Element, selector: string, handle?: string) {
     const normalizedHandle = edgeHandle(handle);
     const ports = Array.from(nodeEl.querySelectorAll(selector)) as HTMLElement[];
     const exact = ports.find((port) => edgeHandle(port.dataset.handle) === normalizedHandle);
+    if (!exact && selector === '.port.output') {
+        const node = nodes.find((candidate) => candidate.id === (nodeEl as HTMLElement).id) || null;
+        if (node && isEndFixedReturnOutputHandle(node, normalizedHandle)) {
+            return null;
+        }
+    }
     return exact || ports[0] || null;
 }
 
@@ -2255,7 +2261,7 @@ function getDefaultNodeData(type: NodeType, subtype?: string): NodeData {
 }
 
 function getNodeOutputPortsMarkup(node: FlowNode) {
-    const handles = getOutputHandles(node);
+    const handles = getOutputHandles(node).filter((item) => !isEndFixedReturnOutputHandle(node, item.handle));
     return `
         <div class="node-output-ports">
             ${handles.map((item) => `
@@ -2280,11 +2286,7 @@ function getNodeOutputPortsMarkup(node: FlowNode) {
                         onclick="openOutputActionEditor('${node.id}', '${encodeURIComponent(edgeHandle(item.handle))}', '${encodeURIComponent(String(item.label || ''))}', event)"
                     >+</button>
                     <div
-                        class="port output${
-                            isEndOutputHandleReturningToTrigger(node, item.handle) || isEndFixedReturnOutputHandle(node, item.handle)
-                                ? ' is-hidden-dot'
-                                : ''
-                        }"
+                        class="port output${isEndOutputHandleReturningToTrigger(node, item.handle) ? ' is-hidden-dot' : ''}"
                         data-port="output"
                         data-handle="${escapeHtml(item.handle)}"
                         data-label="${escapeHtml(item.label || '')}"
