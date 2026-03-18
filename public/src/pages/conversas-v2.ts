@@ -143,6 +143,32 @@ function getNotificationPreferences(): NotificationPreferences {
     };
 }
 
+function clipNotificationText(value: unknown, maxLength = 90) {
+    const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
+}
+
+function normalizeNotificationSenderLabel(value: unknown) {
+    const normalized = clipNotificationText(value, 40);
+    return normalized || 'Contato';
+}
+
+function buildNotificationPreviewText(rawText: unknown, mediaType: unknown) {
+    const textPreview = clipNotificationText(rawText, 90);
+    if (textPreview) return textPreview;
+
+    const normalizedMediaType = String(mediaType || '').trim().toLowerCase();
+    if (normalizedMediaType === 'image') return 'Enviou uma imagem.';
+    if (normalizedMediaType === 'video') return 'Enviou um video.';
+    if (normalizedMediaType === 'audio' || normalizedMediaType === 'ptt') return 'Enviou um audio.';
+    if (normalizedMediaType === 'document') return 'Enviou um documento.';
+    if (normalizedMediaType === 'sticker') return 'Enviou um sticker.';
+
+    return 'Voce recebeu uma nova mensagem.';
+}
+
 function getSessionId() {
     const appSessionId = String((window as any).APP?.sessionId || '').trim();
     if (appSessionId) return appSessionId;
@@ -590,11 +616,14 @@ function handleNewMessage(message: SocketMessage) {
         )
     );
     const isNewLeadMessage = !message.isFromMe && contactIndex < 0;
-    const leadLabel = String(message.pushName || message.fromNumber || message.from || 'Contato').trim();
+    const leadLabel = normalizeNotificationSenderLabel(
+        message.pushName || message.fromNumber || message.from || 'Contato'
+    );
+    const previewText = buildNotificationPreviewText(message.text, (message as any).mediaType || (message as any).media_type);
 
     // Notificacao de novo lead
     if (isNewLeadMessage && notificationPreferences.notifyNewLead) {
-        showToast('info', 'Novo lead', `${leadLabel} enviou uma mensagem`);
+        showToast('info', `Novo lead: ${leadLabel}`, previewText);
     }
 
     // Notificacao visual de nova mensagem
@@ -604,8 +633,7 @@ function handleNewMessage(message: SocketMessage) {
         && !isCurrentContactMessage
         && !(isNewLeadMessage && notificationPreferences.notifyNewLead)
     ) {
-        const preview = String(message.text || '').trim() || 'Nova mensagem recebida';
-        showToast('info', 'Nova mensagem', `${leadLabel}: ${preview}`);
+        showToast('info', `Nova mensagem de ${leadLabel}`, previewText);
     }
 
     // Notificacao sonora

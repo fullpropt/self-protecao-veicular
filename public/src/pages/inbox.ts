@@ -339,6 +339,32 @@ function getNotificationPreferences(): NotificationPreferences {
     };
 }
 
+function clipNotificationText(value: unknown, maxLength = 90) {
+    const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
+}
+
+function normalizeNotificationSenderLabel(value: unknown) {
+    const normalized = clipNotificationText(value, 40);
+    return normalized || 'Contato';
+}
+
+function buildNotificationPreviewText(rawText: unknown, mediaType: unknown) {
+    const textPreview = clipNotificationText(rawText, 90);
+    if (textPreview) return textPreview;
+
+    const normalizedMediaType = String(mediaType || '').trim().toLowerCase();
+    if (normalizedMediaType === 'image') return 'Enviou uma imagem.';
+    if (normalizedMediaType === 'video') return 'Enviou um video.';
+    if (normalizedMediaType === 'audio' || normalizedMediaType === 'ptt') return 'Enviou um audio.';
+    if (normalizedMediaType === 'document') return 'Enviou um documento.';
+    if (normalizedMediaType === 'sticker') return 'Enviou um sticker.';
+
+    return 'Voce recebeu uma nova mensagem.';
+}
+
 function playNotificationSound() {
     try {
         const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleQoAHIvO7bqVNQAAEYHJ8cSqRwAABnfE9M6zVQAAA3HB9tO4XQAAAGy+99e8YwAAAGi8+Nm/ZwAAAGW6+du/aQAAAGO5+ty/agAAAGK4+t2/awAAAGG3+96/bAAAAGC2++C/bQAAAF+1++G/bgAAAF60++K/bwAAAF2z++O/cAAAAFyy++S/cQAAAFux++W/cgAAAFqw++a/cwAAAGWv++e/dAAAAFiu++i/dQAAAFet++m/dgAAAFas++q/dwAAAFWr++u/eAAAAFSq++y/eQAAAFOp++2/egAAAFKo++6/ewAAAFGn+++/fAAAAFCm+/C/fQAAAE+l+/G/fgAAAE6k+/K/fwAAAE2j+/O/gAAAAEyi+/S/gQAAAEuh+/W/ggAAAEqg+/a/gwAAAEmf+/e/hAAAAEie+/i/hQAAAEed+/m/hgAAAEac+/q/hwAAAEWb+/u/iAAAAESa+/y/iQAAAEOZ+/2/igAAAEKY+/6/iwAAAEGX+/+/jAAAAECW/AC/jQAAAD+V/AG/jgAAAD6U/AK/jwAAAD2T/AO/kAAAADyS/AS/kQAAADuR/AW/kgAAADqQ/Aa/kwAAADmP/Ae/lAAAADiO/Ai/lQAAADeN/Am/lgAAADaM/Aq/lwAAADWL/Au/mAAAADSK/Ay/mQAAADOJ/A2/mgAAADKI/A6/mwAAADGH/A+/nAAAADCG/BC/nQAAAC+F/BG/ngAAAC6E/BK/nwAAAC2D/BO/oAAAACyC/BS/oQAAAC');
@@ -1833,18 +1859,21 @@ function initSocket() {
             if (!isFromMe) {
                 const notificationPreferences = getNotificationPreferences();
                 const isNewLeadMessage = !hadConversationBefore;
-                const leadLabel = String(
+                const leadLabel = normalizeNotificationSenderLabel(
                     data?.leadName
                     || data?.pushName
                     || currentConversation?.name
                     || data?.fromNumber
                     || data?.from
                     || 'Contato'
-                ).trim();
-                const incomingText = String(data?.text || '').trim();
+                );
+                const previewText = buildNotificationPreviewText(
+                    data?.text,
+                    data?.mediaType || data?.media_type
+                );
 
                 if (isNewLeadMessage && notificationPreferences.notifyNewLead) {
-                    showToast('info', 'Novo lead', `${leadLabel} enviou uma mensagem`);
+                    showToast('info', `Novo lead: ${leadLabel}`, previewText);
                 }
 
                 if (
@@ -1852,8 +1881,7 @@ function initSocket() {
                     && !isCurrent
                     && !(isNewLeadMessage && notificationPreferences.notifyNewLead)
                 ) {
-                    const preview = incomingText || 'Nova mensagem recebida';
-                    showToast('info', 'Nova mensagem', `${leadLabel}: ${preview}`);
+                    showToast('info', `Nova mensagem de ${leadLabel}`, previewText);
                 }
 
                 if (notificationPreferences.notifyNewMessage && notificationPreferences.notifySound) {
