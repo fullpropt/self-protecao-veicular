@@ -170,9 +170,5 @@ export function validatePreCheckout(values: PreCheckoutFormValues): PreCheckoutF
     errors.whatsapp = 'Informe um telefone com DDD.';
   }
 
-  if (values.companyName.trim().length < 2) {
-    errors.companyName = 'Informe o nome da sua empresa.';
-  }
-
   return errors;
 }

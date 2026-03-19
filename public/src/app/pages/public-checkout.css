@@ -467,10 +467,7 @@
   width: min(1320px, 100%);
   border-radius: 24px;
   border: 1px solid rgba(70, 142, 116, 0.34);
-  background:
-    radial-gradient(620px 300px at 86% -20%, rgba(0, 255, 163, 0.11), rgba(0, 255, 163, 0)),
-    radial-gradient(520px 220px at 8% 0%, rgba(0, 240, 255, 0.08), rgba(0, 240, 255, 0)),
-    linear-gradient(180deg, rgba(6, 18, 15, 0.96), rgba(4, 12, 10, 0.98));
+  background: #000000;
   box-shadow:
     0 20px 44px rgba(1, 8, 19, 0.52),
     inset 0 0 0 1px rgba(139, 222, 186, 0.12);

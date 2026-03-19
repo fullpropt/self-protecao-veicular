@@ -129,19 +129,6 @@ export default function PreCheckoutLeadForm({
           onFieldBlur={onFieldBlur}
         />
 
-        <TextField
-          id="precheckout-company-name"
-          name="companyName"
-          label="Nome da empresa"
-          placeholder="Ex.: Agência Growth"
-          value={values.companyName}
-          error={errors.companyName}
-          autoComplete="organization"
-          onFieldChange={onFieldChange}
-          onFieldBlur={onFieldBlur}
-        />
-
-
         {submitError ? <p className="precheckout-submit-error">{submitError}</p> : null}
 
         <button className="precheckout-submit-btn" type="submit" disabled={isSubmitting}>
@@ -152,3 +139,4 @@ export default function PreCheckoutLeadForm({
     </section>
   );
 }
+
