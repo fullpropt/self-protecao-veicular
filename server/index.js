@@ -16795,7 +16795,7 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
         console.error('Falha ao excluir lead:', error);
         res.status(500).json({
             success: false,
-            error: 'Erro ao excluir lead'
+            error: error?.message || 'Erro ao excluir lead'
         });
     }
 });
