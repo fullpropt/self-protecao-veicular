@@ -1600,7 +1600,10 @@ const bootstrapPromise = bootstrapDatabase();
 const helmetCspConfig = buildHelmetCspConfig();
 app.use(helmet({
     contentSecurityPolicy: helmetCspConfig || false,
-    crossOriginEmbedderPolicy: false
+    crossOriginEmbedderPolicy: false,
+    referrerPolicy: {
+        policy: 'strict-origin-when-cross-origin'
+    }
 }));
 
 if (helmetCspConfig) {

@@ -1740,6 +1740,7 @@ function OnboardingCard({
                 className="onboarding-video-frame"
                 title="Guia de primeiros passos"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
                 allowFullScreen
                 style={{ display: 'none' }}
               ></iframe>
