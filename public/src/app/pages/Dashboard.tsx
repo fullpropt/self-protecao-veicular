@@ -1375,15 +1375,8 @@ function DashboardStyles() {
           display: block;
           background: #02070f;
         }
-        .onboarding-video-player-host {
-          pointer-events: none;
-        }
-        .onboarding-video-player-host iframe {
-          width: 100%;
-          height: 100%;
-          border: 0;
-          display: block;
-          background: #02070f;
+        .onboarding-video-element {
+          object-fit: contain;
           pointer-events: none;
         }
         .onboarding-video-placeholder {
@@ -2168,20 +2161,16 @@ function OnboardingCard({
           <div className="onboarding-floating-player">
             <div className="onboarding-video-shell" id="onboardingVideoShell">
               <div className="onboarding-preview-backdrop" id="onboardingVideoPosterBackdrop"></div>
-              <div
-                id="onboardingVideoPlayerHost"
-                className="onboarding-video-frame onboarding-video-player-host"
-                style={{ display: 'none' }}
-              ></div>
-              <iframe
-                id="onboardingVideoFrame"
-                className="onboarding-video-frame onboarding-video-fallback-frame"
+              <video
+                id="onboardingVideoElement"
+                className="onboarding-video-frame onboarding-video-element"
                 title="Tour guiado do ZapVender"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
+                playsInline
+                preload="metadata"
+                controlsList="nodownload noplaybackrate"
+                disablePictureInPicture
                 style={{ display: 'none' }}
-              ></iframe>
+              ></video>
 
               <div className="onboarding-video-placeholder" id="onboardingVideoPlaceholder">
                 <strong id="onboardingVideoPlaceholderTitle">Carregando tour</strong>
