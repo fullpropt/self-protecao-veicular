@@ -636,26 +636,76 @@ export default function Inbox() {
         }
         .conversation-flow-bot-badge {
             position: absolute;
-            top: -5px;
-            left: -5px;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
+            top: -6px;
+            left: -18px;
+            width: 16px;
+            height: 16px;
+            border-radius: 5px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            color: #052317;
-            background: linear-gradient(180deg, #4bf0b1 0%, #29ce91 100%);
-            border: 1px solid rgba(6, 32, 21, 0.45);
+            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.98) 0%, rgba(var(--primary-rgb), 0.72) 100%);
+            border: 1px solid rgba(3, 24, 18, 0.75);
             box-shadow:
-                0 6px 14px rgba(14, 199, 129, 0.32),
-                0 1px 0 rgba(255, 255, 255, 0.28) inset;
-            z-index: 2;
+                0 5px 11px rgba(var(--primary-rgb), 0.3),
+                0 1px 0 rgba(255, 255, 255, 0.2) inset;
+            z-index: 3;
             pointer-events: none;
         }
-        .conversation-flow-bot-badge .icon {
-            font-size: 11px;
+        .conversation-flow-bot-badge::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            width: 2px;
+            height: 4px;
+            border-radius: 999px;
+            transform: translateX(-50%);
+            background: rgba(var(--primary-rgb), 0.88);
+            box-shadow: 0 0 0 1px rgba(5, 22, 18, 0.35);
+        }
+        .conversation-flow-bot-badge::after {
+            content: '';
+            position: absolute;
+            top: -7px;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            transform: translateX(-50%);
+            background: #d7fff2;
+            box-shadow: 0 0 6px rgba(var(--primary-rgb), 0.6);
+        }
+        .conversation-flow-bot-glyph {
+            position: relative;
+            width: 10px;
+            height: 8px;
+            border-radius: 3px;
+            background: rgba(5, 22, 18, 0.34);
+            border: 1px solid rgba(214, 255, 241, 0.36);
             line-height: 1;
+        }
+        .conversation-flow-bot-glyph::before {
+            content: '';
+            position: absolute;
+            top: 1px;
+            left: 1px;
+            width: 2px;
+            height: 2px;
+            border-radius: 50%;
+            background: #dcfff4;
+            box-shadow: 4px 0 0 #dcfff4;
+        }
+        .conversation-flow-bot-glyph::after {
+            content: '';
+            position: absolute;
+            left: 2px;
+            bottom: 1px;
+            width: 4px;
+            height: 2px;
+            border-radius: 999px;
+            background: #dcfff4;
+            opacity: 0.92;
         }
         .conversation-preview {
             font-size: 13px;

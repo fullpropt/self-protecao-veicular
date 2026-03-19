@@ -2164,7 +2164,7 @@ function renderConversationFlowIndicator(conversation: Conversation) {
             title="Fluxo em andamento"
             aria-label="Fluxo em andamento"
         >
-            <span class="icon icon-automation" aria-hidden="true"></span>
+            <span class="conversation-flow-bot-glyph" aria-hidden="true"></span>
         </span>
     `;
 }
