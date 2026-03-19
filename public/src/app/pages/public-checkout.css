@@ -646,6 +646,10 @@
     gap: 8px;
   }
 
+  .public-checkout-bullets {
+    display: none;
+  }
+
   .public-checkout-bullets li {
     font-size: 12px;
   }
