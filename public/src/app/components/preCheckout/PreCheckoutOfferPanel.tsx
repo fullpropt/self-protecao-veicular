@@ -45,30 +45,35 @@ export default function PreCheckoutOfferPanel({
         <div className="precheckout-plan-price">{recurringLabel}</div>
       </div>
 
-      <ul className="precheckout-benefits" aria-label="Beneficios do plano">
-        {benefits.map((benefit) => (
-          <li key={benefit}>{benefit}</li>
-        ))}
-      </ul>
+      {benefits.length > 0 && (
+        <ul className="precheckout-benefits" aria-label="Beneficios do plano">
+          {benefits.map((benefit) => (
+            <li key={benefit}>{benefit}</li>
+          ))}
+        </ul>
+      )}
 
-      <div className="precheckout-highlight-grid">
-        {highlights.map((item) => (
-          <article key={item.label} className="precheckout-highlight-item">
-            <span>{item.label}</span>
-            <strong>{item.value}</strong>
-          </article>
-        ))}
-      </div>
+      {highlights.length > 0 && (
+        <div className="precheckout-highlight-grid">
+          {highlights.map((item) => (
+            <article key={item.label} className="precheckout-highlight-item">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </article>
+          ))}
+        </div>
+      )}
 
-      <div className="precheckout-trust-list">
-        {trustItems.map((item) => (
-          <p key={item.text}>
-            <span aria-hidden="true">{item.icon}</span>
-            {item.text}
-          </p>
-        ))}
-      </div>
+      {trustItems.length > 0 && (
+        <div className="precheckout-trust-list">
+          {trustItems.map((item) => (
+            <p key={item.text}>
+              <span aria-hidden="true">{item.icon}</span>
+              {item.text}
+            </p>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
-

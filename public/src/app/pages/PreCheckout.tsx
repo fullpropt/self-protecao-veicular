@@ -32,64 +32,50 @@ type PlanPreview = {
 const PLAN_PREVIEW_CATALOG: Record<string, PlanPreview> = {
   premium: {
     key: 'premium',
-    title: 'Ative seu teste grátis',
-    subtitle: 'Preencha seus dados para liberar o checkout com prioridade comercial.',
+    title: 'Teste grátis por 7 dias',
+    subtitle: 'Preencha rápido e avance para o checkout.',
     planName: 'Plano Premium',
     trialLabel: '7 dias grátis',
     recurringLabel: 'Depois, R$ 197/mês',
     benefits: [
       '3 conexões WhatsApp simultâneas',
-      'Escudo antibloqueio completo',
-      'Webhooks e eventos personalizados',
-      'Fluxos ilimitados e suporte prioritário'
+      'Escudo antibloqueio',
+      'Fluxos ilimitados com suporte prioritário'
     ],
-    highlights: [
-      { label: 'Tempo de cadastro', value: '< 1 minuto' },
-      { label: 'Ativação', value: 'Imediata após o pagamento' }
-    ]
+    highlights: []
   },
   starter: {
     key: 'starter',
-    title: 'Finalize sua ativação',
-    subtitle: 'Preencha seu pré-cadastro para seguir para o checkout sem perder o progresso.',
+    title: 'Comece sua ativação',
+    subtitle: 'Faça o pré-cadastro e siga para o checkout.',
     planName: 'Plano Starter',
     trialLabel: 'Acesso imediato',
     recurringLabel: 'R$ 97/mês',
     benefits: [
       '1 conexão WhatsApp nativa',
-      'Construtor de fluxo visual',
       'Inbox unificado',
       'Respostas automáticas 24/7'
     ],
-    highlights: [
-      { label: 'Tempo de cadastro', value: '< 1 minuto' },
-      { label: 'Setup inicial', value: 'Assistido' }
-    ]
+    highlights: []
   },
   advanced: {
     key: 'advanced',
-    title: 'Inicie sua operação avançada',
-    subtitle: 'Antecipe seus dados para ir ao checkout com preenchimento automático.',
+    title: 'Operação avançada pronta para escalar',
+    subtitle: 'Adiante o cadastro e conclua o checkout mais rápido.',
     planName: 'Plano Avançado',
     trialLabel: 'Escala para equipes',
     recurringLabel: 'R$ 397/mês',
     benefits: [
       '5 conexões WhatsApp dedicadas',
       'Múltiplos agentes ilimitados',
-      'Relatórios avançados e funil',
       'API e webhooks ilimitados'
     ],
-    highlights: [
-      { label: 'Tempo de cadastro', value: '< 1 minuto' },
-      { label: 'Escalabilidade', value: 'Alta performance' }
-    ]
+    highlights: []
   }
 };
 
 const TRUST_COPY = [
-  { icon: 'OK', text: 'Cancele quando quiser' },
-  { icon: 'OK', text: 'Leva menos de 1 minuto' },
-  { icon: 'OK', text: 'Dados salvos para continuar depois' }
+  { icon: 'OK', text: 'Cancele quando quiser' }
 ];
 
 function normalizePlanKey(value: unknown) {
