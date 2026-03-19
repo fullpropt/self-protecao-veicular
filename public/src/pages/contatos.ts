@@ -211,6 +211,13 @@ function appConfirm(message: string, title = 'Confirmacao') {
     return Promise.resolve(window.confirm(message));
 }
 
+function contactHasLinkedConversation(contact: Contact | null | undefined) {
+    return Boolean(
+        String(contact?.session_id || '').trim()
+        || String(contact?.last_message_at || '').trim()
+    );
+}
+
 function appPrompt(message: string, options: { title?: string; defaultValue?: string; placeholder?: string; confirmLabel?: string; cancelLabel?: string } = {}) {
     const win = window as Window & {
         showAppPrompt?: (
@@ -1986,7 +1993,14 @@ async function updateContact() {
 }
 
 async function deleteContact(id: number) {
-    if (!await appConfirm('Excluir este contato?', 'Excluir contato')) return;
+    const contact = allContacts.find((item) => Number(item.id) === Number(id)) || null;
+    const hasLinkedConversation = contactHasLinkedConversation(contact);
+    const confirmMessage = hasLinkedConversation
+        ? 'Este contato possui conversa no Inbox. Ao excluir o contato, a conversa e o historico vinculado tambem serao removidos. Deseja excluir contato e conversa?'
+        : 'Excluir este contato?';
+    const confirmTitle = hasLinkedConversation ? 'Excluir contato e conversa' : 'Excluir contato';
+
+    if (!await appConfirm(confirmMessage, confirmTitle)) return;
     try {
         showLoading('Excluindo...');
         await api.delete(`/api/leads/${id}`);
