@@ -587,13 +587,125 @@
 
 @media (max-width: 640px) {
   .public-checkout-page {
-    padding: 18px 12px 42px;
+    padding: 14px 10px 34px;
+  }
+
+  .public-checkout-brand {
+    margin-bottom: 14px;
+  }
+
+  .public-checkout-brand img {
+    width: 128px;
+  }
+
+  .public-checkout-grid {
+    gap: 12px;
+  }
+
+  .public-checkout-main {
+    gap: 12px;
+  }
+
+  .public-checkout-form {
+    gap: 12px;
   }
 
   .public-checkout-card,
   .public-checkout-summary {
-    padding: 20px;
-    border-radius: 22px;
+    padding: 16px;
+    border-radius: 18px;
+    box-shadow:
+      0 16px 34px rgba(0, 0, 0, 0.44),
+      0 0 0 1px rgba(209, 255, 235, 0.1) inset,
+      0 0 0 1px var(--checkout-card-ring),
+      0 8px 18px var(--checkout-card-glow);
+  }
+
+  .public-checkout-card::after,
+  .public-checkout-summary::after {
+    left: 16px;
+    right: 16px;
+    height: 3px;
+  }
+
+  .public-checkout-summary {
+    order: -1;
+  }
+
+  .public-checkout-step-header {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .public-checkout-step-number {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .public-checkout-step-label {
+    min-height: 28px;
+    padding: 0 10px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+
+  .public-checkout-form-grid {
+    gap: 10px;
+  }
+
+  .public-checkout-field label {
+    font-size: 12px;
+  }
+
+  .public-checkout-input,
+  .public-checkout-select {
+    min-height: 46px;
+    border-radius: 12px;
+    padding: 0 13px;
+    font-size: 14px;
+    background: rgba(6, 16, 14, 0.94);
+  }
+
+  .public-checkout-banner,
+  .public-checkout-error {
+    margin-top: 12px;
+    border-radius: 12px;
+    padding: 11px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .public-checkout-submit {
+    margin-top: 14px;
+    min-height: 50px;
+    border-radius: 13px;
+    font-size: 15px;
+  }
+
+  .public-checkout-summary h2 {
+    margin: 10px 0 6px;
+    font-size: 24px;
+  }
+
+  .public-checkout-plan-card {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .public-checkout-price-line {
+    font-size: 13px;
+    padding: 8px 0;
+  }
+
+  .public-checkout-bullets {
+    margin-top: 10px;
+    gap: 8px;
+  }
+
+  .public-checkout-bullets li {
+    font-size: 12px;
   }
 
   .public-checkout-trust,
