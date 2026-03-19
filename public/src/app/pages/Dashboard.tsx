@@ -1179,6 +1179,7 @@ function DashboardStyles() {
           margin-top: 14px;
         }
         .onboarding-video-shell {
+          --onboarding-player-top-crop: 56px;
           position: relative;
           overflow: hidden;
           aspect-ratio: 16 / 9;
@@ -1192,6 +1193,7 @@ function DashboardStyles() {
         .onboarding-preview-backdrop {
           position: absolute;
           inset: 0;
+          z-index: 0;
           background-position: center;
           background-size: cover;
           filter: saturate(0.94);
@@ -1206,6 +1208,7 @@ function DashboardStyles() {
             linear-gradient(180deg, rgba(4, 11, 21, 0.12) 0%, rgba(2, 6, 12, 0.74) 100%),
             linear-gradient(90deg, rgba(2, 8, 17, 0.32) 0%, rgba(2, 8, 17, 0.08) 45%, rgba(2, 8, 17, 0.36) 100%);
           pointer-events: none;
+          transition: opacity 180ms ease;
         }
         .onboarding-video-frame {
           position: absolute;
@@ -1216,11 +1219,24 @@ function DashboardStyles() {
           border: 0;
           display: block;
           background: #02070f;
+          transition: inset 180ms ease, height 180ms ease;
+        }
+        .onboarding-video-top-mask {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: var(--onboarding-player-top-crop);
+          z-index: 4;
+          opacity: 0;
+          pointer-events: none;
+          background: linear-gradient(180deg, rgba(2, 7, 15, 0.98) 0%, rgba(2, 7, 15, 0.92) 44%, rgba(2, 7, 15, 0) 100%);
+          transition: opacity 180ms ease;
         }
         .onboarding-video-cover {
           position: absolute;
           inset: 0;
-          z-index: 2;
+          z-index: 5;
           display: flex;
           align-items: flex-end;
           padding: 18px;
@@ -1257,7 +1273,7 @@ function DashboardStyles() {
         .onboarding-video-placeholder {
           position: absolute;
           inset: 0;
-          z-index: 2;
+          z-index: 5;
           display: flex;
           flex-direction: column;
           justify-content: center;
@@ -1306,6 +1322,16 @@ function DashboardStyles() {
         .onboarding-video-shell.is-playing .onboarding-video-cover,
         .onboarding-video-shell.is-playing .onboarding-video-placeholder {
           display: none;
+        }
+        .onboarding-video-shell.is-playing::after {
+          opacity: 0;
+        }
+        .onboarding-video-shell.is-playing.is-youtube .onboarding-video-frame {
+          inset: calc(var(--onboarding-player-top-crop) * -1) 0 0 0;
+          height: calc(100% + var(--onboarding-player-top-crop));
+        }
+        .onboarding-video-shell.is-playing.is-youtube .onboarding-video-top-mask {
+          opacity: 1;
         }
         .onboarding-spotlight-actions {
           display: flex;
@@ -1495,6 +1521,7 @@ function DashboardStyles() {
           .onboarding-spotlight-card { padding: 14px; border-radius: 14px; }
           .onboarding-video-title { font-size: 20px; }
           .onboarding-video-shell { border-radius: 16px; }
+          .onboarding-video-shell { --onboarding-player-top-crop: 44px; }
           .onboarding-video-cover { padding: 14px; }
           .onboarding-preview-panel { width: 100%; padding: 14px; border-radius: 16px; }
           .onboarding-preview-play-icon { width: 36px; height: 36px; }
@@ -1974,6 +2001,7 @@ function OnboardingCard({
                     allowFullScreen
                     style={{ display: 'none' }}
                   ></iframe>
+                  <div className="onboarding-video-top-mask" aria-hidden="true"></div>
                   <div className="onboarding-video-placeholder" id="onboardingVideoPlaceholder">
                     <strong id="onboardingVideoPlaceholderTitle">Guia indisponível</strong>
                     <span id="onboardingVideoHint">Estamos preparando o passo a passo desta etapa.</span>

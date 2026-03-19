@@ -128,7 +128,9 @@ type OnboardingState = {
     updatedAt: number;
 };
 type OnboardingVideosMap = Partial<Record<OnboardingStepId, string>>;
+type OnboardingVideoProvider = 'youtube' | 'vimeo' | 'external' | 'none';
 type OnboardingVideoPresentation = {
+    provider: OnboardingVideoProvider;
     sourceUrl: string;
     embedUrl: string;
     posterUrl: string;
@@ -518,6 +520,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
     const sourceUrl = normalizeAbsoluteHttpUrl(videoUrl);
     if (!sourceUrl) {
         return {
+            provider: 'none',
             sourceUrl: '',
             embedUrl: '',
             posterUrl: '',
@@ -534,6 +537,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
             const videoId = pathParts[0];
             if (videoId) {
                 return {
+                    provider: 'youtube',
                     sourceUrl,
                     embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=1&iv_load_policy=3&modestbranding=1&fs=1`,
                     posterUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
@@ -554,6 +558,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
 
             if (videoId) {
                 return {
+                    provider: 'youtube',
                     sourceUrl,
                     embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=1&iv_load_policy=3&modestbranding=1&fs=1`,
                     posterUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
@@ -565,6 +570,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
         if (hostname === 'vimeo.com' || hostname === 'player.vimeo.com') {
             const videoId = pathParts.find((part) => /^\d+$/.test(part));
             return {
+                provider: 'vimeo',
                 sourceUrl,
                 embedUrl: videoId ? `https://player.vimeo.com/video/${videoId}?autoplay=1` : '',
                 posterUrl: '',
@@ -573,6 +579,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
         }
     } catch (_) {
         return {
+            provider: 'none',
             sourceUrl: '',
             embedUrl: '',
             posterUrl: '',
@@ -581,6 +588,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
     }
 
     return {
+        provider: 'external',
         sourceUrl,
         embedUrl: '',
         posterUrl: '',
@@ -659,7 +667,7 @@ function renderOnboardingVideo() {
 
     if (!presentation.embedUrl) {
         if (shell) {
-            shell.classList.remove('is-playing');
+            shell.classList.remove('is-playing', 'is-youtube');
         }
         if (previewButton) {
             previewButton.disabled = true;
@@ -694,6 +702,7 @@ function renderOnboardingVideo() {
 
     if (shell) {
         shell.classList.toggle('is-playing', isPlayingCurrentStep);
+        shell.classList.toggle('is-youtube', presentation.provider === 'youtube');
     }
     if (previewButton) {
         previewButton.disabled = false;
