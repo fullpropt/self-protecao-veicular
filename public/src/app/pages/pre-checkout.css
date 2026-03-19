@@ -635,6 +635,11 @@
     gap: 8px;
   }
 
+  .precheckout-benefits,
+  .precheckout-trust-list {
+    display: none;
+  }
+
   .precheckout-benefits li {
     gap: 8px;
     font-size: 12px;
