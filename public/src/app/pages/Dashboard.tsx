@@ -1909,7 +1909,7 @@ function StatsPeriod() {
 
   return (
     <div className="dashboard-botconversa">
-      <div className="stats-period-card">
+      <div className="stats-period-card" data-tour-target="dashboard-stats-period-card">
         <h3>Estatísticas por período</h3>
         <div className="stats-period-controls">
           <input type="date" className="form-input" id="statsStartDate" />
@@ -1924,7 +1924,7 @@ function StatsPeriod() {
               <span className="icon icon-chart-line icon-sm"></span>
               <span className="chart-btn-label">Linha</span>
             </button>
-            <button type="button" className="chart-btn" data-chart-type="bar" title="Gráfico de barras">
+            <button type="button" className="chart-btn" data-chart-type="bar" data-tour-target="dashboard-chart-bar-toggle" title="Gráfico de barras">
               <span className="icon icon-chart-bar icon-sm"></span>
               <span className="chart-btn-label">Barras</span>
             </button>
@@ -2607,7 +2607,7 @@ export default function Dashboard() {
             <div className="nav-section-title">Sistema</div>
             <ul className="nav-menu">
               <li className="nav-item">
-                <Link to="/whatsapp" className="nav-link">
+                <Link to="/whatsapp" className="nav-link" data-tour-target="dashboard-nav-whatsapp">
                   <span className="icon icon-whatsapp"></span>
                   WhatsApp
                 </Link>

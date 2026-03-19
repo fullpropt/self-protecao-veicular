@@ -143,6 +143,8 @@ type OnboardingHighlightMarker = {
     selector: string;
     title: string;
     hint: string;
+    route?: string;
+    action?: 'open_whatsapp_new_account_prompt' | 'confirm_whatsapp_new_account_prompt';
     radius?: number;
     scroll?: ScrollLogicalPosition;
 };
@@ -187,6 +189,7 @@ let onboardingVideoCurrentSeconds = 0;
 let onboardingVideoMuted = false;
 let onboardingVideoPlaybackState: 'idle' | 'loading' | 'playing' | 'paused' | 'ended' = 'idle';
 let onboardingPreparedSurfaceStepId: OnboardingStepId | null = null;
+let onboardingPreparedMarkerActionKey = '';
 let onboardingActiveSpotlightElement: HTMLElement | null = null;
 let onboardingActiveSpotlightSelector = '';
 let onboardingActiveSpotlightMarkerKey = '';
@@ -222,7 +225,7 @@ const ONBOARDING_STEP_IDS: OnboardingStepId[] = [
     'create_automation'
 ];
 const ONBOARDING_STEP_ROUTES: Record<OnboardingStepId, string> = {
-    connect_whatsapp: '#/whatsapp',
+    connect_whatsapp: '#/dashboard',
     configure_accounts: '#/configuracoes?panel=conexao',
     open_inbox: '#/inbox',
     create_first_contact: '#/contatos',
@@ -233,9 +236,13 @@ const ONBOARDING_STEP_ROUTES: Record<OnboardingStepId, string> = {
 };
 const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMarker[]> = {
     connect_whatsapp: [
-        { at: 1.2, selector: '[data-tour-target="whatsapp-session-select"]', title: 'Selecione a conta', hint: 'Aqui você escolhe qual conta do WhatsApp está ativa no momento.', radius: 14 },
-        { at: 5.4, selector: '[data-tour-target="whatsapp-connect-button"]', title: 'Conecte o WhatsApp', hint: 'Este é o botão principal para iniciar a conexão da conta.', radius: 18 },
-        { at: 11.2, selector: '[data-tour-target="whatsapp-instructions"]', title: 'Siga o passo a passo', hint: 'As instruções da conexão ficam visíveis na própria tela para acompanhar com o celular.', radius: 20 }
+        { at: 11.0, selector: '[data-tour-target="dashboard-stats-period-card"]', route: '#/dashboard', title: 'Veja o gráfico principal', hint: 'Aqui você acompanha o gráfico do período e o seletor de métricas como mensagens.', radius: 22 },
+        { at: 16.0, selector: '[data-tour-target="dashboard-chart-bar-toggle"]', route: '#/dashboard', title: 'Alterne o tipo do gráfico', hint: 'Use este toggle para trocar a visualização entre linha e barra.', radius: 18, scroll: 'nearest' },
+        { at: 20.0, selector: '[data-tour-target="dashboard-nav-whatsapp"]', route: '#/dashboard', title: 'Abra o WhatsApp', hint: 'Este atalho leva você para a área de conexão das contas.', radius: 18, scroll: 'nearest' },
+        { at: 22.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Crie uma nova conta', hint: 'Este botão prepara uma nova sessão para conexão no sistema.', radius: 18 },
+        { at: 24.0, selector: '[data-tour-target="app-prompt-modal"]', route: '#/whatsapp', action: 'open_whatsapp_new_account_prompt', title: 'Defina a nova conta', hint: 'O modal abre para escolher o identificador da nova conta WhatsApp.', radius: 22, scroll: 'center' },
+        { at: 25.0, selector: '[data-tour-target="whatsapp-connect-button"]', route: '#/whatsapp', action: 'confirm_whatsapp_new_account_prompt', title: 'Conecte o WhatsApp', hint: 'Depois de criar a conta, use este botão para iniciar a conexão.', radius: 18 },
+        { at: 37.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Você pode repetir o processo', hint: 'Sempre que precisar adicionar outra conta, volte neste mesmo botão.', radius: 18 }
     ],
     configure_accounts: [
         { at: 1.0, selector: '[data-tour-target="settings-nav-conexao"]', title: 'Painel de contas', hint: 'Esta aba concentra as contas conectadas e o status de cada uma.', radius: 14 },
@@ -767,6 +774,7 @@ function resetOnboardingChecklist() {
     onboardingPlayingStepId = null;
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
     onboardingPreparedSurfaceStepId = null;
+    onboardingPreparedMarkerActionKey = '';
     writeOnboardingState(onboardingState);
     renderOnboardingChecklist();
     renderOnboardingVideo();
@@ -779,6 +787,7 @@ function resetOnboardingTourState() {
     onboardingPlayingStepId = null;
     onboardingSelectedStepId = ONBOARDING_STEP_IDS[0] || null;
     onboardingPreparedSurfaceStepId = null;
+    onboardingPreparedMarkerActionKey = '';
     renderOnboardingChecklist();
     renderOnboardingVideo();
     clearOnboardingSpotlight();
@@ -795,6 +804,7 @@ function startOnboardingTour(stepIdInput?: string) {
     onboardingPlayingStepId = stepId;
     onboardingTourOpen = true;
     onboardingPreparedSurfaceStepId = null;
+    onboardingPreparedMarkerActionKey = '';
 
     const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[stepId] || '');
 
@@ -814,6 +824,7 @@ function startOnboardingTour(stepIdInput?: string) {
 function closeOnboardingTour() {
     onboardingTourOpen = false;
     onboardingPreparedSurfaceStepId = null;
+    onboardingPreparedMarkerActionKey = '';
     const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
     if (video) {
         try {
@@ -892,25 +903,47 @@ function getCurrentHashPath() {
     return String(getCurrentHashRoute().split('?')[0] || '/dashboard').trim() || '/dashboard';
 }
 
+function normalizeOnboardingRoute(routeInput: unknown) {
+    const route = String(routeInput || '').trim();
+    if (!route) return '';
+    return route.startsWith('#') ? route : `#${route}`;
+}
+
+function isOnboardingRouteActive(routeInput: unknown) {
+    const route = normalizeOnboardingRoute(routeInput);
+    if (!route) return false;
+    const routePath = route.slice(1).split('?')[0];
+    return getCurrentHashPath() === routePath;
+}
+
+function ensureOnboardingRoute(routeInput: unknown) {
+    const route = normalizeOnboardingRoute(routeInput);
+    if (!route) return false;
+    if (String(window.location.hash || '').trim() === route) return false;
+    window.location.hash = route;
+    return true;
+}
+
 function isOnboardingStepRouteActive(stepIdInput: string | OnboardingStepId | null | undefined) {
     const stepId = normalizeOnboardingStepId(stepIdInput);
     if (!stepId) return false;
-    const route = String(ONBOARDING_STEP_ROUTES[stepId] || '').trim();
-    if (!route) return false;
-    const routePath = route.startsWith('#') ? route.slice(1).split('?')[0] : route.split('?')[0];
-    return getCurrentHashPath() === routePath;
+    return isOnboardingRouteActive(ONBOARDING_STEP_ROUTES[stepId]);
 }
 
 function ensureOnboardingStepRoute(stepIdInput: string | OnboardingStepId | null | undefined) {
     const stepId = normalizeOnboardingStepId(stepIdInput);
     if (!stepId) return false;
+    return ensureOnboardingRoute(ONBOARDING_STEP_ROUTES[stepId]);
+}
 
-    const targetRoute = String(ONBOARDING_STEP_ROUTES[stepId] || '').trim();
-    if (!targetRoute) return false;
-    if (String(window.location.hash || '').trim() === targetRoute) return false;
-
-    window.location.hash = targetRoute;
-    return true;
+function resolveOnboardingHighlightRoute(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker | null
+) {
+    const markerRoute = normalizeOnboardingRoute(marker?.route);
+    if (markerRoute) return markerRoute;
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    return stepId ? normalizeOnboardingRoute(ONBOARDING_STEP_ROUTES[stepId]) : '';
 }
 
 function stopOnboardingSpotlightRefreshTimer() {
@@ -990,6 +1023,57 @@ function positionOnboardingSpotlightCard(target: HTMLElement, marker: Onboarding
     card.style.left = `${Math.round(left)}px`;
 }
 
+function performOnboardingHighlightAction(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker | null
+) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    const action = String(marker?.action || '').trim();
+    if (!stepId || !marker || !action) return true;
+
+    const actionKey = `${stepId}:${marker.at}:${action}`;
+    if (onboardingPreparedMarkerActionKey === actionKey) {
+        return true;
+    }
+
+    const win = window as Window & {
+        createSessionPrompt?: () => Promise<void> | void;
+    };
+
+    if (action === 'open_whatsapp_new_account_prompt') {
+        if (typeof win.createSessionPrompt !== 'function') {
+            scheduleOnboardingSpotlightRefresh(260);
+            return false;
+        }
+
+        void win.createSessionPrompt();
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(120);
+        return true;
+    }
+
+    if (action === 'confirm_whatsapp_new_account_prompt') {
+        const overlay = document.getElementById('appGlobalDialogModal') as HTMLElement | null;
+        const input = document.getElementById('appGlobalDialogInput') as HTMLInputElement | null;
+        const confirmButton = document.getElementById('appGlobalDialogConfirmBtn') as HTMLButtonElement | null;
+        if (!overlay?.classList.contains('active') || !confirmButton) {
+            scheduleOnboardingSpotlightRefresh(140);
+            return false;
+        }
+
+        if (input && !String(input.value || '').trim()) {
+            input.value = 'tour_whatsapp_1';
+        }
+
+        confirmButton.click();
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(180);
+        return false;
+    }
+
+    return true;
+}
+
 function applyOnboardingSpotlight(marker: OnboardingHighlightMarker | null) {
     if (!marker || !onboardingTourOpen) {
         clearOnboardingSpotlight();
@@ -1030,10 +1114,13 @@ function applyOnboardingSpotlight(marker: OnboardingHighlightMarker | null) {
     positionOnboardingSpotlightCard(target, marker);
 }
 
-function prepareOnboardingSurfaceForStep(stepIdInput: string | OnboardingStepId | null | undefined) {
+function prepareOnboardingSurfaceForStep(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker | null = null
+) {
     const stepId = normalizeOnboardingStepId(stepIdInput);
-    if (!stepId || !isOnboardingStepRouteActive(stepId)) return;
-    if (onboardingPreparedSurfaceStepId === stepId) return;
+    const targetRoute = resolveOnboardingHighlightRoute(stepId, marker);
+    if (!stepId || !isOnboardingRouteActive(targetRoute)) return false;
 
     const win = window as Window & {
         showPanel?: (panelId: string) => void;
@@ -1041,53 +1128,57 @@ function prepareOnboardingSurfaceForStep(stepIdInput: string | OnboardingStepId 
         openCampaignModal?: () => void;
         openAutomationModal?: () => void;
     };
-    let didPrepare = true;
+    if (onboardingPreparedSurfaceStepId !== stepId) {
+        let didPrepare = true;
 
-    if (stepId === 'configure_accounts') {
-        if (typeof win.showPanel === 'function') {
-            win.showPanel('conexao');
-        } else {
-            didPrepare = false;
+        if (stepId === 'configure_accounts') {
+            if (typeof win.showPanel === 'function') {
+                win.showPanel('conexao');
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'create_tags') {
+            if (typeof win.showPanel === 'function') {
+                win.showPanel('labels');
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'configure_dynamic_fields') {
+            if (typeof win.showPanel === 'function') {
+                win.showPanel('contact-fields');
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'create_first_contact') {
+            if (typeof win.openAddContactModal === 'function') {
+                win.openAddContactModal();
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'create_campaign') {
+            if (typeof win.openCampaignModal === 'function') {
+                win.openCampaignModal();
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'create_automation') {
+            if (typeof win.openAutomationModal === 'function') {
+                win.openAutomationModal();
+            } else {
+                didPrepare = false;
+            }
         }
-    } else if (stepId === 'create_tags') {
-        if (typeof win.showPanel === 'function') {
-            win.showPanel('labels');
-        } else {
-            didPrepare = false;
+
+        if (!didPrepare) {
+            scheduleOnboardingSpotlightRefresh(260);
+            return false;
         }
-    } else if (stepId === 'configure_dynamic_fields') {
-        if (typeof win.showPanel === 'function') {
-            win.showPanel('contact-fields');
-        } else {
-            didPrepare = false;
-        }
-    } else if (stepId === 'create_first_contact') {
-        if (typeof win.openAddContactModal === 'function') {
-            win.openAddContactModal();
-        } else {
-            didPrepare = false;
-        }
-    } else if (stepId === 'create_campaign') {
-        if (typeof win.openCampaignModal === 'function') {
-            win.openCampaignModal();
-        } else {
-            didPrepare = false;
-        }
-    } else if (stepId === 'create_automation') {
-        if (typeof win.openAutomationModal === 'function') {
-            win.openAutomationModal();
-        } else {
-            didPrepare = false;
-        }
+
+        onboardingPreparedSurfaceStepId = stepId;
+        scheduleOnboardingSpotlightRefresh(180);
     }
 
-    if (!didPrepare) {
-        scheduleOnboardingSpotlightRefresh(260);
-        return;
-    }
-
-    onboardingPreparedSurfaceStepId = stepId;
-    scheduleOnboardingSpotlightRefresh(180);
+    return performOnboardingHighlightAction(stepId, marker);
 }
 
 function refreshOnboardingTourSurface() {
@@ -1097,8 +1188,20 @@ function refreshOnboardingTourSurface() {
         return;
     }
 
-    prepareOnboardingSurfaceForStep(stepId);
     const activeMarker = resolveActiveOnboardingHighlight(stepId);
+    const targetRoute = resolveOnboardingHighlightRoute(stepId, activeMarker);
+    if (targetRoute && !isOnboardingRouteActive(targetRoute)) {
+        clearOnboardingSpotlight();
+        onboardingPreparedSurfaceStepId = null;
+        const hasRouteChanged = ensureOnboardingRoute(targetRoute);
+        if (hasRouteChanged) {
+            scheduleOnboardingSpotlightRefresh(360);
+            return;
+        }
+    }
+
+    const surfaceReady = prepareOnboardingSurfaceForStep(stepId, activeMarker);
+    if (!surfaceReady) return;
     applyOnboardingSpotlight(activeMarker);
 }
 

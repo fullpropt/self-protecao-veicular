@@ -1061,7 +1061,12 @@ export default function Whatsapp() {
                               >
                                   <option value="">Carregando contas...</option>
                               </select>
-                              <button type="button" className="btn btn-outline" onClick={() => globals.createSessionPrompt?.()}>
+                              <button
+                                  type="button"
+                                  className="btn btn-outline"
+                                  data-tour-target="whatsapp-new-account-button"
+                                  onClick={() => globals.createSessionPrompt?.()}
+                              >
                                   + Nova Conta
                               </button>
                           </div>
