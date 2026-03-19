@@ -661,8 +661,77 @@
     font-size: 9px;
   }
 
+  .precheckout-form-panel {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .precheckout-form-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(0, 255, 163, 0.6), rgba(0, 255, 163, 0));
+    pointer-events: none;
+  }
+
+  .precheckout-steps {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .precheckout-step {
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+
+  .precheckout-step span {
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+
+  .precheckout-step strong {
+    margin-top: 2px;
+    font-size: 12px;
+  }
+
   .precheckout-form-panel h2 {
-    font-size: 24px;
+    font-size: 22px;
+    line-height: 1.08;
+  }
+
+  .precheckout-form-copy {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .precheckout-form {
+    margin-top: 12px;
+    gap: 10px;
+  }
+
+  .precheckout-field {
+    gap: 5px;
+  }
+
+  .precheckout-field label {
+    font-size: 12px;
+  }
+
+  .precheckout-field input,
+  .precheckout-field select {
+    min-height: 42px;
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .precheckout-submit-btn {
+    margin-top: 4px;
+    min-height: 46px;
+    border-radius: 11px;
+    font-size: 14px;
   }
 
   .precheckout-highlight-grid {
