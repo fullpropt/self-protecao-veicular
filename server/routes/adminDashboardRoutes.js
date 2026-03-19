@@ -6,6 +6,10 @@ function createAdminDashboardRoutes(options = {}) {
     const router = express.Router();
     const controller = createAdminDashboardController(options);
 
+    router.get('/api/admin/dashboard/overview', authenticate, async (req, res) => {
+        await controller.getOverview(req, res);
+    });
+
     router.get('/api/admin/dashboard/email-settings', authenticate, async (req, res) => {
         await controller.getEmailSettings(req, res);
     });

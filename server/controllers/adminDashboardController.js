@@ -1,5 +1,6 @@
 function createAdminDashboardController(options = {}) {
     const ensureApplicationAdmin = options.ensureApplicationAdmin;
+    const buildApplicationAdminOverview = options.buildApplicationAdminOverview;
     const loadEmailDeliverySettings = options.loadEmailDeliverySettings;
     const sanitizeEmailDeliverySettingsForResponse = options.sanitizeEmailDeliverySettingsForResponse;
     const normalizeEmailDeliverySettingsInput = options.normalizeEmailDeliverySettingsInput;
@@ -19,6 +20,24 @@ function createAdminDashboardController(options = {}) {
     const SupportInboxMessage = options.SupportInboxMessage;
 
     return {
+        async getOverview(req, res) {
+            if (!ensureApplicationAdmin(req, res)) return;
+
+            try {
+                const overview = await buildApplicationAdminOverview();
+                return res.json({
+                    success: true,
+                    overview
+                });
+            } catch (error) {
+                console.error('[admin/dashboard/overview] falha:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Falha ao carregar dashboard administrativo'
+                });
+            }
+        },
+
         async getEmailSettings(req, res) {
             if (!ensureApplicationAdmin(req, res)) return;
 

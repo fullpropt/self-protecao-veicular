@@ -16406,27 +16406,10 @@ app.post('/webhooks/support-inbox/incoming', upload.none(), async (req, res) => 
     }
 });
 
-app.get('/api/admin/dashboard/overview', authenticate, async (req, res) => {
-    if (!ensureApplicationAdmin(req, res)) return;
-
-    try {
-        const overview = await buildApplicationAdminOverview();
-        res.json({
-            success: true,
-            overview
-        });
-    } catch (error) {
-        console.error('[admin/dashboard/overview] falha:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Falha ao carregar dashboard administrativo'
-        });
-    }
-});
-
 app.use(createAdminDashboardRoutes({
     authenticate,
     ensureApplicationAdmin,
+    buildApplicationAdminOverview,
     loadEmailDeliverySettings,
     sanitizeEmailDeliverySettingsForResponse,
     normalizeEmailDeliverySettingsInput,
