@@ -35,7 +35,7 @@ export default function PreCheckoutOfferPanel({
     <section className="precheckout-offer-panel" aria-labelledby="precheckout-offer-title">
       <div className="precheckout-pill">Plano recomendado</div>
       <h1 id="precheckout-offer-title">{title}</h1>
-      <p className="precheckout-offer-subtitle">{subtitle}</p>
+      {subtitle ? <p className="precheckout-offer-subtitle">{subtitle}</p> : null}
 
       <div className="precheckout-plan-card">
         <div className="precheckout-plan-head">

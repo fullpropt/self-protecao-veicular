@@ -86,15 +86,13 @@
 .precheckout-offer-panel,
 .precheckout-form-panel {
   border-radius: 18px;
-  border: 1px solid var(--pc-border);
-  background: var(--pc-surface);
+  border: none;
+  background: transparent;
   padding: 24px;
 }
 
 .precheckout-offer-panel {
-  background:
-    radial-gradient(420px 240px at 90% -10%, rgba(0, 255, 163, 0.2) 0%, rgba(0, 255, 163, 0) 68%),
-    var(--pc-surface-strong);
+  background: transparent;
 }
 
 .precheckout-pill {

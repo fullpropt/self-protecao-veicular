@@ -33,7 +33,7 @@ const PLAN_PREVIEW_CATALOG: Record<string, PlanPreview> = {
   premium: {
     key: 'premium',
     title: 'Teste grátis por 7 dias',
-    subtitle: 'Preencha rápido e avance para o checkout.',
+    subtitle: '',
     planName: 'Plano Premium',
     trialLabel: '7 dias grátis',
     recurringLabel: 'Depois, R$ 197/mês',
