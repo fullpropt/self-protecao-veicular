@@ -489,7 +489,7 @@ function renderOnboardingTourLauncher() {
         completedBadge.style.display = completedCount === totalSteps && totalSteps > 0 ? 'inline-flex' : 'none';
     }
     if (currentStep) {
-        currentStep.textContent = 'Entenda como funciona o ZapVender';
+        currentStep.textContent = 'Inicie o tour e acompanhe cada etapa sem sair da tela.';
     }
     if (startButtonLabel) {
         startButtonLabel.textContent = onboardingTourOpen
@@ -497,6 +497,33 @@ function renderOnboardingTourLauncher() {
             : (completedCount === 0
                 ? 'Iniciar tour'
                 : (completedCount === totalSteps ? 'Rever tour' : 'Continuar tour'));
+    }
+}
+
+function bindOnboardingTourControls() {
+    const bindClick = (id: string, handler: () => void) => {
+        const button = document.getElementById(id) as HTMLButtonElement | null;
+        if (!button || button.dataset.bound === '1') return;
+
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            handler();
+        });
+        button.dataset.bound = '1';
+    };
+
+    bindClick('onboardingTourCloseButton', closeOnboardingTour);
+    bindClick('onboardingVideoToggleButton', toggleOnboardingVideoPlayback);
+    bindClick('onboardingVideoMuteButton', toggleOnboardingVideoMute);
+    bindClick('onboardingVideoPrevButton', goToPreviousOnboardingTourStep);
+    bindClick('onboardingVideoNextButton', goToNextOnboardingTourStep);
+
+    const progress = document.getElementById('onboardingVideoProgress') as HTMLInputElement | null;
+    if (progress && progress.dataset.bound !== '1') {
+        progress.addEventListener('input', () => {
+            seekOnboardingVideo(Number(progress.value));
+        });
+        progress.dataset.bound = '1';
     }
 }
 
@@ -753,7 +780,11 @@ function destroyOnboardingYouTubePlayer() {
 
 function getOnboardingYouTubeIframe() {
     const host = document.getElementById('onboardingVideoPlayerHost') as HTMLElement | null;
-    return host?.querySelector('iframe') as HTMLIFrameElement | null;
+    if (!host) return null;
+    if (host instanceof HTMLIFrameElement) {
+        return host;
+    }
+    return host.querySelector('iframe') as HTMLIFrameElement | null;
 }
 
 function sendOnboardingYouTubeCommand(func: string, args: unknown[] = []) {
@@ -1508,6 +1539,7 @@ function initOnboardingCard() {
     const hasOnboarding = Boolean(document.getElementById('dashboardOnboardingCard'));
     if (!hasOnboarding) return;
     destroyOnboardingYouTubePlayer();
+    bindOnboardingTourControls();
     onboardingState = readOnboardingState();
     onboardingTourOpen = false;
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();

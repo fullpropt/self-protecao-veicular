@@ -1084,6 +1084,15 @@ function DashboardStyles() {
         .onboarding-dismiss-btn {
           font-size: 16px;
         }
+        .onboarding-inline-dismiss .onboarding-dismiss-btn {
+          width: 22px;
+          height: 22px;
+          border: none;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+          color: rgba(231, 248, 242, 0.72);
+        }
         .onboarding-restore-btn {
           font-size: 17px;
           box-shadow:
@@ -1099,6 +1108,12 @@ function DashboardStyles() {
             0 0 0 1px rgba(0, 240, 255, 0.06),
             0 0 20px rgba(0, 240, 255, 0.14);
         }
+        .onboarding-inline-dismiss .onboarding-dismiss-btn:hover {
+          border: none;
+          background: transparent;
+          box-shadow: none;
+          color: #f4fffd;
+        }
         .onboarding-toggle-btn:focus-visible {
           outline: 2px solid rgba(0, 240, 255, 0.34);
           outline-offset: 2px;
@@ -1107,6 +1122,9 @@ function DashboardStyles() {
         .onboarding-restore-btn:focus-visible {
           outline: 2px solid rgba(0, 240, 255, 0.34);
           outline-offset: 2px;
+        }
+        .onboarding-inline-dismiss .onboarding-dismiss-btn:focus-visible {
+          outline-offset: 1px;
         }
         .onboarding-card-header h3 {
           margin: 0;
@@ -1864,7 +1882,7 @@ function DashboardHeader({
               title="Reativar primeiros passos"
               aria-label="Reativar primeiros passos"
             >
-              <span aria-hidden="true">+</span>
+              <span aria-hidden="true">?</span>
             </button>
           ) : null}
         </div>
@@ -2107,9 +2125,9 @@ function OnboardingCard({
                   Tour concluído
                 </span>
               </div>
-              <p className="onboarding-tour-title">Explore o ZapVender em {ONBOARDING_STEPS.length} vídeos rápidos</p>
+              <p className="onboarding-tour-title">Entenda como funciona o ZapVender</p>
               <p className="onboarding-tour-description" id="onboardingTourCurrentStep">
-                Entenda como funciona o ZapVender
+                Inicie o tour e acompanhe cada etapa sem sair da tela.
               </p>
             </div>
           </div>
@@ -2135,7 +2153,7 @@ function OnboardingCard({
             <button
               type="button"
               className="onboarding-tour-close-btn"
-              onClick={() => globals.closeOnboardingTour?.()}
+              id="onboardingTourCloseButton"
               title="Fechar tour"
               aria-label="Fechar tour"
             >
@@ -2175,7 +2193,6 @@ function OnboardingCard({
                   type="button"
                   className="onboarding-video-control-btn is-primary"
                   id="onboardingVideoToggleButton"
-                  onClick={() => globals.toggleOnboardingVideoPlayback?.()}
                   disabled
                   aria-label="Reproduzir vídeo"
                   title="Reproduzir vídeo"
@@ -2187,7 +2204,6 @@ function OnboardingCard({
                   type="button"
                   className="onboarding-video-control-btn"
                   id="onboardingVideoMuteButton"
-                  onClick={() => globals.toggleOnboardingVideoMute?.()}
                   disabled
                   aria-label="Silenciar vídeo"
                   title="Silenciar vídeo"
@@ -2213,7 +2229,6 @@ function OnboardingCard({
                     max={1000}
                     step={1}
                     defaultValue={0}
-                    onInput={(event) => globals.seekOnboardingVideo?.(Number(event.currentTarget.value))}
                     disabled
                   />
                   <span className="onboarding-video-time" id="onboardingVideoDuration">00:00</span>
@@ -2232,7 +2247,6 @@ function OnboardingCard({
                       type="button"
                       className="onboarding-video-ended-btn"
                       id="onboardingVideoPrevButton"
-                      onClick={() => globals.goToPreviousOnboardingTourStep?.()}
                     >
                       Anterior
                     </button>
@@ -2240,7 +2254,6 @@ function OnboardingCard({
                       type="button"
                       className="onboarding-video-ended-btn is-primary"
                       id="onboardingVideoNextButton"
-                      onClick={() => globals.goToNextOnboardingTourStep?.()}
                     >
                       Próximo
                     </button>
