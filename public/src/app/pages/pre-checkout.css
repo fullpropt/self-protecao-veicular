@@ -571,7 +571,7 @@
 
 @media (max-width: 680px) {
   .precheckout-page {
-    padding: 10px;
+    padding: 8px;
   }
 
   .precheckout-header {
@@ -587,17 +587,17 @@
   .precheckout-content {
     border-radius: 0;
     padding: 0;
-    gap: 10px;
+    gap: 8px;
   }
 
   .precheckout-offer-panel,
   .precheckout-form-panel {
-    border-radius: 12px;
-    padding: 14px;
+    border-radius: 10px;
+    padding: 12px;
   }
 
   .precheckout-offer-panel {
-    padding: 12px;
+    padding: 10px;
   }
 
   .precheckout-pill {
@@ -612,9 +612,9 @@
   }
 
   .precheckout-plan-card {
-    margin-top: 14px;
-    padding: 12px;
-    border-radius: 12px;
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 10px;
   }
 
   .precheckout-plan-head strong {
@@ -631,7 +631,7 @@
   }
 
   .precheckout-benefits {
-    margin-top: 12px;
+    margin-top: 10px;
     gap: 8px;
   }
 
@@ -646,7 +646,7 @@
   }
 
   .precheckout-trust-list {
-    margin-top: 12px;
+    margin-top: 10px;
     gap: 6px;
   }
 
@@ -677,12 +677,12 @@
 
   .precheckout-steps {
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
 
   .precheckout-step {
     border-radius: 10px;
-    padding: 8px 10px;
+    padding: 7px 9px;
   }
 
   .precheckout-step span {
@@ -707,8 +707,8 @@
   }
 
   .precheckout-form {
-    margin-top: 12px;
-    gap: 10px;
+    margin-top: 10px;
+    gap: 8px;
   }
 
   .precheckout-field {
