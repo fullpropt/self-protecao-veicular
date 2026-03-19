@@ -172,6 +172,7 @@ const { createQueueRoutes } = require('./routes/queueRoutes');
 const { createSettingsRoutes } = require('./routes/settingsRoutes');
 const { createTagRoutes } = require('./routes/tagRoutes');
 const { createTemplateRoutes } = require('./routes/templateRoutes');
+const { createUploadRoutes } = require('./routes/uploadRoutes');
 const { createPublicCheckoutRoutes } = require('./routes/publicCheckoutRoutes');
 const { createAuthRoutes } = require('./routes/authRoutes');
 const { createWhatsAppSessionRoutes } = require('./routes/whatsAppSessionRoutes');
@@ -17357,37 +17358,12 @@ app.use(createSettingsRoutes({
 
 
 
-app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
-
-    if (!req.file) {
-
-        return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-
-    }
-
-    
-
-    res.json({
-
-        success: true,
-
-        file: {
-
-            filename: req.file.filename,
-
-            originalname: `${sanitizeUploadBaseName(req.file.originalname || '')}${normalizeUploadExtension(req.file.originalname || '')}`,
-
-            mimetype: req.file.mimetype,
-
-            size: req.file.size,
-
-            url: `/uploads/${req.file.filename}`
-
-        }
-
-    });
-
-});
+app.use(createUploadRoutes({
+    authenticate,
+    upload,
+    sanitizeUploadBaseName,
+    normalizeUploadExtension
+}));
 
 
 
