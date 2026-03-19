@@ -587,13 +587,74 @@
 
 @media (max-width: 640px) {
   .public-checkout-page {
-    padding: 18px 12px 42px;
+    padding: 14px 10px 32px;
+  }
+
+  .public-checkout-grid {
+    gap: 14px;
+  }
+
+  .public-checkout-main {
+    gap: 12px;
+  }
+
+  .public-checkout-form {
+    gap: 12px;
   }
 
   .public-checkout-card,
   .public-checkout-summary {
-    padding: 20px;
-    border-radius: 22px;
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .public-checkout-step-header {
+    margin-bottom: 8px;
+    gap: 6px;
+  }
+
+  .public-checkout-step-number {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .public-checkout-step-label {
+    min-height: 28px;
+    padding: 0 10px;
+    font-size: 10px;
+  }
+
+  .public-checkout-summary h2 {
+    margin: 10px 0 6px;
+    font-size: 24px;
+  }
+
+  .public-checkout-plan-card {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .public-checkout-price-line {
+    font-size: 13px;
+    padding: 8px 0;
+  }
+
+  .public-checkout-bullets {
+    margin-top: 10px;
+    gap: 8px;
+  }
+
+  .public-checkout-bullets li {
+    font-size: 12px;
+  }
+
+  .public-checkout-submit {
+    margin-top: 14px;
+    min-height: 50px;
+    border-radius: 13px;
+    font-size: 15px;
   }
 
   .public-checkout-trust,
