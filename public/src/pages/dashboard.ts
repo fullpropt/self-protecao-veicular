@@ -63,11 +63,6 @@ type CustomEventsStatsResponse = {
     };
     period?: string;
 };
-type SettingsResponse = {
-    settings?: Record<string, unknown> | null;
-    onboarding_video_url?: string;
-    onboarding_videos?: Record<string, unknown> | null;
-};
 type AccountHealthRiskLevel = 'critical' | 'attention' | 'healthy' | 'paused';
 type AccountHealthDispatch = {
     campaign_id?: number | null;
@@ -209,9 +204,17 @@ const ONBOARDING_STEP_VIDEO_DESCRIPTIONS: Record<OnboardingStepId, string> = {
     create_campaign: 'Monte sua primeira campanha e entenda onde revisar métricas e resultados.',
     create_automation: 'Publique sua primeira automação e valide o disparo com segurança.'
 };
+const ONBOARDING_STEP_VIDEO_URLS: Record<OnboardingStepId, string> = {
+    connect_whatsapp: 'https://youtu.be/MdTl4xuXWx4',
+    configure_accounts: 'https://youtu.be/jH1ztbHTy4Y',
+    open_inbox: 'https://youtu.be/jh7kbxBNobo',
+    create_first_contact: 'https://youtu.be/ec-u236CrvU',
+    create_tags: 'https://youtu.be/XCtlRPxHCjk',
+    configure_dynamic_fields: 'https://youtu.be/LPJCHUnlaZU',
+    create_campaign: 'https://youtu.be/1J4FDRqwBko',
+    create_automation: 'https://youtu.be/kUaY_wWzzPw'
+};
 const DASHBOARD_ONBOARDING_STORAGE_KEY_PREFIX = 'zapvender_dashboard_onboarding_v1:';
-const ONBOARDING_VIDEO_SETTING_KEY = 'onboarding_video_url';
-const ONBOARDING_VIDEOS_SETTING_KEY = 'onboarding_videos';
 
 function appConfirm(message: string, title = 'Confirmacao') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -333,19 +336,6 @@ function normalizeOnboardingState(value: unknown): OnboardingState {
         completedSteps: uniqueSteps,
         updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? Math.floor(updatedAt) : 0
     };
-}
-
-function normalizeOnboardingVideosMap(value: unknown): OnboardingVideosMap {
-    if (!value || typeof value !== 'object') return {};
-
-    const source = value as Record<string, unknown>;
-    return ONBOARDING_STEP_IDS.reduce<OnboardingVideosMap>((accumulator, stepId) => {
-        const rawValue = String(source[stepId] || '').trim();
-        if (rawValue) {
-            accumulator[stepId] = rawValue;
-        }
-        return accumulator;
-    }, {});
 }
 
 function readOnboardingState(): OnboardingState {
@@ -585,40 +575,11 @@ function renderOnboardingVideo() {
     }
 }
 
-async function loadOnboardingVideo(options: { silent?: boolean } = {}) {
+async function loadOnboardingVideo(_options: { silent?: boolean } = {}) {
     const hasVideoCard = Boolean(document.getElementById('dashboardOnboardingCard'));
     if (!hasVideoCard) return;
 
-    let nextVideoUrls: OnboardingVideosMap = {};
-    try {
-        const response: SettingsResponse = await api.get('/api/settings');
-        const settings = response?.settings && typeof response.settings === 'object'
-            ? response.settings
-            : null;
-        const rawVideosFromSettings = settings && Object.prototype.hasOwnProperty.call(settings, ONBOARDING_VIDEOS_SETTING_KEY)
-            ? (settings as Record<string, unknown>)[ONBOARDING_VIDEOS_SETTING_KEY]
-            : response?.onboarding_videos;
-        nextVideoUrls = normalizeOnboardingVideosMap(rawVideosFromSettings);
-
-        if (!Object.keys(nextVideoUrls).length) {
-            const legacyVideoUrl = settings && Object.prototype.hasOwnProperty.call(settings, ONBOARDING_VIDEO_SETTING_KEY)
-                ? (settings as Record<string, unknown>)[ONBOARDING_VIDEO_SETTING_KEY]
-                : response?.onboarding_video_url;
-            const normalizedLegacyUrl = String(legacyVideoUrl || '').trim();
-            if (normalizedLegacyUrl) {
-                nextVideoUrls = {
-                    connect_whatsapp: normalizedLegacyUrl
-                };
-            }
-        }
-    } catch (error) {
-        if (!options.silent) {
-            showToast('warning', 'Aviso', 'Nao foi possivel carregar video de onboarding');
-        }
-        console.error(error);
-    }
-
-    onboardingVideoUrls = nextVideoUrls;
+    onboardingVideoUrls = { ...ONBOARDING_STEP_VIDEO_URLS };
     renderOnboardingVideo();
 }
 
