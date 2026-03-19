@@ -69,15 +69,12 @@
 }
 
 .precheckout-content {
-  border: 1px solid var(--pc-border);
-  border-radius: 24px;
-  background: linear-gradient(160deg, rgba(10, 12, 16, 0.96), rgba(7, 9, 12, 0.9));
-  backdrop-filter: blur(16px);
-  box-shadow:
-    0 30px 70px rgba(1, 4, 12, 0.65),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 0 38px rgba(0, 255, 163, 0.08);
-  padding: 18px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  padding: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18px;
@@ -583,8 +580,8 @@
   }
 
   .precheckout-content {
-    border-radius: 18px;
-    padding: 12px;
+    border-radius: 0;
+    padding: 0;
     gap: 12px;
   }
 
