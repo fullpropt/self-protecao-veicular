@@ -133,6 +133,7 @@ type OnboardingVideoPresentation = {
     provider: OnboardingVideoProvider;
     sourceUrl: string;
     embedUrl: string;
+    videoId: string;
     posterUrl: string;
     posterFallbackUrl: string;
 };
@@ -153,6 +154,28 @@ let onboardingState: OnboardingState = {
 let onboardingVideoUrls: OnboardingVideosMap = {};
 let onboardingSelectedStepId: OnboardingStepId | null = null;
 let onboardingPlayingStepId: OnboardingStepId | null = null;
+let onboardingYouTubePlayer: {
+    destroy?: () => void;
+    playVideo?: () => void;
+    pauseVideo?: () => void;
+    stopVideo?: () => void;
+    mute?: () => void;
+    unMute?: () => void;
+    isMuted?: () => boolean;
+    seekTo?: (seconds: number, allowSeekAhead?: boolean) => void;
+    getDuration?: () => number;
+    getCurrentTime?: () => number;
+    getPlayerState?: () => number;
+    loadVideoById?: (videoId: string) => void;
+} | null = null;
+let onboardingYouTubeApiPromise: Promise<void> | null = null;
+let onboardingYouTubePlayerReady = false;
+let onboardingYouTubePlayerVideoId = '';
+let onboardingVideoSyncTimer: number | null = null;
+let onboardingVideoDurationSeconds = 0;
+let onboardingVideoCurrentSeconds = 0;
+let onboardingVideoMuted = false;
+let onboardingVideoPlaybackState: 'idle' | 'loading' | 'playing' | 'paused' | 'ended' = 'idle';
 
 let statsChartInstance: { destroy?: () => void } | null = null;
 let statsChartType: StatsChartType = 'line';
@@ -264,6 +287,12 @@ const ONBOARDING_STEP_VIDEO_DESCRIPTIONS_UI: Record<OnboardingStepId, string> = 
     create_automation: 'Publique sua primeira automa\u00E7\u00E3o e valide o disparo com seguran\u00E7a.'
 };
 const DASHBOARD_ONBOARDING_STORAGE_KEY_PREFIX = 'zapvender_dashboard_onboarding_v1:';
+const ONBOARDING_YOUTUBE_PLAYER_STATE = {
+    ended: 0,
+    playing: 1,
+    paused: 2,
+    buffering: 3
+} as const;
 
 function appConfirm(message: string, title = 'Confirmacao') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -456,6 +485,7 @@ function selectOnboardingVideoStep(stepIdInput: string) {
     if (!stepId) return;
 
     if (onboardingSelectedStepId !== stepId) {
+        destroyOnboardingYouTubePlayer();
         onboardingPlayingStepId = null;
     }
     onboardingSelectedStepId = stepId;
@@ -489,6 +519,7 @@ function resetOnboardingChecklist() {
         completedSteps: [],
         updatedAt: Date.now()
     };
+    destroyOnboardingYouTubePlayer();
     onboardingPlayingStepId = null;
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
     writeOnboardingState(onboardingState);
@@ -516,6 +547,270 @@ function normalizeAbsoluteHttpUrl(value: unknown) {
     }
 }
 
+function formatOnboardingVideoTime(totalSeconds: number) {
+    const safeSeconds = Math.max(0, Math.floor(Number.isFinite(totalSeconds) ? totalSeconds : 0));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    const seconds = safeSeconds % 60;
+
+    if (hours > 0) {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function stopOnboardingVideoSyncTimer() {
+    if (onboardingVideoSyncTimer !== null) {
+        window.clearInterval(onboardingVideoSyncTimer);
+        onboardingVideoSyncTimer = null;
+    }
+}
+
+function syncOnboardingYouTubeMetrics() {
+    if (!onboardingYouTubePlayerReady || !onboardingYouTubePlayer) return;
+
+    try {
+        const nextDuration = Number(onboardingYouTubePlayer.getDuration?.() || 0);
+        const nextCurrentTime = Number(onboardingYouTubePlayer.getCurrentTime?.() || 0);
+        const nextMuted = Boolean(onboardingYouTubePlayer.isMuted?.());
+
+        if (nextDuration > 0) {
+            onboardingVideoDurationSeconds = nextDuration;
+        }
+        if (nextCurrentTime >= 0) {
+            onboardingVideoCurrentSeconds = nextCurrentTime;
+        }
+        onboardingVideoMuted = nextMuted;
+    } catch (_) {
+        return;
+    }
+
+    renderOnboardingVideoControls();
+}
+
+function startOnboardingVideoSyncTimer() {
+    stopOnboardingVideoSyncTimer();
+    syncOnboardingYouTubeMetrics();
+    onboardingVideoSyncTimer = window.setInterval(syncOnboardingYouTubeMetrics, 250);
+}
+
+function resetOnboardingVideoRuntime() {
+    stopOnboardingVideoSyncTimer();
+    onboardingVideoDurationSeconds = 0;
+    onboardingVideoCurrentSeconds = 0;
+    onboardingVideoMuted = false;
+    onboardingVideoPlaybackState = 'idle';
+    onboardingYouTubePlayerVideoId = '';
+}
+
+function destroyOnboardingYouTubePlayer() {
+    stopOnboardingVideoSyncTimer();
+
+    if (onboardingYouTubePlayer?.destroy) {
+        try {
+            onboardingYouTubePlayer.destroy();
+        } catch (_) {
+            // no-op
+        }
+    }
+
+    onboardingYouTubePlayer = null;
+    onboardingYouTubePlayerReady = false;
+    resetOnboardingVideoRuntime();
+}
+
+function ensureOnboardingYouTubeApi() {
+    const windowWithYoutube = window as Window & {
+        YT?: { Player?: new (elementId: string, options: Record<string, unknown>) => typeof onboardingYouTubePlayer };
+        onYouTubeIframeAPIReady?: () => void;
+    };
+
+    if (windowWithYoutube.YT?.Player) {
+        return Promise.resolve();
+    }
+    if (onboardingYouTubeApiPromise) {
+        return onboardingYouTubeApiPromise;
+    }
+
+    onboardingYouTubeApiPromise = new Promise<void>((resolve, reject) => {
+        const previousReady = windowWithYoutube.onYouTubeIframeAPIReady;
+        windowWithYoutube.onYouTubeIframeAPIReady = () => {
+            if (typeof previousReady === 'function') {
+                previousReady();
+            }
+            resolve();
+        };
+
+        const existingScript = document.getElementById('youtube-iframe-api');
+        if (existingScript) {
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'youtube-iframe-api';
+        script.src = 'https://www.youtube.com/iframe_api';
+        script.async = true;
+        script.onerror = () => {
+            onboardingYouTubeApiPromise = null;
+            reject(new Error('Nao foi possivel carregar a API do YouTube.'));
+        };
+        document.head.appendChild(script);
+    });
+
+    return onboardingYouTubeApiPromise;
+}
+
+function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresentation | null) {
+    const toggleButton = document.getElementById('onboardingVideoToggleButton') as HTMLButtonElement | null;
+    const toggleLabel = document.getElementById('onboardingVideoToggleLabel') as HTMLElement | null;
+    const toggleIcon = document.getElementById('onboardingVideoToggleIcon') as HTMLElement | null;
+    const muteButton = document.getElementById('onboardingVideoMuteButton') as HTMLButtonElement | null;
+    const muteLabel = document.getElementById('onboardingVideoMuteLabel') as HTMLElement | null;
+    const restartButton = document.getElementById('onboardingVideoRestartButton') as HTMLButtonElement | null;
+    const progress = document.getElementById('onboardingVideoProgress') as HTMLInputElement | null;
+    const currentTime = document.getElementById('onboardingVideoCurrentTime') as HTMLElement | null;
+    const duration = document.getElementById('onboardingVideoDuration') as HTMLElement | null;
+
+    const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
+        ? onboardingSelectedStepId
+        : getPreferredOnboardingSelectedStepId();
+    const presentation = presentationInput ?? (selectedStepId
+        ? buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '')
+        : null);
+    const hasYouTubeVideo = Boolean(presentation?.provider === 'youtube' && presentation.videoId);
+    const isActivePlayer = Boolean(selectedStepId && onboardingPlayingStepId === selectedStepId && hasYouTubeVideo);
+    const isLoading = isActivePlayer && onboardingVideoPlaybackState === 'loading';
+    const isPlaying = isActivePlayer && onboardingVideoPlaybackState === 'playing';
+    const isEnded = isActivePlayer && onboardingVideoPlaybackState === 'ended';
+    const canControlTimeline = isActivePlayer && onboardingYouTubePlayerReady && onboardingVideoDurationSeconds > 0;
+    const progressValue = canControlTimeline
+        ? Math.max(0, Math.min(1000, Math.round((onboardingVideoCurrentSeconds / onboardingVideoDurationSeconds) * 1000)))
+        : 0;
+
+    if (toggleButton) {
+        toggleButton.disabled = !hasYouTubeVideo || isLoading;
+    }
+    if (toggleLabel) {
+        toggleLabel.textContent = !hasYouTubeVideo
+            ? 'Guia indisponivel'
+            : (isLoading
+                ? 'Carregando'
+                : (isPlaying ? 'Pausar' : (isEnded ? 'Reiniciar guia' : (isActivePlayer ? 'Continuar' : 'Iniciar guia'))));
+    }
+    if (toggleIcon) {
+        toggleIcon.className = `icon ${isPlaying ? 'icon-pause' : 'icon-play'} icon-sm`;
+    }
+    if (muteButton) {
+        muteButton.disabled = !isActivePlayer || !onboardingYouTubePlayerReady;
+    }
+    if (muteLabel) {
+        muteLabel.textContent = onboardingVideoMuted ? 'Ativar som' : 'Som ligado';
+    }
+    if (restartButton) {
+        restartButton.disabled = !isActivePlayer || !onboardingYouTubePlayerReady;
+    }
+    if (progress) {
+        progress.disabled = !canControlTimeline;
+        progress.value = String(progressValue);
+    }
+    if (currentTime) {
+        currentTime.textContent = formatOnboardingVideoTime(onboardingVideoCurrentSeconds);
+    }
+    if (duration) {
+        duration.textContent = formatOnboardingVideoTime(onboardingVideoDurationSeconds);
+    }
+}
+
+async function ensureOnboardingYouTubePlayback(videoId: string) {
+    if (!videoId) return;
+
+    const host = document.getElementById('onboardingVideoPlayerHost') as HTMLElement | null;
+    if (!host) return;
+
+    onboardingVideoPlaybackState = 'loading';
+    renderOnboardingVideoControls();
+
+    await ensureOnboardingYouTubeApi();
+
+    const windowWithYoutube = window as Window & {
+        YT?: {
+            Player?: new (elementId: string, options: Record<string, unknown>) => typeof onboardingYouTubePlayer;
+        };
+    };
+    const PlayerCtor = windowWithYoutube.YT?.Player;
+    if (!PlayerCtor) return;
+
+    if (!onboardingYouTubePlayer) {
+        onboardingYouTubePlayerVideoId = videoId;
+        onboardingYouTubePlayerReady = false;
+        onboardingYouTubePlayer = new PlayerCtor('onboardingVideoPlayerHost', {
+            videoId,
+            playerVars: {
+                autoplay: 1,
+                controls: 0,
+                rel: 0,
+                playsinline: 1,
+                iv_load_policy: 3,
+                modestbranding: 1,
+                fs: 0,
+                enablejsapi: 1,
+                origin: window.location.origin
+            },
+            events: {
+                onReady: () => {
+                    onboardingYouTubePlayerReady = true;
+                    onboardingVideoPlaybackState = 'playing';
+                    try {
+                        onboardingYouTubePlayer?.playVideo?.();
+                    } catch (_) {
+                        // no-op
+                    }
+                    startOnboardingVideoSyncTimer();
+                    renderOnboardingVideoControls();
+                },
+                onStateChange: (event: { data?: number }) => {
+                    const nextState = Number(event?.data);
+                    if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.playing) {
+                        onboardingVideoPlaybackState = 'playing';
+                    } else if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.paused) {
+                        onboardingVideoPlaybackState = 'paused';
+                    } else if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.ended) {
+                        onboardingVideoPlaybackState = 'ended';
+                    } else if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.buffering) {
+                        onboardingVideoPlaybackState = 'loading';
+                    }
+
+                    syncOnboardingYouTubeMetrics();
+                    renderOnboardingVideoControls();
+                },
+                onError: () => {
+                    onboardingVideoPlaybackState = 'idle';
+                    renderOnboardingVideoControls();
+                }
+            }
+        });
+
+        return;
+    }
+
+    if (!onboardingYouTubePlayerReady) {
+        onboardingYouTubePlayerVideoId = videoId;
+        return;
+    }
+
+    if (onboardingYouTubePlayerVideoId !== videoId) {
+        onboardingYouTubePlayerVideoId = videoId;
+        onboardingYouTubePlayer.loadVideoById?.(videoId);
+    } else {
+        onboardingYouTubePlayer.playVideo?.();
+    }
+
+    onboardingVideoPlaybackState = 'playing';
+    startOnboardingVideoSyncTimer();
+    renderOnboardingVideoControls();
+}
+
 function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPresentation {
     const sourceUrl = normalizeAbsoluteHttpUrl(videoUrl);
     if (!sourceUrl) {
@@ -523,6 +818,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
             provider: 'none',
             sourceUrl: '',
             embedUrl: '',
+            videoId: '',
             posterUrl: '',
             posterFallbackUrl: ''
         };
@@ -539,7 +835,8 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
                 return {
                     provider: 'youtube',
                     sourceUrl,
-                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=1&iv_load_policy=3&modestbranding=1&fs=1`,
+                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=0&iv_load_policy=3&modestbranding=1&fs=0&enablejsapi=1`,
+                    videoId,
                     posterUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
                     posterFallbackUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
                 };
@@ -560,7 +857,8 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
                 return {
                     provider: 'youtube',
                     sourceUrl,
-                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=1&iv_load_policy=3&modestbranding=1&fs=1`,
+                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=0&iv_load_policy=3&modestbranding=1&fs=0&enablejsapi=1`,
+                    videoId,
                     posterUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
                     posterFallbackUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
                 };
@@ -573,6 +871,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
                 provider: 'vimeo',
                 sourceUrl,
                 embedUrl: videoId ? `https://player.vimeo.com/video/${videoId}?autoplay=1` : '',
+                videoId: videoId || '',
                 posterUrl: '',
                 posterFallbackUrl: ''
             };
@@ -582,6 +881,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
             provider: 'none',
             sourceUrl: '',
             embedUrl: '',
+            videoId: '',
             posterUrl: '',
             posterFallbackUrl: ''
         };
@@ -591,6 +891,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
         provider: 'external',
         sourceUrl,
         embedUrl: '',
+        videoId: '',
         posterUrl: '',
         posterFallbackUrl: ''
     };
@@ -610,6 +911,7 @@ function renderOnboardingVideo() {
     const hint = document.getElementById('onboardingVideoHint') as HTMLElement | null;
     const posterBackdrop = document.getElementById('onboardingVideoPosterBackdrop') as HTMLElement | null;
     const cover = document.getElementById('onboardingVideoCover') as HTMLElement | null;
+    const playerHost = document.getElementById('onboardingVideoPlayerHost') as HTMLElement | null;
     const previewButton = document.getElementById('onboardingVideoPreviewButton') as HTMLButtonElement | null;
     const playButton = document.getElementById('onboardingVideoPlayButton') as HTMLButtonElement | null;
     const previewHint = document.getElementById('onboardingVideoPreviewHint') as HTMLElement | null;
@@ -669,6 +971,9 @@ function renderOnboardingVideo() {
         if (shell) {
             shell.classList.remove('is-playing', 'is-youtube');
         }
+        if (playerHost) {
+            playerHost.style.display = 'none';
+        }
         if (previewButton) {
             previewButton.disabled = true;
             previewButton.style.pointerEvents = 'none';
@@ -697,6 +1002,7 @@ function renderOnboardingVideo() {
             frame.style.display = 'none';
             frame.removeAttribute('src');
         }
+        renderOnboardingVideoControls(presentation);
         return;
     }
 
@@ -729,8 +1035,11 @@ function renderOnboardingVideo() {
     if (cover) {
         cover.style.display = isPlayingCurrentStep ? 'none' : 'flex';
     }
+    if (playerHost) {
+        playerHost.style.display = isPlayingCurrentStep && presentation.provider === 'youtube' ? 'block' : 'none';
+    }
     if (frame) {
-        if (isPlayingCurrentStep) {
+        if (isPlayingCurrentStep && presentation.provider !== 'youtube') {
             if (frame.src !== presentation.embedUrl) {
                 frame.src = presentation.embedUrl;
             }
@@ -740,6 +1049,7 @@ function renderOnboardingVideo() {
             frame.removeAttribute('src');
         }
     }
+    renderOnboardingVideoControls(presentation);
 }
 
 function playOnboardingVideo() {
@@ -755,6 +1065,85 @@ function playOnboardingVideo() {
     onboardingPlayingStepId = selectedStepId;
     renderOnboardingChecklist();
     renderOnboardingVideo();
+
+    if (presentation.provider === 'youtube' && presentation.videoId) {
+        void ensureOnboardingYouTubePlayback(presentation.videoId);
+    }
+}
+
+function toggleOnboardingVideoPlayback() {
+    const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
+        ? onboardingSelectedStepId
+        : getPreferredOnboardingSelectedStepId();
+    if (!selectedStepId) return;
+
+    const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
+    if (!presentation.embedUrl) return;
+
+    if (presentation.provider !== 'youtube' || !presentation.videoId) {
+        playOnboardingVideo();
+        return;
+    }
+
+    if (onboardingPlayingStepId !== selectedStepId || !onboardingYouTubePlayer || !onboardingYouTubePlayerReady) {
+        playOnboardingVideo();
+        return;
+    }
+
+    const currentState = Number(onboardingYouTubePlayer.getPlayerState?.() ?? -1);
+    if (currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.playing || currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.buffering) {
+        onboardingYouTubePlayer.pauseVideo?.();
+        onboardingVideoPlaybackState = 'paused';
+    } else {
+        onboardingYouTubePlayer.playVideo?.();
+        onboardingVideoPlaybackState = 'playing';
+    }
+
+    syncOnboardingYouTubeMetrics();
+    renderOnboardingVideoControls(presentation);
+}
+
+function toggleOnboardingVideoMute() {
+    if (!onboardingYouTubePlayer || !onboardingYouTubePlayerReady) return;
+
+    if (onboardingVideoMuted) {
+        onboardingYouTubePlayer.unMute?.();
+        onboardingVideoMuted = false;
+    } else {
+        onboardingYouTubePlayer.mute?.();
+        onboardingVideoMuted = true;
+    }
+
+    renderOnboardingVideoControls();
+}
+
+function restartOnboardingVideo() {
+    if (!onboardingYouTubePlayer || !onboardingYouTubePlayerReady) {
+        playOnboardingVideo();
+        return;
+    }
+
+    onboardingYouTubePlayer.seekTo?.(0, true);
+    onboardingYouTubePlayer.playVideo?.();
+    onboardingVideoCurrentSeconds = 0;
+    onboardingVideoPlaybackState = 'playing';
+    startOnboardingVideoSyncTimer();
+    renderOnboardingVideoControls();
+}
+
+function seekOnboardingVideo(progressInput: number) {
+    if (!onboardingYouTubePlayer || !onboardingYouTubePlayerReady || onboardingVideoDurationSeconds <= 0) return;
+
+    const normalizedProgress = Math.max(0, Math.min(1000, Number(progressInput) || 0));
+    const nextSeconds = (normalizedProgress / 1000) * onboardingVideoDurationSeconds;
+    onboardingYouTubePlayer.seekTo?.(nextSeconds, true);
+    onboardingVideoCurrentSeconds = nextSeconds;
+
+    if (onboardingVideoPlaybackState === 'ended') {
+        onboardingVideoPlaybackState = 'paused';
+    }
+
+    renderOnboardingVideoControls();
 }
 
 async function loadOnboardingVideo(_options: { silent?: boolean } = {}) {
@@ -768,6 +1157,7 @@ async function loadOnboardingVideo(_options: { silent?: boolean } = {}) {
 function initOnboardingCard() {
     const hasOnboarding = Boolean(document.getElementById('dashboardOnboardingCard'));
     if (!hasOnboarding) return;
+    destroyOnboardingYouTubePlayer();
     onboardingState = readOnboardingState();
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
     onboardingPlayingStepId = null;
@@ -2105,6 +2495,10 @@ const windowAny = window as Window & {
     goToOnboardingStep?: (stepId: string) => void;
     resetOnboardingChecklist?: () => void;
     playOnboardingVideo?: () => void;
+    toggleOnboardingVideoPlayback?: () => void;
+    toggleOnboardingVideoMute?: () => void;
+    restartOnboardingVideo?: () => void;
+    seekOnboardingVideo?: (progress: number) => void;
     openCustomEventModal?: (id?: number) => void;
     saveCustomEvent?: () => Promise<void>;
     deleteCustomEvent?: (id: number) => Promise<void>;
@@ -2132,6 +2526,10 @@ windowAny.selectOnboardingVideoStep = selectOnboardingVideoStep;
 windowAny.goToOnboardingStep = goToOnboardingStep;
 windowAny.resetOnboardingChecklist = resetOnboardingChecklist;
 windowAny.playOnboardingVideo = playOnboardingVideo;
+windowAny.toggleOnboardingVideoPlayback = toggleOnboardingVideoPlayback;
+windowAny.toggleOnboardingVideoMute = toggleOnboardingVideoMute;
+windowAny.restartOnboardingVideo = restartOnboardingVideo;
+windowAny.seekOnboardingVideo = seekOnboardingVideo;
 windowAny.openCustomEventModal = openCustomEventModal;
 windowAny.saveCustomEvent = saveCustomEvent;
 windowAny.deleteCustomEvent = deleteCustomEvent;

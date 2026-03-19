@@ -13,6 +13,10 @@ type DashboardGlobals = {
   goToOnboardingStep?: (stepId: string) => void;
   resetOnboardingChecklist?: () => void;
   playOnboardingVideo?: () => void;
+  toggleOnboardingVideoPlayback?: () => void;
+  toggleOnboardingVideoMute?: () => void;
+  restartOnboardingVideo?: () => void;
+  seekOnboardingVideo?: (progress: number) => void;
   openModal?: (id: string) => void;
   closeModal?: (id: string) => void;
   openCustomEventModal?: (id?: number) => void;
@@ -1221,6 +1225,13 @@ function DashboardStyles() {
           background: #02070f;
           transition: inset 180ms ease, height 180ms ease;
         }
+        .onboarding-video-player-host iframe {
+          width: 100%;
+          height: 100%;
+          border: 0;
+          display: block;
+          background: #02070f;
+        }
         .onboarding-video-top-mask {
           position: absolute;
           top: 0;
@@ -1332,6 +1343,82 @@ function DashboardStyles() {
         }
         .onboarding-video-shell.is-playing.is-youtube .onboarding-video-top-mask {
           opacity: 1;
+        }
+        .onboarding-video-controls {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: auto auto auto minmax(0, 1fr);
+          align-items: center;
+          gap: 10px;
+          padding: 12px 14px;
+          border-radius: 16px;
+          border: 1px solid rgba(var(--primary-rgb), 0.18);
+          background: linear-gradient(180deg, rgba(6, 17, 31, 0.96) 0%, rgba(4, 12, 24, 0.98) 100%);
+          box-shadow: inset 0 1px 0 rgba(var(--primary-rgb), 0.08);
+        }
+        .onboarding-video-control-btn {
+          min-height: 40px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 0 14px;
+          border-radius: 12px;
+          border: 1px solid rgba(var(--primary-rgb), 0.18);
+          background: rgba(10, 25, 42, 0.82);
+          color: #eaf8f4;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1;
+          transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, opacity 180ms ease;
+        }
+        .onboarding-video-control-btn:hover:not(:disabled) {
+          border-color: rgba(var(--primary-rgb), 0.34);
+          background: rgba(12, 31, 49, 0.96);
+          transform: translateY(-1px);
+        }
+        .onboarding-video-control-btn:disabled {
+          opacity: 0.56;
+          cursor: not-allowed;
+          transform: none;
+        }
+        .onboarding-video-control-btn:focus-visible {
+          outline: 2px solid rgba(var(--primary-rgb), 0.42);
+          outline-offset: 2px;
+        }
+        .onboarding-video-control-btn.is-primary {
+          border-color: rgba(17, 212, 143, 0.28);
+          background: linear-gradient(135deg, rgba(17, 212, 143, 0.98), rgba(32, 240, 192, 0.92));
+          color: #062219;
+          box-shadow: 0 14px 24px rgba(17, 212, 143, 0.18);
+        }
+        .onboarding-video-control-btn.is-primary:hover:not(:disabled) {
+          border-color: rgba(17, 212, 143, 0.4);
+          background: linear-gradient(135deg, rgba(28, 223, 154, 0.98), rgba(48, 245, 199, 0.94));
+        }
+        .onboarding-video-timeline {
+          min-width: 0;
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 10px;
+        }
+        .onboarding-video-time {
+          color: rgba(218, 236, 243, 0.82);
+          font-size: 12px;
+          line-height: 1;
+          font-variant-numeric: tabular-nums;
+          white-space: nowrap;
+        }
+        .onboarding-video-progress {
+          width: 100%;
+          margin: 0;
+          accent-color: rgb(var(--primary-rgb));
+          cursor: pointer;
+        }
+        .onboarding-video-progress:disabled {
+          cursor: not-allowed;
+          opacity: 0.6;
         }
         .onboarding-spotlight-actions {
           display: flex;
@@ -1523,6 +1610,9 @@ function DashboardStyles() {
           .onboarding-video-shell { border-radius: 16px; }
           .onboarding-video-shell { --onboarding-player-top-crop: 44px; }
           .onboarding-video-cover { padding: 14px; }
+          .onboarding-video-controls { grid-template-columns: 1fr; }
+          .onboarding-video-control-btn { width: 100%; }
+          .onboarding-video-timeline { width: 100%; }
           .onboarding-preview-panel { width: 100%; padding: 14px; border-radius: 16px; }
           .onboarding-preview-play-icon { width: 36px; height: 36px; }
           .onboarding-spotlight-actions { flex-direction: column; }
@@ -1992,9 +2082,14 @@ function OnboardingCard({
               <div className="onboarding-preview-card">
                 <div className="onboarding-video-shell" id="onboardingVideoShell">
                   <div className="onboarding-preview-backdrop" id="onboardingVideoPosterBackdrop"></div>
+                  <div
+                    id="onboardingVideoPlayerHost"
+                    className="onboarding-video-frame onboarding-video-player-host"
+                    style={{ display: 'none' }}
+                  ></div>
                   <iframe
                     id="onboardingVideoFrame"
-                    className="onboarding-video-frame"
+                    className="onboarding-video-frame onboarding-video-fallback-frame"
                     title="Guia de primeiros passos"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     referrerPolicy="strict-origin-when-cross-origin"
@@ -2025,6 +2120,51 @@ function OnboardingCard({
                         </span>
                       </span>
                     </button>
+                  </div>
+                </div>
+                <div className="onboarding-video-controls" id="onboardingVideoControls">
+                  <button
+                    type="button"
+                    className="onboarding-video-control-btn is-primary"
+                    id="onboardingVideoToggleButton"
+                    onClick={() => globals.toggleOnboardingVideoPlayback?.()}
+                    disabled
+                  >
+                    <span className="icon icon-play icon-sm" id="onboardingVideoToggleIcon"></span>
+                    <span id="onboardingVideoToggleLabel">Iniciar guia</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="onboarding-video-control-btn"
+                    id="onboardingVideoMuteButton"
+                    onClick={() => globals.toggleOnboardingVideoMute?.()}
+                    disabled
+                  >
+                    <span id="onboardingVideoMuteLabel">Som ligado</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="onboarding-video-control-btn"
+                    id="onboardingVideoRestartButton"
+                    onClick={() => globals.restartOnboardingVideo?.()}
+                    disabled
+                  >
+                    Reiniciar
+                  </button>
+                  <div className="onboarding-video-timeline">
+                    <span className="onboarding-video-time" id="onboardingVideoCurrentTime">00:00</span>
+                    <input
+                      type="range"
+                      id="onboardingVideoProgress"
+                      className="onboarding-video-progress"
+                      min={0}
+                      max={1000}
+                      step={1}
+                      defaultValue={0}
+                      onInput={(event) => globals.seekOnboardingVideo?.(Number(event.currentTarget.value))}
+                      disabled
+                    />
+                    <span className="onboarding-video-time" id="onboardingVideoDuration">00:00</span>
                   </div>
                 </div>
               </div>
