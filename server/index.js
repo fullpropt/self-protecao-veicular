@@ -541,7 +541,8 @@ function buildHelmetCspConfig() {
             "'self'",
             "'unsafe-inline'",
             'https://cdn.socket.io',
-            'https://cdn.jsdelivr.net'
+            'https://cdn.jsdelivr.net',
+            'https://static.cloudflareinsights.com'
         ],
         styleSrc: [
             "'self'",
@@ -563,7 +564,9 @@ function buildHelmetCspConfig() {
             "'self'",
             'ws:',
             'wss:',
-            'https://api.pagar.me'
+            'https://api.pagar.me',
+            'https://cloudflareinsights.com',
+            'https://static.cloudflareinsights.com'
         ],
         mediaSrc: [
             "'self'",
