@@ -577,9 +577,12 @@ export default function Inbox() {
         .conversation-item.unread .conversation-name { font-weight: 700; }
         .conversation-avatar-wrap {
             position: relative;
-            width: 48px;
+            width: 58px;
             height: 48px;
             flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
         }
         .conversation-avatar {
             width: 48px;
@@ -636,91 +639,28 @@ export default function Inbox() {
         }
         .conversation-flow-bot-badge {
             position: absolute;
-            top: -4px;
-            left: -9px;
+            top: -2px;
+            left: 3px;
             width: 20px;
             height: 20px;
+            border-radius: 7px;
+            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.14) 0%, rgba(var(--primary-rgb), 0.28) 100%);
+            border: 1px solid rgba(var(--primary-rgb), 0.42);
             display: inline-flex;
             align-items: center;
             justify-content: center;
             box-shadow:
-                0 5px 10px rgba(var(--primary-rgb), 0.24),
-                0 0 0 1px rgba(var(--primary-rgb), 0.2);
+                0 5px 10px rgba(var(--primary-rgb), 0.2),
+                0 0 0 1px rgba(5, 26, 18, 0.2) inset;
             z-index: 3;
             pointer-events: none;
         }
-        .conversation-flow-bot-antenna {
-            position: absolute;
-            top: -4px;
-            left: 50%;
-            width: 2px;
-            height: 5px;
-            border-radius: 999px;
-            transform: translateX(-50%);
-            background: rgba(var(--primary-rgb), 0.82);
-        }
-        .conversation-flow-bot-antenna::before {
-            content: '';
-            position: absolute;
-            top: -4px;
-            left: 50%;
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            transform: translateX(-50%);
-            background: #d8fff3;
-            box-shadow: 0 0 6px rgba(var(--primary-rgb), 0.5);
-        }
-        .conversation-flow-bot-head {
-            position: relative;
-            width: 16px;
-            height: 14px;
-            border-radius: 4px;
-            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.95) 0%, rgba(var(--primary-rgb), 0.62) 100%);
-            border: 1px solid rgba(4, 28, 19, 0.75);
-            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset;
-        }
-        .conversation-flow-bot-head::before {
-            content: '';
-            position: absolute;
-            top: 4px;
-            left: -2px;
-            width: 2px;
-            height: 6px;
-            border-radius: 999px;
-            background: rgba(var(--primary-rgb), 0.82);
-            box-shadow: 18px 0 0 rgba(var(--primary-rgb), 0.82);
-        }
-        .conversation-flow-bot-eyes {
-            position: absolute;
-            top: 4px;
-            left: 3px;
-            width: 3px;
-            height: 3px;
-            border-radius: 50%;
-            background: #dcfff4;
-            box-shadow: 6px 0 0 #dcfff4;
-        }
-        .conversation-flow-bot-mouth {
-            position: absolute;
-            left: 3px;
-            bottom: 2px;
-            width: 9px;
-            height: 4px;
-            border-radius: 2px;
-            background: rgba(4, 22, 16, 0.78);
-            box-shadow: 0 0 0 1px rgba(220, 255, 244, 0.25) inset;
-        }
-        .conversation-flow-bot-mouth::before {
-            content: '';
-            position: absolute;
-            left: 2px;
-            top: 1px;
-            width: 1px;
-            height: 2px;
-            border-radius: 50%;
-            background: #dcfff4;
-            box-shadow: 2px 0 0 #dcfff4, 4px 0 0 #dcfff4;
+        .conversation-flow-bot-icon {
+            width: 13px;
+            height: 13px;
+            color: #cffff0;
+            opacity: 0.98;
+            display: block;
         }
         .conversation-preview {
             font-size: 13px;

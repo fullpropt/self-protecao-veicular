@@ -1,4 +1,5 @@
 // Inbox page logic migrated to module
+import robotFlowIconUrl from '../app/assets/robot-svgrepo-com.svg';
 
 declare const io:
     | undefined
@@ -2164,11 +2165,12 @@ function renderConversationFlowIndicator(conversation: Conversation) {
             title="Fluxo em andamento"
             aria-label="Fluxo em andamento"
         >
-            <span class="conversation-flow-bot-antenna" aria-hidden="true"></span>
-            <span class="conversation-flow-bot-head" aria-hidden="true">
-                <span class="conversation-flow-bot-eyes"></span>
-                <span class="conversation-flow-bot-mouth"></span>
-            </span>
+            <img
+                class="conversation-flow-bot-icon"
+                src="${escapeHtml(robotFlowIconUrl)}"
+                alt=""
+                aria-hidden="true"
+            />
         </span>
     `;
 }
