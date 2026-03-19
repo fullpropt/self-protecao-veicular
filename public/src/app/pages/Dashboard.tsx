@@ -1411,20 +1411,37 @@ function DashboardStyles() {
           border-color: rgba(17, 212, 143, 0.4);
           background: linear-gradient(135deg, rgba(28, 223, 154, 0.98), rgba(48, 245, 199, 0.94));
         }
-        .onboarding-video-control-btn.is-text {
-          width: auto;
-          min-width: 58px;
-          padding: 0 12px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 700;
-        }
         .onboarding-video-timeline {
           min-width: 0;
           display: grid;
           grid-template-columns: auto minmax(0, 1fr) auto;
           align-items: center;
           gap: 8px;
+        }
+        .onboarding-video-sound-icon {
+          width: 18px;
+          height: 18px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .onboarding-video-sound-icon svg {
+          width: 18px;
+          height: 18px;
+          stroke: currentColor;
+          fill: none;
+          stroke-width: 2;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+        .onboarding-video-sound-off {
+          display: none;
+        }
+        .onboarding-video-control-btn.is-muted .onboarding-video-sound-wave {
+          display: none;
+        }
+        .onboarding-video-control-btn.is-muted .onboarding-video-sound-off {
+          display: inline;
         }
         .onboarding-video-time {
           color: rgba(218, 236, 243, 0.82);
@@ -1606,7 +1623,6 @@ function DashboardStyles() {
           .onboarding-video-controls { padding: 12px; gap: 8px; }
           .onboarding-video-control-btn { width: 36px; height: 36px; }
           .onboarding-video-control-btn.is-primary { width: 40px; height: 40px; }
-          .onboarding-video-control-btn.is-text { min-width: 52px; padding: 0 10px; }
           .onboarding-video-timeline { gap: 6px; }
           .onboarding-video-ended-actions { flex-direction: column; }
           .dashboard-react .stats-grid {
@@ -2144,12 +2160,22 @@ function OnboardingCard({
 
                 <button
                   type="button"
-                  className="onboarding-video-control-btn is-text"
+                  className="onboarding-video-control-btn"
                   id="onboardingVideoMuteButton"
                   onClick={() => globals.toggleOnboardingVideoMute?.()}
                   disabled
+                  aria-label="Silenciar vídeo"
+                  title="Silenciar vídeo"
                 >
-                  <span id="onboardingVideoMuteLabel">Som</span>
+                  <span className="onboarding-video-sound-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M5 10v4h4l5 4V6l-5 4H5z"></path>
+                      <path className="onboarding-video-sound-wave" d="M18 9a4 4 0 0 1 0 6"></path>
+                      <path className="onboarding-video-sound-wave" d="M20.5 7a7 7 0 0 1 0 10"></path>
+                      <path className="onboarding-video-sound-off" d="M18 9l4 6"></path>
+                      <path className="onboarding-video-sound-off" d="M22 9l-4 6"></path>
+                    </svg>
+                  </span>
                 </button>
 
                 <div className="onboarding-video-timeline">

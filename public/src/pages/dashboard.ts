@@ -816,7 +816,6 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     const toggleButton = document.getElementById('onboardingVideoToggleButton') as HTMLButtonElement | null;
     const toggleIcon = document.getElementById('onboardingVideoToggleIcon') as HTMLElement | null;
     const muteButton = document.getElementById('onboardingVideoMuteButton') as HTMLButtonElement | null;
-    const muteLabel = document.getElementById('onboardingVideoMuteLabel') as HTMLElement | null;
     const progress = document.getElementById('onboardingVideoProgress') as HTMLInputElement | null;
     const currentTime = document.getElementById('onboardingVideoCurrentTime') as HTMLElement | null;
     const duration = document.getElementById('onboardingVideoDuration') as HTMLElement | null;
@@ -856,9 +855,7 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
         muteButton.disabled = !isActivePlayer || !onboardingYouTubePlayerReady;
         muteButton.title = onboardingVideoMuted ? 'Ativar som' : 'Silenciar v\u00eddeo';
         muteButton.setAttribute('aria-label', muteButton.title);
-    }
-    if (muteLabel) {
-        muteLabel.textContent = onboardingVideoMuted ? 'Mudo' : 'Som';
+        muteButton.classList.toggle('is-muted', onboardingVideoMuted);
     }
     if (progress) {
         progress.disabled = !canControlTimeline;
@@ -1375,18 +1372,26 @@ function toggleOnboardingVideoPlayback() {
         return;
     }
 
-    const currentState = Number(onboardingYouTubePlayer.getPlayerState?.() ?? -1);
-    if (currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.playing || currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.buffering) {
-        onboardingYouTubePlayer.pauseVideo?.();
-        onboardingVideoPlaybackState = 'paused';
-    } else if (currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.ended || onboardingVideoPlaybackState === 'ended') {
-        onboardingYouTubePlayer.seekTo?.(0, true);
-        onboardingYouTubePlayer.playVideo?.();
-        onboardingVideoCurrentSeconds = 0;
-        onboardingVideoPlaybackState = 'playing';
-    } else {
-        onboardingYouTubePlayer.playVideo?.();
-        onboardingVideoPlaybackState = 'playing';
+    syncOnboardingYouTubeMetrics();
+
+    try {
+        const isCurrentlyPlaying = onboardingVideoPlaybackState === 'playing' || onboardingVideoPlaybackState === 'loading';
+        if (isCurrentlyPlaying) {
+            onboardingYouTubePlayer.pauseVideo?.();
+            onboardingVideoPlaybackState = 'paused';
+            stopOnboardingVideoSyncTimer();
+        } else {
+            if (onboardingVideoPlaybackState === 'ended') {
+                onboardingYouTubePlayer.seekTo?.(0, true);
+                onboardingVideoCurrentSeconds = 0;
+            }
+            onboardingYouTubePlayer.playVideo?.();
+            onboardingVideoPlaybackState = 'playing';
+            startOnboardingVideoSyncTimer();
+        }
+    } catch (_) {
+        startOnboardingTour(selectedStepId);
+        return;
     }
 
     syncOnboardingYouTubeMetrics();
@@ -1428,14 +1433,22 @@ function toggleOnboardingVideoPlaybackLegacy() {
 function toggleOnboardingVideoMute() {
     if (!onboardingYouTubePlayer || !onboardingYouTubePlayerReady) return;
 
-    if (onboardingVideoMuted) {
-        onboardingYouTubePlayer.unMute?.();
-        onboardingVideoMuted = false;
-    } else {
-        onboardingYouTubePlayer.mute?.();
-        onboardingVideoMuted = true;
+    syncOnboardingYouTubeMetrics();
+
+    try {
+        const isMuted = Boolean(onboardingYouTubePlayer.isMuted?.());
+        if (isMuted) {
+            onboardingYouTubePlayer.unMute?.();
+            onboardingVideoMuted = false;
+        } else {
+            onboardingYouTubePlayer.mute?.();
+            onboardingVideoMuted = true;
+        }
+    } catch (_) {
+        return;
     }
 
+    window.setTimeout(syncOnboardingYouTubeMetrics, 60);
     renderOnboardingVideoControls();
 }
 
