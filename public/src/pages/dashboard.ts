@@ -150,6 +150,7 @@ let onboardingState: OnboardingState = {
 };
 let onboardingVideoUrls: OnboardingVideosMap = {};
 let onboardingSelectedStepId: OnboardingStepId | null = null;
+let onboardingPlayingStepId: OnboardingStepId | null = null;
 
 let statsChartInstance: { destroy?: () => void } | null = null;
 let statsChartType: StatsChartType = 'line';
@@ -229,6 +230,36 @@ const ONBOARDING_STEP_VIDEO_URLS: Record<OnboardingStepId, string> = {
     configure_dynamic_fields: 'https://youtu.be/LPJCHUnlaZU',
     create_campaign: 'https://youtu.be/1J4FDRqwBko',
     create_automation: 'https://youtu.be/kUaY_wWzzPw'
+};
+const ONBOARDING_STEP_LABELS_UI: Record<OnboardingStepId, string> = {
+    connect_whatsapp: 'Conecte seu WhatsApp',
+    configure_accounts: 'Revise suas contas',
+    open_inbox: 'Abra o Inbox',
+    create_first_contact: 'Cadastre um contato',
+    create_tags: 'Crie tags',
+    configure_dynamic_fields: 'Configure campos din\u00E2micos',
+    create_campaign: 'Monte uma campanha',
+    create_automation: 'Publique uma automa\u00E7\u00E3o'
+};
+const ONBOARDING_STEP_ACTION_LABELS_UI: Record<OnboardingStepId, string> = {
+    connect_whatsapp: 'Conectar agora',
+    configure_accounts: 'Abrir contas',
+    open_inbox: 'Abrir inbox',
+    create_first_contact: 'Abrir contatos',
+    create_tags: 'Abrir tags',
+    configure_dynamic_fields: 'Abrir campos',
+    create_campaign: 'Abrir campanhas',
+    create_automation: 'Abrir automa\u00E7\u00F5es'
+};
+const ONBOARDING_STEP_VIDEO_DESCRIPTIONS_UI: Record<OnboardingStepId, string> = {
+    connect_whatsapp: 'Passo a passo para conectar a primeira sess\u00E3o do WhatsApp no ZapVender.',
+    configure_accounts: 'Veja como revisar as contas em Configura\u00E7\u00F5es e deixar o ambiente pronto para operar.',
+    open_inbox: 'Aprenda a abrir o Inbox e validar o atendimento com uma conversa de teste.',
+    create_first_contact: 'Cadastre um contato de exemplo para testar o fluxo completo da opera\u00E7\u00E3o.',
+    create_tags: 'Crie etiquetas para organizar contatos, campanhas e automa\u00E7\u00F5es.',
+    configure_dynamic_fields: 'Configure campos personalizados que viram vari\u00E1veis em mensagens, campanhas e fluxos.',
+    create_campaign: 'Monte sua primeira campanha e entenda onde revisar m\u00E9tricas e resultados.',
+    create_automation: 'Publique sua primeira automa\u00E7\u00E3o e valide o disparo com seguran\u00E7a.'
 };
 const DASHBOARD_ONBOARDING_STORAGE_KEY_PREFIX = 'zapvender_dashboard_onboarding_v1:';
 
@@ -408,7 +439,7 @@ function renderOnboardingChecklist() {
     const completedBadge = document.getElementById('onboardingCompletedBadge') as HTMLElement | null;
 
     if (progressText) {
-        progressText.textContent = `${completedCount}/${totalSteps} etapas concluidas`;
+        progressText.textContent = `${completedCount}/${totalSteps} etapas concluídas`;
     }
     if (progressFill) {
         progressFill.style.width = `${progress}%`;
@@ -422,6 +453,9 @@ function selectOnboardingVideoStep(stepIdInput: string) {
     const stepId = normalizeOnboardingStepId(stepIdInput) || getPreferredOnboardingSelectedStepId();
     if (!stepId) return;
 
+    if (onboardingSelectedStepId !== stepId) {
+        onboardingPlayingStepId = null;
+    }
     onboardingSelectedStepId = stepId;
     renderOnboardingChecklist();
     renderOnboardingVideo();
@@ -453,6 +487,7 @@ function resetOnboardingChecklist() {
         completedSteps: [],
         updatedAt: Date.now()
     };
+    onboardingPlayingStepId = null;
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
     writeOnboardingState(onboardingState);
     renderOnboardingChecklist();
@@ -500,8 +535,8 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
             if (videoId) {
                 return {
                     sourceUrl,
-                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&iv_load_policy=3`,
-                    posterUrl: `https://i.ytimg.com/vi_webp/${encodeURIComponent(videoId)}/hqdefault.webp`,
+                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=1&iv_load_policy=3&modestbranding=1&fs=1`,
+                    posterUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
                     posterFallbackUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
                 };
             }
@@ -520,8 +555,8 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
             if (videoId) {
                 return {
                     sourceUrl,
-                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&iv_load_policy=3`,
-                    posterUrl: `https://i.ytimg.com/vi_webp/${encodeURIComponent(videoId)}/hqdefault.webp`,
+                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=1&iv_load_policy=3&modestbranding=1&fs=1`,
+                    posterUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
                     posterFallbackUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
                 };
             }
@@ -538,7 +573,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
         }
     } catch (_) {
         return {
-            sourceUrl,
+            sourceUrl: '',
             embedUrl: '',
             posterUrl: '',
             posterFallbackUrl: ''
@@ -561,76 +596,71 @@ function renderOnboardingVideo() {
 
     onboardingSelectedStepId = selectedStepId;
 
+    const shell = document.getElementById('onboardingVideoShell') as HTMLElement | null;
     const placeholder = document.getElementById('onboardingVideoPlaceholder') as HTMLElement | null;
     const placeholderTitle = document.getElementById('onboardingVideoPlaceholderTitle') as HTMLElement | null;
     const hint = document.getElementById('onboardingVideoHint') as HTMLElement | null;
-    const posterImage = document.getElementById('onboardingVideoPosterImage') as HTMLImageElement | null;
     const posterBackdrop = document.getElementById('onboardingVideoPosterBackdrop') as HTMLElement | null;
+    const cover = document.getElementById('onboardingVideoCover') as HTMLElement | null;
     const previewButton = document.getElementById('onboardingVideoPreviewButton') as HTMLButtonElement | null;
     const playButton = document.getElementById('onboardingVideoPlayButton') as HTMLButtonElement | null;
+    const previewHint = document.getElementById('onboardingVideoPreviewHint') as HTMLElement | null;
     const ctaLabel = document.getElementById('onboardingVideoCtaLabel') as HTMLElement | null;
     const status = document.getElementById('onboardingVideoStatus') as HTMLElement | null;
     const note = document.getElementById('onboardingSpotlightNote') as HTMLElement | null;
     const actionButton = document.getElementById('onboardingStepActionButton') as HTMLButtonElement | null;
-    const openLink = document.getElementById('onboardingVideoOpenLink') as HTMLAnchorElement | null;
+    const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
     const kicker = document.getElementById('onboardingVideoKicker') as HTMLElement | null;
     const title = document.getElementById('onboardingVideoTitle') as HTMLElement | null;
     const description = document.getElementById('onboardingVideoDescription') as HTMLElement | null;
-    const modalTitle = document.getElementById('onboardingVideoModalTitle') as HTMLElement | null;
-    const modalKicker = document.getElementById('onboardingVideoModalKicker') as HTMLElement | null;
-    const modalFrame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
-    const modalPlaceholder = document.getElementById('onboardingVideoModalPlaceholder') as HTMLElement | null;
-    const modalPlaceholderTitle = document.getElementById('onboardingVideoModalPlaceholderTitle') as HTMLElement | null;
-    const modalHint = document.getElementById('onboardingVideoModalHint') as HTMLElement | null;
-    const modal = document.getElementById('onboardingVideoModal') as HTMLElement | null;
     const stepPosition = Math.max(0, ONBOARDING_STEP_IDS.indexOf(selectedStepId)) + 1;
     const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
     const isCompleted = isOnboardingStepCompleted(selectedStepId);
     const isRecommendedStep = selectedStepId === getPreferredOnboardingSelectedStepId();
+    const isPlayingCurrentStep = onboardingPlayingStepId === selectedStepId && Boolean(presentation.embedUrl);
 
     if (kicker) {
         kicker.textContent = `Etapa ${stepPosition} de ${ONBOARDING_STEP_IDS.length}`;
     }
     if (status) {
         status.textContent = isCompleted
-            ? 'ConcluÃ­da'
-            : (isRecommendedStep ? 'PrÃ³xima recomendada' : 'Guia disponÃ­vel');
+            ? 'Concluída'
+            : (isPlayingCurrentStep ? 'Guia aberto' : (isRecommendedStep ? 'Próxima recomendada' : 'Guia disponível'));
     }
     if (title) {
-        title.textContent = ONBOARDING_STEP_LABELS[selectedStepId];
+        title.textContent = ONBOARDING_STEP_LABELS_UI[selectedStepId];
     }
     if (description) {
-        description.textContent = ONBOARDING_STEP_VIDEO_DESCRIPTIONS[selectedStepId];
+        description.textContent = ONBOARDING_STEP_VIDEO_DESCRIPTIONS_UI[selectedStepId];
     }
     if (note) {
         note.textContent = isCompleted
-            ? 'Esta etapa jÃ¡ foi concluÃ­da. O guia continua disponÃ­vel para revisÃ£o rÃ¡pida.'
-            : 'Abra o guia em destaque e depois marque a etapa quando concluir.';
+            ? 'Esta etapa já foi concluída. Você pode rever o guia aqui sempre que precisar.'
+            : (isPlayingCurrentStep
+                ? 'O guia está aberto dentro do card. Você pode acompanhar sem sair do painel.'
+                : 'Assista ao guia da etapa selecionada e depois marque a checklist quando concluir.');
     }
     if (actionButton) {
-        actionButton.textContent = ONBOARDING_STEP_ACTION_LABELS[selectedStepId] || 'Abrir etapa';
+        actionButton.textContent = ONBOARDING_STEP_ACTION_LABELS_UI[selectedStepId] || 'Abrir etapa';
         actionButton.onclick = () => goToOnboardingStep(selectedStepId);
     }
-    if (modalTitle) {
-        modalTitle.textContent = ONBOARDING_STEP_LABELS[selectedStepId];
-    }
-    if (modalKicker) {
-        modalKicker.textContent = `Guia da etapa ${stepPosition}`;
-    }
     if (ctaLabel) {
-        ctaLabel.textContent = presentation.sourceUrl ? 'Assistir guia rÃ¡pido' : 'Guia indisponÃ­vel';
+        ctaLabel.textContent = presentation.embedUrl
+            ? (isPlayingCurrentStep ? 'Guia em reprodução' : 'Assistir guia aqui')
+            : 'Guia indisponível';
     }
-    if (openLink) {
-        if (presentation.sourceUrl) {
-            openLink.href = presentation.sourceUrl;
-            openLink.style.display = 'inline-flex';
-        } else {
-            openLink.style.display = 'none';
-            openLink.removeAttribute('href');
-        }
+    if (previewHint) {
+        previewHint.textContent = presentation.embedUrl
+            ? (isPlayingCurrentStep
+                ? 'O passo a passo está aberto logo aqui no painel.'
+                : 'Abra o passo a passo sem sair do dashboard.')
+            : 'Este passo a passo ainda não está disponível.';
     }
 
-    if (!presentation.sourceUrl) {
+    if (!presentation.embedUrl) {
+        if (shell) {
+            shell.classList.remove('is-playing');
+        }
         if (previewButton) {
             previewButton.disabled = true;
             previewButton.style.pointerEvents = 'none';
@@ -638,169 +668,84 @@ function renderOnboardingVideo() {
         }
         if (playButton) {
             playButton.disabled = true;
-        }
-        if (posterImage) {
-            posterImage.style.display = 'none';
-            posterImage.removeAttribute('src');
-            posterImage.removeAttribute('data-fallback-src');
+            playButton.textContent = 'Guia indisponível';
         }
         if (posterBackdrop) {
             posterBackdrop.style.backgroundImage = '';
+        }
+        if (cover) {
+            cover.style.display = 'none';
         }
         if (placeholder) {
             placeholder.style.display = 'flex';
         }
         if (placeholderTitle) {
-            placeholderTitle.textContent = 'Guia indisponÃ­vel';
+            placeholderTitle.textContent = 'Guia indisponível';
         }
         if (hint) {
-            hint.textContent = 'Este passo a passo ainda nÃ£o estÃ¡ disponÃ­vel para exibiÃ§Ã£o.';
+            hint.textContent = 'Este passo a passo ainda não está disponível para exibição.';
         }
-        if (modalFrame) {
-            modalFrame.style.display = 'none';
-            modalFrame.removeAttribute('src');
-        }
-        if (modalPlaceholder) {
-            modalPlaceholder.style.display = 'flex';
-        }
-        if (modalPlaceholderTitle) {
-            modalPlaceholderTitle.textContent = 'Guia indisponÃ­vel';
-        }
-        if (modalHint) {
-            modalHint.textContent = 'NÃ£o foi possÃ­vel abrir este guia agora.';
+        if (frame) {
+            frame.style.display = 'none';
+            frame.removeAttribute('src');
         }
         return;
     }
 
+    if (shell) {
+        shell.classList.toggle('is-playing', isPlayingCurrentStep);
+    }
     if (previewButton) {
         previewButton.disabled = false;
         previewButton.style.pointerEvents = '';
         previewButton.style.opacity = '';
     }
     if (playButton) {
-        playButton.disabled = false;
-    }
-
-    if (posterImage) {
-        posterImage.onerror = () => {
-            const fallbackSrc = String(posterImage.dataset.fallbackSrc || '').trim();
-            if (fallbackSrc && posterImage.getAttribute('src') !== fallbackSrc) {
-                posterImage.src = fallbackSrc;
-                return;
-            }
-            posterImage.style.display = 'none';
-            if (placeholder) {
-                placeholder.style.display = 'flex';
-            }
-        };
-
-        if (presentation.posterUrl) {
-            posterImage.dataset.fallbackSrc = presentation.posterFallbackUrl;
-            posterImage.src = presentation.posterUrl;
-            posterImage.style.display = 'block';
-        } else {
-            posterImage.style.display = 'none';
-            posterImage.removeAttribute('src');
-            posterImage.removeAttribute('data-fallback-src');
-        }
+        playButton.disabled = isPlayingCurrentStep;
+        playButton.textContent = isPlayingCurrentStep ? 'Guia em reprodução' : 'Assistir guia aqui';
     }
     if (posterBackdrop) {
-        posterBackdrop.style.backgroundImage = presentation.posterFallbackUrl
-            ? `url("${presentation.posterFallbackUrl}")`
-            : (presentation.posterUrl ? `url("${presentation.posterUrl}")` : '');
+        const backdropUrl = presentation.posterUrl || presentation.posterFallbackUrl;
+        posterBackdrop.style.backgroundImage = backdropUrl ? `url("${backdropUrl}")` : '';
     }
     if (placeholder) {
-        placeholder.style.display = presentation.posterUrl || presentation.posterFallbackUrl ? 'none' : 'flex';
+        placeholder.style.display = 'none';
     }
     if (placeholderTitle) {
-        placeholderTitle.textContent = presentation.embedUrl ? 'Abrir guia' : 'Guia pronto para abrir';
+        placeholderTitle.textContent = 'Assistir guia';
     }
     if (hint) {
-        hint.textContent = presentation.embedUrl
-            ? 'Abra o passo a passo em foco para acompanhar esta etapa.'
-            : 'Abra este guia em uma janela separada.';
+        hint.textContent = 'Abra o passo a passo dentro do próprio painel.';
     }
-    if (modalPlaceholder) {
-        modalPlaceholder.style.display = presentation.embedUrl ? 'none' : 'flex';
+    if (cover) {
+        cover.style.display = isPlayingCurrentStep ? 'none' : 'flex';
     }
-    if (modalPlaceholderTitle) {
-        modalPlaceholderTitle.textContent = presentation.embedUrl ? '' : 'Guia pronto para abrir';
-    }
-    if (modalHint) {
-        modalHint.textContent = presentation.embedUrl
-            ? ''
-            : 'Use o botÃ£o abaixo para abrir este guia fora da plataforma.';
-    }
-    if (modalFrame) {
-        const shouldKeepPlaying = Boolean(modal?.classList.contains('active')) && Boolean(presentation.embedUrl);
-        if (shouldKeepPlaying && presentation.embedUrl) {
-            if (modalFrame.src !== presentation.embedUrl) {
-                modalFrame.src = presentation.embedUrl;
+    if (frame) {
+        if (isPlayingCurrentStep) {
+            if (frame.src !== presentation.embedUrl) {
+                frame.src = presentation.embedUrl;
             }
-            modalFrame.style.display = 'block';
+            frame.style.display = 'block';
         } else {
-            modalFrame.style.display = 'none';
-            modalFrame.removeAttribute('src');
+            frame.style.display = 'none';
+            frame.removeAttribute('src');
         }
     }
 }
 
-function openOnboardingVideoModal() {
+function playOnboardingVideo() {
     const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
         ? onboardingSelectedStepId
         : getPreferredOnboardingSelectedStepId();
     if (!selectedStepId) return;
 
+    const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
+    if (!presentation.embedUrl) return;
+
     onboardingSelectedStepId = selectedStepId;
+    onboardingPlayingStepId = selectedStepId;
     renderOnboardingChecklist();
     renderOnboardingVideo();
-
-    const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
-    if (!presentation.sourceUrl) return;
-    if (!presentation.embedUrl) {
-        window.open(presentation.sourceUrl, '_blank', 'noopener,noreferrer');
-        return;
-    }
-
-    const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
-    const placeholder = document.getElementById('onboardingVideoModalPlaceholder') as HTMLElement | null;
-    if (frame) {
-        frame.src = presentation.embedUrl;
-        frame.style.display = 'block';
-    }
-    if (placeholder) {
-        placeholder.style.display = 'none';
-    }
-    openModal('onboardingVideoModal');
-}
-
-function closeOnboardingVideoModal() {
-    const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
-    if (frame) {
-        frame.style.display = 'none';
-        frame.removeAttribute('src');
-    }
-    closeModal('onboardingVideoModal');
-}
-
-function bindOnboardingVideoModalObserver() {
-    const modal = document.getElementById('onboardingVideoModal') as HTMLElement | null;
-    if (!modal || modal.dataset.bound === '1') return;
-
-    modal.dataset.bound = '1';
-    const observer = new MutationObserver(() => {
-        if (modal.classList.contains('active')) return;
-        const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
-        if (frame) {
-            frame.style.display = 'none';
-            frame.removeAttribute('src');
-        }
-    });
-
-    observer.observe(modal, {
-        attributes: true,
-        attributeFilter: ['class']
-    });
 }
 
 async function loadOnboardingVideo(_options: { silent?: boolean } = {}) {
@@ -816,7 +761,7 @@ function initOnboardingCard() {
     if (!hasOnboarding) return;
     onboardingState = readOnboardingState();
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
-    bindOnboardingVideoModalObserver();
+    onboardingPlayingStepId = null;
     renderOnboardingChecklist();
     void loadOnboardingVideo({ silent: true });
 }
@@ -2150,8 +2095,7 @@ const windowAny = window as Window & {
     selectOnboardingVideoStep?: (stepId: string) => void;
     goToOnboardingStep?: (stepId: string) => void;
     resetOnboardingChecklist?: () => void;
-    openOnboardingVideoModal?: () => void;
-    closeOnboardingVideoModal?: () => void;
+    playOnboardingVideo?: () => void;
     openCustomEventModal?: (id?: number) => void;
     saveCustomEvent?: () => Promise<void>;
     deleteCustomEvent?: (id: number) => Promise<void>;
@@ -2178,8 +2122,7 @@ windowAny.toggleOnboardingStep = toggleOnboardingStep;
 windowAny.selectOnboardingVideoStep = selectOnboardingVideoStep;
 windowAny.goToOnboardingStep = goToOnboardingStep;
 windowAny.resetOnboardingChecklist = resetOnboardingChecklist;
-windowAny.openOnboardingVideoModal = openOnboardingVideoModal;
-windowAny.closeOnboardingVideoModal = closeOnboardingVideoModal;
+windowAny.playOnboardingVideo = playOnboardingVideo;
 windowAny.openCustomEventModal = openCustomEventModal;
 windowAny.saveCustomEvent = saveCustomEvent;
 windowAny.deleteCustomEvent = deleteCustomEvent;
