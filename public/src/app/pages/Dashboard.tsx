@@ -998,10 +998,10 @@ function DashboardStyles() {
             linear-gradient(165deg, rgba(6, 22, 42, 0.98), rgba(4, 13, 28, 0.99));
         }
         .onboarding-card.onboarding-card-inline {
-          width: clamp(620px, 44vw, 760px);
+          width: clamp(480px, 34vw, 620px);
           flex: 0 0 auto;
           margin-bottom: 0;
-          padding: 16px 18px;
+          padding: 14px 16px;
         }
         .onboarding-inline-dismiss {
           position: absolute;
@@ -1134,23 +1134,23 @@ function DashboardStyles() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 18px;
+          gap: 14px;
           min-width: 0;
         }
         .onboarding-tour-copy-wrap {
           min-width: 0;
           display: flex;
           align-items: center;
-          gap: 14px;
+          gap: 12px;
         }
         .onboarding-tour-icon {
-          width: 52px;
-          height: 52px;
+          width: 46px;
+          height: 46px;
           flex-shrink: 0;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          border-radius: 16px;
+          border-radius: 14px;
           border: 1px solid rgba(var(--primary-rgb), 0.24);
           background:
             radial-gradient(circle at top, rgba(17, 212, 143, 0.22), transparent 60%),
@@ -1196,7 +1196,7 @@ function DashboardStyles() {
         .onboarding-tour-title {
           margin: 0;
           color: #f4fbf8;
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 700;
           line-height: 1.25;
         }
@@ -1204,13 +1204,13 @@ function DashboardStyles() {
           margin: 0;
           color: rgba(204, 225, 233, 0.86);
           font-size: 12px;
-          line-height: 1.45;
+          line-height: 1.35;
         }
         .onboarding-tour-start-button {
-          min-height: 50px;
-          padding: 0 22px;
-          gap: 10px;
-          border-radius: 16px;
+          min-height: 46px;
+          padding: 0 18px;
+          gap: 8px;
+          border-radius: 14px;
           white-space: nowrap;
           box-shadow: 0 18px 28px rgba(17, 212, 143, 0.18);
         }
@@ -1219,7 +1219,7 @@ function DashboardStyles() {
           height: 16px;
         }
         .onboarding-card.onboarding-card-inline .onboarding-tour-launcher {
-          padding-right: 28px;
+          padding-right: 24px;
         }
         .onboarding-card.onboarding-card-inline .onboarding-tour-title,
         .onboarding-card.onboarding-card-inline .onboarding-tour-description {
@@ -1392,6 +1392,7 @@ function DashboardStyles() {
           right: 0;
           bottom: 0;
           z-index: 6;
+          pointer-events: auto;
           display: grid;
           grid-template-columns: auto auto minmax(0, 1fr);
           align-items: center;
@@ -1410,6 +1411,7 @@ function DashboardStyles() {
           border: 1px solid rgba(var(--primary-rgb), 0.18);
           background: rgba(10, 25, 42, 0.88);
           color: #eaf8f4;
+          pointer-events: auto;
           transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, opacity 180ms ease;
         }
         .onboarding-video-control-btn:hover:not(:disabled) {
@@ -1484,6 +1486,7 @@ function DashboardStyles() {
           -webkit-appearance: none;
           accent-color: rgb(var(--primary-rgb));
           cursor: pointer;
+          pointer-events: auto;
           height: 4px;
           border-radius: 999px;
           background: rgba(220, 236, 243, 0.16);
@@ -2100,14 +2103,13 @@ function OnboardingCard({
             </div>
             <div className="onboarding-tour-copy">
               <div className="onboarding-tour-badge-row">
-                <span className="onboarding-tour-badge">Tour guiado</span>
                 <span className="badge badge-success" id="onboardingCompletedBadge" style={{ display: 'none' }}>
                   Tour concluído
                 </span>
               </div>
               <p className="onboarding-tour-title">Explore o ZapVender em {ONBOARDING_STEPS.length} vídeos rápidos</p>
               <p className="onboarding-tour-description" id="onboardingTourCurrentStep">
-                Inicie o tour e acompanhe cada etapa sem sair da tela.
+                Entenda como funciona o ZapVender
               </p>
             </div>
           </div>

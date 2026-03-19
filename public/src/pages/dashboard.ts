@@ -479,37 +479,17 @@ function markOnboardingStepCompleted(stepIdInput: string | OnboardingStepId | nu
 }
 
 function renderOnboardingTourLauncher() {
-    const selectedStepId = getSelectedOnboardingStepId();
     const totalSteps = ONBOARDING_STEP_IDS.length;
     const completedCount = onboardingState.completedSteps.length;
-    const progress = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
-    const nextRecommendedStepId = getPreferredOnboardingSelectedStepId();
-
-    const progressText = document.getElementById('onboardingProgressText') as HTMLElement | null;
-    const progressFill = document.getElementById('onboardingProgressFill') as HTMLElement | null;
     const completedBadge = document.getElementById('onboardingCompletedBadge') as HTMLElement | null;
     const currentStep = document.getElementById('onboardingTourCurrentStep') as HTMLElement | null;
     const startButtonLabel = document.getElementById('onboardingTourStartButtonLabel') as HTMLElement | null;
 
-    if (progressText) {
-        progressText.textContent = `${completedCount}/${totalSteps} v\u00eddeos vistos`;
-    }
-    if (progressFill) {
-        progressFill.style.width = `${progress}%`;
-    }
     if (completedBadge) {
         completedBadge.style.display = completedCount === totalSteps && totalSteps > 0 ? 'inline-flex' : 'none';
     }
     if (currentStep) {
-        if (completedCount === totalSteps && totalSteps > 0) {
-            currentStep.textContent = 'Tour conclu\u00eddo. Voc\u00ea pode rever qualquer etapa quando quiser.';
-        } else if (onboardingTourOpen && selectedStepId) {
-            currentStep.textContent = `Reproduzindo agora: ${ONBOARDING_STEP_LABELS_UI[selectedStepId]}.`;
-        } else if (nextRecommendedStepId) {
-            currentStep.textContent = `Pr\u00f3ximo v\u00eddeo: ${ONBOARDING_STEP_LABELS_UI[nextRecommendedStepId]}.`;
-        } else {
-            currentStep.textContent = 'Comece pelo tour inicial e avance no seu ritmo.';
-        }
+        currentStep.textContent = 'Entenda como funciona o ZapVender';
     }
     if (startButtonLabel) {
         startButtonLabel.textContent = onboardingTourOpen
@@ -769,6 +749,36 @@ function destroyOnboardingYouTubePlayer() {
     onboardingYouTubePlayer = null;
     onboardingYouTubePlayerReady = false;
     resetOnboardingVideoRuntime();
+}
+
+function getOnboardingYouTubeIframe() {
+    const host = document.getElementById('onboardingVideoPlayerHost') as HTMLElement | null;
+    return host?.querySelector('iframe') as HTMLIFrameElement | null;
+}
+
+function sendOnboardingYouTubeCommand(func: string, args: unknown[] = []) {
+    const frame = getOnboardingYouTubeIframe();
+    const targetWindow = frame?.contentWindow;
+    if (!frame || !targetWindow) return false;
+
+    const payload = JSON.stringify({
+        event: 'command',
+        func,
+        args
+    });
+
+    try {
+        const targetOrigin = new URL(frame.src).origin;
+        targetWindow.postMessage(payload, targetOrigin || '*');
+        return true;
+    } catch (_) {
+        try {
+            targetWindow.postMessage(payload, '*');
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
 }
 
 function ensureOnboardingYouTubeApi() {
@@ -1378,14 +1388,17 @@ function toggleOnboardingVideoPlayback() {
         const isCurrentlyPlaying = onboardingVideoPlaybackState === 'playing' || onboardingVideoPlaybackState === 'loading';
         if (isCurrentlyPlaying) {
             onboardingYouTubePlayer.pauseVideo?.();
+            sendOnboardingYouTubeCommand('pauseVideo');
             onboardingVideoPlaybackState = 'paused';
             stopOnboardingVideoSyncTimer();
         } else {
             if (onboardingVideoPlaybackState === 'ended') {
                 onboardingYouTubePlayer.seekTo?.(0, true);
+                sendOnboardingYouTubeCommand('seekTo', [0, true]);
                 onboardingVideoCurrentSeconds = 0;
             }
             onboardingYouTubePlayer.playVideo?.();
+            sendOnboardingYouTubeCommand('playVideo');
             onboardingVideoPlaybackState = 'playing';
             startOnboardingVideoSyncTimer();
         }
@@ -1439,9 +1452,11 @@ function toggleOnboardingVideoMute() {
         const isMuted = Boolean(onboardingYouTubePlayer.isMuted?.());
         if (isMuted) {
             onboardingYouTubePlayer.unMute?.();
+            sendOnboardingYouTubeCommand('unMute');
             onboardingVideoMuted = false;
         } else {
             onboardingYouTubePlayer.mute?.();
+            sendOnboardingYouTubeCommand('mute');
             onboardingVideoMuted = true;
         }
     } catch (_) {
