@@ -641,25 +641,18 @@ export default function Inbox() {
             position: absolute;
             top: -2px;
             left: 3px;
-            width: 20px;
-            height: 20px;
-            border-radius: 7px;
-            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.14) 0%, rgba(var(--primary-rgb), 0.28) 100%);
-            border: 1px solid rgba(var(--primary-rgb), 0.42);
+            width: 16px;
+            height: 16px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            box-shadow:
-                0 5px 10px rgba(var(--primary-rgb), 0.2),
-                0 0 0 1px rgba(5, 26, 18, 0.2) inset;
             z-index: 3;
             pointer-events: none;
         }
         .conversation-flow-bot-icon {
-            width: 13px;
-            height: 13px;
-            color: #cffff0;
-            opacity: 0.98;
+            width: 16px;
+            height: 16px;
+            color: #ffffff;
             display: block;
         }
         .conversation-preview {
