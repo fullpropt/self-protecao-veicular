@@ -75,12 +75,12 @@ Status do bloco: [x] Concluido
 ## P1 - Refatoracao incremental
 
 - [~] Quebra de `server/index.js` por dominio iniciada.
-  Evidencia: extraidos blocos de observabilidade/alertas para `server/services/opsMonitoringService.js`, de menu textual para `server/services/flowMenuTextService.js` e o pipeline de automacao inbound para `server/services/inboundMessagePipelineService.js`, com `server/index.js` usando wrappers.
+  Evidencia: extraidos blocos de observabilidade/alertas para `server/services/opsMonitoringService.js`, de menu textual para `server/services/flowMenuTextService.js`, pipeline de automacao inbound para `server/services/inboundMessagePipelineService.js` e rotas de checkout/sessao para `server/routes/publicCheckoutRoutes.js` e `server/routes/whatsAppSessionRoutes.js`, com `server/index.js` usando wrappers/modulos de rota.
 - [~] Quebra de `server/database/models.js` por modulo de dominio iniciada.
   Evidencia: extraidos modulos `server/database/models/leadModel.js`, `server/database/models/conversationModel.js`, `server/database/models/messageModel.js`, `server/database/models/automationModel.js`, `server/database/models/flowModel.js`, `server/database/models/customEventModel.js`, `server/database/models/messageQueueModel.js`, `server/database/models/tagModel.js`, `server/database/models/incomingWebhookCredentialModel.js`, `server/database/models/webhookModel.js` e `server/database/models/webhookDeliveryQueueModel.js`, mantendo `server/database/models.js` como fachada de export; em 2026-03-18 foram extraidos helpers adicionais para `server/database/models/helpers/leadModelHelpers.js`, `server/database/models/helpers/flowModelHelpers.js`, `server/database/models/helpers/scalarHelpers.js` e `server/database/models/helpers/incomingWebhookSecretHelpers.js`.
 
 Evidencia atual:
-- `server/index.js` com ~17463 linhas.
+- `server/index.js` com ~15551 linhas.
 - `server/database/models.js` com ~450 linhas.
 
 Status do bloco: [~] Parcial (avanco consistente)
