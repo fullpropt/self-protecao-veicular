@@ -1,11 +1,11 @@
 ﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useRef } from 'react';
 import { brandLogoUrl, brandName } from '../lib/brand';
 
 type DashboardGlobals = {
   initDashboard?: () => void;
   initOnboardingCard?: () => void;
+  resetOnboardingTourState?: () => void;
   loadDashboardData?: () => void;
   loadCustomEvents?: (options?: { silent?: boolean }) => void;
   startOnboardingTour?: (stepId?: string) => void;
@@ -2069,7 +2069,6 @@ function OnboardingCard({
 }) {
   const globals = window as Window & DashboardGlobals;
   const dismissStorageKey = buildOnboardingDismissedStorageKey();
-  const wasDismissedRef = useRef(isDismissed);
 
   useEffect(() => {
     try {
@@ -2080,23 +2079,19 @@ function OnboardingCard({
   }, [dismissStorageKey, isDismissed]);
 
   useEffect(() => {
-    if (wasDismissedRef.current && !isDismissed) {
-      const rehydrateOnboarding = () => {
-        globals.initOnboardingCard?.();
-      };
+    const rehydrateOnboarding = () => {
+      globals.initOnboardingCard?.();
+    };
 
-      if (typeof window.requestAnimationFrame === 'function') {
-        window.requestAnimationFrame(rehydrateOnboarding);
-      } else {
-        window.setTimeout(rehydrateOnboarding, 0);
-      }
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(rehydrateOnboarding);
+    } else {
+      window.setTimeout(rehydrateOnboarding, 0);
     }
-
-    wasDismissedRef.current = isDismissed;
-  }, [globals, isDismissed]);
+  }, [globals]);
 
   const handleDismiss = () => {
-    globals.closeOnboardingTour?.();
+    globals.resetOnboardingTourState?.();
     onDismissedChange(true);
   };
 

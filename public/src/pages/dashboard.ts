@@ -692,6 +692,15 @@ function resetOnboardingChecklist() {
     renderOnboardingVideo();
 }
 
+function resetOnboardingTourState() {
+    destroyOnboardingYouTubePlayer();
+    onboardingTourOpen = false;
+    onboardingPlayingStepId = null;
+    onboardingSelectedStepId = ONBOARDING_STEP_IDS[0] || null;
+    renderOnboardingChecklist();
+    renderOnboardingVideo();
+}
+
 function startOnboardingTour(stepIdInput?: string) {
     const stepId = normalizeOnboardingStepId(stepIdInput)
         || getPreferredOnboardingSelectedStepId()
@@ -1494,7 +1503,7 @@ function initOnboardingCard() {
     bindOnboardingTourControls();
     onboardingState = readOnboardingState();
     onboardingTourOpen = false;
-    onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
+    onboardingSelectedStepId = normalizeOnboardingStepId(onboardingSelectedStepId) || getPreferredOnboardingSelectedStepId();
     onboardingPlayingStepId = null;
     renderOnboardingChecklist();
     void loadOnboardingVideo({ silent: true });
@@ -2823,6 +2832,7 @@ async function confirmReset() {
 const windowAny = window as Window & {
     initDashboard?: () => void;
     initOnboardingCard?: () => void;
+    resetOnboardingTourState?: () => void;
     loadDashboardData?: () => Promise<void>;
     loadCustomEvents?: (options?: { silent?: boolean }) => Promise<void>;
     startOnboardingTour?: (stepId?: string) => void;
@@ -2858,6 +2868,7 @@ const windowAny = window as Window & {
 };
 windowAny.initDashboard = initDashboard;
 windowAny.initOnboardingCard = initOnboardingCard;
+windowAny.resetOnboardingTourState = resetOnboardingTourState;
 windowAny.loadDashboardData = loadDashboardData;
 windowAny.loadCustomEvents = loadCustomEvents;
 windowAny.startOnboardingTour = startOnboardingTour;
