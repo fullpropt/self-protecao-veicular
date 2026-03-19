@@ -703,8 +703,8 @@ function resetOnboardingTourState() {
 
 function startOnboardingTour(stepIdInput?: string) {
     const stepId = normalizeOnboardingStepId(stepIdInput)
-        || getPreferredOnboardingSelectedStepId()
-        || getSelectedOnboardingStepId();
+        || normalizeOnboardingStepId(onboardingSelectedStepId)
+        || getPreferredOnboardingSelectedStepId();
     if (!stepId) return;
 
     onboardingSelectedStepId = stepId;

@@ -1200,6 +1200,9 @@ function DashboardStyles() {
         .onboarding-tour-badge,
         .onboarding-video-kicker {
           display: inline-flex;
+          width: fit-content;
+          max-width: 100%;
+          align-self: flex-start;
           align-items: center;
           padding: 3px 10px;
           border-radius: 999px;
