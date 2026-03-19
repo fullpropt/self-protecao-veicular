@@ -53,6 +53,17 @@ function createMessageController(options = {}) {
         return digits.length >= 11 ? digits.slice(-11) : digits;
     }
 
+    function parseBooleanFlag(value, fallback = false) {
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'number') return value > 0;
+        if (typeof value === 'string') {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+            if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+        }
+        return fallback;
+    }
+
     async function countMissingStickerMediaForConversation(conversationId) {
         const normalizedConversationId = Number(conversationId);
         if (!Number.isFinite(normalizedConversationId) || normalizedConversationId <= 0) return 0;
@@ -88,6 +99,39 @@ function createMessageController(options = {}) {
                 limit: limit ? parseInt(limit) : 100,
                 offset: offset ? parseInt(offset) : 0
             });
+            const conversationIds = conversations
+                .map((conversation) => Number(conversation?.id || 0))
+                .filter((conversationId) => Number.isInteger(conversationId) && conversationId > 0);
+
+            const runningFlowByConversationId = new Map();
+            if (conversationIds.length > 0) {
+                try {
+                    const placeholders = conversationIds.map(() => '?').join(', ');
+                    const runningExecutionRows = await query(`
+                        SELECT
+                            conversation_id,
+                            COUNT(*) AS total,
+                            MAX(flow_id) AS flow_id
+                        FROM flow_executions
+                        WHERE status = 'running'
+                          AND conversation_id IN (${placeholders})
+                        GROUP BY conversation_id
+                    `, conversationIds);
+
+                    for (const row of runningExecutionRows || []) {
+                        const conversationId = Number(row?.conversation_id || 0);
+                        if (!Number.isInteger(conversationId) || conversationId <= 0) continue;
+
+                        runningFlowByConversationId.set(conversationId, {
+                            total: Math.max(0, Number(row?.total || 0) || 0),
+                            flowId: Number(row?.flow_id || 0) || null
+                        });
+                    }
+                } catch (error) {
+                    console.warn('[messageController:listConversations] Falha ao consultar execucoes de fluxo em andamento:', error.message);
+                }
+            }
+
             const lastMessages = await Message.getLastMessagesByConversationIds(
                 conversations.map((conversation) => conversation.id)
             );
@@ -98,6 +142,10 @@ function createMessageController(options = {}) {
             const normalized = conversations.map((c) => {
                 const lastMessage = lastMessageByConversationId.get(Number(c.id)) || null;
                 const decrypted = resolveMessageContentWithFallback(lastMessage);
+                const runningFlow = runningFlowByConversationId.get(Number(c.id)) || null;
+                const flowIsRunning = Boolean((runningFlow?.total || 0) > 0);
+                const runningFlowId = Number(runningFlow?.flowId || 0) || null;
+                const isBotActive = parseBooleanFlag(c?.is_bot_active, true);
 
                 let metadata = {};
                 try {
@@ -145,7 +193,10 @@ function createMessageController(options = {}) {
                     lastMessageAt,
                     name,
                     phone: c.phone,
-                    avatar_url: avatarUrl || null
+                    avatar_url: avatarUrl || null,
+                    is_bot_active: isBotActive ? 1 : 0,
+                    flow_is_running: flowIsRunning ? 1 : 0,
+                    flow_running_id: runningFlowId
                 };
             }).filter((conv) => {
                 if (!conv.lastMessageAt && !conv.lastMessage && Number(conv?.unread || 0) <= 0) {
@@ -179,6 +230,56 @@ function createMessageController(options = {}) {
             });
 
             return res.json({ success: true, conversations: sorted });
+        },
+
+        async toggleConversationFlow(req, res) {
+            const conversationId = parseInt(req.params.id, 10);
+            const ownerScopeUserId = await resolveRequesterOwnerUserId(req);
+
+            if (!conversationId) {
+                return res.status(400).json({ error: 'ID de conversa invalido' });
+            }
+
+            try {
+                const conversation = await Conversation.findById(conversationId);
+                const hasAccess = conversation
+                    ? await canAccessConversationInOwnerScope(req, conversation, ownerScopeUserId)
+                    : false;
+
+                if (!conversation || !hasAccess) {
+                    return res.status(404).json({ error: 'Conversa nao encontrada' });
+                }
+
+                const currentIsBotActive = parseBooleanFlag(conversation.is_bot_active, true);
+                const hasExplicitActive = Object.prototype.hasOwnProperty.call(req.body || {}, 'active');
+                const nextIsBotActive = hasExplicitActive
+                    ? parseBooleanFlag(req.body?.active, currentIsBotActive)
+                    : !currentIsBotActive;
+
+                await Conversation.update(conversationId, { is_bot_active: nextIsBotActive ? 1 : 0 });
+
+                const runningExecutionRows = await query(`
+                    SELECT
+                        COUNT(*) AS total,
+                        MAX(flow_id) AS flow_id
+                    FROM flow_executions
+                    WHERE status = 'running'
+                      AND conversation_id = ?
+                `, [conversationId]);
+                const runningExecution = runningExecutionRows?.[0] || {};
+                const flowIsRunning = Math.max(0, Number(runningExecution?.total || 0) || 0) > 0;
+                const runningFlowId = Number(runningExecution?.flow_id || 0) || null;
+
+                return res.json({
+                    success: true,
+                    conversation_id: conversationId,
+                    is_bot_active: nextIsBotActive ? 1 : 0,
+                    flow_is_running: flowIsRunning ? 1 : 0,
+                    flow_running_id: runningFlowId
+                });
+            } catch (error) {
+                return res.status(500).json({ error: error.message });
+            }
         },
 
         async markConversationRead(req, res) {

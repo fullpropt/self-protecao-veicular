@@ -22,6 +22,12 @@ type Conversation = {
     unread?: number;
     status?: LeadStatus;
     hasConversation?: boolean;
+    isBotActive?: boolean;
+    isFlowRunning?: boolean;
+    flowRunningId?: number | null;
+    is_bot_active?: number;
+    flow_is_running?: number;
+    flow_running_id?: number | null;
 };
 
 type ChatMessage = {
@@ -146,6 +152,7 @@ let inboxStartConversationLeadsFetchInFlight: Promise<InboxLeadItem[]> | null = 
 let inboxSearchRequestToken = 0;
 let inboxStartConversationLeads: InboxLeadItem[] = [];
 let inboxStartConversationModalBound = false;
+let conversationFlowToggleInFlight = false;
 
 const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 const INBOX_OPEN_LEAD_QUERY_KEYS = ['leadId', 'lead_id', 'id'] as const;
@@ -2004,7 +2011,10 @@ async function loadConversations() {
                 ? 0
                 : (c.unread || c.unread_count || 0),
             status: c.status,
-            hasConversation: true
+            hasConversation: true,
+            isBotActive: Number(c.is_bot_active ?? c.isBotActive ?? 1) === 1,
+            isFlowRunning: Number(c.flow_is_running ?? c.flowIsRunning ?? 0) === 1,
+            flowRunningId: Number(c.flow_running_id ?? c.flowRunningId ?? 0) || null
         }));
 
         if (currentConversation) {
@@ -2127,6 +2137,169 @@ function bindInboxLifecycle() {
     scheduleInboxMobileViewportStateSync();
 }
 
+function isConversationBotActive(conversation: Conversation | null) {
+    if (!conversation) return false;
+    const raw = conversation.isBotActive ?? conversation.is_bot_active;
+    return Number(raw ?? 1) === 1;
+}
+
+function isConversationFlowRunning(conversation: Conversation | null) {
+    if (!conversation) return false;
+    const raw = conversation.isFlowRunning ?? conversation.flow_is_running;
+    return Number(raw || 0) === 1;
+}
+
+function shouldShowConversationFlowControls(conversation: Conversation | null) {
+    if (!conversation || Number(conversation.id || 0) <= 0) return false;
+    return isConversationFlowRunning(conversation) || !isConversationBotActive(conversation);
+}
+
+function renderConversationFlowTag(conversation: Conversation) {
+    if (!isConversationFlowRunning(conversation) || !isConversationBotActive(conversation)) {
+        return '';
+    }
+    return '<span class="conversation-flow-chip" title="Fluxo em andamento">Fluxo ativo</span>';
+}
+
+function getConversationFlowToggleButtonLabel(conversation: Conversation | null) {
+    if (conversationFlowToggleInFlight) return 'Atualizando...';
+    return isConversationBotActive(conversation) ? 'Interromper fluxo' : 'Reativar fluxo';
+}
+
+function refreshConversationListKeepingCurrentFilter() {
+    const activeSearch = getInboxSearchValue();
+    if (activeSearch) {
+        void searchConversations();
+        return;
+    }
+
+    if (currentFilter === 'unread') {
+        renderFilteredConversations(conversations.filter((conversation) => (conversation.unread || 0) > 0));
+        return;
+    }
+
+    renderConversations();
+}
+
+function updateConversationFlowState(conversationId: number, patch: Partial<Conversation>) {
+    const applyPatch = (conversation: Conversation) => (
+        Number(conversation?.id || 0) === conversationId
+            ? { ...conversation, ...patch }
+            : conversation
+    );
+
+    conversations = conversations.map(applyPatch);
+    inboxSearchVirtualConversations = inboxSearchVirtualConversations.map(applyPatch);
+
+    if (currentConversation && Number(currentConversation.id || 0) === conversationId) {
+        currentConversation = { ...currentConversation, ...patch };
+    }
+}
+
+function refreshConversationFlowHeaderControls() {
+    const flowStatusChip = document.getElementById('chatFlowStatusChip') as HTMLElement | null;
+    const flowToggleButton = document.getElementById('chatFlowToggleBtn') as HTMLButtonElement | null;
+
+    if (!flowStatusChip && !flowToggleButton) return;
+
+    const showControls = shouldShowConversationFlowControls(currentConversation);
+    const flowRunning = isConversationFlowRunning(currentConversation);
+    const botActive = isConversationBotActive(currentConversation);
+
+    if (flowStatusChip) {
+        if (!showControls) {
+            flowStatusChip.style.display = 'none';
+        } else {
+            flowStatusChip.style.display = '';
+            flowStatusChip.classList.toggle('is-active', botActive);
+            flowStatusChip.classList.toggle('is-paused', !botActive);
+            flowStatusChip.textContent = botActive
+                ? (flowRunning ? 'Fluxo ativo' : 'Fluxo habilitado')
+                : 'Fluxo pausado';
+        }
+    }
+
+    if (flowToggleButton) {
+        if (!showControls) {
+            flowToggleButton.style.display = 'none';
+            return;
+        }
+
+        flowToggleButton.style.display = '';
+        flowToggleButton.disabled = conversationFlowToggleInFlight;
+        flowToggleButton.classList.toggle('is-active', botActive);
+        flowToggleButton.classList.toggle('is-paused', !botActive);
+        flowToggleButton.textContent = getConversationFlowToggleButtonLabel(currentConversation);
+        flowToggleButton.title = botActive
+            ? 'Interromper fluxo nesta conversa'
+            : 'Reativar fluxo nesta conversa';
+    }
+}
+
+async function toggleConversationFlow() {
+    if (!currentConversation || Number(currentConversation.id || 0) <= 0) {
+        showToast('info', 'Info', 'Selecione uma conversa para controlar o fluxo');
+        return;
+    }
+
+    if (conversationFlowToggleInFlight) return;
+
+    const conversationId = Number(currentConversation.id || 0);
+    const nextIsBotActive = !isConversationBotActive(currentConversation);
+
+    conversationFlowToggleInFlight = true;
+    refreshConversationFlowHeaderControls();
+
+    try {
+        const response = await api.post(`/api/conversations/${conversationId}/flow-toggle`, {
+            active: nextIsBotActive
+        });
+
+        const resolvedIsBotActive = Number(
+            response?.is_bot_active
+            ?? response?.conversation?.is_bot_active
+            ?? (nextIsBotActive ? 1 : 0)
+        ) === 1;
+        const resolvedFlowIsRunning = Number(
+            response?.flow_is_running
+            ?? response?.conversation?.flow_is_running
+            ?? (isConversationFlowRunning(currentConversation) ? 1 : 0)
+        ) === 1;
+        const resolvedFlowRunningId = Number(
+            response?.flow_running_id
+            ?? response?.conversation?.flow_running_id
+            ?? currentConversation?.flowRunningId
+            ?? 0
+        ) || null;
+
+        updateConversationFlowState(conversationId, {
+            isBotActive: resolvedIsBotActive,
+            is_bot_active: resolvedIsBotActive ? 1 : 0,
+            isFlowRunning: resolvedFlowIsRunning,
+            flow_is_running: resolvedFlowIsRunning ? 1 : 0,
+            flowRunningId: resolvedFlowRunningId,
+            flow_running_id: resolvedFlowRunningId
+        });
+
+        refreshConversationListKeepingCurrentFilter();
+        refreshConversationFlowHeaderControls();
+
+        showToast(
+            'success',
+            'Sucesso',
+            resolvedIsBotActive
+                ? 'Fluxo reativado nesta conversa'
+                : 'Fluxo interrompido nesta conversa'
+        );
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Nao foi possivel atualizar o fluxo desta conversa';
+        showToast('error', 'Erro', message);
+    } finally {
+        conversationFlowToggleInFlight = false;
+        refreshConversationFlowHeaderControls();
+    }
+}
+
 function renderConversations() {
     const list = document.getElementById('conversationsList') as HTMLElement | null;
     if (!list) return;
@@ -2154,6 +2327,7 @@ function renderConversations() {
                 <div class="conversation-name-row">
                     <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
                     ${c.sessionLabel ? `<span class="conversation-session-chip" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
+                    ${renderConversationFlowTag(c)}
                 </div>
                 <div class="conversation-preview">${renderConversationPreview(c.lastMessage, 'Sem mensagens')}</div>
             </div>
@@ -2211,6 +2385,7 @@ function renderFilteredConversations(filtered: Conversation[]) {
                 <div class="conversation-name-row">
                     <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
                     ${c.sessionLabel ? `<span class="conversation-session-chip" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
+                    ${renderConversationFlowTag(c)}
                 </div>
                 <div class="conversation-preview">${renderConversationPreview(c.lastMessage, '')}</div>
             </div>
@@ -3188,6 +3363,23 @@ function renderChat() {
                 <div class="chat-header-status">${formatPhone(currentConversation.phone)}</div>
             </div>
             <div class="chat-header-actions">
+                ${shouldShowConversationFlowControls(currentConversation) ? `
+                    <span
+                        class="chat-flow-status-chip ${isConversationBotActive(currentConversation) ? 'is-active' : 'is-paused'}"
+                        id="chatFlowStatusChip"
+                    >
+                        ${isConversationBotActive(currentConversation) ? 'Fluxo ativo' : 'Fluxo pausado'}
+                    </span>
+                    <button
+                        class="btn btn-sm btn-outline chat-flow-toggle ${isConversationBotActive(currentConversation) ? 'is-active' : 'is-paused'}"
+                        id="chatFlowToggleBtn"
+                        onclick="toggleConversationFlow()"
+                        ${conversationFlowToggleInFlight ? 'disabled' : ''}
+                        title="${isConversationBotActive(currentConversation) ? 'Interromper fluxo nesta conversa' : 'Reativar fluxo nesta conversa'}"
+                    >
+                        ${getConversationFlowToggleButtonLabel(currentConversation)}
+                    </button>
+                ` : ''}
                 <button class="btn btn-sm btn-outline btn-icon" onclick="toggleContactInfo()" title="Dados do contato"><span class="icon icon-user icon-sm"></span></button>
             </div>
         </div>
@@ -3233,6 +3425,7 @@ function renderChat() {
 
     setMobileConversationMode(true);
     closeContactInfoPanel();
+    refreshConversationFlowHeaderControls();
     bindInlineAudioPlayers(panel);
     bindChatScrollBottomVisibility();
     bindMessageComposerViewportSync();
@@ -3636,6 +3829,7 @@ const windowAny = window as Window & {
     viewContact?: () => void;
     toggleContactInfo?: (forceOpen?: boolean) => void;
     registerCurrentUser?: () => Promise<void>;
+    toggleConversationFlow?: () => Promise<void>;
     backToList?: () => void;
     logout?: () => void;
 };
@@ -3665,6 +3859,7 @@ windowAny.handleMediaInputChange = handleMediaInputChange;
 windowAny.openWhatsApp = openWhatsApp;
 windowAny.viewContact = viewContact;
 windowAny.toggleContactInfo = toggleContactInfo;
+windowAny.toggleConversationFlow = toggleConversationFlow;
 windowAny.backToList = backToList;
 
 export { initInbox };

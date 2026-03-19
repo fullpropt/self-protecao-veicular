@@ -15,6 +15,10 @@ function createMessageRoutes(options = {}) {
         await controller.markConversationRead(req, res);
     });
 
+    router.post('/api/conversations/:id/flow-toggle', authenticate, async (req, res) => {
+        await controller.toggleConversationFlow(req, res);
+    });
+
     router.post('/api/send', authenticate, validateApiSendRequest, async (req, res) => {
         await controller.sendLegacyApiMessage(req, res);
     });
