@@ -12,6 +12,8 @@ type DashboardGlobals = {
   selectOnboardingVideoStep?: (stepId: string) => void;
   goToOnboardingStep?: (stepId: string) => void;
   resetOnboardingChecklist?: () => void;
+  openOnboardingVideoModal?: () => void;
+  closeOnboardingVideoModal?: () => void;
   openModal?: (id: string) => void;
   closeModal?: (id: string) => void;
   openCustomEventModal?: (id?: number) => void;
@@ -1094,8 +1096,9 @@ function DashboardStyles() {
         }
         .onboarding-grid {
           display: grid;
-          grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.2fr);
+          grid-template-columns: minmax(340px, 1.02fr) minmax(320px, 0.98fr);
           gap: 16px;
+          align-items: start;
         }
         .onboarding-content {
           display: block;
@@ -1103,15 +1106,36 @@ function DashboardStyles() {
         .onboarding-card.is-collapsed .onboarding-content {
           display: none;
         }
-        .onboarding-video-wrap {
-          min-height: 210px;
-          border-radius: 14px;
-          border: 1px solid rgba(var(--primary-rgb), 0.24);
-          background: rgba(6, 15, 30, 0.72);
+        .onboarding-spotlight {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          min-width: 0;
+        }
+        .onboarding-spotlight-card {
+          position: relative;
           overflow: hidden;
+          padding: 18px;
+          border-radius: 18px;
+          border: 1px solid rgba(var(--primary-rgb), 0.22);
+          background:
+            radial-gradient(circle at right top, rgba(var(--primary-rgb), 0.12), transparent 28%),
+            linear-gradient(180deg, rgba(11, 27, 46, 0.94) 0%, rgba(7, 18, 33, 0.96) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.12),
+            0 18px 36px rgba(2, 8, 20, 0.22);
         }
         .onboarding-video-meta {
-          margin-bottom: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin: 0;
+        }
+        .onboarding-video-head {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
         }
         .onboarding-video-kicker {
           display: inline-flex;
@@ -1126,45 +1150,185 @@ function DashboardStyles() {
           letter-spacing: 0.04em;
           text-transform: uppercase;
         }
-        .onboarding-video-title {
-          margin: 10px 0 4px;
-          color: #f4fbf8;
-          font-size: 18px;
+        .onboarding-video-status {
+          display: inline-flex;
+          align-items: center;
+          min-height: 24px;
+          padding: 0 10px;
+          border-radius: 999px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          background: rgba(7, 18, 32, 0.78);
+          color: rgba(214, 228, 239, 0.82);
+          font-size: 11px;
           font-weight: 700;
-          line-height: 1.2;
+        }
+        .onboarding-video-title {
+          margin: 0;
+          color: #f4fbf8;
+          font-size: 24px;
+          font-weight: 700;
+          line-height: 1.15;
         }
         .onboarding-video-description {
-          margin: 0 0 12px;
+          margin: 0;
           color: rgba(204, 225, 233, 0.86);
           font-size: 13px;
           line-height: 1.5;
         }
+        .onboarding-preview-card {
+          position: relative;
+          margin-top: 14px;
+        }
+        .onboarding-preview-button {
+          width: 100%;
+          display: block;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          text-align: left;
+          cursor: pointer;
+        }
+        .onboarding-preview-button:focus-visible {
+          outline: 2px solid rgba(var(--primary-rgb), 0.4);
+          outline-offset: 3px;
+          border-radius: 20px;
+        }
+        .onboarding-preview-surface {
+          position: relative;
+          overflow: hidden;
+          min-height: 292px;
+          border-radius: 20px;
+          border: 1px solid rgba(var(--primary-rgb), 0.22);
+          background: linear-gradient(180deg, rgba(7, 18, 33, 0.98) 0%, rgba(3, 9, 19, 0.98) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.08),
+            0 20px 38px rgba(2, 8, 20, 0.2);
+        }
+        .onboarding-preview-backdrop {
+          position: absolute;
+          inset: 0;
+          background-position: center;
+          background-size: cover;
+          filter: blur(22px) saturate(0.95);
+          opacity: 0.4;
+          transform: scale(1.08);
+        }
+        .onboarding-preview-surface::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(180deg, rgba(4, 11, 21, 0.28) 0%, rgba(2, 6, 12, 0.8) 100%),
+            linear-gradient(90deg, rgba(2, 8, 17, 0.3) 0%, rgba(2, 8, 17, 0) 35%, rgba(2, 8, 17, 0.32) 100%);
+          pointer-events: none;
+        }
+        .onboarding-preview-media {
+          position: relative;
+          z-index: 1;
+          min-height: 292px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px 18px 86px;
+        }
+        .onboarding-preview-poster {
+          width: min(42%, 220px);
+          min-width: 150px;
+          aspect-ratio: 9 / 16;
+          object-fit: cover;
+          border-radius: 26px;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          background: rgba(4, 12, 24, 0.9);
+          box-shadow:
+            0 24px 42px rgba(2, 6, 23, 0.5),
+            0 0 0 1px rgba(var(--primary-rgb), 0.12);
+        }
         .onboarding-video-placeholder {
-          min-height: inherit;
+          position: relative;
+          z-index: 2;
+          min-height: 292px;
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
           gap: 6px;
           text-align: center;
-          padding: 18px;
+          padding: 24px;
           color: rgba(220, 236, 243, 0.82);
           font-size: 13px;
         }
-        .onboarding-video-frame {
-          width: 100%;
-          height: 100%;
-          min-height: 210px;
-          border: 0;
-          display: block;
+        .onboarding-preview-play {
+          position: absolute;
+          left: 18px;
+          right: 18px;
+          bottom: 18px;
+          z-index: 2;
+          display: inline-flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 18px;
+          border: 1px solid rgba(var(--primary-rgb), 0.2);
+          background: rgba(4, 13, 25, 0.86);
+          color: #f4fbf8;
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.08),
+            0 16px 28px rgba(2, 8, 20, 0.24);
         }
-        .onboarding-video-open {
-          margin-top: 10px;
-          width: 100%;
+        .onboarding-preview-play-icon {
+          width: 42px;
+          height: 42px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
           justify-content: center;
+          flex-shrink: 0;
+          background: linear-gradient(135deg, rgba(17, 212, 143, 0.96), rgba(32, 240, 192, 0.92));
+          color: #062219;
+          box-shadow: 0 14px 24px rgba(17, 212, 143, 0.2);
+        }
+        .onboarding-preview-play-copy {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 0;
+        }
+        .onboarding-preview-play-label {
+          color: #f4fbf8;
+          font-size: 14px;
+          font-weight: 700;
+        }
+        .onboarding-preview-play-hint {
+          color: rgba(209, 236, 244, 0.76);
+          font-size: 12px;
+        }
+        .onboarding-spotlight-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-top: 14px;
+        }
+        .onboarding-spotlight-actions .btn {
+          min-height: 42px;
+        }
+        .onboarding-spotlight-note {
+          margin-top: 2px;
+          color: rgba(204, 225, 233, 0.72);
+          font-size: 12px;
+          line-height: 1.45;
+        }
+        .onboarding-sidebar {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          min-width: 0;
         }
         .onboarding-progress {
-          margin-bottom: 12px;
+          margin: 0;
+          padding: 14px;
+          border-radius: 18px;
+          border: 1px solid rgba(var(--primary-rgb), 0.18);
+          background: rgba(8, 21, 38, 0.62);
         }
         .onboarding-progress-head {
           display: flex;
@@ -1195,17 +1359,21 @@ function DashboardStyles() {
         .onboarding-steps {
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 8px;
         }
         .onboarding-step {
           display: grid;
           grid-template-columns: auto minmax(0, 1fr) auto;
           gap: 10px;
-          align-items: center;
-          padding: 11px;
-          border-radius: 12px;
+          align-items: flex-start;
+          padding: 10px 12px;
+          border-radius: 14px;
           border: 1px solid rgba(var(--primary-rgb), 0.16);
           background: rgba(8, 21, 38, 0.72);
+          transition:
+            border-color 0.18s ease,
+            background 0.18s ease,
+            box-shadow 0.18s ease;
         }
         .onboarding-step.is-active {
           border-color: rgba(var(--primary-rgb), 0.34);
@@ -1215,48 +1383,169 @@ function DashboardStyles() {
           background: rgba(11, 28, 46, 0.82);
         }
         .onboarding-step.is-complete {
-          border-color: rgba(var(--primary-rgb), 0.46);
-          box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.2);
+          border-color: rgba(17, 212, 143, 0.28);
+          box-shadow: inset 0 0 0 1px rgba(17, 212, 143, 0.08);
           background: rgba(12, 35, 55, 0.72);
+        }
+        .onboarding-step-select {
+          width: 100%;
+          min-width: 0;
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          text-align: left;
+          color: inherit;
+          cursor: pointer;
+        }
+        .onboarding-step-select:focus-visible {
+          outline: 2px solid rgba(var(--primary-rgb), 0.34);
+          outline-offset: 2px;
+          border-radius: 12px;
+        }
+        .onboarding-step-index {
+          width: 30px;
+          height: 30px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          border-radius: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          background: rgba(7, 18, 32, 0.72);
+          color: rgba(214, 228, 239, 0.82);
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+        }
+        .onboarding-step.is-active .onboarding-step-index {
+          border-color: rgba(var(--primary-rgb), 0.3);
+          background: rgba(var(--primary-rgb), 0.16);
+          color: #eafff4;
+        }
+        .onboarding-step.is-complete .onboarding-step-index {
+          border-color: rgba(17, 212, 143, 0.3);
+          background: rgba(17, 212, 143, 0.12);
+          color: #d8fff0;
         }
         .onboarding-step-info {
           min-width: 0;
+          padding-top: 2px;
         }
         .onboarding-step-title {
           margin: 0;
           color: #e7f8f2;
           font-size: 14px;
           font-weight: 600;
+          line-height: 1.3;
         }
         .onboarding-step-description {
-          margin: 3px 0 0;
+          display: none;
+          margin: 4px 0 0;
           color: rgba(194, 214, 224, 0.86);
           font-size: 12px;
+          line-height: 1.45;
         }
-        .onboarding-step-watch-link {
-          margin-top: 8px;
-          padding: 0;
-          border: 0;
-          background: transparent;
-          color: #20f0c0;
-          font-size: 12px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-        .onboarding-step-watch-link:hover {
-          color: #7cf9df;
+        .onboarding-step.is-active .onboarding-step-description {
+          display: block;
         }
         .onboarding-step .checkbox-wrapper {
-          margin-right: 2px;
+          margin-top: 4px;
+          margin-right: 0;
+        }
+        .onboarding-step-action {
+          display: none;
+          min-width: 118px;
+          justify-content: center;
+        }
+        .onboarding-step.is-active .onboarding-step-action {
+          display: inline-flex;
         }
         .onboarding-actions {
-          margin-top: 12px;
+          margin-top: 4px;
           display: flex;
           justify-content: flex-end;
+        }
+        .onboarding-video-modal {
+          width: min(940px, calc(100vw - 32px));
+          border-radius: 22px;
+          border: 1px solid rgba(var(--primary-rgb), 0.22);
+          background:
+            radial-gradient(circle at right top, rgba(var(--primary-rgb), 0.12), transparent 24%),
+            linear-gradient(180deg, rgba(11, 27, 46, 0.98) 0%, rgba(5, 14, 27, 0.98) 100%);
+          box-shadow:
+            0 30px 80px rgba(2, 8, 20, 0.5),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.1);
+        }
+        .onboarding-video-modal .modal-header {
+          align-items: flex-start;
+        }
+        .onboarding-video-modal-body {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .onboarding-video-modal-frame-wrap {
+          position: relative;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 72vh;
+          max-height: 780px;
+          padding: 18px;
+          border-radius: 22px;
+          border: 1px solid rgba(var(--primary-rgb), 0.18);
+          background:
+            radial-gradient(circle at center, rgba(var(--primary-rgb), 0.12), transparent 40%),
+            linear-gradient(180deg, rgba(4, 11, 21, 0.96) 0%, rgba(2, 7, 14, 0.98) 100%);
+          overflow: hidden;
+        }
+        .onboarding-video-modal-frame-shell {
+          position: relative;
+          width: min(360px, 100%);
+          aspect-ratio: 9 / 16;
+          border-radius: 30px;
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          overflow: hidden;
+          background: #02070f;
+          box-shadow:
+            0 28px 52px rgba(2, 6, 23, 0.56),
+            0 0 0 1px rgba(var(--primary-rgb), 0.08);
+        }
+        .onboarding-video-frame {
+          width: 100%;
+          height: 100%;
+          border: 0;
+          display: block;
+          background: #02070f;
+        }
+        .onboarding-video-modal-placeholder {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          gap: 8px;
+          text-align: center;
+          padding: 20px;
+          color: rgba(220, 236, 243, 0.82);
+          font-size: 13px;
+        }
+        .onboarding-video-modal-note {
+          margin: 0;
+          color: rgba(204, 225, 233, 0.7);
+          font-size: 12px;
+          line-height: 1.45;
         }
         @media (max-width: 980px) {
           .onboarding-grid {
             grid-template-columns: 1fr;
+          }
+          .onboarding-video-modal-frame-wrap {
+            min-height: auto;
           }
         }
         @media (max-width: 768px) {
@@ -1273,9 +1562,23 @@ function DashboardStyles() {
           .onboarding-card { padding: 14px; border-radius: 12px; margin-bottom: 16px; }
           .onboarding-card-header { margin-bottom: 12px; }
           .onboarding-card-header h3 { font-size: 18px; }
+          .onboarding-spotlight-card { padding: 14px; border-radius: 14px; }
+          .onboarding-video-title { font-size: 20px; }
+          .onboarding-preview-surface,
+          .onboarding-preview-media,
+          .onboarding-video-placeholder { min-height: 236px; }
+          .onboarding-preview-media { padding-bottom: 82px; }
+          .onboarding-preview-poster { min-width: 132px; border-radius: 20px; }
+          .onboarding-preview-play { left: 14px; right: 14px; bottom: 14px; padding: 10px 12px; }
+          .onboarding-preview-play-icon { width: 36px; height: 36px; }
+          .onboarding-spotlight-actions { flex-direction: column; }
+          .onboarding-spotlight-actions .btn { width: 100%; justify-content: center; }
           .onboarding-step { grid-template-columns: auto minmax(0, 1fr); }
-          .onboarding-step .btn { grid-column: 2; justify-self: flex-start; }
+          .onboarding-step-action { grid-column: 2; justify-self: flex-start; min-width: 0; }
           .onboarding-actions { justify-content: flex-start; }
+          .onboarding-video-modal { width: min(100vw - 20px, 480px); }
+          .onboarding-video-modal-frame-wrap { padding: 10px; border-radius: 16px; }
+          .onboarding-video-modal-frame-shell { border-radius: 22px; }
           .dashboard-react .stats-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
@@ -1724,40 +2027,76 @@ function OnboardingCard({
 
       <div className="onboarding-content">
         <div className="onboarding-grid">
-          <div>
-            <div className="onboarding-video-meta">
-              <span className="onboarding-video-kicker" id="onboardingVideoKicker">Etapa 1 de 8</span>
-              <p className="onboarding-video-title" id="onboardingVideoTitle">Conecte seu WhatsApp</p>
-              <p className="onboarding-video-description" id="onboardingVideoDescription">Selecione uma etapa para assistir ao passo a passo correspondente.</p>
-            </div>
-            <div className="onboarding-video-wrap">
-              <div className="onboarding-video-placeholder" id="onboardingVideoPlaceholder">
-                <strong id="onboardingVideoPlaceholderTitle">Vídeo não configurado</strong>
-                <span id="onboardingVideoHint">Cole a URL do vídeo desta etapa em Configurações para exibi-lo aqui.</span>
+          <div className="onboarding-spotlight">
+            <div className="onboarding-spotlight-card">
+              <div className="onboarding-video-meta">
+                <div className="onboarding-video-head">
+                  <span className="onboarding-video-kicker" id="onboardingVideoKicker">Etapa 1 de 8</span>
+                  <span className="onboarding-video-status" id="onboardingVideoStatus">Próxima recomendada</span>
+                </div>
+                <p className="onboarding-video-title" id="onboardingVideoTitle">Conecte seu WhatsApp</p>
+                <p className="onboarding-video-description" id="onboardingVideoDescription">Selecione uma etapa para abrir o guia rápido correspondente.</p>
               </div>
-              <iframe
-                id="onboardingVideoFrame"
-                className="onboarding-video-frame"
-                title="Guia de primeiros passos"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-                style={{ display: 'none' }}
-              ></iframe>
+
+              <div className="onboarding-preview-card">
+                <button
+                  type="button"
+                  className="onboarding-preview-button"
+                  id="onboardingVideoPreviewButton"
+                  onClick={() => globals.openOnboardingVideoModal?.()}
+                >
+                  <div className="onboarding-preview-surface">
+                    <div className="onboarding-preview-backdrop" id="onboardingVideoPosterBackdrop"></div>
+                    <div className="onboarding-preview-media">
+                      <img
+                        id="onboardingVideoPosterImage"
+                        className="onboarding-preview-poster"
+                        alt="Prévia do guia da etapa"
+                        style={{ display: 'none' }}
+                      />
+                    </div>
+                    <div className="onboarding-video-placeholder" id="onboardingVideoPlaceholder">
+                      <strong id="onboardingVideoPlaceholderTitle">Guia indisponível</strong>
+                      <span id="onboardingVideoHint">Estamos preparando o passo a passo desta etapa.</span>
+                    </div>
+                    <div className="onboarding-preview-play">
+                      <span className="onboarding-preview-play-icon">
+                        <span className="icon icon-play icon-sm"></span>
+                      </span>
+                      <span className="onboarding-preview-play-copy">
+                        <span className="onboarding-preview-play-label" id="onboardingVideoCtaLabel">Assistir guia rápido</span>
+                        <span className="onboarding-preview-play-hint">Abra em destaque e avance com segurança.</span>
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="onboarding-spotlight-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  id="onboardingVideoPlayButton"
+                  onClick={() => globals.openOnboardingVideoModal?.()}
+                >
+                  Assistir guia
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  id="onboardingStepActionButton"
+                >
+                  Abrir etapa
+                </button>
+              </div>
+
+              <p className="onboarding-spotlight-note" id="onboardingSpotlightNote">
+                Assista ao guia da etapa selecionada e depois marque a checklist quando concluir.
+              </p>
             </div>
-            <a
-              id="onboardingVideoOpenLink"
-              className="btn btn-outline btn-sm onboarding-video-open"
-              href="#/configuracoes"
-              target="_blank"
-              rel="noreferrer"
-              style={{ display: 'none' }}
-            >
-              Abrir vídeo em nova aba
-            </a>
           </div>
 
-          <div>
+          <div className="onboarding-sidebar">
             <div className="onboarding-progress">
               <div className="onboarding-progress-head">
                 <span className="onboarding-progress-text" id="onboardingProgressText">0/8 etapas concluídas</span>
@@ -1768,7 +2107,7 @@ function OnboardingCard({
             </div>
 
             <div className="onboarding-steps">
-              {ONBOARDING_STEPS.map((step) => (
+              {ONBOARDING_STEPS.map((step, index) => (
                 <div className="onboarding-step" id={`onboarding-row-${step.id}`} data-onboarding-step-id={step.id} key={step.id}>
                   <label className="checkbox-wrapper">
                     <input
@@ -1779,21 +2118,21 @@ function OnboardingCard({
                     <span className="checkbox-custom"></span>
                   </label>
 
-                  <div className="onboarding-step-info">
-                    <p className="onboarding-step-title">{step.title}</p>
-                    <p className="onboarding-step-description">{step.description}</p>
-                    <button
-                      type="button"
-                      className="onboarding-step-watch-link"
-                      onClick={() => globals.selectOnboardingVideoStep?.(step.id)}
-                    >
-                      Assistir vídeo
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="onboarding-step-select"
+                    onClick={() => globals.selectOnboardingVideoStep?.(step.id)}
+                  >
+                    <span className="onboarding-step-index">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="onboarding-step-info">
+                      <span className="onboarding-step-title">{step.title}</span>
+                      <span className="onboarding-step-description">{step.description}</span>
+                    </span>
+                  </button>
 
                   <button
                     type="button"
-                    className="btn btn-outline btn-sm"
+                    className="btn btn-outline btn-sm onboarding-step-action"
                     onClick={() => globals.goToOnboardingStep?.(step.id)}
                   >
                     {step.actionLabel}
@@ -1815,6 +2154,71 @@ function OnboardingCard({
         </div>
       </div>
     </section>
+  );
+}
+
+function OnboardingVideoModal() {
+  const globals = window as Window & DashboardGlobals;
+
+  return (
+    <div className="modal-overlay" id="onboardingVideoModal">
+      <div className="modal modal-lg onboarding-video-modal">
+        <div className="modal-header">
+          <div>
+            <span className="onboarding-video-kicker" id="onboardingVideoModalKicker">Guia da etapa</span>
+            <h3 className="modal-title" id="onboardingVideoModalTitle">Conecte seu WhatsApp</h3>
+          </div>
+          <button
+            type="button"
+            className="modal-close"
+            onClick={() => globals.closeOnboardingVideoModal?.()}
+          >
+            {'\u00D7'}
+          </button>
+        </div>
+        <div className="modal-body onboarding-video-modal-body">
+          <div className="onboarding-video-modal-frame-wrap">
+            <div className="onboarding-video-modal-frame-shell">
+              <iframe
+                id="onboardingVideoFrame"
+                className="onboarding-video-frame"
+                title="Guia de primeiros passos"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                style={{ display: 'none' }}
+              ></iframe>
+              <div className="onboarding-video-modal-placeholder" id="onboardingVideoModalPlaceholder">
+                <strong id="onboardingVideoModalPlaceholderTitle">Guia indisponível</strong>
+                <span id="onboardingVideoModalHint">Não foi possível abrir este guia agora.</span>
+              </div>
+            </div>
+          </div>
+          <p className="onboarding-video-modal-note">
+            O passo a passo abre em foco para você acompanhar a configuração sem poluir o dashboard.
+          </p>
+        </div>
+        <div className="modal-footer">
+          <a
+            id="onboardingVideoOpenLink"
+            className="btn btn-outline btn-sm"
+            href="#/dashboard"
+            target="_blank"
+            rel="noreferrer"
+            style={{ display: 'none' }}
+          >
+            Abrir em janela separada
+          </a>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => globals.closeOnboardingVideoModal?.()}
+          >
+            Fechar guia
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2316,6 +2720,7 @@ export default function Dashboard() {
         <StatsCards />
         <Funnel />
       </main>
+      <OnboardingVideoModal />
       <LeadModals />
     </div>
   );
