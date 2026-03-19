@@ -271,11 +271,14 @@ function createLeadModel(options = {}) {
             return await transaction(async (client) => {
                 const leadId = Number(id);
                 const cleanupStatements = [
+                    'UPDATE messages SET reply_to_id = NULL WHERE reply_to_id IN (SELECT id FROM messages WHERE lead_id = $1)',
+                    'UPDATE custom_event_logs SET execution_id = NULL WHERE execution_id IN (SELECT id FROM flow_executions WHERE lead_id = $1)',
+                    'UPDATE custom_event_logs SET conversation_id = NULL WHERE conversation_id IN (SELECT id FROM conversations WHERE lead_id = $1)',
+                    'UPDATE custom_event_logs SET lead_id = NULL WHERE lead_id = $1',
                     'DELETE FROM message_queue WHERE lead_id = $1',
                     'DELETE FROM flow_executions WHERE lead_id = $1',
                     'DELETE FROM messages WHERE lead_id = $1',
                     'DELETE FROM automation_lead_runs WHERE lead_id = $1',
-                    'UPDATE custom_event_logs SET lead_id = NULL WHERE lead_id = $1',
                     'DELETE FROM conversations WHERE lead_id = $1'
                 ];
 
@@ -309,11 +312,14 @@ function createLeadModel(options = {}) {
 
             return await transaction(async (client) => {
                 const cleanupStatements = [
+                    'UPDATE messages SET reply_to_id = NULL WHERE reply_to_id IN (SELECT id FROM messages WHERE lead_id = ANY($1::int[]))',
+                    'UPDATE custom_event_logs SET execution_id = NULL WHERE execution_id IN (SELECT id FROM flow_executions WHERE lead_id = ANY($1::int[]))',
+                    'UPDATE custom_event_logs SET conversation_id = NULL WHERE conversation_id IN (SELECT id FROM conversations WHERE lead_id = ANY($1::int[]))',
+                    'UPDATE custom_event_logs SET lead_id = NULL WHERE lead_id = ANY($1::int[])',
                     'DELETE FROM message_queue WHERE lead_id = ANY($1::int[])',
                     'DELETE FROM flow_executions WHERE lead_id = ANY($1::int[])',
                     'DELETE FROM messages WHERE lead_id = ANY($1::int[])',
                     'DELETE FROM automation_lead_runs WHERE lead_id = ANY($1::int[])',
-                    'UPDATE custom_event_logs SET lead_id = NULL WHERE lead_id = ANY($1::int[])',
                     'DELETE FROM conversations WHERE lead_id = ANY($1::int[])'
                 ];
 

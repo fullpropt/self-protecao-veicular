@@ -197,8 +197,8 @@ async function executeLeadCleanupQuery(client, statement, leadId) {
     try {
         await client.query(statement, [leadId]);
     } catch (error) {
-        // In partially migrated environments, some tables may not exist.
-        if (error && error.code === '42P01') return;
+        // In partially migrated environments, some tables or columns may not exist yet.
+        if (error && (error.code === '42P01' || error.code === '42703')) return;
         throw error;
     }
 }

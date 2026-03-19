@@ -2088,6 +2088,7 @@ async function bulkDelete() {
         let deleted = 0;
         let skipped = 0;
         let failed = 0;
+        let firstDetailedError = '';
 
         for (let offset = 0; offset < uniqueLeadIds.length; offset += CONTACTS_BULK_DELETE_BATCH_SIZE) {
             const chunk = uniqueLeadIds.slice(offset, offset + CONTACTS_BULK_DELETE_BATCH_SIZE);
@@ -2099,8 +2100,15 @@ async function bulkDelete() {
                 deleted += Number(response?.deleted || 0);
                 skipped += Number(response?.skipped || 0);
                 failed += Number(response?.failed || 0);
+                if (Array.isArray(response?.errors) && response.errors.length > 0) {
+                    const firstError = String(response.errors[0]?.error || '').trim();
+                    if (firstError && !firstDetailedError) firstDetailedError = firstError;
+                }
             } catch (error) {
                 failed += chunk.length;
+                if (!firstDetailedError) {
+                    firstDetailedError = error instanceof Error ? error.message : 'Erro ao excluir';
+                }
             }
         }
 
@@ -2113,7 +2121,7 @@ async function bulkDelete() {
         if (failed > 0) summary.push(`${failed} com erro`);
 
         if (deleted === 0 && skipped === 0 && failed > 0) {
-            showToast('error', 'Erro', `Falha na exclusao (${failed} com erro)`);
+            showToast('error', 'Erro', firstDetailedError || `Falha na exclusao (${failed} com erro)`);
             return;
         }
 
