@@ -138,6 +138,14 @@ type OnboardingVideoPresentation = {
     posterUrl: string;
     posterFallbackUrl: string;
 };
+type OnboardingHighlightMarker = {
+    at: number;
+    selector: string;
+    title: string;
+    hint: string;
+    radius?: number;
+    scroll?: ScrollLogicalPosition;
+};
 
 let allLeads: Lead[] = [];
 let selectedLeads: number[] = [];
@@ -178,6 +186,11 @@ let onboardingVideoDurationSeconds = 0;
 let onboardingVideoCurrentSeconds = 0;
 let onboardingVideoMuted = false;
 let onboardingVideoPlaybackState: 'idle' | 'loading' | 'playing' | 'paused' | 'ended' = 'idle';
+let onboardingPreparedSurfaceStepId: OnboardingStepId | null = null;
+let onboardingActiveSpotlightElement: HTMLElement | null = null;
+let onboardingActiveSpotlightSelector = '';
+let onboardingActiveSpotlightMarkerKey = '';
+let onboardingSpotlightRefreshTimer: number | null = null;
 
 let statsChartInstance: { destroy?: () => void } | null = null;
 let statsChartType: StatsChartType = 'line';
@@ -217,6 +230,49 @@ const ONBOARDING_STEP_ROUTES: Record<OnboardingStepId, string> = {
     configure_dynamic_fields: '#/configuracoes?panel=contact-fields',
     create_campaign: '#/campanhas',
     create_automation: '#/automacao'
+};
+const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMarker[]> = {
+    connect_whatsapp: [
+        { at: 1.2, selector: '[data-tour-target="whatsapp-session-select"]', title: 'Selecione a conta', hint: 'Aqui você escolhe qual conta do WhatsApp está ativa no momento.', radius: 14 },
+        { at: 5.4, selector: '[data-tour-target="whatsapp-connect-button"]', title: 'Conecte o WhatsApp', hint: 'Este é o botão principal para iniciar a conexão da conta.', radius: 18 },
+        { at: 11.2, selector: '[data-tour-target="whatsapp-instructions"]', title: 'Siga o passo a passo', hint: 'As instruções da conexão ficam visíveis na própria tela para acompanhar com o celular.', radius: 20 }
+    ],
+    configure_accounts: [
+        { at: 1.0, selector: '[data-tour-target="settings-nav-conexao"]', title: 'Painel de contas', hint: 'Esta aba concentra as contas conectadas e o status de cada uma.', radius: 14 },
+        { at: 5.0, selector: '[data-tour-target="settings-accounts-list"]', title: 'Contas disponíveis', hint: 'Revise aqui o nome, o estado e a disponibilidade das contas de envio.', radius: 22 }
+    ],
+    open_inbox: [
+        { at: 1.1, selector: '[data-tour-target="inbox-session-indicator"]', title: 'Conta exibida', hint: 'Use este bloco para filtrar qual conta está sendo exibida no Inbox.', radius: 18 },
+        { at: 6.3, selector: '[data-tour-target="inbox-start-conversation-button"]', title: 'Inicie uma conversa', hint: 'Este botão abre a janela para começar um atendimento manual.', radius: 18 },
+        { at: 11.0, selector: '[data-tour-target="inbox-search-input"]', title: 'Busque conversas', hint: 'Aqui você encontra rapidamente uma conversa específica.', radius: 14 }
+    ],
+    create_first_contact: [
+        { at: 1.2, selector: '[data-tour-target="contacts-new-button"]', title: 'Crie um novo contato', hint: 'O cadastro começa por este botão na tela de contatos.', radius: 18 },
+        { at: 5.0, selector: '[data-tour-target="contacts-name-field"]', title: 'Preencha o nome', hint: 'O nome do contato é o primeiro campo do cadastro.', radius: 14 },
+        { at: 8.4, selector: '[data-tour-target="contacts-phone-field"]', title: 'Informe o WhatsApp', hint: 'Digite o número com DDD para o contato já nascer pronto para atendimento.', radius: 14 }
+    ],
+    create_tags: [
+        { at: 1.0, selector: '[data-tour-target="settings-nav-labels"]', title: 'Abra Tags', hint: 'Esta aba reúne todas as etiquetas usadas em contatos e campanhas.', radius: 14 },
+        { at: 4.5, selector: '[data-tour-target="settings-tag-name-field"]', title: 'Cadastre uma nova tag', hint: 'Preencha o nome da etiqueta por aqui.', radius: 14 },
+        { at: 8.2, selector: '[data-tour-target="settings-tags-table"]', title: 'Gerencie as etiquetas', hint: 'As tags criadas aparecem nesta lista para edição e organização.', radius: 20 }
+    ],
+    configure_dynamic_fields: [
+        { at: 1.0, selector: '[data-tour-target="settings-nav-contact-fields"]', title: 'Abra Campos Dinâmicos', hint: 'Esta área guarda os campos personalizados usados em contatos, mensagens e fluxos.', radius: 14 },
+        { at: 4.5, selector: '[data-tour-target="settings-contact-field-name"]', title: 'Crie um campo personalizado', hint: 'Defina aqui o nome do novo campo dinâmico.', radius: 14 },
+        { at: 8.4, selector: '[data-tour-target="settings-contact-fields-table"]', title: 'Revise os campos criados', hint: 'A lista abaixo mostra todas as variáveis disponíveis no sistema.', radius: 20 }
+    ],
+    create_campaign: [
+        { at: 1.2, selector: '[data-tour-target="campaign-new-button"]', title: 'Abra a criação de campanha', hint: 'Este botão inicia uma nova campanha no sistema.', radius: 18 },
+        { at: 5.0, selector: '[data-tour-target="campaign-name-field"]', title: 'Nome da campanha', hint: 'Dê um nome claro para identificar a campanha depois.', radius: 14 },
+        { at: 9.6, selector: '[data-tour-target="campaign-message-tags-button"]', title: 'Insira tags dinâmicas', hint: 'Use este botão para personalizar a mensagem com variáveis do contato.', radius: 16 },
+        { at: 14.2, selector: '[data-tour-target="campaign-variation-button"]', title: 'Crie variações', hint: 'As variações ajudam a distribuir textos diferentes dentro da mesma campanha.', radius: 18 }
+    ],
+    create_automation: [
+        { at: 1.2, selector: '[data-tour-target="automation-new-button"]', title: 'Nova automação', hint: 'É por aqui que você cria uma regra automatizada nova.', radius: 18 },
+        { at: 5.0, selector: '[data-tour-target="automation-name-field"]', title: 'Nome da automação', hint: 'Dê um nome fácil de reconhecer para a regra.', radius: 14 },
+        { at: 9.0, selector: '[data-tour-target="automation-trigger-select"]', title: 'Escolha o gatilho', hint: 'Selecione quando a automação deve ser executada.', radius: 14 },
+        { at: 13.2, selector: '[data-tour-target="automation-action-select"]', title: 'Defina a ação', hint: 'Aqui você escolhe o que a automação vai fazer.', radius: 14 }
+    ]
 };
 const ONBOARDING_STEP_LABELS: Record<OnboardingStepId, string> = {
     connect_whatsapp: 'Conecte seu WhatsApp',
@@ -540,6 +596,7 @@ function bindOnboardingTourControls() {
         video.addEventListener('loadedmetadata', () => {
             syncFromVideo();
             renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
         });
 
         video.addEventListener('canplay', () => {
@@ -548,6 +605,7 @@ function bindOnboardingTourControls() {
                 onboardingVideoPlaybackState = video.paused ? 'paused' : 'playing';
             }
             renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
         });
 
         video.addEventListener('play', () => {
@@ -555,6 +613,7 @@ function bindOnboardingTourControls() {
             onboardingVideoPlaybackState = 'playing';
             renderOnboardingVideo();
             renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
         });
 
         video.addEventListener('playing', () => {
@@ -562,6 +621,7 @@ function bindOnboardingTourControls() {
             onboardingVideoPlaybackState = 'playing';
             renderOnboardingVideo();
             renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
         });
 
         video.addEventListener('pause', () => {
@@ -572,17 +632,20 @@ function bindOnboardingTourControls() {
                 onboardingVideoPlaybackState = 'paused';
             }
             renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
         });
 
         video.addEventListener('waiting', () => {
             syncFromVideo();
             onboardingVideoPlaybackState = 'loading';
             renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
         });
 
         video.addEventListener('timeupdate', () => {
             syncFromVideo();
             renderOnboardingVideoControls();
+            refreshOnboardingTourSurface();
         });
 
         video.addEventListener('volumechange', () => {
@@ -596,9 +659,25 @@ function bindOnboardingTourControls() {
             markOnboardingStepCompleted(onboardingPlayingStepId || onboardingSelectedStepId);
             renderOnboardingVideo();
             renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
         });
 
         video.dataset.bound = '1';
+    }
+
+    const body = document.body as HTMLBodyElement | null;
+    if (body && body.dataset.onboardingSpotlightBound !== '1') {
+        const refresh = () => {
+            if (!onboardingTourOpen) return;
+            refreshOnboardingTourSurface();
+        };
+        window.addEventListener('resize', refresh);
+        window.addEventListener('scroll', refresh, { passive: true });
+        window.addEventListener('hashchange', () => {
+            onboardingPreparedSurfaceStepId = null;
+            scheduleOnboardingSpotlightRefresh(260);
+        });
+        body.dataset.onboardingSpotlightBound = '1';
     }
 }
 
@@ -687,9 +766,11 @@ function resetOnboardingChecklist() {
     onboardingTourOpen = false;
     onboardingPlayingStepId = null;
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
+    onboardingPreparedSurfaceStepId = null;
     writeOnboardingState(onboardingState);
     renderOnboardingChecklist();
     renderOnboardingVideo();
+    clearOnboardingSpotlight();
 }
 
 function resetOnboardingTourState() {
@@ -697,8 +778,10 @@ function resetOnboardingTourState() {
     onboardingTourOpen = false;
     onboardingPlayingStepId = null;
     onboardingSelectedStepId = ONBOARDING_STEP_IDS[0] || null;
+    onboardingPreparedSurfaceStepId = null;
     renderOnboardingChecklist();
     renderOnboardingVideo();
+    clearOnboardingSpotlight();
 }
 
 function startOnboardingTour(stepIdInput?: string) {
@@ -707,14 +790,17 @@ function startOnboardingTour(stepIdInput?: string) {
         || getPreferredOnboardingSelectedStepId();
     if (!stepId) return;
 
+    const hasRouteChanged = ensureOnboardingStepRoute(stepId);
     onboardingSelectedStepId = stepId;
     onboardingPlayingStepId = stepId;
     onboardingTourOpen = true;
+    onboardingPreparedSurfaceStepId = null;
 
     const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[stepId] || '');
 
     renderOnboardingChecklist();
     renderOnboardingVideo();
+    scheduleOnboardingSpotlightRefresh(hasRouteChanged ? 380 : 180);
 
     if (!presentation.mediaUrl) {
         renderOnboardingVideoControls(presentation);
@@ -727,6 +813,7 @@ function startOnboardingTour(stepIdInput?: string) {
 
 function closeOnboardingTour() {
     onboardingTourOpen = false;
+    onboardingPreparedSurfaceStepId = null;
     const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
     if (video) {
         try {
@@ -743,6 +830,8 @@ function closeOnboardingTour() {
 
     renderOnboardingChecklist();
     renderOnboardingVideo();
+    stopOnboardingSpotlightRefreshTimer();
+    clearOnboardingSpotlight();
 }
 
 function goToPreviousOnboardingTourStep() {
@@ -791,6 +880,226 @@ function formatOnboardingVideoTime(totalSeconds: number) {
     }
 
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function getCurrentHashRoute() {
+    const rawHash = String(window.location.hash || '#/dashboard').trim();
+    if (!rawHash) return '/dashboard';
+    return rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+}
+
+function getCurrentHashPath() {
+    return String(getCurrentHashRoute().split('?')[0] || '/dashboard').trim() || '/dashboard';
+}
+
+function isOnboardingStepRouteActive(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (!stepId) return false;
+    const route = String(ONBOARDING_STEP_ROUTES[stepId] || '').trim();
+    if (!route) return false;
+    const routePath = route.startsWith('#') ? route.slice(1).split('?')[0] : route.split('?')[0];
+    return getCurrentHashPath() === routePath;
+}
+
+function ensureOnboardingStepRoute(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (!stepId) return false;
+
+    const targetRoute = String(ONBOARDING_STEP_ROUTES[stepId] || '').trim();
+    if (!targetRoute) return false;
+    if (String(window.location.hash || '').trim() === targetRoute) return false;
+
+    window.location.hash = targetRoute;
+    return true;
+}
+
+function stopOnboardingSpotlightRefreshTimer() {
+    if (onboardingSpotlightRefreshTimer !== null) {
+        window.clearTimeout(onboardingSpotlightRefreshTimer);
+        onboardingSpotlightRefreshTimer = null;
+    }
+}
+
+function scheduleOnboardingSpotlightRefresh(delayMs = 120) {
+    stopOnboardingSpotlightRefreshTimer();
+    onboardingSpotlightRefreshTimer = window.setTimeout(() => {
+        onboardingSpotlightRefreshTimer = null;
+        refreshOnboardingTourSurface();
+    }, Math.max(0, delayMs));
+}
+
+function clearOnboardingSpotlight() {
+    if (onboardingActiveSpotlightElement) {
+        onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active');
+        onboardingActiveSpotlightElement.style.removeProperty('--onboarding-tour-radius');
+    }
+
+    onboardingActiveSpotlightElement = null;
+    onboardingActiveSpotlightSelector = '';
+    onboardingActiveSpotlightMarkerKey = '';
+
+    const card = document.getElementById('onboardingSpotlightCard') as HTMLElement | null;
+    if (card) {
+        card.classList.remove('is-visible');
+        card.style.removeProperty('top');
+        card.style.removeProperty('left');
+    }
+}
+
+function resolveActiveOnboardingHighlight(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (!stepId) return null;
+
+    const markers = ONBOARDING_STEP_HIGHLIGHTS[stepId] || [];
+    let activeMarker: OnboardingHighlightMarker | null = null;
+    for (const marker of markers) {
+        if (onboardingVideoCurrentSeconds >= marker.at) {
+            activeMarker = marker;
+        } else {
+            break;
+        }
+    }
+    return activeMarker;
+}
+
+function positionOnboardingSpotlightCard(target: HTMLElement, marker: OnboardingHighlightMarker) {
+    const card = document.getElementById('onboardingSpotlightCard') as HTMLElement | null;
+    const kicker = document.getElementById('onboardingSpotlightKicker') as HTMLElement | null;
+    const title = document.getElementById('onboardingSpotlightTitle') as HTMLElement | null;
+    const hint = document.getElementById('onboardingSpotlightHint') as HTMLElement | null;
+    if (!card || !kicker || !title || !hint) return;
+
+    kicker.textContent = 'Na tela agora';
+    title.textContent = marker.title;
+    hint.textContent = marker.hint;
+    card.classList.add('is-visible');
+
+    const rect = target.getBoundingClientRect();
+    const cardWidth = Math.min(280, window.innerWidth - 32);
+    const gap = 12;
+    const cardHeight = card.offsetHeight || 96;
+    const preferredTop = rect.bottom + gap;
+    const fallbackTop = rect.top - cardHeight - gap;
+    const top = preferredTop + cardHeight <= window.innerHeight - 12
+        ? preferredTop
+        : Math.max(12, fallbackTop);
+    const centeredLeft = rect.left + (rect.width / 2) - (cardWidth / 2);
+    const left = Math.max(12, Math.min(window.innerWidth - cardWidth - 12, centeredLeft));
+
+    card.style.top = `${Math.round(top)}px`;
+    card.style.left = `${Math.round(left)}px`;
+}
+
+function applyOnboardingSpotlight(marker: OnboardingHighlightMarker | null) {
+    if (!marker || !onboardingTourOpen) {
+        clearOnboardingSpotlight();
+        return;
+    }
+
+    const target = document.querySelector(marker.selector) as HTMLElement | null;
+    if (!target) {
+        clearOnboardingSpotlight();
+        return;
+    }
+
+    const markerKey = `${marker.selector}:${marker.at}`;
+    if (onboardingActiveSpotlightElement !== target) {
+        if (onboardingActiveSpotlightElement) {
+            onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active');
+            onboardingActiveSpotlightElement.style.removeProperty('--onboarding-tour-radius');
+        }
+
+        onboardingActiveSpotlightElement = target;
+        onboardingActiveSpotlightSelector = marker.selector;
+        onboardingActiveSpotlightMarkerKey = markerKey;
+        target.classList.add('onboarding-tour-target-active');
+        target.style.setProperty('--onboarding-tour-radius', `${Math.max(8, Math.floor(marker.radius || 16))}px`);
+    }
+
+    const rect = target.getBoundingClientRect();
+    const isOffscreen = rect.top < 72 || rect.bottom > window.innerHeight - 120;
+    if (isOffscreen || onboardingActiveSpotlightMarkerKey !== markerKey) {
+        target.scrollIntoView({
+            behavior: 'smooth',
+            block: marker.scroll || 'center',
+            inline: 'nearest'
+        });
+        onboardingActiveSpotlightMarkerKey = markerKey;
+    }
+
+    positionOnboardingSpotlightCard(target, marker);
+}
+
+function prepareOnboardingSurfaceForStep(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (!stepId || !isOnboardingStepRouteActive(stepId)) return;
+    if (onboardingPreparedSurfaceStepId === stepId) return;
+
+    const win = window as Window & {
+        showPanel?: (panelId: string) => void;
+        openAddContactModal?: () => void;
+        openCampaignModal?: () => void;
+        openAutomationModal?: () => void;
+    };
+    let didPrepare = true;
+
+    if (stepId === 'configure_accounts') {
+        if (typeof win.showPanel === 'function') {
+            win.showPanel('conexao');
+        } else {
+            didPrepare = false;
+        }
+    } else if (stepId === 'create_tags') {
+        if (typeof win.showPanel === 'function') {
+            win.showPanel('labels');
+        } else {
+            didPrepare = false;
+        }
+    } else if (stepId === 'configure_dynamic_fields') {
+        if (typeof win.showPanel === 'function') {
+            win.showPanel('contact-fields');
+        } else {
+            didPrepare = false;
+        }
+    } else if (stepId === 'create_first_contact') {
+        if (typeof win.openAddContactModal === 'function') {
+            win.openAddContactModal();
+        } else {
+            didPrepare = false;
+        }
+    } else if (stepId === 'create_campaign') {
+        if (typeof win.openCampaignModal === 'function') {
+            win.openCampaignModal();
+        } else {
+            didPrepare = false;
+        }
+    } else if (stepId === 'create_automation') {
+        if (typeof win.openAutomationModal === 'function') {
+            win.openAutomationModal();
+        } else {
+            didPrepare = false;
+        }
+    }
+
+    if (!didPrepare) {
+        scheduleOnboardingSpotlightRefresh(260);
+        return;
+    }
+
+    onboardingPreparedSurfaceStepId = stepId;
+    scheduleOnboardingSpotlightRefresh(180);
+}
+
+function refreshOnboardingTourSurface() {
+    const stepId = normalizeOnboardingStepId(onboardingPlayingStepId || onboardingSelectedStepId);
+    if (!stepId || !onboardingTourOpen) {
+        clearOnboardingSpotlight();
+        return;
+    }
+
+    prepareOnboardingSurfaceForStep(stepId);
+    const activeMarker = resolveActiveOnboardingHighlight(stepId);
+    applyOnboardingSpotlight(activeMarker);
 }
 
 function stopOnboardingVideoSyncTimer() {
@@ -1191,6 +1500,9 @@ function renderOnboardingVideo() {
     }
 
     renderOnboardingVideoControls(presentation);
+    if (onboardingTourOpen) {
+        scheduleOnboardingSpotlightRefresh(120);
+    }
 }
 
 function renderOnboardingVideoLegacy() {
@@ -2851,6 +3163,7 @@ const windowAny = window as Window & {
     openCustomEventModal?: (id?: number) => void;
     saveCustomEvent?: () => Promise<void>;
     deleteCustomEvent?: (id: number) => Promise<void>;
+    refreshOnboardingTourSurface?: () => void;
     updateStats?: () => void;
     updateFunnel?: () => void;
     renderLeadsTable?: (leads?: Lead[] | null) => void;
@@ -2873,6 +3186,7 @@ windowAny.loadDashboardData = loadDashboardData;
 windowAny.loadCustomEvents = loadCustomEvents;
 windowAny.startOnboardingTour = startOnboardingTour;
 windowAny.closeOnboardingTour = closeOnboardingTour;
+windowAny.refreshOnboardingTourSurface = refreshOnboardingTourSurface;
 windowAny.goToPreviousOnboardingTourStep = goToPreviousOnboardingTourStep;
 windowAny.goToNextOnboardingTourStep = goToNextOnboardingTourStep;
 windowAny.toggleOnboardingStep = toggleOnboardingStep;

@@ -656,10 +656,10 @@ export default function Configuracoes() {
       
               <div className="settings-container">
                   <nav className="settings-nav">
-                      <div className="settings-nav-item active" data-panel="conexao" onClick={() => globals.showPanel?.('conexao')}><span className="icon icon-whatsapp icon-sm"></span> Contas</div>
+                      <div className="settings-nav-item active" data-panel="conexao" data-tour-target="settings-nav-conexao" onClick={() => globals.showPanel?.('conexao')}><span className="icon icon-whatsapp icon-sm"></span> Contas</div>
                       <div className="settings-nav-item" data-panel="general" onClick={() => globals.showPanel?.('general')}><span className="icon icon-building icon-sm"></span> Campos</div>
-                      <div className="settings-nav-item" data-panel="contact-fields" onClick={() => globals.showPanel?.('contact-fields')}><span className="icon icon-contacts icon-sm"></span> Campos Dinâmicos</div>
-                      <div className="settings-nav-item" data-panel="labels" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Tags</div>
+                      <div className="settings-nav-item" data-panel="contact-fields" data-tour-target="settings-nav-contact-fields" onClick={() => globals.showPanel?.('contact-fields')}><span className="icon icon-contacts icon-sm"></span> Campos Dinâmicos</div>
+                      <div className="settings-nav-item" data-panel="labels" data-tour-target="settings-nav-labels" onClick={() => globals.showPanel?.('labels')}><span className="icon icon-tag icon-sm"></span> Tags</div>
                       <div className="settings-nav-item" data-panel="quick" onClick={() => globals.showPanel?.('quick')}><span className="icon icon-bolt icon-sm"></span> Respostas rápidas</div>
                       <div className="settings-nav-item" data-panel="hours" onClick={() => globals.showPanel?.('hours')}><span className="icon icon-clock icon-sm"></span> Horários</div>
                       {SHOW_AI_TAB && (
@@ -676,7 +676,7 @@ export default function Configuracoes() {
                   <div className="settings-panels">
                       <div className="settings-panel active" id="panel-conexao">
                           <h4 style={{ margin: '0 0 14px', fontSize: '20px' }}>Contas WhatsApp</h4>
-                          <div className="connection-accounts-list" id="connectionAccountsList">
+                          <div className="connection-accounts-list" id="connectionAccountsList" data-tour-target="settings-accounts-list">
                               <p style={{ color: 'var(--gray-500)', margin: 0 }}>Carregando contas...</p>
                           </div>
                       </div>
@@ -725,7 +725,7 @@ export default function Configuracoes() {
                                   <div className="form-row">
                                       <div className="form-group">
                                           <label className="form-label required">Nome do campo</label>
-                                          <input type="text" className="form-input" id="newContactFieldLabel" placeholder="Ex.: Cidade" />
+                                          <input type="text" className="form-input" id="newContactFieldLabel" data-tour-target="settings-contact-field-name" placeholder="Ex.: Cidade" />
                                       </div>
                                       <div className="form-group">
                                           <label className="form-label">Placeholder</label>
@@ -747,7 +747,7 @@ export default function Configuracoes() {
                                               <th>{'Ações'}</th>
                                           </tr>
                                       </thead>
-                                      <tbody id="contactFieldsTableBody">
+                                      <tbody id="contactFieldsTableBody" data-tour-target="settings-contact-fields-table">
                                           <tr>
                                               <td colSpan={4} className="table-empty">
                                                   <div className="table-empty-icon icon icon-empty icon-lg"></div>
@@ -771,7 +771,7 @@ export default function Configuracoes() {
                                   </div>
                                   <div className="form-group">
                                       <label className="form-label required">Nome</label>
-                                      <input type="text" className="form-input" id="newTagName" placeholder="Ex.: Lead quente" />
+                                      <input type="text" className="form-input" id="newTagName" data-tour-target="settings-tag-name-field" placeholder="Ex.: Lead quente" />
                                   </div>
                                   <div className="form-group">
                                       <label className="form-label">{'Descrição'}</label>
@@ -791,7 +791,7 @@ export default function Configuracoes() {
                                               <th>{'Ações'}</th>
                                           </tr>
                                       </thead>
-                                      <tbody id="settingsTagsTableBody">
+                                      <tbody id="settingsTagsTableBody" data-tour-target="settings-tags-table">
                                           <tr>
                                               <td colSpan={3} className="table-empty">
                                                   <div className="table-empty-icon icon icon-empty icon-lg"></div>

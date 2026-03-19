@@ -1051,6 +1051,7 @@ export default function Whatsapp() {
                           <div className="session-controls">
                               <select
                                   id="whatsapp-session-select"
+                                  data-tour-target="whatsapp-session-select"
                                   className="form-select"
                                   defaultValue=""
                                   onChange={(event) => {
@@ -1095,11 +1096,11 @@ export default function Whatsapp() {
                                       Por segurança, o QR Code será atualizado em <strong id="timer-countdown">30</strong> segundos
                                   </p>
                                   
-                                  <button className="btn btn-whatsapp" id="connect-btn" onClick={() => globals.startConnection?.()}>Conectar WhatsApp</button>
+                                  <button className="btn btn-whatsapp" id="connect-btn" data-tour-target="whatsapp-connect-button" onClick={() => globals.startConnection?.()}>Conectar WhatsApp</button>
 
                               </div>
                               
-                              <div className="instructions">
+                              <div className="instructions" data-tour-target="whatsapp-instructions">
                                   <h3>Como conectar</h3>
                                   <div className="instruction-step">
                                       <span className="step-number">1</span>

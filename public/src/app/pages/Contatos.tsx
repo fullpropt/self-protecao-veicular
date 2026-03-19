@@ -574,7 +574,7 @@ export default function Contatos() {
             <button className="btn btn-success btn-export-contacts" onClick={() => globals.exportContacts?.()}>
               <span className="icon icon-export icon-sm"></span> Exportar
             </button>
-            <button className="btn btn-primary" onClick={() => globals.openAddContactModal?.() || globals.openModal?.('addContactModal')}>
+            <button className="btn btn-primary" data-tour-target="contacts-new-button" onClick={() => globals.openAddContactModal?.() || globals.openModal?.('addContactModal')}>
               <span className="icon icon-add icon-sm"></span> Novo Contato
             </button>
           </div>
@@ -714,11 +714,11 @@ export default function Contatos() {
             <form id="addContactForm">
               <div className="form-group">
                 <label className="form-label required">Nome Completo</label>
-                <input type="text" className="form-input" id="contactName" required placeholder="Digite o nome" />
+                <input type="text" className="form-input" id="contactName" data-tour-target="contacts-name-field" required placeholder="Digite o nome" />
               </div>
               <div className="form-group">
                 <label className="form-label required">WhatsApp</label>
-                <input type="tel" className="form-input" id="contactPhone" required placeholder="27999999999" />
+                <input type="tel" className="form-input" id="contactPhone" data-tour-target="contacts-phone-field" required placeholder="27999999999" />
                 <p className="form-help">Apenas números com DDD</p>
               </div>
               <div className="form-group">

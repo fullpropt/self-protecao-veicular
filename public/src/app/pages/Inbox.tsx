@@ -2231,7 +2231,7 @@ export default function Inbox() {
                 </button>
                 <span className="icon icon-inbox icon-sm"></span> Inbox
               </h2>
-              <div className="inbox-session-highlight inbox-session-unified" id="inboxSessionIndicator">
+              <div className="inbox-session-highlight inbox-session-unified" id="inboxSessionIndicator" data-tour-target="inbox-session-indicator">
                 <div className="inbox-session-highlight-main">
                   <div className="inbox-session-highlight-top">
                     <div className="inbox-session-highlight-label">Conta exibida</div>
@@ -2254,6 +2254,7 @@ export default function Inbox() {
                   <div className="inbox-session-highlight-actions">
                     <button
                       id="inboxStartConversationBtn"
+                      data-tour-target="inbox-start-conversation-button"
                       className="inbox-session-start-btn"
                       type="button"
                       onClick={() => globals.openStartConversationModal?.()}
@@ -2281,6 +2282,7 @@ export default function Inbox() {
                 <input
                   type="text"
                   id="searchConversations"
+                  data-tour-target="inbox-search-input"
                   placeholder="Buscar conversa..."
                   onKeyUp={() => globals.searchConversations?.()}
                 />

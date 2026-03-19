@@ -1020,7 +1020,7 @@ export default function Campanhas() {
                   </div>
                   <div className="page-actions">
                       <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.loadCampaigns?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
-                      <button className="btn btn-primary" onClick={() => (globals.openCampaignModal ? globals.openCampaignModal() : globals.openModal?.('newCampaignModal'))}><span className="icon icon-add icon-sm"></span> Nova Campanha</button>
+                      <button className="btn btn-primary" data-tour-target="campaign-new-button" onClick={() => (globals.openCampaignModal ? globals.openCampaignModal() : globals.openModal?.('newCampaignModal'))}><span className="icon icon-add icon-sm"></span> Nova Campanha</button>
                   </div>
               </div>
       
@@ -1081,7 +1081,7 @@ export default function Campanhas() {
                           </div>
                           <div className="form-group">
                               <label className="form-label required">Nome da Campanha</label>
-                              <input type="text" className="form-input" id="campaignName" required placeholder="Ex: Promoção Janeiro" />
+                              <input type="text" className="form-input" id="campaignName" data-tour-target="campaign-name-field" required placeholder="Ex: Promoção Janeiro" />
                           </div>
                           
                           <div className="form-group">
@@ -1154,6 +1154,7 @@ export default function Campanhas() {
                                           type="button"
                                           className="campaign-variable-trigger"
                                           id="campaignMessageVariableToggle"
+                                          data-tour-target="campaign-message-tags-button"
                                           aria-haspopup="true"
                                           aria-expanded="false"
                                           title="Inserir tag na mensagem"
@@ -1221,7 +1222,7 @@ export default function Campanhas() {
                                       </div>
                                   </div>
 
-                                  <button type="button" className="btn btn-outline campaign-variation-create-btn" id="campaignCreateVariationBtn"><span className="icon icon-add icon-sm"></span> Criar variação</button>
+                                  <button type="button" className="btn btn-outline campaign-variation-create-btn" id="campaignCreateVariationBtn" data-tour-target="campaign-variation-button"><span className="icon icon-add icon-sm"></span> Criar variação</button>
                               </div>
                               <div className="campaign-drip-steps-panel" id="campaignDripSequenceSection" hidden>
                                   <div className="campaign-drip-steps-header">
