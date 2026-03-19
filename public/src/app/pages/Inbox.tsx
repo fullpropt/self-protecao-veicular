@@ -636,25 +636,25 @@ export default function Inbox() {
         }
         .conversation-flow-bot-badge {
             position: absolute;
-            top: -8px;
-            left: -22px;
-            width: 18px;
-            height: 18px;
+            top: -4px;
+            left: -9px;
+            width: 20px;
+            height: 20px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             box-shadow:
-                0 6px 12px rgba(var(--primary-rgb), 0.28),
-                0 0 0 1px rgba(var(--primary-rgb), 0.22);
+                0 5px 10px rgba(var(--primary-rgb), 0.24),
+                0 0 0 1px rgba(var(--primary-rgb), 0.2);
             z-index: 3;
             pointer-events: none;
         }
         .conversation-flow-bot-antenna {
             position: absolute;
-            top: -3px;
+            top: -4px;
             left: 50%;
             width: 2px;
-            height: 4px;
+            height: 5px;
             border-radius: 999px;
             transform: translateX(-50%);
             background: rgba(var(--primary-rgb), 0.82);
@@ -662,10 +662,10 @@ export default function Inbox() {
         .conversation-flow-bot-antenna::before {
             content: '';
             position: absolute;
-            top: -3px;
+            top: -4px;
             left: 50%;
-            width: 4px;
-            height: 4px;
+            width: 5px;
+            height: 5px;
             border-radius: 50%;
             transform: translateX(-50%);
             background: #d8fff3;
@@ -673,8 +673,8 @@ export default function Inbox() {
         }
         .conversation-flow-bot-head {
             position: relative;
-            width: 14px;
-            height: 12px;
+            width: 16px;
+            height: 14px;
             border-radius: 4px;
             background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.95) 0%, rgba(var(--primary-rgb), 0.62) 100%);
             border: 1px solid rgba(4, 28, 19, 0.75);
@@ -686,27 +686,27 @@ export default function Inbox() {
             top: 4px;
             left: -2px;
             width: 2px;
-            height: 5px;
+            height: 6px;
             border-radius: 999px;
             background: rgba(var(--primary-rgb), 0.82);
-            box-shadow: 16px 0 0 rgba(var(--primary-rgb), 0.82);
+            box-shadow: 18px 0 0 rgba(var(--primary-rgb), 0.82);
         }
         .conversation-flow-bot-eyes {
             position: absolute;
-            top: 3px;
+            top: 4px;
             left: 3px;
-            width: 2px;
-            height: 2px;
+            width: 3px;
+            height: 3px;
             border-radius: 50%;
             background: #dcfff4;
-            box-shadow: 5px 0 0 #dcfff4;
+            box-shadow: 6px 0 0 #dcfff4;
         }
         .conversation-flow-bot-mouth {
             position: absolute;
             left: 3px;
             bottom: 2px;
-            width: 8px;
-            height: 3px;
+            width: 9px;
+            height: 4px;
             border-radius: 2px;
             background: rgba(4, 22, 16, 0.78);
             box-shadow: 0 0 0 1px rgba(220, 255, 244, 0.25) inset;
@@ -717,7 +717,7 @@ export default function Inbox() {
             left: 2px;
             top: 1px;
             width: 1px;
-            height: 1px;
+            height: 2px;
             border-radius: 50%;
             background: #dcfff4;
             box-shadow: 2px 0 0 #dcfff4, 4px 0 0 #dcfff4;
