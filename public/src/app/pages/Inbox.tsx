@@ -575,6 +575,12 @@ export default function Inbox() {
         .conversation-item.active { background: rgba(var(--primary-rgb), 0.16); }
         .conversation-item.unread { background: rgba(var(--primary-rgb), 0.1); }
         .conversation-item.unread .conversation-name { font-weight: 700; }
+        .conversation-avatar-wrap {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            flex-shrink: 0;
+        }
         .conversation-avatar {
             width: 48px;
             height: 48px;
@@ -585,7 +591,6 @@ export default function Inbox() {
             font-weight: 600;
             color: white;
             font-size: 16px;
-            flex-shrink: 0;
         }
         .conversation-avatar.has-image {
             overflow: hidden;
@@ -629,18 +634,28 @@ export default function Inbox() {
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .conversation-flow-chip {
-            flex-shrink: 0;
-            padding: 1px 8px;
-            border-radius: 999px;
-            font-size: 10px;
-            font-weight: 700;
-            line-height: 1.4;
-            color: #d9fff0;
-            background: rgba(var(--primary-rgb), 0.22);
-            border: 1px solid rgba(var(--primary-rgb), 0.45);
-            white-space: nowrap;
-            box-shadow: inset 0 1px 0 rgba(var(--primary-rgb), 0.18);
+        .conversation-flow-bot-badge {
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #052317;
+            background: linear-gradient(180deg, #4bf0b1 0%, #29ce91 100%);
+            border: 1px solid rgba(6, 32, 21, 0.45);
+            box-shadow:
+                0 6px 14px rgba(14, 199, 129, 0.32),
+                0 1px 0 rgba(255, 255, 255, 0.28) inset;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .conversation-flow-bot-badge .icon {
+            font-size: 11px;
+            line-height: 1;
         }
         .conversation-preview {
             font-size: 13px;

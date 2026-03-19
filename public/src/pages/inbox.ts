@@ -2154,11 +2154,32 @@ function shouldShowConversationFlowControls(conversation: Conversation | null) {
     return isConversationFlowRunning(conversation) || !isConversationBotActive(conversation);
 }
 
-function renderConversationFlowTag(conversation: Conversation) {
+function renderConversationFlowIndicator(conversation: Conversation) {
     if (!isConversationFlowRunning(conversation) || !isConversationBotActive(conversation)) {
         return '';
     }
-    return '<span class="conversation-flow-chip" title="Fluxo em andamento">Fluxo ativo</span>';
+    return `
+        <span
+            class="conversation-flow-bot-badge"
+            title="Fluxo em andamento"
+            aria-label="Fluxo em andamento"
+        >
+            <span class="icon icon-automation" aria-hidden="true"></span>
+        </span>
+    `;
+}
+
+function renderConversationAvatarWithIndicator(conversation: Conversation) {
+    return `
+        <div class="conversation-avatar-wrap">
+            ${renderConversationFlowIndicator(conversation)}
+            ${renderAvatarMarkup({
+                name: conversation.name,
+                avatarUrl: resolveConversationAvatarUrl(conversation),
+                className: 'conversation-avatar'
+            })}
+        </div>
+    `;
 }
 
 function getConversationFlowToggleButtonLabel(conversation: Conversation | null) {
@@ -2318,16 +2339,11 @@ function renderConversations() {
     list.innerHTML = conversations.map(c => `
         <div class="conversation-item ${c.unread > 0 ? 'unread' : ''} ${currentConversation?.id === c.id ? 'active' : ''}" 
              onclick="selectConversation(${c.id})">
-            ${renderAvatarMarkup({
-                name: c.name,
-                avatarUrl: resolveConversationAvatarUrl(c),
-                className: 'conversation-avatar'
-            })}
+            ${renderConversationAvatarWithIndicator(c)}
             <div class="conversation-info">
                 <div class="conversation-name-row">
                     <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
                     ${c.sessionLabel ? `<span class="conversation-session-chip" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
-                    ${renderConversationFlowTag(c)}
                 </div>
                 <div class="conversation-preview">${renderConversationPreview(c.lastMessage, 'Sem mensagens')}</div>
             </div>
@@ -2376,16 +2392,11 @@ function renderFilteredConversations(filtered: Conversation[]) {
     // Usar mesma lógica de renderConversations
     list.innerHTML = filtered.map(c => `
         <div class="conversation-item ${c.unread > 0 ? 'unread' : ''} ${currentConversation?.id === c.id ? 'active' : ''}" onclick="selectConversation(${c.id})">
-            ${renderAvatarMarkup({
-                name: c.name,
-                avatarUrl: resolveConversationAvatarUrl(c),
-                className: 'conversation-avatar'
-            })}
+            ${renderConversationAvatarWithIndicator(c)}
             <div class="conversation-info">
                 <div class="conversation-name-row">
                     <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
                     ${c.sessionLabel ? `<span class="conversation-session-chip" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
-                    ${renderConversationFlowTag(c)}
                 </div>
                 <div class="conversation-preview">${renderConversationPreview(c.lastMessage, '')}</div>
             </div>
