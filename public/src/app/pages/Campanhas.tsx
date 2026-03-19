@@ -1184,12 +1184,37 @@ export default function Campanhas() {
                                   <div className="campaign-variations-list" id="campaignMessageVariationsList"></div>
 
                                   <div className="campaign-variation-editor" id="campaignMessageVariationEditor" hidden>
-                                      <textarea
-                                          className="form-textarea campaign-message-variation-input"
-                                          id="campaignMessageVariationDraft"
-                                          rows={4}
-                                          placeholder="Digite a variação da mensagem..."
-                                      ></textarea>
+                                      <div className="campaign-message-editor">
+                                          <textarea
+                                              className="form-textarea campaign-message-variation-input"
+                                              id="campaignMessageVariationDraft"
+                                              rows={4}
+                                              placeholder="Digite a variação da mensagem..."
+                                          ></textarea>
+                                          <div className="campaign-message-tools">
+                                              <button
+                                                  type="button"
+                                                  className="campaign-variable-trigger"
+                                                  id="campaignVariationVariableToggle"
+                                                  aria-haspopup="true"
+                                                  aria-expanded="false"
+                                                  title="Inserir tag na variação"
+                                              >
+                                                  <span className="icon icon-tag icon-sm"></span>
+                                                  Inserir tag
+                                              </button>
+                                              <div className="campaign-variable-menu" id="campaignVariationVariableMenu" hidden>
+                                                  <div className="campaign-variable-section">
+                                                      <div className="campaign-variable-section-title">Fixas</div>
+                                                      <div className="campaign-variable-list" id="campaignVariationVariableFixedList"></div>
+                                                  </div>
+                                                  <div className="campaign-variable-section">
+                                                      <div className="campaign-variable-section-title">Personalizadas</div>
+                                                      <div className="campaign-variable-list" id="campaignVariationVariableCustomList"></div>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
                                       <div className="campaign-variation-editor-actions">
                                           <button type="button" className="btn btn-outline" id="campaignCancelVariationBtn">Cancelar</button>
                                           <button type="button" className="btn btn-primary" id="campaignSaveVariationBtn"><span className="icon icon-save icon-sm"></span> Salvar variação</button>

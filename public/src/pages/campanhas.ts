@@ -614,14 +614,28 @@ function getCampaignMessageCustomVariables(): CampaignMessageVariable[] {
     return Array.from(dedupe.values()).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
 }
 
-function getCampaignMessageVariableElements() {
-    const toggleButton = document.getElementById('campaignMessageVariableToggle') as HTMLButtonElement | null;
-    const menu = document.getElementById('campaignMessageVariableMenu') as HTMLElement | null;
-    return { toggleButton, menu };
+type CampaignMessageVariablePickerTarget = 'message' | 'variation';
+
+function getCampaignMessageVariableElements(target: CampaignMessageVariablePickerTarget = 'message') {
+    if (target === 'variation') {
+        return {
+            toggleButton: document.getElementById('campaignVariationVariableToggle') as HTMLButtonElement | null,
+            menu: document.getElementById('campaignVariationVariableMenu') as HTMLElement | null,
+            fixedContainer: document.getElementById('campaignVariationVariableFixedList') as HTMLElement | null,
+            customContainer: document.getElementById('campaignVariationVariableCustomList') as HTMLElement | null
+        };
+    }
+
+    return {
+        toggleButton: document.getElementById('campaignMessageVariableToggle') as HTMLButtonElement | null,
+        menu: document.getElementById('campaignMessageVariableMenu') as HTMLElement | null,
+        fixedContainer: document.getElementById('campaignMessageVariableFixedList') as HTMLElement | null,
+        customContainer: document.getElementById('campaignMessageVariableCustomList') as HTMLElement | null
+    };
 }
 
-function setCampaignMessageVariableMenuOpen(isOpen: boolean) {
-    const { toggleButton, menu } = getCampaignMessageVariableElements();
+function setCampaignMessageVariableMenuOpen(target: CampaignMessageVariablePickerTarget, isOpen: boolean) {
+    const { toggleButton, menu } = getCampaignMessageVariableElements(target);
     if (!menu) return;
 
     menu.hidden = !isOpen;
@@ -631,16 +645,20 @@ function setCampaignMessageVariableMenuOpen(isOpen: boolean) {
 }
 
 function closeCampaignMessageVariableMenu() {
-    setCampaignMessageVariableMenuOpen(false);
+    setCampaignMessageVariableMenuOpen('message', false);
+    setCampaignMessageVariableMenuOpen('variation', false);
 }
 
-function toggleCampaignMessageVariableMenu() {
-    const { menu } = getCampaignMessageVariableElements();
+function toggleCampaignMessageVariableMenu(target: CampaignMessageVariablePickerTarget = 'message') {
+    const { menu } = getCampaignMessageVariableElements(target);
     if (!menu) return;
-    setCampaignMessageVariableMenuOpen(menu.hidden);
+
+    const nextOpenState = menu.hidden;
+    closeCampaignMessageVariableMenu();
+    setCampaignMessageVariableMenuOpen(target, nextOpenState);
 }
 
-function insertCampaignMessageVariable(variableKey: string) {
+function insertCampaignMessageVariable(variableKey: string, preferredTextareaId: string = 'campaignMessage') {
     const normalizedKey = normalizeCampaignVariableKey(variableKey);
     if (!normalizedKey) return;
 
@@ -655,11 +673,17 @@ function insertCampaignMessageVariable(variableKey: string) {
         }
         return textarea.classList.contains('campaign-drip-step-input');
     };
+    const preferredTextarea = document.getElementById(preferredTextareaId) as HTMLTextAreaElement | null;
     const textarea = (
         activeTextarea &&
         isSupportedCampaignTextarea(activeTextarea)
             ? activeTextarea
-            : (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)
+            : (
+                preferredTextarea &&
+                isSupportedCampaignTextarea(preferredTextarea)
+                    ? preferredTextarea
+                    : (document.getElementById('campaignMessage') as HTMLTextAreaElement | null)
+            )
     );
     if (!textarea) return;
 
@@ -683,66 +707,82 @@ function insertCampaignMessageVariable(variableKey: string) {
 }
 
 function renderCampaignMessageVariableOptions() {
-    const fixedContainer = document.getElementById('campaignMessageVariableFixedList') as HTMLElement | null;
-    const customContainer = document.getElementById('campaignMessageVariableCustomList') as HTMLElement | null;
-    if (!fixedContainer || !customContainer) return;
-
     const renderOption = (variable: CampaignMessageVariable) => `
         <button type="button" class="campaign-variable-option" data-variable-key="${escapeCampaignText(variable.key)}">
             <span class="campaign-variable-token">{{${escapeCampaignText(variable.key)}}}</span>
             <span class="campaign-variable-label">${escapeCampaignText(variable.label)}</span>
         </button>
     `;
-
-    fixedContainer.innerHTML = FIXED_CAMPAIGN_MESSAGE_VARIABLES.map(renderOption).join('');
-
     const customVariables = getCampaignMessageCustomVariables();
-    customContainer.innerHTML = customVariables.length
-        ? customVariables.map(renderOption).join('')
-        : '<p class="campaign-variable-empty">Nenhuma tag personalizada cadastrada.</p>';
 
-    const menu = document.getElementById('campaignMessageVariableMenu') as HTMLElement | null;
-    if (!menu) return;
+    ([
+        { target: 'message', textareaId: 'campaignMessage' },
+        { target: 'variation', textareaId: 'campaignMessageVariationDraft' }
+    ] as const).forEach(({ target, textareaId }) => {
+        const {
+            fixedContainer,
+            customContainer,
+            menu
+        } = getCampaignMessageVariableElements(target);
 
-    const variableButtons = Array.from(menu.querySelectorAll<HTMLButtonElement>('.campaign-variable-option'));
-    variableButtons.forEach((button) => {
-        button.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            insertCampaignMessageVariable(String(button.dataset.variableKey || ''));
+        if (!fixedContainer || !customContainer || !menu) return;
+
+        fixedContainer.innerHTML = FIXED_CAMPAIGN_MESSAGE_VARIABLES.map(renderOption).join('');
+        customContainer.innerHTML = customVariables.length
+            ? customVariables.map(renderOption).join('')
+            : '<p class="campaign-variable-empty">Nenhuma tag personalizada cadastrada.</p>';
+
+        const variableButtons = Array.from(menu.querySelectorAll<HTMLButtonElement>('.campaign-variable-option'));
+        variableButtons.forEach((button) => {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                insertCampaignMessageVariable(String(button.dataset.variableKey || ''), textareaId);
+            });
         });
     });
 }
 
 function bindCampaignMessageVariablePicker() {
-    const { toggleButton, menu } = getCampaignMessageVariableElements();
-    if (!toggleButton || !menu) return;
+    let hasPickerBound = false;
 
-    if (toggleButton.dataset.bound !== '1') {
-        toggleButton.dataset.bound = '1';
-        toggleButton.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            toggleCampaignMessageVariableMenu();
-        });
-    }
+    (['message', 'variation'] as const).forEach((target) => {
+        const { toggleButton, menu } = getCampaignMessageVariableElements(target);
+        if (!toggleButton || !menu) return;
 
-    if (menu.dataset.bound !== '1') {
-        menu.dataset.bound = '1';
-        menu.addEventListener('click', (event) => {
-            event.stopPropagation();
-        });
-    }
+        hasPickerBound = true;
+
+        if (toggleButton.dataset.bound !== '1') {
+            toggleButton.dataset.bound = '1';
+            toggleButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleCampaignMessageVariableMenu(target);
+            });
+        }
+
+        if (menu.dataset.bound !== '1') {
+            menu.dataset.bound = '1';
+            menu.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+        }
+    });
 
     renderCampaignMessageVariableOptions();
 
-    if (!campaignMessageVariableGlobalEventsBound) {
+    if (hasPickerBound && !campaignMessageVariableGlobalEventsBound) {
         campaignMessageVariableGlobalEventsBound = true;
 
         document.addEventListener('click', (event) => {
             const target = event.target;
             if (target instanceof Element) {
-                if (target.closest('#campaignMessageVariableToggle') || target.closest('#campaignMessageVariableMenu')) {
+                if (
+                    target.closest('#campaignMessageVariableToggle') ||
+                    target.closest('#campaignMessageVariableMenu') ||
+                    target.closest('#campaignVariationVariableToggle') ||
+                    target.closest('#campaignVariationVariableMenu')
+                ) {
                     return;
                 }
             }
