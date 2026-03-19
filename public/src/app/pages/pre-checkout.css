@@ -571,13 +571,13 @@
 
 @media (max-width: 680px) {
   .precheckout-page {
-    padding: 8px;
+    padding: 10px;
   }
 
   .precheckout-header {
     flex-direction: column;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
 
   .precheckout-brand-link img {
@@ -587,7 +587,7 @@
   .precheckout-content {
     border-radius: 0;
     padding: 0;
-    gap: 8px;
+    gap: 12px;
   }
 
   .precheckout-offer-panel,
@@ -744,7 +744,7 @@
   }
 
   .precheckout-footer {
-    margin-top: 12px;
+    margin-top: 16px;
     border-radius: 12px;
     padding: 0 12px 8px;
   }
