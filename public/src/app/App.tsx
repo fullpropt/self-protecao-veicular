@@ -430,29 +430,16 @@ function GlobalOnboardingTour() {
           z-index: 2500 !important;
           box-shadow:
             0 0 0 2px rgba(var(--primary-rgb), 0.82),
-            0 0 0 9999px rgba(2, 7, 15, 0.48),
+            0 0 0 9999px rgba(2, 7, 15, 0.66),
             0 18px 32px rgba(2, 8, 20, 0.28) !important;
           border-radius: var(--onboarding-tour-radius, 16px) !important;
           animation: onboardingTourPulse 1.6s ease-in-out infinite;
         }
         .onboarding-tour-spotlight-card {
-          position: fixed;
-          z-index: 2990;
-          width: min(280px, calc(100vw - 32px));
-          display: none;
-          flex-direction: column;
-          gap: 6px;
-          padding: 12px 14px;
-          border-radius: 16px;
-          border: 1px solid rgba(var(--primary-rgb), 0.22);
-          background: rgba(6, 16, 29, 0.94);
-          box-shadow: 0 24px 48px rgba(2, 8, 20, 0.32);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          pointer-events: none;
+          display: none !important;
         }
         .onboarding-tour-spotlight-card.is-visible {
-          display: flex;
+          display: none !important;
         }
         .onboarding-tour-spotlight-kicker {
           color: rgba(143, 255, 225, 0.88);
@@ -476,13 +463,13 @@ function GlobalOnboardingTour() {
           0%, 100% {
             box-shadow:
               0 0 0 2px rgba(var(--primary-rgb), 0.82),
-              0 0 0 9999px rgba(2, 7, 15, 0.48),
+              0 0 0 9999px rgba(2, 7, 15, 0.66),
               0 18px 32px rgba(2, 8, 20, 0.28);
           }
           50% {
             box-shadow:
               0 0 0 4px rgba(var(--primary-rgb), 0.88),
-              0 0 0 9999px rgba(2, 7, 15, 0.52),
+              0 0 0 9999px rgba(2, 7, 15, 0.72),
               0 20px 36px rgba(2, 8, 20, 0.32);
           }
         }

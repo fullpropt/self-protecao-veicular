@@ -145,6 +145,7 @@ type OnboardingHighlightMarker = {
     hint: string;
     route?: string;
     action?: 'open_whatsapp_new_account_prompt' | 'confirm_whatsapp_new_account_prompt';
+    clear?: boolean;
     radius?: number;
     scroll?: ScrollLogicalPosition;
 };
@@ -242,6 +243,7 @@ const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMa
         { at: 22.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Crie uma nova conta', hint: 'Este botão prepara uma nova sessão para conexão no sistema.', radius: 18 },
         { at: 24.0, selector: '[data-tour-target="app-prompt-modal"]', route: '#/whatsapp', action: 'open_whatsapp_new_account_prompt', title: 'Defina a nova conta', hint: 'O modal abre para escolher o identificador da nova conta WhatsApp.', radius: 22, scroll: 'center' },
         { at: 25.0, selector: '[data-tour-target="whatsapp-connect-button"]', route: '#/whatsapp', action: 'confirm_whatsapp_new_account_prompt', title: 'Conecte o WhatsApp', hint: 'Depois de criar a conta, use este botão para iniciar a conexão.', radius: 18 },
+        { at: 29.0, selector: '', route: '#/whatsapp', title: '', hint: '', clear: true },
         { at: 37.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Você pode repetir o processo', hint: 'Sempre que precisar adicionar outra conta, volte neste mesmo botão.', radius: 18 }
     ],
     configure_accounts: [
@@ -1076,6 +1078,11 @@ function performOnboardingHighlightAction(
 
 function applyOnboardingSpotlight(marker: OnboardingHighlightMarker | null) {
     if (!marker || !onboardingTourOpen) {
+        clearOnboardingSpotlight();
+        return;
+    }
+
+    if (marker.clear === true) {
         clearOnboardingSpotlight();
         return;
     }
