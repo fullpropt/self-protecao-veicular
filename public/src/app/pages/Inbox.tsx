@@ -640,7 +640,7 @@ export default function Inbox() {
         .conversation-flow-bot-badge {
             position: absolute;
             top: -2px;
-            left: 3px;
+            left: -7px;
             width: 16px;
             height: 16px;
             display: inline-flex;
