@@ -57,8 +57,8 @@ const PLAN_CATALOG: Record<string, CheckoutPlan> = {
     name: 'Starter',
     amountCents: 9700,
     trialDays: 0,
-    accent: '#00e89a',
-    accentSoft: 'rgba(0, 232, 154, 0.18)',
+    accent: '#00d98f',
+    accentSoft: 'rgba(0, 255, 163, 0.12)',
     summary: '1 conexão WhatsApp e até 1000 contatos para começar sem fricção.',
     bullets: ['1 conexão WhatsApp', 'Até 1000 contatos', 'Fluxos e inbox incluídos']
   },
@@ -67,8 +67,8 @@ const PLAN_CATALOG: Record<string, CheckoutPlan> = {
     name: 'Premium',
     amountCents: 19700,
     trialDays: 7,
-    accent: '#00ffa3',
-    accentSoft: 'rgba(0, 255, 163, 0.22)',
+    accent: '#00e89a',
+    accentSoft: 'rgba(0, 255, 163, 0.14)',
     summary: '3 conexões WhatsApp, contatos ilimitados e 7 dias grátis para ativar sem cobrança do plano hoje.',
     bullets: ['3 conexões WhatsApp', 'Contatos ilimitados', '7 dias grátis']
   },
@@ -77,8 +77,8 @@ const PLAN_CATALOG: Record<string, CheckoutPlan> = {
     name: 'Avançado',
     amountCents: 39700,
     trialDays: 0,
-    accent: '#00d789',
-    accentSoft: 'rgba(0, 215, 137, 0.2)',
+    accent: '#00c77f',
+    accentSoft: 'rgba(0, 255, 163, 0.1)',
     summary: '5 conexões WhatsApp, contatos ilimitados e operação mais robusta.',
     bullets: ['5 conexões WhatsApp', 'Contatos ilimitados', 'Escala para equipe']
   }
