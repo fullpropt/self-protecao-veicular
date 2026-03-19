@@ -514,6 +514,8 @@ function bindOnboardingTourControls() {
     };
 
     bindClick('onboardingTourCloseButton', closeOnboardingTour);
+    bindClick('onboardingTourPrevButton', goToPreviousOnboardingTourStep);
+    bindClick('onboardingTourNextButton', goToNextOnboardingTourStep);
     bindClick('onboardingVideoToggleButton', toggleOnboardingVideoPlayback);
     bindClick('onboardingVideoMuteButton', toggleOnboardingVideoMute);
     bindClick('onboardingVideoPrevButton', goToPreviousOnboardingTourStep);
@@ -922,6 +924,8 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     const endedOverlay = document.getElementById('onboardingVideoEndedOverlay') as HTMLElement | null;
     const endedTitle = document.getElementById('onboardingVideoEndedTitle') as HTMLElement | null;
     const endedHint = document.getElementById('onboardingVideoEndedHint') as HTMLElement | null;
+    const headerPreviousButton = document.getElementById('onboardingTourPrevButton') as HTMLButtonElement | null;
+    const headerNextButton = document.getElementById('onboardingTourNextButton') as HTMLButtonElement | null;
     const previousButton = document.getElementById('onboardingVideoPrevButton') as HTMLButtonElement | null;
     const nextButton = document.getElementById('onboardingVideoNextButton') as HTMLButtonElement | null;
 
@@ -979,6 +983,16 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
         endedHint.textContent = nextStepId
             ? 'Siga para o pr\u00f3ximo v\u00eddeo quando quiser.'
             : 'Voc\u00ea chegou ao fim do tour e pode rever qualquer etapa.';
+    }
+    if (headerPreviousButton) {
+        headerPreviousButton.disabled = !previousStepId;
+        headerPreviousButton.title = previousStepId ? 'Etapa anterior' : 'Primeira etapa';
+        headerPreviousButton.setAttribute('aria-label', headerPreviousButton.title);
+    }
+    if (headerNextButton) {
+        headerNextButton.disabled = !nextStepId;
+        headerNextButton.title = nextStepId ? 'Pr\u00f3xima etapa' : 'Fim do tour';
+        headerNextButton.setAttribute('aria-label', headerNextButton.title);
     }
     if (previousButton) {
         previousButton.disabled = !previousStepId;

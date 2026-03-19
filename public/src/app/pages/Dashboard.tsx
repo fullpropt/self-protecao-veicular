@@ -1279,7 +1279,7 @@ function DashboardStyles() {
         }
         .onboarding-floating-tour-head {
           display: flex;
-          align-items: flex-start;
+          align-items: center;
           justify-content: space-between;
           gap: 12px;
         }
@@ -1296,12 +1296,13 @@ function DashboardStyles() {
           font-weight: 700;
           line-height: 1.25;
         }
-        .onboarding-floating-tour-description {
-          margin: 0;
-          color: rgba(210, 232, 241, 0.8);
-          font-size: 12px;
-          line-height: 1.45;
+        .onboarding-floating-tour-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
         }
+        .onboarding-tour-nav-btn,
         .onboarding-tour-close-btn {
           width: 32px;
           height: 32px;
@@ -1321,11 +1322,21 @@ function DashboardStyles() {
             background 180ms ease,
             color 180ms ease;
         }
+        .onboarding-tour-nav-btn {
+          font-size: 16px;
+          font-weight: 700;
+        }
+        .onboarding-tour-nav-btn:disabled {
+          opacity: 0.42;
+          cursor: not-allowed;
+        }
+        .onboarding-tour-nav-btn:hover:not(:disabled),
         .onboarding-tour-close-btn:hover {
           border-color: rgba(var(--primary-rgb), 0.38);
           background: rgba(0, 240, 255, 0.12);
           color: #f4fffd;
         }
+        .onboarding-tour-nav-btn:focus-visible,
         .onboarding-tour-close-btn:focus-visible {
           outline: 2px solid rgba(var(--primary-rgb), 0.4);
           outline-offset: 2px;
@@ -2143,20 +2154,38 @@ function OnboardingCard({
               <p className="onboarding-floating-tour-title" id="onboardingVideoTitle">Conecte seu WhatsApp</p>
             </div>
 
-            <button
-              type="button"
-              className="onboarding-tour-close-btn"
-              id="onboardingTourCloseButton"
-              title="Fechar tour"
-              aria-label="Fechar tour"
-            >
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
+            <div className="onboarding-floating-tour-actions">
+              <button
+                type="button"
+                className="onboarding-tour-nav-btn"
+                id="onboardingTourPrevButton"
+                title="Etapa anterior"
+                aria-label="Etapa anterior"
+              >
+                <span aria-hidden="true">&larr;</span>
+              </button>
 
-          <p className="onboarding-floating-tour-description" id="onboardingVideoDescription">
-            Passo a passo para conectar a primeira sessão do WhatsApp no ZapVender.
-          </p>
+              <button
+                type="button"
+                className="onboarding-tour-nav-btn"
+                id="onboardingTourNextButton"
+                title="Próxima etapa"
+                aria-label="Próxima etapa"
+              >
+                <span aria-hidden="true">&rarr;</span>
+              </button>
+
+              <button
+                type="button"
+                className="onboarding-tour-close-btn"
+                id="onboardingTourCloseButton"
+                title="Fechar tour"
+                aria-label="Fechar tour"
+              >
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+          </div>
 
           <div className="onboarding-floating-player">
             <div className="onboarding-video-shell" id="onboardingVideoShell">
