@@ -12615,9 +12615,6 @@ app.post('/api/pre-checkout/capture', async (req, res) => {
         if (whatsapp.length < 10) {
             return res.status(400).json({ success: false, error: 'WhatsApp invalido' });
         }
-        if (!companyName) {
-            return res.status(400).json({ success: false, error: 'Nome da empresa e obrigatorio' });
-        }
         const utmPayload = parsePreCheckoutUtmPayload(body, req);
         const sourceUrl = normalizePreCheckoutText(
             body.sourceUrl || body.source_url || req.get('referer') || '',
@@ -12645,7 +12642,9 @@ app.post('/api/pre-checkout/capture', async (req, res) => {
         redirectParams.set('prefill_name', fullName);
         redirectParams.set('prefill_email', email);
         redirectParams.set('prefill_whatsapp', whatsapp);
-        redirectParams.set('prefill_company_name', companyName);
+        if (companyName) {
+            redirectParams.set('prefill_company_name', companyName);
+        }
         if (primaryObjective) redirectParams.set('prefill_objective', primaryObjective);
         const redirectUrl = `/billing/checkout/${encodeURIComponent(plan.code)}?${redirectParams.toString()}`;
 
