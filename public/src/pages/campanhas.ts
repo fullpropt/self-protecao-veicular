@@ -130,9 +130,7 @@ let campaignRecipientsRefreshInFlight = false;
 let campaignRecipientsRequestToken = 0;
 let campaignMessageVariationsDrafts: string[] = [];
 let campaignMessageVariationEditingIndex: number | null = null;
-let campaignMessageVariationsUiBound = false;
 let campaignDripStepsDrafts: string[] = [];
-let campaignDripStepsUiBound = false;
 let expandedCampaignId: number | null = null;
 
 function appConfirm(message: string, title = 'Confirmacao') {
@@ -976,8 +974,6 @@ function renderCampaignMessageVariations() {
 }
 
 function bindCampaignMessageVariationsUi() {
-    if (campaignMessageVariationsUiBound) return;
-
     const {
         list,
         createButton,
@@ -987,49 +983,60 @@ function bindCampaignMessageVariationsUi() {
 
     if (!list || !createButton || !saveButton || !cancelButton) return;
 
-    campaignMessageVariationsUiBound = true;
+    if (createButton.dataset.bound !== '1') {
+        createButton.dataset.bound = '1';
+        createButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            openCampaignMessageVariationEditor(-1);
+        });
+    }
 
-    createButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        openCampaignMessageVariationEditor(-1);
-    });
+    if (saveButton.dataset.bound !== '1') {
+        saveButton.dataset.bound = '1';
+        saveButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            saveCampaignMessageVariationDraft();
+        });
+    }
 
-    saveButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        saveCampaignMessageVariationDraft();
-    });
+    if (cancelButton.dataset.bound !== '1') {
+        cancelButton.dataset.bound = '1';
+        cancelButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeCampaignMessageVariationEditor();
+            renderCampaignMessageVariations();
+        });
+    }
 
-    cancelButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        closeCampaignMessageVariationEditor();
-        renderCampaignMessageVariations();
-    });
+    if (list.dataset.bound !== '1') {
+        list.dataset.bound = '1';
+        list.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
 
-    list.addEventListener('click', (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
+            const button = target.closest<HTMLButtonElement>('[data-variation-action][data-variation-index]');
+            if (!button) return;
 
-        const button = target.closest<HTMLButtonElement>('[data-variation-action][data-variation-index]');
-        if (!button) return;
+            event.preventDefault();
 
-        event.preventDefault();
+            const action = String(button.dataset.variationAction || '').trim();
+            const index = Number(button.dataset.variationIndex);
+            if (!Number.isInteger(index) || index < 0) return;
 
-        const action = String(button.dataset.variationAction || '').trim();
-        const index = Number(button.dataset.variationIndex);
-        if (!Number.isInteger(index) || index < 0) return;
+            if (action === 'edit') {
+                openCampaignMessageVariationEditor(index);
+                return;
+            }
 
-        if (action === 'edit') {
-            openCampaignMessageVariationEditor(index);
-            return;
-        }
-
-        if (action === 'remove') {
-            removeCampaignMessageVariation(index);
-        }
-    });
+            if (action === 'remove') {
+                removeCampaignMessageVariation(index);
+            }
+        });
+    }
 
     const draftInput = document.getElementById('campaignMessageVariationDraft') as HTMLTextAreaElement | null;
-    if (draftInput) {
+    if (draftInput && draftInput.dataset.bound !== '1') {
+        draftInput.dataset.bound = '1';
         draftInput.addEventListener('keydown', (event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
                 event.preventDefault();
@@ -1114,47 +1121,50 @@ function collectCampaignDripStepsFromForm() {
 }
 
 function bindCampaignDripStepsUi() {
-    if (campaignDripStepsUiBound) return;
-
     const { list, addButton } = getCampaignDripStepsUiElements();
     if (!list || !addButton) return;
 
-    campaignDripStepsUiBound = true;
+    if (addButton.dataset.bound !== '1') {
+        addButton.dataset.bound = '1';
+        addButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            campaignDripStepsDrafts.push('');
+            renderCampaignDripSteps();
+            const { list: refreshedList } = getCampaignDripStepsUiElements();
+            const lastIndex = Math.max(0, campaignDripStepsDrafts.length - 1);
+            const input = refreshedList?.querySelector<HTMLTextAreaElement>(`textarea[data-drip-step-index="${lastIndex}"]`);
+            input?.focus();
+        });
+    }
 
-    addButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        campaignDripStepsDrafts.push('');
-        renderCampaignDripSteps();
-        const { list: refreshedList } = getCampaignDripStepsUiElements();
-        const lastIndex = Math.max(0, campaignDripStepsDrafts.length - 1);
-        const input = refreshedList?.querySelector<HTMLTextAreaElement>(`textarea[data-drip-step-index="${lastIndex}"]`);
-        input?.focus();
-    });
+    if (list.dataset.bound !== '1') {
+        list.dataset.bound = '1';
 
-    list.addEventListener('click', (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
+        list.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
 
-        const removeButton = target.closest<HTMLButtonElement>('[data-drip-remove-index]');
-        if (!removeButton) return;
+            const removeButton = target.closest<HTMLButtonElement>('[data-drip-remove-index]');
+            if (!removeButton) return;
 
-        event.preventDefault();
-        const index = Number(removeButton.dataset.dripRemoveIndex);
-        if (!Number.isInteger(index) || index < 0 || index >= campaignDripStepsDrafts.length) return;
+            event.preventDefault();
+            const index = Number(removeButton.dataset.dripRemoveIndex);
+            if (!Number.isInteger(index) || index < 0 || index >= campaignDripStepsDrafts.length) return;
 
-        campaignDripStepsDrafts.splice(index, 1);
-        renderCampaignDripSteps();
-    });
+            campaignDripStepsDrafts.splice(index, 1);
+            renderCampaignDripSteps();
+        });
 
-    list.addEventListener('input', (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLTextAreaElement)) return;
+        list.addEventListener('input', (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLTextAreaElement)) return;
 
-        const index = Number(target.dataset.dripStepIndex);
-        if (!Number.isInteger(index) || index < 0 || index >= campaignDripStepsDrafts.length) return;
+            const index = Number(target.dataset.dripStepIndex);
+            if (!Number.isInteger(index) || index < 0 || index >= campaignDripStepsDrafts.length) return;
 
-        campaignDripStepsDrafts[index] = target.value;
-    });
+            campaignDripStepsDrafts[index] = target.value;
+        });
+    }
 
     renderCampaignDripSteps();
 }
