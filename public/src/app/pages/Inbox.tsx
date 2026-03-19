@@ -636,76 +636,91 @@ export default function Inbox() {
         }
         .conversation-flow-bot-badge {
             position: absolute;
-            top: -6px;
-            left: -18px;
-            width: 16px;
-            height: 16px;
-            border-radius: 5px;
+            top: -8px;
+            left: -22px;
+            width: 18px;
+            height: 18px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.98) 0%, rgba(var(--primary-rgb), 0.72) 100%);
-            border: 1px solid rgba(3, 24, 18, 0.75);
             box-shadow:
-                0 5px 11px rgba(var(--primary-rgb), 0.3),
-                0 1px 0 rgba(255, 255, 255, 0.2) inset;
+                0 6px 12px rgba(var(--primary-rgb), 0.28),
+                0 0 0 1px rgba(var(--primary-rgb), 0.22);
             z-index: 3;
             pointer-events: none;
         }
-        .conversation-flow-bot-badge::before {
-            content: '';
+        .conversation-flow-bot-antenna {
             position: absolute;
-            top: -5px;
+            top: -3px;
             left: 50%;
             width: 2px;
             height: 4px;
             border-radius: 999px;
             transform: translateX(-50%);
-            background: rgba(var(--primary-rgb), 0.88);
-            box-shadow: 0 0 0 1px rgba(5, 22, 18, 0.35);
+            background: rgba(var(--primary-rgb), 0.82);
         }
-        .conversation-flow-bot-badge::after {
+        .conversation-flow-bot-antenna::before {
             content: '';
             position: absolute;
-            top: -7px;
+            top: -3px;
             left: 50%;
             width: 4px;
             height: 4px;
             border-radius: 50%;
             transform: translateX(-50%);
-            background: #d7fff2;
-            box-shadow: 0 0 6px rgba(var(--primary-rgb), 0.6);
+            background: #d8fff3;
+            box-shadow: 0 0 6px rgba(var(--primary-rgb), 0.5);
         }
-        .conversation-flow-bot-glyph {
+        .conversation-flow-bot-head {
             position: relative;
-            width: 10px;
-            height: 8px;
-            border-radius: 3px;
-            background: rgba(5, 22, 18, 0.34);
-            border: 1px solid rgba(214, 255, 241, 0.36);
-            line-height: 1;
+            width: 14px;
+            height: 12px;
+            border-radius: 4px;
+            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.95) 0%, rgba(var(--primary-rgb), 0.62) 100%);
+            border: 1px solid rgba(4, 28, 19, 0.75);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset;
         }
-        .conversation-flow-bot-glyph::before {
+        .conversation-flow-bot-head::before {
             content: '';
             position: absolute;
-            top: 1px;
-            left: 1px;
+            top: 4px;
+            left: -2px;
+            width: 2px;
+            height: 5px;
+            border-radius: 999px;
+            background: rgba(var(--primary-rgb), 0.82);
+            box-shadow: 16px 0 0 rgba(var(--primary-rgb), 0.82);
+        }
+        .conversation-flow-bot-eyes {
+            position: absolute;
+            top: 3px;
+            left: 3px;
             width: 2px;
             height: 2px;
             border-radius: 50%;
             background: #dcfff4;
-            box-shadow: 4px 0 0 #dcfff4;
+            box-shadow: 5px 0 0 #dcfff4;
         }
-        .conversation-flow-bot-glyph::after {
+        .conversation-flow-bot-mouth {
+            position: absolute;
+            left: 3px;
+            bottom: 2px;
+            width: 8px;
+            height: 3px;
+            border-radius: 2px;
+            background: rgba(4, 22, 16, 0.78);
+            box-shadow: 0 0 0 1px rgba(220, 255, 244, 0.25) inset;
+        }
+        .conversation-flow-bot-mouth::before {
             content: '';
             position: absolute;
             left: 2px;
-            bottom: 1px;
-            width: 4px;
-            height: 2px;
-            border-radius: 999px;
+            top: 1px;
+            width: 1px;
+            height: 1px;
+            border-radius: 50%;
             background: #dcfff4;
-            opacity: 0.92;
+            box-shadow: 2px 0 0 #dcfff4, 4px 0 0 #dcfff4;
         }
         .conversation-preview {
             font-size: 13px;
