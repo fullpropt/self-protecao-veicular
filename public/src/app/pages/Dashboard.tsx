@@ -8,6 +8,10 @@ type DashboardGlobals = {
   initOnboardingCard?: () => void;
   loadDashboardData?: () => void;
   loadCustomEvents?: (options?: { silent?: boolean }) => void;
+  startOnboardingTour?: (stepId?: string) => void;
+  closeOnboardingTour?: () => void;
+  goToPreviousOnboardingTourStep?: () => void;
+  goToNextOnboardingTourStep?: () => void;
   toggleOnboardingStep?: (stepId: string, checked?: boolean) => void;
   selectOnboardingVideoStep?: (stepId: string) => void;
   goToOnboardingStep?: (stepId: string) => void;
@@ -1097,49 +1101,67 @@ function DashboardStyles() {
           font-size: 13px;
           color: rgba(220, 236, 243, 0.8);
         }
-        .onboarding-grid {
-          display: grid;
-          grid-template-columns: minmax(340px, 1.02fr) minmax(320px, 0.98fr);
-          gap: 16px;
-          align-items: start;
-        }
         .onboarding-content {
           display: block;
         }
         .onboarding-card.is-collapsed .onboarding-content {
           display: none;
         }
-        .onboarding-spotlight {
+        .onboarding-tour-launcher {
           display: flex;
-          flex-direction: column;
-          gap: 12px;
-          min-width: 0;
-        }
-        .onboarding-spotlight-card {
-          position: relative;
-          overflow: hidden;
-          padding: 18px;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 16px 18px;
           border-radius: 18px;
-          border: 1px solid rgba(var(--primary-rgb), 0.22);
+          border: 1px solid rgba(var(--primary-rgb), 0.2);
           background:
-            radial-gradient(circle at right top, rgba(var(--primary-rgb), 0.12), transparent 28%),
-            linear-gradient(180deg, rgba(11, 27, 46, 0.94) 0%, rgba(7, 18, 33, 0.96) 100%);
+            radial-gradient(circle at right top, rgba(var(--primary-rgb), 0.12), transparent 26%),
+            linear-gradient(180deg, rgba(11, 27, 46, 0.92) 0%, rgba(7, 18, 33, 0.96) 100%);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.1),
+            0 18px 36px rgba(2, 8, 20, 0.18);
+        }
+        .onboarding-tour-copy-wrap {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+        .onboarding-tour-icon {
+          width: 52px;
+          height: 52px;
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 16px;
+          border: 1px solid rgba(var(--primary-rgb), 0.24);
+          background:
+            radial-gradient(circle at top, rgba(17, 212, 143, 0.22), transparent 60%),
+            linear-gradient(180deg, rgba(10, 25, 42, 0.96) 0%, rgba(6, 16, 30, 0.98) 100%);
+          color: rgb(var(--primary-rgb));
           box-shadow:
             inset 0 1px 0 rgba(var(--primary-rgb), 0.12),
-            0 18px 36px rgba(2, 8, 20, 0.22);
+            0 14px 24px rgba(2, 8, 20, 0.18);
         }
-        .onboarding-video-meta {
+        .onboarding-tour-icon .icon {
+          width: 20px;
+          height: 20px;
+        }
+        .onboarding-tour-copy {
+          min-width: 0;
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          margin: 0;
+          gap: 6px;
         }
-        .onboarding-video-head {
+        .onboarding-tour-badge-row {
           display: flex;
           align-items: center;
           gap: 8px;
           flex-wrap: wrap;
         }
+        .onboarding-tour-badge,
         .onboarding-video-kicker {
           display: inline-flex;
           align-items: center;
@@ -1153,46 +1175,130 @@ function DashboardStyles() {
           letter-spacing: 0.04em;
           text-transform: uppercase;
         }
-        .onboarding-video-status {
-          display: inline-flex;
-          align-items: center;
-          min-height: 24px;
-          padding: 0 10px;
-          border-radius: 999px;
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          background: rgba(7, 18, 32, 0.78);
-          color: rgba(214, 228, 239, 0.82);
-          font-size: 11px;
-          font-weight: 700;
-        }
-        .onboarding-video-title {
+        .onboarding-tour-title {
           margin: 0;
           color: #f4fbf8;
-          font-size: 24px;
+          font-size: 18px;
           font-weight: 700;
-          line-height: 1.15;
+          line-height: 1.25;
         }
-        .onboarding-video-description {
+        .onboarding-tour-description {
           margin: 0;
           color: rgba(204, 225, 233, 0.86);
-          font-size: 13px;
-          line-height: 1.5;
+          font-size: 12px;
+          line-height: 1.45;
         }
-        .onboarding-preview-card {
+        .onboarding-tour-start-button {
+          min-height: 50px;
+          padding: 0 22px;
+          gap: 10px;
+          border-radius: 16px;
+          white-space: nowrap;
+          box-shadow: 0 18px 28px rgba(17, 212, 143, 0.18);
+        }
+        .onboarding-tour-start-button .icon {
+          width: 16px;
+          height: 16px;
+        }
+        .onboarding-floating-tour {
+          position: fixed;
+          right: 24px;
+          bottom: 24px;
+          width: min(390px, calc(100vw - 32px));
+          z-index: 80;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          padding: 14px;
+          border-radius: 20px;
+          border: 1px solid rgba(var(--primary-rgb), 0.22);
+          background:
+            radial-gradient(circle at top right, rgba(var(--primary-rgb), 0.14), transparent 34%),
+            linear-gradient(180deg, rgba(8, 20, 36, 0.94) 0%, rgba(4, 12, 23, 0.98) 100%);
+          box-shadow:
+            0 28px 54px rgba(2, 8, 20, 0.42),
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.1);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          opacity: 0;
+          pointer-events: none;
+          transform: translate3d(0, 18px, 0) scale(0.98);
+          transition:
+            opacity 180ms ease,
+            transform 180ms ease;
+        }
+        .onboarding-floating-tour.is-open {
+          opacity: 1;
+          pointer-events: auto;
+          transform: translate3d(0, 0, 0) scale(1);
+        }
+        .onboarding-floating-tour-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .onboarding-floating-tour-meta {
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .onboarding-floating-tour-title {
+          margin: 0;
+          color: #f4fbf8;
+          font-size: 18px;
+          font-weight: 700;
+          line-height: 1.25;
+        }
+        .onboarding-floating-tour-description {
+          margin: 0;
+          color: rgba(210, 232, 241, 0.8);
+          font-size: 12px;
+          line-height: 1.45;
+        }
+        .onboarding-tour-close-btn {
+          width: 32px;
+          height: 32px;
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          border: 1px solid rgba(var(--primary-rgb), 0.22);
+          background: rgba(4, 14, 29, 0.82);
+          color: rgba(234, 248, 244, 0.88);
+          line-height: 1;
+          padding: 0;
+          cursor: pointer;
+          transition:
+            border-color 180ms ease,
+            background 180ms ease,
+            color 180ms ease;
+        }
+        .onboarding-tour-close-btn:hover {
+          border-color: rgba(var(--primary-rgb), 0.38);
+          background: rgba(0, 240, 255, 0.12);
+          color: #f4fffd;
+        }
+        .onboarding-tour-close-btn:focus-visible {
+          outline: 2px solid rgba(var(--primary-rgb), 0.4);
+          outline-offset: 2px;
+        }
+        .onboarding-floating-player {
           position: relative;
-          margin-top: 14px;
         }
         .onboarding-video-shell {
-          --onboarding-player-top-crop: 56px;
           position: relative;
           overflow: hidden;
           aspect-ratio: 16 / 9;
-          border-radius: 20px;
-          border: 1px solid rgba(var(--primary-rgb), 0.22);
+          border-radius: 18px;
+          border: 1px solid rgba(var(--primary-rgb), 0.2);
           background: linear-gradient(180deg, rgba(7, 18, 33, 0.98) 0%, rgba(3, 9, 19, 0.98) 100%);
           box-shadow:
             inset 0 1px 0 rgba(var(--primary-rgb), 0.08),
-            0 20px 38px rgba(2, 8, 20, 0.2);
+            0 18px 32px rgba(2, 8, 20, 0.24);
+          isolation: isolate;
         }
         .onboarding-preview-backdrop {
           position: absolute;
@@ -1201,29 +1307,31 @@ function DashboardStyles() {
           background-position: center;
           background-size: cover;
           filter: saturate(0.94);
-          opacity: 0.52;
-          transform: scale(1.03);
+          opacity: 0.38;
+          transform: scale(1.04);
         }
         .onboarding-video-shell::after {
           content: '';
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(180deg, rgba(4, 11, 21, 0.12) 0%, rgba(2, 6, 12, 0.74) 100%),
-            linear-gradient(90deg, rgba(2, 8, 17, 0.32) 0%, rgba(2, 8, 17, 0.08) 45%, rgba(2, 8, 17, 0.36) 100%);
+            linear-gradient(180deg, rgba(4, 11, 21, 0.08) 0%, rgba(2, 6, 12, 0.14) 48%, rgba(2, 6, 12, 0.84) 100%),
+            linear-gradient(90deg, rgba(2, 8, 17, 0.24) 0%, rgba(2, 8, 17, 0.02) 40%, rgba(2, 8, 17, 0.28) 100%);
           pointer-events: none;
-          transition: opacity 180ms ease;
+          z-index: 1;
         }
         .onboarding-video-frame {
           position: absolute;
           inset: 0;
-          z-index: 3;
+          z-index: 2;
           width: 100%;
           height: 100%;
           border: 0;
           display: block;
           background: #02070f;
-          transition: inset 180ms ease, height 180ms ease;
+        }
+        .onboarding-video-player-host {
+          pointer-events: none;
         }
         .onboarding-video-player-host iframe {
           width: 100%;
@@ -1231,145 +1339,50 @@ function DashboardStyles() {
           border: 0;
           display: block;
           background: #02070f;
-        }
-        .onboarding-video-top-mask {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: var(--onboarding-player-top-crop);
-          z-index: 4;
-          opacity: 0;
           pointer-events: none;
-          background: linear-gradient(180deg, rgba(2, 7, 15, 0.98) 0%, rgba(2, 7, 15, 0.92) 44%, rgba(2, 7, 15, 0) 100%);
-          transition: opacity 180ms ease;
-        }
-        .onboarding-video-cover {
-          position: absolute;
-          inset: 0;
-          z-index: 5;
-          display: flex;
-          align-items: flex-end;
-          padding: 18px;
-        }
-        .onboarding-preview-button {
-          width: 100%;
-          min-height: 100%;
-          display: flex;
-          align-items: flex-end;
-          padding: 0;
-          border: 0;
-          background: transparent;
-          text-align: left;
-          cursor: pointer;
-        }
-        .onboarding-preview-button:focus-visible {
-          outline: 2px solid rgba(var(--primary-rgb), 0.4);
-          outline-offset: 3px;
-          border-radius: 20px;
-        }
-        .onboarding-preview-panel {
-          position: relative;
-          width: min(420px, 100%);
-          padding: 16px 18px;
-          border-radius: 20px;
-          border: 1px solid rgba(var(--primary-rgb), 0.2);
-          background: rgba(4, 13, 25, 0.82);
-          box-shadow:
-            inset 0 1px 0 rgba(var(--primary-rgb), 0.08),
-            0 16px 28px rgba(2, 8, 20, 0.24);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
         }
         .onboarding-video-placeholder {
           position: absolute;
           inset: 0;
-          z-index: 5;
+          z-index: 4;
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
-          gap: 6px;
+          gap: 8px;
           text-align: center;
           padding: 24px;
+          background: linear-gradient(180deg, rgba(2, 7, 15, 0.56) 0%, rgba(2, 7, 15, 0.84) 100%);
           color: rgba(220, 236, 243, 0.82);
           font-size: 13px;
         }
-        .onboarding-preview-panel-head {
-          display: inline-flex;
-          align-items: center;
-          gap: 12px;
-          width: 100%;
-        }
-        .onboarding-preview-play-icon {
-          width: 42px;
-          height: 42px;
-          border-radius: 999px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          background: linear-gradient(135deg, rgba(17, 212, 143, 0.96), rgba(32, 240, 192, 0.92));
-          color: #062219;
-          box-shadow: 0 14px 24px rgba(17, 212, 143, 0.2);
-        }
-        .onboarding-preview-copy {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          min-width: 0;
-        }
-        .onboarding-preview-label {
-          color: #f4fbf8;
-          font-size: 15px;
-          font-weight: 700;
-          line-height: 1.25;
-        }
-        .onboarding-preview-hint {
-          color: rgba(209, 236, 244, 0.76);
-          font-size: 12px;
-          line-height: 1.4;
-        }
-        .onboarding-video-shell.is-playing .onboarding-video-cover,
-        .onboarding-video-shell.is-playing .onboarding-video-placeholder {
+        .onboarding-video-shell.is-ready .onboarding-video-placeholder {
           display: none;
         }
-        .onboarding-video-shell.is-playing::after {
-          opacity: 0;
-        }
-        .onboarding-video-shell.is-playing.is-youtube .onboarding-video-frame {
-          inset: calc(var(--onboarding-player-top-crop) * -1) 0 0 0;
-          height: calc(100% + var(--onboarding-player-top-crop));
-        }
-        .onboarding-video-shell.is-playing.is-youtube .onboarding-video-top-mask {
-          opacity: 1;
-        }
         .onboarding-video-controls {
-          margin-top: 12px;
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 6;
           display: grid;
-          grid-template-columns: auto auto auto minmax(0, 1fr);
+          grid-template-columns: auto auto minmax(0, 1fr);
           align-items: center;
           gap: 10px;
-          padding: 12px 14px;
-          border-radius: 16px;
-          border: 1px solid rgba(var(--primary-rgb), 0.18);
-          background: linear-gradient(180deg, rgba(6, 17, 31, 0.96) 0%, rgba(4, 12, 24, 0.98) 100%);
-          box-shadow: inset 0 1px 0 rgba(var(--primary-rgb), 0.08);
+          padding: 14px;
+          background: linear-gradient(180deg, rgba(2, 7, 15, 0) 0%, rgba(2, 7, 15, 0.18) 10%, rgba(2, 7, 15, 0.9) 54%, rgba(2, 7, 15, 0.96) 100%);
         }
         .onboarding-video-control-btn {
-          min-height: 40px;
+          width: 40px;
+          height: 40px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          padding: 0 14px;
-          border-radius: 12px;
+          padding: 0;
+          border-radius: 999px;
           border: 1px solid rgba(var(--primary-rgb), 0.18);
-          background: rgba(10, 25, 42, 0.82);
+          background: rgba(10, 25, 42, 0.88);
           color: #eaf8f4;
-          font-size: 13px;
-          font-weight: 700;
-          line-height: 1;
           transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, opacity 180ms ease;
         }
         .onboarding-video-control-btn:hover:not(:disabled) {
@@ -1387,6 +1400,8 @@ function DashboardStyles() {
           outline-offset: 2px;
         }
         .onboarding-video-control-btn.is-primary {
+          width: 44px;
+          height: 44px;
           border-color: rgba(17, 212, 143, 0.28);
           background: linear-gradient(135deg, rgba(17, 212, 143, 0.98), rgba(32, 240, 192, 0.92));
           color: #062219;
@@ -1396,16 +1411,24 @@ function DashboardStyles() {
           border-color: rgba(17, 212, 143, 0.4);
           background: linear-gradient(135deg, rgba(28, 223, 154, 0.98), rgba(48, 245, 199, 0.94));
         }
+        .onboarding-video-control-btn.is-text {
+          width: auto;
+          min-width: 58px;
+          padding: 0 12px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 700;
+        }
         .onboarding-video-timeline {
           min-width: 0;
           display: grid;
           grid-template-columns: auto minmax(0, 1fr) auto;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
         }
         .onboarding-video-time {
           color: rgba(218, 236, 243, 0.82);
-          font-size: 12px;
+          font-size: 11px;
           line-height: 1;
           font-variant-numeric: tabular-nums;
           white-space: nowrap;
@@ -1413,182 +1436,143 @@ function DashboardStyles() {
         .onboarding-video-progress {
           width: 100%;
           margin: 0;
+          appearance: none;
+          -webkit-appearance: none;
           accent-color: rgb(var(--primary-rgb));
           cursor: pointer;
+          height: 4px;
+          border-radius: 999px;
+          background: rgba(220, 236, 243, 0.16);
         }
         .onboarding-video-progress:disabled {
           cursor: not-allowed;
           opacity: 0.6;
         }
-        .onboarding-spotlight-actions {
+        .onboarding-video-progress::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 12px;
+          height: 12px;
+          border-radius: 999px;
+          background: #20f0c0;
+          border: 2px solid #03251c;
+          box-shadow: 0 0 0 4px rgba(32, 240, 192, 0.12);
+        }
+        .onboarding-video-progress::-moz-range-thumb {
+          width: 12px;
+          height: 12px;
+          border-radius: 999px;
+          background: #20f0c0;
+          border: 2px solid #03251c;
+          box-shadow: 0 0 0 4px rgba(32, 240, 192, 0.12);
+        }
+        .onboarding-video-ended-overlay {
+          position: absolute;
+          inset: 0;
+          z-index: 7;
+          display: none;
+          align-items: flex-end;
+          padding: 14px;
+          background: linear-gradient(180deg, rgba(2, 7, 15, 0.08) 0%, rgba(2, 7, 15, 0.24) 42%, rgba(2, 7, 15, 0.84) 100%);
+        }
+        .onboarding-video-ended-overlay.is-visible {
           display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          margin-top: 14px;
         }
-        .onboarding-spotlight-actions .btn {
-          min-height: 42px;
+        .onboarding-video-ended-card {
+          width: 100%;
+          padding: 14px 16px;
+          border-radius: 16px;
+          border: 1px solid rgba(var(--primary-rgb), 0.18);
+          background: rgba(4, 13, 25, 0.84);
+          box-shadow:
+            inset 0 1px 0 rgba(var(--primary-rgb), 0.08),
+            0 18px 28px rgba(2, 8, 20, 0.24);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
         }
-        .onboarding-spotlight-note {
-          margin-top: 2px;
-          color: rgba(204, 225, 233, 0.72);
+        .onboarding-video-ended-kicker {
+          display: inline-flex;
+          margin-bottom: 8px;
+          color: rgba(143, 255, 225, 0.88);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .onboarding-video-ended-title {
+          display: block;
+          color: #f4fbf8;
+          font-size: 15px;
+          font-weight: 700;
+          line-height: 1.3;
+        }
+        .onboarding-video-ended-hint {
+          display: block;
+          margin-top: 4px;
+          color: rgba(208, 228, 237, 0.8);
           font-size: 12px;
           line-height: 1.45;
         }
-        .onboarding-sidebar {
+        .onboarding-video-ended-actions {
           display: flex;
-          flex-direction: column;
-          gap: 12px;
+          gap: 10px;
+          margin-top: 12px;
           min-width: 0;
         }
-        .onboarding-progress {
-          margin: 0;
-          padding: 14px;
-          border-radius: 18px;
-          border: 1px solid rgba(var(--primary-rgb), 0.18);
-          background: rgba(8, 21, 38, 0.62);
-        }
-        .onboarding-progress-head {
-          display: flex;
-          justify-content: space-between;
+        .onboarding-video-ended-btn {
+          flex: 1 1 0;
+          min-height: 38px;
+          display: inline-flex;
           align-items: center;
-          gap: 8px;
-          margin-bottom: 8px;
-        }
-        .onboarding-progress-text {
-          font-size: 13px;
-          color: rgba(226, 242, 248, 0.88);
-        }
-        .onboarding-progress-track {
-          width: 100%;
-          height: 9px;
+          justify-content: center;
+          padding: 0 14px;
           border-radius: 999px;
-          background: rgba(13, 31, 51, 0.9);
-          border: 1px solid rgba(var(--primary-rgb), 0.2);
-          overflow: hidden;
-        }
-        .onboarding-progress-fill {
-          height: 100%;
-          width: 0;
-          border-radius: inherit;
-          background: linear-gradient(90deg, #11d48f 0%, #20f0c0 100%);
-          transition: width 0.25s ease;
-        }
-        .onboarding-steps {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .onboarding-step {
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto;
-          gap: 10px;
-          align-items: flex-start;
-          padding: 10px 12px;
-          border-radius: 14px;
-          border: 1px solid rgba(var(--primary-rgb), 0.16);
-          background: rgba(8, 21, 38, 0.72);
+          border: 1px solid rgba(var(--primary-rgb), 0.18);
+          background: rgba(10, 25, 42, 0.88);
+          color: #eaf8f4;
+          font-size: 12px;
+          font-weight: 700;
           transition:
             border-color 0.18s ease,
             background 0.18s ease,
-            box-shadow 0.18s ease;
+            transform 0.18s ease,
+            opacity 0.18s ease;
         }
-        .onboarding-step.is-active {
+        .onboarding-video-ended-btn:hover:not(:disabled) {
           border-color: rgba(var(--primary-rgb), 0.34);
-          box-shadow:
-            inset 0 0 0 1px rgba(var(--primary-rgb), 0.16),
-            0 0 0 1px rgba(var(--primary-rgb), 0.06);
-          background: rgba(11, 28, 46, 0.82);
+          background: rgba(12, 31, 49, 0.96);
+          transform: translateY(-1px);
         }
-        .onboarding-step.is-complete {
+        .onboarding-video-ended-btn:disabled {
+          opacity: 0.48;
+          cursor: not-allowed;
+          transform: none;
+        }
+        .onboarding-video-ended-btn.is-primary {
           border-color: rgba(17, 212, 143, 0.28);
-          box-shadow: inset 0 0 0 1px rgba(17, 212, 143, 0.08);
-          background: rgba(12, 35, 55, 0.72);
+          background: linear-gradient(135deg, rgba(17, 212, 143, 0.98), rgba(32, 240, 192, 0.92));
+          color: #062219;
+          box-shadow: 0 14px 24px rgba(17, 212, 143, 0.16);
         }
-        .onboarding-step-select {
-          width: 100%;
-          min-width: 0;
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 0;
-          border: 0;
-          background: transparent;
-          text-align: left;
-          color: inherit;
-          cursor: pointer;
-        }
-        .onboarding-step-select:focus-visible {
+        .onboarding-video-ended-btn:focus-visible {
           outline: 2px solid rgba(var(--primary-rgb), 0.34);
           outline-offset: 2px;
-          border-radius: 12px;
-        }
-        .onboarding-step-index {
-          width: 30px;
-          height: 30px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          border-radius: 10px;
-          border: 1px solid rgba(148, 163, 184, 0.18);
-          background: rgba(7, 18, 32, 0.72);
-          color: rgba(214, 228, 239, 0.82);
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: 0.02em;
-        }
-        .onboarding-step.is-active .onboarding-step-index {
-          border-color: rgba(var(--primary-rgb), 0.3);
-          background: rgba(var(--primary-rgb), 0.16);
-          color: #eafff4;
-        }
-        .onboarding-step.is-complete .onboarding-step-index {
-          border-color: rgba(17, 212, 143, 0.3);
-          background: rgba(17, 212, 143, 0.12);
-          color: #d8fff0;
-        }
-        .onboarding-step-info {
-          min-width: 0;
-          padding-top: 2px;
-        }
-        .onboarding-step-title {
-          margin: 0;
-          color: #e7f8f2;
-          font-size: 14px;
-          font-weight: 600;
-          line-height: 1.3;
-        }
-        .onboarding-step-description {
-          display: none;
-          margin: 4px 0 0;
-          color: rgba(194, 214, 224, 0.86);
-          font-size: 12px;
-          line-height: 1.45;
-        }
-        .onboarding-step.is-active .onboarding-step-description {
-          display: block;
-        }
-        .onboarding-step .checkbox-wrapper {
-          margin-top: 4px;
-          margin-right: 0;
-        }
-        .onboarding-step-action {
-          display: none;
-          min-width: 118px;
-          justify-content: center;
-        }
-        .onboarding-step.is-active .onboarding-step-action {
-          display: inline-flex;
-        }
-        .onboarding-actions {
-          margin-top: 4px;
-          display: flex;
-          justify-content: flex-end;
         }
         @media (max-width: 980px) {
-          .onboarding-grid {
-            grid-template-columns: 1fr;
+          .onboarding-tour-launcher {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .onboarding-tour-copy-wrap {
+            align-items: flex-start;
+          }
+          .onboarding-tour-start-button {
+            width: 100%;
+            justify-content: center;
+          }
+          .onboarding-floating-tour {
+            right: 18px;
+            bottom: 18px;
           }
         }
         @media (max-width: 768px) {
@@ -1605,21 +1589,26 @@ function DashboardStyles() {
           .onboarding-card { padding: 14px; border-radius: 12px; margin-bottom: 16px; }
           .onboarding-card-header { margin-bottom: 12px; }
           .onboarding-card-header h3 { font-size: 18px; }
-          .onboarding-spotlight-card { padding: 14px; border-radius: 14px; }
-          .onboarding-video-title { font-size: 20px; }
+          .onboarding-tour-launcher { padding: 14px; border-radius: 14px; }
+          .onboarding-tour-copy-wrap { gap: 12px; }
+          .onboarding-tour-icon { width: 48px; height: 48px; border-radius: 14px; }
+          .onboarding-tour-title { font-size: 17px; }
+          .onboarding-floating-tour {
+            left: 12px;
+            right: 12px;
+            bottom: 12px;
+            width: auto;
+            padding: 12px;
+            border-radius: 16px;
+          }
+          .onboarding-floating-tour-title { font-size: 16px; }
           .onboarding-video-shell { border-radius: 16px; }
-          .onboarding-video-shell { --onboarding-player-top-crop: 44px; }
-          .onboarding-video-cover { padding: 14px; }
-          .onboarding-video-controls { grid-template-columns: 1fr; }
-          .onboarding-video-control-btn { width: 100%; }
-          .onboarding-video-timeline { width: 100%; }
-          .onboarding-preview-panel { width: 100%; padding: 14px; border-radius: 16px; }
-          .onboarding-preview-play-icon { width: 36px; height: 36px; }
-          .onboarding-spotlight-actions { flex-direction: column; }
-          .onboarding-spotlight-actions .btn { width: 100%; justify-content: center; }
-          .onboarding-step { grid-template-columns: auto minmax(0, 1fr); }
-          .onboarding-step-action { grid-column: 2; justify-self: flex-start; min-width: 0; }
-          .onboarding-actions { justify-content: flex-start; }
+          .onboarding-video-controls { padding: 12px; gap: 8px; }
+          .onboarding-video-control-btn { width: 36px; height: 36px; }
+          .onboarding-video-control-btn.is-primary { width: 40px; height: 40px; }
+          .onboarding-video-control-btn.is-text { min-width: 52px; padding: 0 10px; }
+          .onboarding-video-timeline { gap: 6px; }
+          .onboarding-video-ended-actions { flex-direction: column; }
           .dashboard-react .stats-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
@@ -2025,6 +2014,7 @@ function OnboardingCard({
   }, [globals, isDismissed]);
 
   const handleDismiss = () => {
+    globals.closeOnboardingTour?.();
     setIsCollapsed(false);
     onDismissedChange(true);
   };
@@ -2038,11 +2028,11 @@ function OnboardingCard({
       <div className="onboarding-card-header">
         <div>
           <h3>Primeiros passos no ZapVender</h3>
-          <p>Use este checklist para configurar sua conta e acelerar a ativação.</p>
+          <p>Faça um tour rápido pelos recursos principais sem disputar espaço com o restante da tela.</p>
         </div>
         <div className="onboarding-card-controls">
           <span className="badge badge-success" id="onboardingCompletedBadge" style={{ display: 'none' }}>
-            Checklist concluído
+            Tour concluído
           </span>
           <button
             type="button"
@@ -2067,185 +2057,145 @@ function OnboardingCard({
       </div>
 
       <div className="onboarding-content">
-        <div className="onboarding-grid">
-          <div className="onboarding-spotlight">
-            <div className="onboarding-spotlight-card">
-              <div className="onboarding-video-meta">
-                <div className="onboarding-video-head">
-                  <span className="onboarding-video-kicker" id="onboardingVideoKicker">Etapa 1 de 8</span>
-                  <span className="onboarding-video-status" id="onboardingVideoStatus">Próxima recomendada</span>
-                </div>
-                <p className="onboarding-video-title" id="onboardingVideoTitle">Conecte seu WhatsApp</p>
-                <p className="onboarding-video-description" id="onboardingVideoDescription">Selecione uma etapa para abrir o guia rápido correspondente.</p>
+        <div className="onboarding-tour-launcher">
+          <div className="onboarding-tour-copy-wrap">
+            <div className="onboarding-tour-icon" aria-hidden="true">
+              <span className="icon icon-play"></span>
+            </div>
+            <div className="onboarding-tour-copy">
+              <div className="onboarding-tour-badge-row">
+                <span className="onboarding-tour-badge">Tour guiado</span>
               </div>
-
-              <div className="onboarding-preview-card">
-                <div className="onboarding-video-shell" id="onboardingVideoShell">
-                  <div className="onboarding-preview-backdrop" id="onboardingVideoPosterBackdrop"></div>
-                  <div
-                    id="onboardingVideoPlayerHost"
-                    className="onboarding-video-frame onboarding-video-player-host"
-                    style={{ display: 'none' }}
-                  ></div>
-                  <iframe
-                    id="onboardingVideoFrame"
-                    className="onboarding-video-frame onboarding-video-fallback-frame"
-                    title="Guia de primeiros passos"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    referrerPolicy="strict-origin-when-cross-origin"
-                    allowFullScreen
-                    style={{ display: 'none' }}
-                  ></iframe>
-                  <div className="onboarding-video-top-mask" aria-hidden="true"></div>
-                  <div className="onboarding-video-placeholder" id="onboardingVideoPlaceholder">
-                    <strong id="onboardingVideoPlaceholderTitle">Guia indisponível</strong>
-                    <span id="onboardingVideoHint">Estamos preparando o passo a passo desta etapa.</span>
-                  </div>
-                  <div className="onboarding-video-cover" id="onboardingVideoCover">
-                    <button
-                      type="button"
-                      className="onboarding-preview-button"
-                      id="onboardingVideoPreviewButton"
-                      onClick={() => globals.playOnboardingVideo?.()}
-                    >
-                      <span className="onboarding-preview-panel">
-                        <span className="onboarding-preview-panel-head">
-                          <span className="onboarding-preview-play-icon">
-                            <span className="icon icon-play icon-sm"></span>
-                          </span>
-                          <span className="onboarding-preview-copy">
-                            <span className="onboarding-preview-label" id="onboardingVideoCtaLabel">Assistir guia aqui</span>
-                            <span className="onboarding-preview-hint" id="onboardingVideoPreviewHint">Abra o passo a passo sem sair do dashboard.</span>
-                          </span>
-                        </span>
-                      </span>
-                    </button>
-                  </div>
-                </div>
-                <div className="onboarding-video-controls" id="onboardingVideoControls">
-                  <button
-                    type="button"
-                    className="onboarding-video-control-btn is-primary"
-                    id="onboardingVideoToggleButton"
-                    onClick={() => globals.toggleOnboardingVideoPlayback?.()}
-                    disabled
-                  >
-                    <span className="icon icon-play icon-sm" id="onboardingVideoToggleIcon"></span>
-                    <span id="onboardingVideoToggleLabel">Iniciar guia</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="onboarding-video-control-btn"
-                    id="onboardingVideoMuteButton"
-                    onClick={() => globals.toggleOnboardingVideoMute?.()}
-                    disabled
-                  >
-                    <span id="onboardingVideoMuteLabel">Som ligado</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="onboarding-video-control-btn"
-                    id="onboardingVideoRestartButton"
-                    onClick={() => globals.restartOnboardingVideo?.()}
-                    disabled
-                  >
-                    Reiniciar
-                  </button>
-                  <div className="onboarding-video-timeline">
-                    <span className="onboarding-video-time" id="onboardingVideoCurrentTime">00:00</span>
-                    <input
-                      type="range"
-                      id="onboardingVideoProgress"
-                      className="onboarding-video-progress"
-                      min={0}
-                      max={1000}
-                      step={1}
-                      defaultValue={0}
-                      onInput={(event) => globals.seekOnboardingVideo?.(Number(event.currentTarget.value))}
-                      disabled
-                    />
-                    <span className="onboarding-video-time" id="onboardingVideoDuration">00:00</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="onboarding-spotlight-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  id="onboardingVideoPlayButton"
-                  onClick={() => globals.playOnboardingVideo?.()}
-                >
-                  Assistir guia
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  id="onboardingStepActionButton"
-                >
-                  Abrir etapa
-                </button>
-              </div>
-
-              <p className="onboarding-spotlight-note" id="onboardingSpotlightNote">
-                Assista ao guia da etapa selecionada e depois marque a checklist quando concluir.
+              <p className="onboarding-tour-title">Explore o ZapVender em {ONBOARDING_STEPS.length} vídeos rápidos</p>
+              <p className="onboarding-tour-description" id="onboardingTourCurrentStep">
+                Inicie o tour e acompanhe cada etapa sem sair da tela.
               </p>
             </div>
           </div>
 
-          <div className="onboarding-sidebar">
-            <div className="onboarding-progress">
-              <div className="onboarding-progress-head">
-                <span className="onboarding-progress-text" id="onboardingProgressText">0/8 etapas concluídas</span>
-              </div>
-              <div className="onboarding-progress-track">
-                <div className="onboarding-progress-fill" id="onboardingProgressFill"></div>
-              </div>
+          <button
+            type="button"
+            className="btn btn-primary onboarding-tour-start-button"
+            id="onboardingTourStartButton"
+            onClick={() => globals.startOnboardingTour?.()}
+          >
+            <span className="icon icon-play icon-sm"></span>
+            <span id="onboardingTourStartButtonLabel">Iniciar tour</span>
+          </button>
+        </div>
+
+        <div className="onboarding-floating-tour" id="onboardingFloatingTour" aria-live="polite">
+          <div className="onboarding-floating-tour-head">
+            <div className="onboarding-floating-tour-meta">
+              <span className="onboarding-video-kicker" id="onboardingVideoKicker">Etapa 1 de 8</span>
+              <p className="onboarding-floating-tour-title" id="onboardingVideoTitle">Conecte seu WhatsApp</p>
             </div>
 
-            <div className="onboarding-steps">
-              {ONBOARDING_STEPS.map((step, index) => (
-                <div className="onboarding-step" id={`onboarding-row-${step.id}`} data-onboarding-step-id={step.id} key={step.id}>
-                  <label className="checkbox-wrapper">
-                    <input
-                      type="checkbox"
-                      id={`onboarding-step-${step.id}`}
-                      onChange={(event) => globals.toggleOnboardingStep?.(step.id, event.currentTarget.checked)}
-                    />
-                    <span className="checkbox-custom"></span>
-                  </label>
+            <button
+              type="button"
+              className="onboarding-tour-close-btn"
+              onClick={() => globals.closeOnboardingTour?.()}
+              title="Fechar tour"
+              aria-label="Fechar tour"
+            >
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
 
-                  <button
-                    type="button"
-                    className="onboarding-step-select"
-                    onClick={() => globals.selectOnboardingVideoStep?.(step.id)}
-                  >
-                    <span className="onboarding-step-index">{String(index + 1).padStart(2, '0')}</span>
-                    <span className="onboarding-step-info">
-                      <span className="onboarding-step-title">{step.title}</span>
-                      <span className="onboarding-step-description">{step.description}</span>
-                    </span>
-                  </button>
+          <p className="onboarding-floating-tour-description" id="onboardingVideoDescription">
+            Passo a passo para conectar a primeira sessão do WhatsApp no ZapVender.
+          </p>
 
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm onboarding-step-action"
-                    onClick={() => globals.goToOnboardingStep?.(step.id)}
-                  >
-                    {step.actionLabel}
-                  </button>
+          <div className="onboarding-floating-player">
+            <div className="onboarding-video-shell" id="onboardingVideoShell">
+              <div className="onboarding-preview-backdrop" id="onboardingVideoPosterBackdrop"></div>
+              <div
+                id="onboardingVideoPlayerHost"
+                className="onboarding-video-frame onboarding-video-player-host"
+                style={{ display: 'none' }}
+              ></div>
+              <iframe
+                id="onboardingVideoFrame"
+                className="onboarding-video-frame onboarding-video-fallback-frame"
+                title="Tour guiado do ZapVender"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+                style={{ display: 'none' }}
+              ></iframe>
+
+              <div className="onboarding-video-placeholder" id="onboardingVideoPlaceholder">
+                <strong id="onboardingVideoPlaceholderTitle">Carregando tour</strong>
+                <span id="onboardingVideoHint">Seu vídeo vai aparecer aqui em instantes.</span>
+              </div>
+
+              <div className="onboarding-video-controls" id="onboardingVideoControls">
+                <button
+                  type="button"
+                  className="onboarding-video-control-btn is-primary"
+                  id="onboardingVideoToggleButton"
+                  onClick={() => globals.toggleOnboardingVideoPlayback?.()}
+                  disabled
+                  aria-label="Reproduzir vídeo"
+                  title="Reproduzir vídeo"
+                >
+                  <span className="icon icon-play icon-sm" id="onboardingVideoToggleIcon"></span>
+                </button>
+
+                <button
+                  type="button"
+                  className="onboarding-video-control-btn is-text"
+                  id="onboardingVideoMuteButton"
+                  onClick={() => globals.toggleOnboardingVideoMute?.()}
+                  disabled
+                >
+                  <span id="onboardingVideoMuteLabel">Som</span>
+                </button>
+
+                <div className="onboarding-video-timeline">
+                  <span className="onboarding-video-time" id="onboardingVideoCurrentTime">00:00</span>
+                  <input
+                    type="range"
+                    id="onboardingVideoProgress"
+                    className="onboarding-video-progress"
+                    min={0}
+                    max={1000}
+                    step={1}
+                    defaultValue={0}
+                    onInput={(event) => globals.seekOnboardingVideo?.(Number(event.currentTarget.value))}
+                    disabled
+                  />
+                  <span className="onboarding-video-time" id="onboardingVideoDuration">00:00</span>
                 </div>
-              ))}
-            </div>
+              </div>
 
-            <div className="onboarding-actions">
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => globals.resetOnboardingChecklist?.()}
-              >
-                Reiniciar checklist
-              </button>
+              <div className="onboarding-video-ended-overlay" id="onboardingVideoEndedOverlay" aria-live="polite">
+                <div className="onboarding-video-ended-card">
+                  <span className="onboarding-video-ended-kicker">Etapa concluída</span>
+                  <strong className="onboarding-video-ended-title" id="onboardingVideoEndedTitle">Pronto para seguir</strong>
+                  <span className="onboarding-video-ended-hint" id="onboardingVideoEndedHint">
+                    Vá para o próximo vídeo do tour quando quiser.
+                  </span>
+                  <div className="onboarding-video-ended-actions">
+                    <button
+                      type="button"
+                      className="onboarding-video-ended-btn"
+                      id="onboardingVideoPrevButton"
+                      onClick={() => globals.goToPreviousOnboardingTourStep?.()}
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      className="onboarding-video-ended-btn is-primary"
+                      id="onboardingVideoNextButton"
+                      onClick={() => globals.goToNextOnboardingTourStep?.()}
+                    >
+                      Próximo
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

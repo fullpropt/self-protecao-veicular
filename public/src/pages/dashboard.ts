@@ -154,6 +154,7 @@ let onboardingState: OnboardingState = {
 let onboardingVideoUrls: OnboardingVideosMap = {};
 let onboardingSelectedStepId: OnboardingStepId | null = null;
 let onboardingPlayingStepId: OnboardingStepId | null = null;
+let onboardingTourOpen = false;
 let onboardingYouTubePlayer: {
     destroy?: () => void;
     playVideo?: () => void;
@@ -444,30 +445,106 @@ function getPreferredOnboardingSelectedStepId() {
         || null;
 }
 
-function renderOnboardingChecklist() {
-    if (!onboardingSelectedStepId || !ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)) {
-        onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
-    }
+function getSelectedOnboardingStepId() {
+    const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
+        ? onboardingSelectedStepId
+        : getPreferredOnboardingSelectedStepId();
+    onboardingSelectedStepId = selectedStepId;
+    return selectedStepId;
+}
 
+function getOnboardingStepIndex(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    return stepId ? ONBOARDING_STEP_IDS.indexOf(stepId) : -1;
+}
+
+function getAdjacentOnboardingStepId(stepIdInput: string | OnboardingStepId | null | undefined, direction: -1 | 1) {
+    const currentIndex = getOnboardingStepIndex(stepIdInput);
+    if (currentIndex < 0) return null;
+    return ONBOARDING_STEP_IDS[currentIndex + direction] || null;
+}
+
+function markOnboardingStepCompleted(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (!stepId || isOnboardingStepCompleted(stepId)) return;
+
+    const nextCompleted = new Set(onboardingState.completedSteps);
+    nextCompleted.add(stepId);
+    onboardingState = {
+        completedSteps: ONBOARDING_STEP_IDS.filter((id) => nextCompleted.has(id)),
+        updatedAt: Date.now()
+    };
+    writeOnboardingState(onboardingState);
+    renderOnboardingChecklist();
+}
+
+function renderOnboardingTourLauncher() {
+    const selectedStepId = getSelectedOnboardingStepId();
     const totalSteps = ONBOARDING_STEP_IDS.length;
-    let completedCount = 0;
+    const completedCount = onboardingState.completedSteps.length;
+    const progress = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
+    const nextRecommendedStepId = getPreferredOnboardingSelectedStepId();
+
+    const progressText = document.getElementById('onboardingProgressText') as HTMLElement | null;
+    const progressFill = document.getElementById('onboardingProgressFill') as HTMLElement | null;
+    const completedBadge = document.getElementById('onboardingCompletedBadge') as HTMLElement | null;
+    const currentStep = document.getElementById('onboardingTourCurrentStep') as HTMLElement | null;
+    const startButtonLabel = document.getElementById('onboardingTourStartButtonLabel') as HTMLElement | null;
+
+    if (progressText) {
+        progressText.textContent = `${completedCount}/${totalSteps} v\u00eddeos vistos`;
+    }
+    if (progressFill) {
+        progressFill.style.width = `${progress}%`;
+    }
+    if (completedBadge) {
+        completedBadge.style.display = completedCount === totalSteps && totalSteps > 0 ? 'inline-flex' : 'none';
+    }
+    if (currentStep) {
+        if (completedCount === totalSteps && totalSteps > 0) {
+            currentStep.textContent = 'Tour conclu\u00eddo. Voc\u00ea pode rever qualquer etapa quando quiser.';
+        } else if (onboardingTourOpen && selectedStepId) {
+            currentStep.textContent = `Reproduzindo agora: ${ONBOARDING_STEP_LABELS_UI[selectedStepId]}.`;
+        } else if (nextRecommendedStepId) {
+            currentStep.textContent = `Pr\u00f3ximo v\u00eddeo: ${ONBOARDING_STEP_LABELS_UI[nextRecommendedStepId]}.`;
+        } else {
+            currentStep.textContent = 'Comece pelo tour inicial e avance no seu ritmo.';
+        }
+    }
+    if (startButtonLabel) {
+        startButtonLabel.textContent = onboardingTourOpen
+            ? 'Continuar tour'
+            : (completedCount === 0
+                ? 'Iniciar tour'
+                : (completedCount === totalSteps ? 'Rever tour' : 'Continuar tour'));
+    }
+}
+
+function renderOnboardingChecklist() {
+    getSelectedOnboardingStepId();
+    renderOnboardingTourLauncher();
+}
+
+function renderOnboardingChecklistLegacy() {
+    const selectedStepId = getSelectedOnboardingStepId();
+    const totalSteps = ONBOARDING_STEP_IDS.length;
+    const completedCount = onboardingState.completedSteps.length;
+    const progress = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
+    const progressText = null as HTMLElement | null;
+    const progressFill = null as HTMLElement | null;
+    const completedBadge = null as HTMLElement | null;
 
     ONBOARDING_STEP_IDS.forEach((stepId) => {
         const checked = isOnboardingStepCompleted(stepId);
-        if (checked) completedCount += 1;
 
         const input = document.getElementById(`onboarding-step-${stepId}`) as HTMLInputElement | null;
         if (input) input.checked = checked;
 
         const row = document.getElementById(`onboarding-row-${stepId}`) as HTMLElement | null;
         row?.classList.toggle('is-complete', checked);
-        row?.classList.toggle('is-active', onboardingSelectedStepId === stepId);
+        row?.classList.toggle('is-active', selectedStepId === stepId);
     });
 
-    const progress = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
-    const progressText = document.getElementById('onboardingProgressText') as HTMLElement | null;
-    const progressFill = document.getElementById('onboardingProgressFill') as HTMLElement | null;
-    const completedBadge = document.getElementById('onboardingCompletedBadge') as HTMLElement | null;
 
     if (progressText) {
         progressText.textContent = `${completedCount}/${totalSteps} etapas concluídas`;
@@ -478,19 +555,24 @@ function renderOnboardingChecklist() {
     if (completedBadge) {
         completedBadge.style.display = completedCount === totalSteps && totalSteps > 0 ? 'inline-flex' : 'none';
     }
+
+    renderOnboardingTourLauncher();
 }
 
 function selectOnboardingVideoStep(stepIdInput: string) {
     const stepId = normalizeOnboardingStepId(stepIdInput) || getPreferredOnboardingSelectedStepId();
     if (!stepId) return;
 
-    if (onboardingSelectedStepId !== stepId) {
-        destroyOnboardingYouTubePlayer();
+    onboardingSelectedStepId = stepId;
+    if (!onboardingTourOpen) {
         onboardingPlayingStepId = null;
     }
-    onboardingSelectedStepId = stepId;
     renderOnboardingChecklist();
     renderOnboardingVideo();
+
+    if (onboardingTourOpen) {
+        startOnboardingTour(stepId);
+    }
 }
 
 function toggleOnboardingStep(stepIdInput: string, checked?: boolean) {
@@ -520,11 +602,80 @@ function resetOnboardingChecklist() {
         updatedAt: Date.now()
     };
     destroyOnboardingYouTubePlayer();
+    onboardingTourOpen = false;
     onboardingPlayingStepId = null;
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
     writeOnboardingState(onboardingState);
     renderOnboardingChecklist();
     renderOnboardingVideo();
+}
+
+function startOnboardingTour(stepIdInput?: string) {
+    const stepId = normalizeOnboardingStepId(stepIdInput)
+        || getPreferredOnboardingSelectedStepId()
+        || getSelectedOnboardingStepId();
+    if (!stepId) return;
+
+    onboardingSelectedStepId = stepId;
+    onboardingPlayingStepId = stepId;
+    onboardingTourOpen = true;
+
+    const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[stepId] || '');
+
+    renderOnboardingChecklist();
+    renderOnboardingVideo();
+
+    if (!presentation.embedUrl) {
+        renderOnboardingVideoControls(presentation);
+        return;
+    }
+
+    if (presentation.provider === 'youtube' && presentation.videoId) {
+        void ensureOnboardingYouTubePlayback(presentation.videoId);
+        return;
+    }
+
+    const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
+    if (frame && frame.src !== presentation.embedUrl) {
+        frame.src = presentation.embedUrl;
+    }
+
+    renderOnboardingVideoControls(presentation);
+}
+
+function closeOnboardingTour() {
+    onboardingTourOpen = false;
+
+    if (onboardingYouTubePlayer && onboardingYouTubePlayerReady) {
+        try {
+            onboardingYouTubePlayer.pauseVideo?.();
+        } catch (_) {
+            // no-op
+        }
+    }
+
+    stopOnboardingVideoSyncTimer();
+    if (onboardingVideoPlaybackState === 'playing' || onboardingVideoPlaybackState === 'loading') {
+        onboardingVideoPlaybackState = 'paused';
+    }
+
+    renderOnboardingChecklist();
+    renderOnboardingVideo();
+}
+
+function goToPreviousOnboardingTourStep() {
+    const previousStepId = getAdjacentOnboardingStepId(getSelectedOnboardingStepId(), -1);
+    if (!previousStepId) return;
+    startOnboardingTour(previousStepId);
+}
+
+function goToNextOnboardingTourStep() {
+    const nextStepId = getAdjacentOnboardingStepId(getSelectedOnboardingStepId(), 1);
+    if (!nextStepId) {
+        closeOnboardingTour();
+        return;
+    }
+    startOnboardingTour(nextStepId);
 }
 
 function goToOnboardingStep(stepIdInput: string) {
@@ -663,23 +814,24 @@ function ensureOnboardingYouTubeApi() {
 
 function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresentation | null) {
     const toggleButton = document.getElementById('onboardingVideoToggleButton') as HTMLButtonElement | null;
-    const toggleLabel = document.getElementById('onboardingVideoToggleLabel') as HTMLElement | null;
     const toggleIcon = document.getElementById('onboardingVideoToggleIcon') as HTMLElement | null;
     const muteButton = document.getElementById('onboardingVideoMuteButton') as HTMLButtonElement | null;
     const muteLabel = document.getElementById('onboardingVideoMuteLabel') as HTMLElement | null;
-    const restartButton = document.getElementById('onboardingVideoRestartButton') as HTMLButtonElement | null;
     const progress = document.getElementById('onboardingVideoProgress') as HTMLInputElement | null;
     const currentTime = document.getElementById('onboardingVideoCurrentTime') as HTMLElement | null;
     const duration = document.getElementById('onboardingVideoDuration') as HTMLElement | null;
+    const endedOverlay = document.getElementById('onboardingVideoEndedOverlay') as HTMLElement | null;
+    const endedTitle = document.getElementById('onboardingVideoEndedTitle') as HTMLElement | null;
+    const endedHint = document.getElementById('onboardingVideoEndedHint') as HTMLElement | null;
+    const previousButton = document.getElementById('onboardingVideoPrevButton') as HTMLButtonElement | null;
+    const nextButton = document.getElementById('onboardingVideoNextButton') as HTMLButtonElement | null;
 
-    const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
-        ? onboardingSelectedStepId
-        : getPreferredOnboardingSelectedStepId();
+    const selectedStepId = getSelectedOnboardingStepId();
     const presentation = presentationInput ?? (selectedStepId
         ? buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '')
         : null);
     const hasYouTubeVideo = Boolean(presentation?.provider === 'youtube' && presentation.videoId);
-    const isActivePlayer = Boolean(selectedStepId && onboardingPlayingStepId === selectedStepId && hasYouTubeVideo);
+    const isActivePlayer = Boolean(onboardingTourOpen && selectedStepId && onboardingPlayingStepId === selectedStepId && hasYouTubeVideo);
     const isLoading = isActivePlayer && onboardingVideoPlaybackState === 'loading';
     const isPlaying = isActivePlayer && onboardingVideoPlaybackState === 'playing';
     const isEnded = isActivePlayer && onboardingVideoPlaybackState === 'ended';
@@ -687,28 +839,26 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     const progressValue = canControlTimeline
         ? Math.max(0, Math.min(1000, Math.round((onboardingVideoCurrentSeconds / onboardingVideoDurationSeconds) * 1000)))
         : 0;
+    const previousStepId = selectedStepId ? getAdjacentOnboardingStepId(selectedStepId, -1) : null;
+    const nextStepId = selectedStepId ? getAdjacentOnboardingStepId(selectedStepId, 1) : null;
 
     if (toggleButton) {
         toggleButton.disabled = !hasYouTubeVideo || isLoading;
-    }
-    if (toggleLabel) {
-        toggleLabel.textContent = !hasYouTubeVideo
-            ? 'Guia indisponivel'
-            : (isLoading
-                ? 'Carregando'
-                : (isPlaying ? 'Pausar' : (isEnded ? 'Reiniciar guia' : (isActivePlayer ? 'Continuar' : 'Iniciar guia'))));
+        toggleButton.title = !hasYouTubeVideo
+            ? 'V\u00eddeo indispon\u00edvel'
+            : (isPlaying ? 'Pausar v\u00eddeo' : (isEnded ? 'Reiniciar v\u00eddeo' : 'Reproduzir v\u00eddeo'));
+        toggleButton.setAttribute('aria-label', toggleButton.title);
     }
     if (toggleIcon) {
         toggleIcon.className = `icon ${isPlaying ? 'icon-pause' : 'icon-play'} icon-sm`;
     }
     if (muteButton) {
         muteButton.disabled = !isActivePlayer || !onboardingYouTubePlayerReady;
+        muteButton.title = onboardingVideoMuted ? 'Ativar som' : 'Silenciar v\u00eddeo';
+        muteButton.setAttribute('aria-label', muteButton.title);
     }
     if (muteLabel) {
-        muteLabel.textContent = onboardingVideoMuted ? 'Ativar som' : 'Som ligado';
-    }
-    if (restartButton) {
-        restartButton.disabled = !isActivePlayer || !onboardingYouTubePlayerReady;
+        muteLabel.textContent = onboardingVideoMuted ? 'Mudo' : 'Som';
     }
     if (progress) {
         progress.disabled = !canControlTimeline;
@@ -719,6 +869,25 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     }
     if (duration) {
         duration.textContent = formatOnboardingVideoTime(onboardingVideoDurationSeconds);
+    }
+    if (endedOverlay) {
+        endedOverlay.classList.toggle('is-visible', isEnded);
+    }
+    if (endedTitle) {
+        endedTitle.textContent = nextStepId
+            ? `Pr\u00f3ximo: ${ONBOARDING_STEP_LABELS_UI[nextStepId]}`
+            : 'Tour conclu\u00eddo';
+    }
+    if (endedHint) {
+        endedHint.textContent = nextStepId
+            ? 'Siga para o pr\u00f3ximo v\u00eddeo quando quiser.'
+            : 'Voc\u00ea chegou ao fim do tour e pode rever qualquer etapa.';
+    }
+    if (previousButton) {
+        previousButton.disabled = !previousStepId;
+    }
+    if (nextButton) {
+        nextButton.textContent = nextStepId ? 'Pr\u00f3ximo' : 'Concluir';
     }
 }
 
@@ -767,6 +936,7 @@ async function ensureOnboardingYouTubePlayback(videoId: string) {
                         // no-op
                     }
                     startOnboardingVideoSyncTimer();
+                    renderOnboardingVideo();
                     renderOnboardingVideoControls();
                 },
                 onStateChange: (event: { data?: number }) => {
@@ -777,15 +947,18 @@ async function ensureOnboardingYouTubePlayback(videoId: string) {
                         onboardingVideoPlaybackState = 'paused';
                     } else if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.ended) {
                         onboardingVideoPlaybackState = 'ended';
+                        markOnboardingStepCompleted(onboardingPlayingStepId || onboardingSelectedStepId);
                     } else if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.buffering) {
                         onboardingVideoPlaybackState = 'loading';
                     }
 
                     syncOnboardingYouTubeMetrics();
+                    renderOnboardingVideo();
                     renderOnboardingVideoControls();
                 },
                 onError: () => {
                     onboardingVideoPlaybackState = 'idle';
+                    renderOnboardingVideo();
                     renderOnboardingVideoControls();
                 }
             }
@@ -808,6 +981,7 @@ async function ensureOnboardingYouTubePlayback(videoId: string) {
 
     onboardingVideoPlaybackState = 'playing';
     startOnboardingVideoSyncTimer();
+    renderOnboardingVideo();
     renderOnboardingVideoControls();
 }
 
@@ -898,6 +1072,115 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
 }
 
 function renderOnboardingVideo() {
+    const selectedStepId = getSelectedOnboardingStepId();
+    if (!selectedStepId) return;
+
+    const tour = document.getElementById('onboardingFloatingTour') as HTMLElement | null;
+    const shell = document.getElementById('onboardingVideoShell') as HTMLElement | null;
+    const placeholder = document.getElementById('onboardingVideoPlaceholder') as HTMLElement | null;
+    const placeholderTitle = document.getElementById('onboardingVideoPlaceholderTitle') as HTMLElement | null;
+    const hint = document.getElementById('onboardingVideoHint') as HTMLElement | null;
+    const posterBackdrop = document.getElementById('onboardingVideoPosterBackdrop') as HTMLElement | null;
+    const playerHost = document.getElementById('onboardingVideoPlayerHost') as HTMLElement | null;
+    const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
+    const kicker = document.getElementById('onboardingVideoKicker') as HTMLElement | null;
+    const title = document.getElementById('onboardingVideoTitle') as HTMLElement | null;
+    const description = document.getElementById('onboardingVideoDescription') as HTMLElement | null;
+
+    const stepPosition = Math.max(0, ONBOARDING_STEP_IDS.indexOf(selectedStepId)) + 1;
+    const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
+    const isCurrentStepOpen = onboardingTourOpen && onboardingPlayingStepId === selectedStepId;
+    const shouldRenderVideo = isCurrentStepOpen && Boolean(presentation.embedUrl);
+    const isVideoReady = shouldRenderVideo && (
+        presentation.provider !== 'youtube'
+        || (onboardingYouTubePlayerReady && onboardingYouTubePlayerVideoId === presentation.videoId)
+    );
+
+    if (tour) {
+        tour.classList.toggle('is-open', onboardingTourOpen);
+    }
+    if (shell) {
+        shell.classList.toggle('is-ready', isVideoReady);
+        shell.classList.toggle('is-youtube', presentation.provider === 'youtube');
+    }
+    if (kicker) {
+        kicker.textContent = `Etapa ${stepPosition} de ${ONBOARDING_STEP_IDS.length}`;
+    }
+    if (title) {
+        title.textContent = ONBOARDING_STEP_LABELS_UI[selectedStepId];
+    }
+    if (description) {
+        description.textContent = ONBOARDING_STEP_VIDEO_DESCRIPTIONS_UI[selectedStepId];
+    }
+    if (posterBackdrop) {
+        const backdropUrl = presentation.posterUrl || presentation.posterFallbackUrl;
+        posterBackdrop.style.backgroundImage = backdropUrl ? `url("${backdropUrl}")` : '';
+    }
+
+    if (!presentation.embedUrl) {
+        if (placeholder) {
+            placeholder.style.display = 'flex';
+        }
+        if (placeholderTitle) {
+            placeholderTitle.textContent = 'Guia indispon\u00edvel';
+        }
+        if (hint) {
+            hint.textContent = 'Este passo a passo ainda n\u00e3o est\u00e1 dispon\u00edvel para exibi\u00e7\u00e3o.';
+        }
+        if (playerHost) {
+            playerHost.style.display = 'none';
+        }
+        if (frame) {
+            frame.style.display = 'none';
+            frame.removeAttribute('src');
+        }
+        renderOnboardingVideoControls(presentation);
+        return;
+    }
+
+    if (!onboardingTourOpen) {
+        if (placeholder) {
+            placeholder.style.display = 'flex';
+        }
+        if (placeholderTitle) {
+            placeholderTitle.textContent = 'Tour pronto';
+        }
+        if (hint) {
+            hint.textContent = 'Clique em Iniciar tour para abrir o v\u00eddeo flutuante.';
+        }
+    } else if (!isVideoReady) {
+        if (placeholder) {
+            placeholder.style.display = 'flex';
+        }
+        if (placeholderTitle) {
+            placeholderTitle.textContent = 'Abrindo v\u00eddeo';
+        }
+        if (hint) {
+            hint.textContent = 'O tour est\u00e1 sendo carregado. Isso leva s\u00f3 alguns instantes.';
+        }
+    } else if (placeholder) {
+        placeholder.style.display = 'none';
+    }
+
+    if (playerHost) {
+        playerHost.style.display = shouldRenderVideo && presentation.provider === 'youtube' ? 'block' : 'none';
+    }
+    if (frame) {
+        if (shouldRenderVideo && presentation.provider !== 'youtube') {
+            if (frame.src !== presentation.embedUrl) {
+                frame.src = presentation.embedUrl;
+            }
+            frame.style.display = 'block';
+        } else {
+            frame.style.display = 'none';
+            frame.removeAttribute('src');
+        }
+    }
+
+    renderOnboardingVideoControls(presentation);
+}
+
+function renderOnboardingVideoLegacy() {
     const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
         ? onboardingSelectedStepId
         : getPreferredOnboardingSelectedStepId();
@@ -1053,6 +1336,10 @@ function renderOnboardingVideo() {
 }
 
 function playOnboardingVideo() {
+    startOnboardingTour();
+}
+
+function playOnboardingVideoLegacy() {
     const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
         ? onboardingSelectedStepId
         : getPreferredOnboardingSelectedStepId();
@@ -1072,6 +1359,41 @@ function playOnboardingVideo() {
 }
 
 function toggleOnboardingVideoPlayback() {
+    const selectedStepId = getSelectedOnboardingStepId();
+    if (!selectedStepId) return;
+
+    const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
+    if (!presentation.embedUrl) return;
+
+    if (presentation.provider !== 'youtube' || !presentation.videoId) {
+        startOnboardingTour(selectedStepId);
+        return;
+    }
+
+    if (!onboardingTourOpen || onboardingPlayingStepId !== selectedStepId || !onboardingYouTubePlayer || !onboardingYouTubePlayerReady) {
+        startOnboardingTour(selectedStepId);
+        return;
+    }
+
+    const currentState = Number(onboardingYouTubePlayer.getPlayerState?.() ?? -1);
+    if (currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.playing || currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.buffering) {
+        onboardingYouTubePlayer.pauseVideo?.();
+        onboardingVideoPlaybackState = 'paused';
+    } else if (currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.ended || onboardingVideoPlaybackState === 'ended') {
+        onboardingYouTubePlayer.seekTo?.(0, true);
+        onboardingYouTubePlayer.playVideo?.();
+        onboardingVideoCurrentSeconds = 0;
+        onboardingVideoPlaybackState = 'playing';
+    } else {
+        onboardingYouTubePlayer.playVideo?.();
+        onboardingVideoPlaybackState = 'playing';
+    }
+
+    syncOnboardingYouTubeMetrics();
+    renderOnboardingVideoControls(presentation);
+}
+
+function toggleOnboardingVideoPlaybackLegacy() {
     const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
         ? onboardingSelectedStepId
         : getPreferredOnboardingSelectedStepId();
@@ -1159,6 +1481,7 @@ function initOnboardingCard() {
     if (!hasOnboarding) return;
     destroyOnboardingYouTubePlayer();
     onboardingState = readOnboardingState();
+    onboardingTourOpen = false;
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
     onboardingPlayingStepId = null;
     renderOnboardingChecklist();
