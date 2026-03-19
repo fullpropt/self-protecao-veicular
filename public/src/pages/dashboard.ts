@@ -66,6 +66,7 @@ type CustomEventsStatsResponse = {
 type SettingsResponse = {
     settings?: Record<string, unknown> | null;
     onboarding_video_url?: string;
+    onboarding_videos?: Record<string, unknown> | null;
 };
 type AccountHealthRiskLevel = 'critical' | 'attention' | 'healthy' | 'paused';
 type AccountHealthDispatch = {
@@ -120,15 +121,18 @@ type AccountHealthResponse = {
 };
 type OnboardingStepId =
     | 'connect_whatsapp'
-    | 'create_first_contact'
+    | 'configure_accounts'
     | 'open_inbox'
+    | 'create_first_contact'
     | 'create_tags'
+    | 'configure_dynamic_fields'
     | 'create_campaign'
-    | 'create_flow';
+    | 'create_automation';
 type OnboardingState = {
     completedSteps: OnboardingStepId[];
     updatedAt: number;
 };
+type OnboardingVideosMap = Partial<Record<OnboardingStepId, string>>;
 
 let allLeads: Lead[] = [];
 let selectedLeads: number[] = [];
@@ -143,7 +147,8 @@ let onboardingState: OnboardingState = {
     completedSteps: [],
     updatedAt: 0
 };
-let onboardingVideoUrl = '';
+let onboardingVideoUrls: OnboardingVideosMap = {};
+let onboardingSelectedStepId: OnboardingStepId | null = null;
 
 let statsChartInstance: { destroy?: () => void } | null = null;
 let statsChartType: StatsChartType = 'line';
@@ -166,22 +171,47 @@ const CUSTOM_EVENT_PERIODS: Record<string, CustomEventsPeriod> = {
 };
 const ONBOARDING_STEP_IDS: OnboardingStepId[] = [
     'connect_whatsapp',
-    'create_first_contact',
+    'configure_accounts',
     'open_inbox',
+    'create_first_contact',
     'create_tags',
+    'configure_dynamic_fields',
     'create_campaign',
-    'create_flow'
+    'create_automation'
 ];
 const ONBOARDING_STEP_ROUTES: Record<OnboardingStepId, string> = {
     connect_whatsapp: '#/whatsapp',
-    create_first_contact: '#/contatos',
+    configure_accounts: '#/configuracoes?panel=conexao',
     open_inbox: '#/inbox',
+    create_first_contact: '#/contatos',
     create_tags: '#/configuracoes?panel=labels',
+    configure_dynamic_fields: '#/configuracoes?panel=contact-fields',
     create_campaign: '#/campanhas',
-    create_flow: '#/fluxos'
+    create_automation: '#/automacao'
+};
+const ONBOARDING_STEP_LABELS: Record<OnboardingStepId, string> = {
+    connect_whatsapp: 'Conecte seu WhatsApp',
+    configure_accounts: 'Revise suas contas',
+    open_inbox: 'Abra o Inbox',
+    create_first_contact: 'Cadastre um contato',
+    create_tags: 'Crie tags',
+    configure_dynamic_fields: 'Configure campos dinâmicos',
+    create_campaign: 'Monte uma campanha',
+    create_automation: 'Publique uma automação'
+};
+const ONBOARDING_STEP_VIDEO_DESCRIPTIONS: Record<OnboardingStepId, string> = {
+    connect_whatsapp: 'Passo a passo para conectar a primeira sessão do WhatsApp no ZapVender.',
+    configure_accounts: 'Veja como revisar as contas em Configurações e deixar o ambiente pronto para operar.',
+    open_inbox: 'Aprenda a abrir o Inbox e validar o atendimento com uma conversa de teste.',
+    create_first_contact: 'Cadastre um contato de exemplo para testar o fluxo completo da operação.',
+    create_tags: 'Crie etiquetas para organizar contatos, campanhas e automações.',
+    configure_dynamic_fields: 'Configure campos personalizados que viram variáveis em mensagens, campanhas e fluxos.',
+    create_campaign: 'Monte sua primeira campanha e entenda onde revisar métricas e resultados.',
+    create_automation: 'Publique sua primeira automação e valide o disparo com segurança.'
 };
 const DASHBOARD_ONBOARDING_STORAGE_KEY_PREFIX = 'zapvender_dashboard_onboarding_v1:';
 const ONBOARDING_VIDEO_SETTING_KEY = 'onboarding_video_url';
+const ONBOARDING_VIDEOS_SETTING_KEY = 'onboarding_videos';
 
 function appConfirm(message: string, title = 'Confirmacao') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -305,6 +335,19 @@ function normalizeOnboardingState(value: unknown): OnboardingState {
     };
 }
 
+function normalizeOnboardingVideosMap(value: unknown): OnboardingVideosMap {
+    if (!value || typeof value !== 'object') return {};
+
+    const source = value as Record<string, unknown>;
+    return ONBOARDING_STEP_IDS.reduce<OnboardingVideosMap>((accumulator, stepId) => {
+        const rawValue = String(source[stepId] || '').trim();
+        if (rawValue) {
+            accumulator[stepId] = rawValue;
+        }
+        return accumulator;
+    }, {});
+}
+
 function readOnboardingState(): OnboardingState {
     try {
         const raw = localStorage.getItem(getDashboardOnboardingStorageKey());
@@ -327,7 +370,17 @@ function isOnboardingStepCompleted(stepId: OnboardingStepId) {
     return onboardingState.completedSteps.includes(stepId);
 }
 
+function getPreferredOnboardingSelectedStepId() {
+    return ONBOARDING_STEP_IDS.find((stepId) => !isOnboardingStepCompleted(stepId))
+        || ONBOARDING_STEP_IDS[0]
+        || null;
+}
+
 function renderOnboardingChecklist() {
+    if (!onboardingSelectedStepId || !ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)) {
+        onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
+    }
+
     const totalSteps = ONBOARDING_STEP_IDS.length;
     let completedCount = 0;
 
@@ -340,6 +393,7 @@ function renderOnboardingChecklist() {
 
         const row = document.getElementById(`onboarding-row-${stepId}`) as HTMLElement | null;
         row?.classList.toggle('is-complete', checked);
+        row?.classList.toggle('is-active', onboardingSelectedStepId === stepId);
     });
 
     const progress = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
@@ -356,6 +410,15 @@ function renderOnboardingChecklist() {
     if (completedBadge) {
         completedBadge.style.display = completedCount === totalSteps && totalSteps > 0 ? 'inline-flex' : 'none';
     }
+}
+
+function selectOnboardingVideoStep(stepIdInput: string) {
+    const stepId = normalizeOnboardingStepId(stepIdInput) || getPreferredOnboardingSelectedStepId();
+    if (!stepId) return;
+
+    onboardingSelectedStepId = stepId;
+    renderOnboardingChecklist();
+    renderOnboardingVideo();
 }
 
 function toggleOnboardingStep(stepIdInput: string, checked?: boolean) {
@@ -376,6 +439,7 @@ function toggleOnboardingStep(stepIdInput: string, checked?: boolean) {
     };
     writeOnboardingState(onboardingState);
     renderOnboardingChecklist();
+    renderOnboardingVideo();
 }
 
 function resetOnboardingChecklist() {
@@ -383,8 +447,10 @@ function resetOnboardingChecklist() {
         completedSteps: [],
         updatedAt: Date.now()
     };
+    onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
     writeOnboardingState(onboardingState);
     renderOnboardingChecklist();
+    renderOnboardingVideo();
 }
 
 function goToOnboardingStep(stepIdInput: string) {
@@ -442,11 +508,33 @@ function extractEmbedVideoUrl(videoUrl: string) {
 }
 
 function renderOnboardingVideo() {
+    const selectedStepId = onboardingSelectedStepId && ONBOARDING_STEP_IDS.includes(onboardingSelectedStepId)
+        ? onboardingSelectedStepId
+        : getPreferredOnboardingSelectedStepId();
+    if (!selectedStepId) return;
+
+    onboardingSelectedStepId = selectedStepId;
+
     const placeholder = document.getElementById('onboardingVideoPlaceholder') as HTMLElement | null;
+    const placeholderTitle = document.getElementById('onboardingVideoPlaceholderTitle') as HTMLElement | null;
     const hint = document.getElementById('onboardingVideoHint') as HTMLElement | null;
     const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
     const openLink = document.getElementById('onboardingVideoOpenLink') as HTMLAnchorElement | null;
-    const safeVideoUrl = normalizeAbsoluteHttpUrl(onboardingVideoUrl);
+    const kicker = document.getElementById('onboardingVideoKicker') as HTMLElement | null;
+    const title = document.getElementById('onboardingVideoTitle') as HTMLElement | null;
+    const description = document.getElementById('onboardingVideoDescription') as HTMLElement | null;
+    const safeVideoUrl = normalizeAbsoluteHttpUrl(onboardingVideoUrls[selectedStepId] || '');
+    const stepPosition = Math.max(0, ONBOARDING_STEP_IDS.indexOf(selectedStepId)) + 1;
+
+    if (kicker) {
+        kicker.textContent = `Etapa ${stepPosition} de ${ONBOARDING_STEP_IDS.length}`;
+    }
+    if (title) {
+        title.textContent = ONBOARDING_STEP_LABELS[selectedStepId];
+    }
+    if (description) {
+        description.textContent = ONBOARDING_STEP_VIDEO_DESCRIPTIONS[selectedStepId];
+    }
 
     if (!safeVideoUrl) {
         if (frame) {
@@ -456,8 +544,11 @@ function renderOnboardingVideo() {
         if (placeholder) {
             placeholder.style.display = 'flex';
         }
+        if (placeholderTitle) {
+            placeholderTitle.textContent = 'Video nao configurado';
+        }
         if (hint) {
-            hint.textContent = 'Estamos finalizando o video de primeiros passos. Em breve ele estara disponivel aqui.';
+            hint.textContent = `Cole a URL do video "${ONBOARDING_STEP_LABELS[selectedStepId]}" em Configuracoes > Campos para exibi-lo aqui.`;
         }
         if (openLink) {
             openLink.style.display = 'none';
@@ -480,6 +571,9 @@ function renderOnboardingVideo() {
     if (placeholder) {
         placeholder.style.display = embedUrl ? 'none' : 'flex';
     }
+    if (placeholderTitle) {
+        placeholderTitle.textContent = embedUrl ? '' : 'Link pronto para abrir';
+    }
     if (hint) {
         hint.textContent = embedUrl
             ? ''
@@ -495,16 +589,28 @@ async function loadOnboardingVideo(options: { silent?: boolean } = {}) {
     const hasVideoCard = Boolean(document.getElementById('dashboardOnboardingCard'));
     if (!hasVideoCard) return;
 
-    let nextVideoUrl = '';
+    let nextVideoUrls: OnboardingVideosMap = {};
     try {
         const response: SettingsResponse = await api.get('/api/settings');
         const settings = response?.settings && typeof response.settings === 'object'
             ? response.settings
             : null;
-        const fromSettings = settings && Object.prototype.hasOwnProperty.call(settings, ONBOARDING_VIDEO_SETTING_KEY)
-            ? (settings as Record<string, unknown>)[ONBOARDING_VIDEO_SETTING_KEY]
-            : response?.onboarding_video_url;
-        nextVideoUrl = String(fromSettings || '').trim();
+        const rawVideosFromSettings = settings && Object.prototype.hasOwnProperty.call(settings, ONBOARDING_VIDEOS_SETTING_KEY)
+            ? (settings as Record<string, unknown>)[ONBOARDING_VIDEOS_SETTING_KEY]
+            : response?.onboarding_videos;
+        nextVideoUrls = normalizeOnboardingVideosMap(rawVideosFromSettings);
+
+        if (!Object.keys(nextVideoUrls).length) {
+            const legacyVideoUrl = settings && Object.prototype.hasOwnProperty.call(settings, ONBOARDING_VIDEO_SETTING_KEY)
+                ? (settings as Record<string, unknown>)[ONBOARDING_VIDEO_SETTING_KEY]
+                : response?.onboarding_video_url;
+            const normalizedLegacyUrl = String(legacyVideoUrl || '').trim();
+            if (normalizedLegacyUrl) {
+                nextVideoUrls = {
+                    connect_whatsapp: normalizedLegacyUrl
+                };
+            }
+        }
     } catch (error) {
         if (!options.silent) {
             showToast('warning', 'Aviso', 'Nao foi possivel carregar video de onboarding');
@@ -512,7 +618,7 @@ async function loadOnboardingVideo(options: { silent?: boolean } = {}) {
         console.error(error);
     }
 
-    onboardingVideoUrl = nextVideoUrl;
+    onboardingVideoUrls = nextVideoUrls;
     renderOnboardingVideo();
 }
 
@@ -520,6 +626,7 @@ function initOnboardingCard() {
     const hasOnboarding = Boolean(document.getElementById('dashboardOnboardingCard'));
     if (!hasOnboarding) return;
     onboardingState = readOnboardingState();
+    onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
     renderOnboardingChecklist();
     void loadOnboardingVideo({ silent: true });
 }
@@ -1850,6 +1957,7 @@ const windowAny = window as Window & {
     loadDashboardData?: () => Promise<void>;
     loadCustomEvents?: (options?: { silent?: boolean }) => Promise<void>;
     toggleOnboardingStep?: (stepId: string, checked?: boolean) => void;
+    selectOnboardingVideoStep?: (stepId: string) => void;
     goToOnboardingStep?: (stepId: string) => void;
     resetOnboardingChecklist?: () => void;
     openCustomEventModal?: (id?: number) => void;
@@ -1875,6 +1983,7 @@ windowAny.initOnboardingCard = initOnboardingCard;
 windowAny.loadDashboardData = loadDashboardData;
 windowAny.loadCustomEvents = loadCustomEvents;
 windowAny.toggleOnboardingStep = toggleOnboardingStep;
+windowAny.selectOnboardingVideoStep = selectOnboardingVideoStep;
 windowAny.goToOnboardingStep = goToOnboardingStep;
 windowAny.resetOnboardingChecklist = resetOnboardingChecklist;
 windowAny.openCustomEventModal = openCustomEventModal;

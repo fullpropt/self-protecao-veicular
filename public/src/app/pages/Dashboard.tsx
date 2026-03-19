@@ -9,6 +9,7 @@ type DashboardGlobals = {
   loadDashboardData?: () => void;
   loadCustomEvents?: (options?: { silent?: boolean }) => void;
   toggleOnboardingStep?: (stepId: string, checked?: boolean) => void;
+  selectOnboardingVideoStep?: (stepId: string) => void;
   goToOnboardingStep?: (stepId: string) => void;
   resetOnboardingChecklist?: () => void;
   openModal?: (id: string) => void;
@@ -1109,6 +1110,35 @@ function DashboardStyles() {
           background: rgba(6, 15, 30, 0.72);
           overflow: hidden;
         }
+        .onboarding-video-meta {
+          margin-bottom: 10px;
+        }
+        .onboarding-video-kicker {
+          display: inline-flex;
+          align-items: center;
+          padding: 3px 10px;
+          border-radius: 999px;
+          border: 1px solid rgba(var(--primary-rgb), 0.24);
+          background: rgba(10, 27, 44, 0.76);
+          color: rgba(209, 236, 244, 0.88);
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+        .onboarding-video-title {
+          margin: 10px 0 4px;
+          color: #f4fbf8;
+          font-size: 18px;
+          font-weight: 700;
+          line-height: 1.2;
+        }
+        .onboarding-video-description {
+          margin: 0 0 12px;
+          color: rgba(204, 225, 233, 0.86);
+          font-size: 13px;
+          line-height: 1.5;
+        }
         .onboarding-video-placeholder {
           min-height: inherit;
           display: flex;
@@ -1177,6 +1207,13 @@ function DashboardStyles() {
           border: 1px solid rgba(var(--primary-rgb), 0.16);
           background: rgba(8, 21, 38, 0.72);
         }
+        .onboarding-step.is-active {
+          border-color: rgba(var(--primary-rgb), 0.34);
+          box-shadow:
+            inset 0 0 0 1px rgba(var(--primary-rgb), 0.16),
+            0 0 0 1px rgba(var(--primary-rgb), 0.06);
+          background: rgba(11, 28, 46, 0.82);
+        }
         .onboarding-step.is-complete {
           border-color: rgba(var(--primary-rgb), 0.46);
           box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.2);
@@ -1195,6 +1232,19 @@ function DashboardStyles() {
           margin: 3px 0 0;
           color: rgba(194, 214, 224, 0.86);
           font-size: 12px;
+        }
+        .onboarding-step-watch-link {
+          margin-top: 8px;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: #20f0c0;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .onboarding-step-watch-link:hover {
+          color: #7cf9df;
         }
         .onboarding-step .checkbox-wrapper {
           margin-right: 2px;
@@ -1510,10 +1560,10 @@ const ONBOARDING_STEPS = [
     actionLabel: 'Conectar'
   },
   {
-    id: 'create_first_contact',
-    title: 'Cadastre um contato',
-    description: 'Crie um contato de teste para validar o fluxo.',
-    actionLabel: 'Abrir contatos'
+    id: 'configure_accounts',
+    title: 'Revise suas contas',
+    description: 'Abra Configurações para conferir nome, status e disponibilidade das contas.',
+    actionLabel: 'Abrir contas'
   },
   {
     id: 'open_inbox',
@@ -1522,10 +1572,22 @@ const ONBOARDING_STEPS = [
     actionLabel: 'Abrir inbox'
   },
   {
+    id: 'create_first_contact',
+    title: 'Cadastre um contato',
+    description: 'Crie um contato de teste para validar o fluxo.',
+    actionLabel: 'Abrir contatos'
+  },
+  {
     id: 'create_tags',
     title: 'Crie tags',
     description: 'Cadastre etiquetas para segmentar contatos e campanhas.',
     actionLabel: 'Abrir tags'
+  },
+  {
+    id: 'configure_dynamic_fields',
+    title: 'Configure campos dinâmicos',
+    description: 'Cadastre variáveis personalizadas para enriquecer contatos, mensagens e fluxos.',
+    actionLabel: 'Abrir campos'
   },
   {
     id: 'create_campaign',
@@ -1534,10 +1596,10 @@ const ONBOARDING_STEPS = [
     actionLabel: 'Abrir campanhas'
   },
   {
-    id: 'create_flow',
-    title: 'Publique um fluxo',
-    description: 'Crie um fluxo de conversa com etapas de automação.',
-    actionLabel: 'Abrir fluxos'
+    id: 'create_automation',
+    title: 'Publique uma automação',
+    description: 'Monte uma automação e valide o disparo com um teste rápido.',
+    actionLabel: 'Abrir automações'
   }
 ] as const;
 
@@ -1663,10 +1725,15 @@ function OnboardingCard({
       <div className="onboarding-content">
         <div className="onboarding-grid">
           <div>
+            <div className="onboarding-video-meta">
+              <span className="onboarding-video-kicker" id="onboardingVideoKicker">Etapa 1 de 8</span>
+              <p className="onboarding-video-title" id="onboardingVideoTitle">Conecte seu WhatsApp</p>
+              <p className="onboarding-video-description" id="onboardingVideoDescription">Selecione uma etapa para assistir ao passo a passo correspondente.</p>
+            </div>
             <div className="onboarding-video-wrap">
               <div className="onboarding-video-placeholder" id="onboardingVideoPlaceholder">
-                <strong>Em implementação</strong>
-                <span id="onboardingVideoHint">Estamos finalizando o vídeo de primeiros passos. Em breve ele estará disponível aqui.</span>
+                <strong id="onboardingVideoPlaceholderTitle">Vídeo não configurado</strong>
+                <span id="onboardingVideoHint">Cole a URL do vídeo desta etapa em Configurações para exibi-lo aqui.</span>
               </div>
               <iframe
                 id="onboardingVideoFrame"
@@ -1692,7 +1759,7 @@ function OnboardingCard({
           <div>
             <div className="onboarding-progress">
               <div className="onboarding-progress-head">
-                <span className="onboarding-progress-text" id="onboardingProgressText">0/6 etapas concluídas</span>
+                <span className="onboarding-progress-text" id="onboardingProgressText">0/8 etapas concluídas</span>
               </div>
               <div className="onboarding-progress-track">
                 <div className="onboarding-progress-fill" id="onboardingProgressFill"></div>
@@ -1701,7 +1768,7 @@ function OnboardingCard({
 
             <div className="onboarding-steps">
               {ONBOARDING_STEPS.map((step) => (
-                <div className="onboarding-step" id={`onboarding-row-${step.id}`} key={step.id}>
+                <div className="onboarding-step" id={`onboarding-row-${step.id}`} data-onboarding-step-id={step.id} key={step.id}>
                   <label className="checkbox-wrapper">
                     <input
                       type="checkbox"
@@ -1714,6 +1781,13 @@ function OnboardingCard({
                   <div className="onboarding-step-info">
                     <p className="onboarding-step-title">{step.title}</p>
                     <p className="onboarding-step-description">{step.description}</p>
+                    <button
+                      type="button"
+                      className="onboarding-step-watch-link"
+                      onClick={() => globals.selectOnboardingVideoStep?.(step.id)}
+                    >
+                      Assistir vídeo
+                    </button>
                   </div>
 
                   <button

@@ -703,6 +703,50 @@ export default function Configuracoes() {
                                   <input type="email" className="form-input" id="companyEmail" placeholder="contato@empresa.com" />
                               </div>
                           </div>
+                          <div className="settings-section">
+                              <h3 className="settings-section-title"><span className="icon icon-play icon-sm"></span> Videos de Primeiros Passos</h3>
+                              <p className="text-muted mb-3">Cole as URLs dos videos do YouTube ou Vimeo para cada etapa exibida no checklist do dashboard.</p>
+                              <div className="form-row">
+                                  <div className="form-group">
+                                      <label className="form-label">01. Conectar WhatsApp</label>
+                                      <input type="url" className="form-input" id="onboardingVideoConnectWhatsapp" placeholder="https://www.youtube.com/watch?v=..." />
+                                  </div>
+                                  <div className="form-group">
+                                      <label className="form-label">02. Contas</label>
+                                      <input type="url" className="form-input" id="onboardingVideoConfigureAccounts" placeholder="https://www.youtube.com/watch?v=..." />
+                                  </div>
+                              </div>
+                              <div className="form-row">
+                                  <div className="form-group">
+                                      <label className="form-label">03. Inbox</label>
+                                      <input type="url" className="form-input" id="onboardingVideoOpenInbox" placeholder="https://www.youtube.com/watch?v=..." />
+                                  </div>
+                                  <div className="form-group">
+                                      <label className="form-label">04. Contatos</label>
+                                      <input type="url" className="form-input" id="onboardingVideoCreateFirstContact" placeholder="https://www.youtube.com/watch?v=..." />
+                                  </div>
+                              </div>
+                              <div className="form-row">
+                                  <div className="form-group">
+                                      <label className="form-label">05. Tags</label>
+                                      <input type="url" className="form-input" id="onboardingVideoCreateTags" placeholder="https://www.youtube.com/watch?v=..." />
+                                  </div>
+                                  <div className="form-group">
+                                      <label className="form-label">06. Campos Dinamicos</label>
+                                      <input type="url" className="form-input" id="onboardingVideoConfigureDynamicFields" placeholder="https://www.youtube.com/watch?v=..." />
+                                  </div>
+                              </div>
+                              <div className="form-row">
+                                  <div className="form-group">
+                                      <label className="form-label">07. Campanhas</label>
+                                      <input type="url" className="form-input" id="onboardingVideoCreateCampaign" placeholder="https://www.youtube.com/watch?v=..." />
+                                  </div>
+                                  <div className="form-group">
+                                      <label className="form-label">08. Automacoes</label>
+                                      <input type="url" className="form-input" id="onboardingVideoCreateAutomation" placeholder="https://www.youtube.com/watch?v=..." />
+                                  </div>
+                              </div>
+                          </div>
                           <button className="btn btn-primary" onClick={() => globals.saveGeneralSettings?.()}><span className="icon icon-save icon-sm"></span> Salvar Configurações</button>
                       </div>
       

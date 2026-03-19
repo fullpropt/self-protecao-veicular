@@ -8,7 +8,20 @@ type Settings = {
     businessHoursBySession?: Record<string, BusinessHoursSessionSettings>;
     notifications?: { notifyNewLead?: boolean; notifyNewMessage?: boolean; notifySound?: boolean };
     ai?: AiSettingsConfig;
+    onboardingVideos?: OnboardingVideosSettings;
 };
+
+type OnboardingVideoStepId =
+    | 'connect_whatsapp'
+    | 'configure_accounts'
+    | 'open_inbox'
+    | 'create_first_contact'
+    | 'create_tags'
+    | 'configure_dynamic_fields'
+    | 'create_campaign'
+    | 'create_automation';
+
+type OnboardingVideosSettings = Partial<Record<OnboardingVideoStepId, string>>;
 
 type BusinessHoursSessionSettings = {
     enabled: boolean;
@@ -80,6 +93,17 @@ type ManagedUser = {
     last_login_at?: string | null;
     created_at?: string | null;
 };
+
+const ONBOARDING_VIDEO_FIELDS: Array<{ stepId: OnboardingVideoStepId; inputId: string }> = [
+    { stepId: 'connect_whatsapp', inputId: 'onboardingVideoConnectWhatsapp' },
+    { stepId: 'configure_accounts', inputId: 'onboardingVideoConfigureAccounts' },
+    { stepId: 'open_inbox', inputId: 'onboardingVideoOpenInbox' },
+    { stepId: 'create_first_contact', inputId: 'onboardingVideoCreateFirstContact' },
+    { stepId: 'create_tags', inputId: 'onboardingVideoCreateTags' },
+    { stepId: 'configure_dynamic_fields', inputId: 'onboardingVideoConfigureDynamicFields' },
+    { stepId: 'create_campaign', inputId: 'onboardingVideoCreateCampaign' },
+    { stepId: 'create_automation', inputId: 'onboardingVideoCreateAutomation' }
+];
 
 type PlanStatusApiPayload = {
     owner_admin?: {
@@ -375,6 +399,39 @@ function applyCompanySettings(company: { name?: string; cnpj?: string; phone?: s
     if (companyCnpj) companyCnpj.value = company.cnpj || '';
     if (companyPhone) companyPhone.value = company.phone || '';
     if (companyEmail) companyEmail.value = company.email || '';
+}
+
+function normalizeOnboardingVideosSettings(value: unknown): OnboardingVideosSettings {
+    if (!value || typeof value !== 'object') return {};
+
+    const source = value as Record<string, unknown>;
+    return ONBOARDING_VIDEO_FIELDS.reduce<OnboardingVideosSettings>((accumulator, field) => {
+        const rawValue = String(source[field.stepId] || '').trim();
+        if (rawValue) {
+            accumulator[field.stepId] = rawValue;
+        }
+        return accumulator;
+    }, {});
+}
+
+function applyOnboardingVideosSettings(videos: OnboardingVideosSettings) {
+    ONBOARDING_VIDEO_FIELDS.forEach(({ stepId, inputId }) => {
+        const input = document.getElementById(inputId) as HTMLInputElement | null;
+        if (input) {
+            input.value = String(videos?.[stepId] || '').trim();
+        }
+    });
+}
+
+function collectOnboardingVideosSettingsFromForm(): OnboardingVideosSettings {
+    return ONBOARDING_VIDEO_FIELDS.reduce<OnboardingVideosSettings>((accumulator, field) => {
+        const input = document.getElementById(field.inputId) as HTMLInputElement | null;
+        const value = String(input?.value || '').trim();
+        if (value) {
+            accumulator[field.stepId] = value;
+        }
+        return accumulator;
+    }, {});
 }
 
 function normalizeBusinessHoursTime(value: unknown, fallback: string) {
@@ -774,6 +831,7 @@ function readAiSettingsFromForm(): AiSettingsConfig {
 async function loadSettings() {
     const localSettings: Settings = readLocalSettingsStorage();
     applyCompanySettings(localSettings.company || {});
+    applyOnboardingVideosSettings(localSettings.onboardingVideos || {});
     applyBusinessHoursSettings(localSettings.businessHours || DEFAULT_BUSINESS_HOURS_SETTINGS);
     businessHoursBySessionCache = normalizeBusinessHoursBySession(localSettings.businessHoursBySession || {});
     renderBusinessHoursAccountsManager();
@@ -792,6 +850,9 @@ async function loadSettings() {
             phone: String(serverSettings.company_phone || ''),
             email: String(serverSettings.company_email || '')
         };
+        const onboardingVideos = normalizeOnboardingVideosSettings(
+            serverSettings.onboarding_videos ?? localSettings.onboardingVideos ?? {}
+        );
 
         const businessHours = {
             enabled: parseBooleanSetting(serverSettings.business_hours_enabled, localSettings.businessHours?.enabled ?? DEFAULT_BUSINESS_HOURS_SETTINGS.enabled),
@@ -815,6 +876,7 @@ async function loadSettings() {
         if (hasCompanySettings) {
             applyCompanySettings(company);
         }
+        applyOnboardingVideosSettings(onboardingVideos);
         applyBusinessHoursSettings(businessHours);
         businessHoursBySessionCache = businessHoursBySession;
         renderBusinessHoursAccountsManager();
@@ -824,6 +886,7 @@ async function loadSettings() {
         writeLocalSettingsStorage({
             ...localSettings,
             company: hasCompanySettings ? company : (localSettings.company || {}),
+            onboardingVideos,
             businessHours,
             businessHoursBySession,
             notifications,
@@ -1112,8 +1175,10 @@ async function saveGeneralSettings() {
         phone: ((document.getElementById('companyPhone') as HTMLInputElement | null)?.value || '').trim(),
         email: ((document.getElementById('companyEmail') as HTMLInputElement | null)?.value || '').trim()
     };
+    const onboardingVideos = collectOnboardingVideosSettingsFromForm();
 
     settings.company = company;
+    settings.onboardingVideos = onboardingVideos;
     writeLocalSettingsStorage(settings);
 
     try {
@@ -1121,7 +1186,8 @@ async function saveGeneralSettings() {
             company_name: company.name || 'ZapVender',
             company_cnpj: company.cnpj,
             company_phone: company.phone,
-            company_email: company.email
+            company_email: company.email,
+            onboarding_videos: onboardingVideos
         });
         showToast('success', 'Sucesso', 'Configurações salvas!');
     } catch (error) {
