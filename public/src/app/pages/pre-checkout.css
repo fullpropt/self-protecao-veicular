@@ -571,29 +571,98 @@
 
 @media (max-width: 680px) {
   .precheckout-page {
-    padding: 12px;
+    padding: 10px;
   }
 
   .precheckout-header {
     flex-direction: column;
     align-items: center;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
+  }
+
+  .precheckout-brand-link img {
+    width: 124px;
   }
 
   .precheckout-content {
     border-radius: 0;
     padding: 0;
-    gap: 12px;
+    gap: 10px;
   }
 
   .precheckout-offer-panel,
   .precheckout-form-panel {
-    border-radius: 14px;
-    padding: 16px;
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .precheckout-offer-panel {
+    padding: 12px;
+  }
+
+  .precheckout-pill {
+    margin-bottom: 10px;
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+
+  .precheckout-offer-panel h1 {
+    font-size: 28px;
+    line-height: 1.08;
+  }
+
+  .precheckout-plan-card {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .precheckout-plan-head strong {
+    font-size: 16px;
+  }
+
+  .precheckout-plan-head span {
+    font-size: 11px;
+  }
+
+  .precheckout-plan-price {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+
+  .precheckout-benefits {
+    margin-top: 12px;
+    gap: 8px;
+  }
+
+  .precheckout-benefits li {
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .precheckout-benefits li:nth-child(n + 3) {
+    display: none;
+  }
+
+  .precheckout-trust-list {
+    margin-top: 12px;
+    gap: 6px;
+  }
+
+  .precheckout-trust-list p {
+    font-size: 12px;
+  }
+
+  .precheckout-trust-list p span {
+    min-width: 24px;
+    height: 20px;
+    padding: 0 6px;
+    font-size: 9px;
   }
 
   .precheckout-form-panel h2 {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .precheckout-highlight-grid {
@@ -601,28 +670,50 @@
   }
 
   .precheckout-footer {
-    margin-top: 18px;
-    border-radius: 14px;
-    padding: 0 14px 10px;
+    margin-top: 12px;
+    border-radius: 12px;
+    padding: 0 12px 8px;
   }
 
   .precheckout-footer-grid {
-    padding: 16px 0 12px;
-    gap: 14px;
+    padding: 10px 0 8px;
+    gap: 8px;
+  }
+
+  .precheckout-footer-grid > :nth-child(2) {
+    display: none;
   }
 
   .precheckout-footer-brand {
-    font-size: 22px;
+    font-size: 18px;
   }
 
   .precheckout-footer-brand img {
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
+  }
+
+  .precheckout-footer-brand-col p {
+    display: none;
+  }
+
+  .precheckout-footer-col h3 {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .precheckout-footer-col ul {
+    margin-top: 8px;
+    gap: 6px;
+  }
+
+  .precheckout-footer-bottom {
+    padding-top: 8px;
   }
 
   .precheckout-footer-brand-col p,
   .precheckout-footer-col a,
   .precheckout-footer-bottom span {
-    font-size: 13px;
+    font-size: 12px;
   }
 }
