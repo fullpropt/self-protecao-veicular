@@ -1919,7 +1919,7 @@ function StatsPeriod() {
             <option value="mensagens">Mensagens</option>
             <option value="interacoes">Interações</option>
           </select>
-          <div className="chart-type-toggle">
+          <div className="chart-type-toggle" data-tour-target="dashboard-chart-type-toggle">
             <button type="button" className="chart-btn active" data-chart-type="line" title="Gráfico de linhas">
               <span className="icon icon-chart-line icon-sm"></span>
               <span className="chart-btn-label">Linha</span>
@@ -1930,7 +1930,7 @@ function StatsPeriod() {
             </button>
           </div>
         </div>
-        <div className="stats-period-chart" id="statsPeriodChart">
+        <div className="stats-period-chart" id="statsPeriodChart" data-tour-target="dashboard-stats-chart-area">
           <canvas id="statsChart" style={{ maxHeight: '200px' }}></canvas>
         </div>
       </div>

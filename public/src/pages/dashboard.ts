@@ -154,10 +154,16 @@ type OnboardingVideoPresentation = {
 type OnboardingHighlightMarker = {
     at: number;
     selector: string;
+    ambientSelector?: string;
     title: string;
     hint: string;
     route?: string;
-    action?: 'open_whatsapp_new_account_prompt' | 'confirm_whatsapp_new_account_prompt';
+    action?:
+        | 'open_whatsapp_new_account_prompt'
+        | 'confirm_whatsapp_new_account_prompt'
+        | 'set_dashboard_stats_metric_novos_contatos'
+        | 'set_dashboard_stats_metric_mensagens'
+        | 'set_dashboard_stats_metric_interacoes';
     clear?: boolean;
     radius?: number;
     scroll?: ScrollLogicalPosition;
@@ -205,9 +211,16 @@ let onboardingVideoPlaybackState: 'idle' | 'loading' | 'playing' | 'paused' | 'e
 let onboardingPreparedSurfaceStepId: OnboardingStepId | null = null;
 let onboardingPreparedMarkerActionKey = '';
 let onboardingActiveSpotlightElement: HTMLElement | null = null;
+let onboardingAmbientSpotlightElements: HTMLElement[] = [];
 let onboardingActiveSpotlightSelector = '';
 let onboardingActiveSpotlightMarkerKey = '';
 let onboardingSpotlightRefreshTimer: number | null = null;
+let onboardingSpotlightOverflowPatches: Array<{
+    element: HTMLElement;
+    overflow: string;
+    overflowX: string;
+    overflowY: string;
+}> = [];
 let onboardingPresentationDashboardBridgeBound = false;
 
 let statsChartInstance: { destroy?: () => void } | null = null;
@@ -996,7 +1009,24 @@ function clearOnboardingSpotlight() {
         onboardingActiveSpotlightElement.style.removeProperty('--onboarding-tour-radius');
     }
 
+    if (onboardingAmbientSpotlightElements.length > 0) {
+        onboardingAmbientSpotlightElements.forEach((element) => {
+            element.classList.remove('onboarding-tour-target-ambient');
+            element.style.removeProperty('--onboarding-tour-radius');
+        });
+    }
+
+    if (onboardingSpotlightOverflowPatches.length > 0) {
+        onboardingSpotlightOverflowPatches.forEach((patch) => {
+            patch.element.style.overflow = patch.overflow;
+            patch.element.style.overflowX = patch.overflowX;
+            patch.element.style.overflowY = patch.overflowY;
+        });
+        onboardingSpotlightOverflowPatches = [];
+    }
+
     onboardingActiveSpotlightElement = null;
+    onboardingAmbientSpotlightElements = [];
     onboardingActiveSpotlightSelector = '';
     onboardingActiveSpotlightMarkerKey = '';
 
@@ -1006,6 +1036,80 @@ function clearOnboardingSpotlight() {
         card.style.removeProperty('top');
         card.style.removeProperty('left');
     }
+}
+
+function ensureOnboardingSpotlightOverflowVisible(targets: HTMLElement[]) {
+    if (onboardingSpotlightOverflowPatches.length > 0) {
+        onboardingSpotlightOverflowPatches.forEach((patch) => {
+            patch.element.style.overflow = patch.overflow;
+            patch.element.style.overflowX = patch.overflowX;
+            patch.element.style.overflowY = patch.overflowY;
+        });
+        onboardingSpotlightOverflowPatches = [];
+    }
+
+    const seen = new Set<HTMLElement>();
+    for (const target of targets) {
+        let current = target.parentElement as HTMLElement | null;
+        while (current && current !== document.body && current !== document.documentElement) {
+            if (seen.has(current)) {
+                current = current.parentElement as HTMLElement | null;
+                continue;
+            }
+
+            seen.add(current);
+            const computed = window.getComputedStyle(current);
+            const overflowValues = [computed.overflow, computed.overflowX, computed.overflowY];
+            const shouldPatch = overflowValues.some((value) => ['hidden', 'clip', 'auto', 'scroll'].includes(String(value || '').trim().toLowerCase()));
+
+            if (shouldPatch) {
+                onboardingSpotlightOverflowPatches.push({
+                    element: current,
+                    overflow: current.style.overflow,
+                    overflowX: current.style.overflowX,
+                    overflowY: current.style.overflowY
+                });
+                current.style.overflow = 'visible';
+                current.style.overflowX = 'visible';
+                current.style.overflowY = 'visible';
+            }
+
+            current = current.parentElement as HTMLElement | null;
+        }
+    }
+}
+
+function resolveOnboardingSpotlightTarget(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker
+) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    const directTarget = document.querySelector(marker.selector) as HTMLElement | null;
+    if (!directTarget) return null;
+
+    if (stepId === 'connect_whatsapp' && marker.selector === '[data-tour-target="dashboard-chart-bar-toggle"]') {
+        return (directTarget.closest('[data-tour-target="dashboard-chart-type-toggle"]') as HTMLElement | null) || directTarget;
+    }
+
+    return directTarget;
+}
+
+function resolveOnboardingAmbientSpotlightTargets(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker,
+    primaryTarget: HTMLElement
+) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    const targets: HTMLElement[] = [];
+
+    if (stepId === 'connect_whatsapp' && marker.selector === '[data-tour-target="dashboard-chart-bar-toggle"]') {
+        const chartArea = document.querySelector('[data-tour-target="dashboard-stats-chart-area"]') as HTMLElement | null;
+        if (chartArea && chartArea !== primaryTarget) {
+            targets.push(chartArea);
+        }
+    }
+
+    return targets;
 }
 
 function resolveActiveOnboardingHighlight(stepIdInput: string | OnboardingStepId | null | undefined) {
@@ -1103,7 +1207,40 @@ function performOnboardingHighlightAction(
     return true;
 }
 
-function applyOnboardingSpotlight(marker: OnboardingHighlightMarker | null) {
+function syncOnboardingDashboardMetricForCurrentTime(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (stepId !== 'connect_whatsapp') return true;
+    if (!isOnboardingRouteActive('#/dashboard')) return true;
+
+    let targetMetric: StatsMetric | null = null;
+    if (onboardingVideoCurrentSeconds >= 14 && onboardingVideoCurrentSeconds < 16) {
+        targetMetric = 'interacoes';
+    } else if (onboardingVideoCurrentSeconds >= 13 && onboardingVideoCurrentSeconds < 14) {
+        targetMetric = 'mensagens';
+    } else if (onboardingVideoCurrentSeconds >= 11 && onboardingVideoCurrentSeconds < 13) {
+        targetMetric = 'novos_contatos';
+    }
+
+    if (!targetMetric) return true;
+    return setSelectedStatsMetric(targetMetric);
+}
+
+function syncOnboardingDashboardChartTypeForCurrentTime(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (stepId !== 'connect_whatsapp') return true;
+    if (!isOnboardingRouteActive('#/dashboard')) return true;
+
+    if (onboardingVideoCurrentSeconds >= 16 && onboardingVideoCurrentSeconds < 20) {
+        return setSelectedStatsChartType('bar');
+    }
+
+    return setSelectedStatsChartType('line');
+}
+
+function applyOnboardingSpotlight(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker | null
+) {
     if (!marker || !onboardingTourOpen) {
         clearOnboardingSpotlight();
         return;
@@ -1114,11 +1251,14 @@ function applyOnboardingSpotlight(marker: OnboardingHighlightMarker | null) {
         return;
     }
 
-    const target = document.querySelector(marker.selector) as HTMLElement | null;
+    const target = resolveOnboardingSpotlightTarget(stepIdInput, marker);
     if (!target) {
         clearOnboardingSpotlight();
         return;
     }
+
+    const ambientTargets = resolveOnboardingAmbientSpotlightTargets(stepIdInput, marker, target);
+    ensureOnboardingSpotlightOverflowVisible([target, ...ambientTargets]);
 
     const markerKey = `${marker.selector}:${marker.at}`;
     if (onboardingActiveSpotlightElement !== target) {
@@ -1133,6 +1273,19 @@ function applyOnboardingSpotlight(marker: OnboardingHighlightMarker | null) {
         target.classList.add('onboarding-tour-target-active');
         target.style.setProperty('--onboarding-tour-radius', `${Math.max(8, Math.floor(marker.radius || 16))}px`);
     }
+
+    const currentAmbientSet = new Set(ambientTargets);
+    onboardingAmbientSpotlightElements.forEach((element) => {
+        if (!currentAmbientSet.has(element)) {
+            element.classList.remove('onboarding-tour-target-ambient');
+            element.style.removeProperty('--onboarding-tour-radius');
+        }
+    });
+    ambientTargets.forEach((element) => {
+        element.classList.add('onboarding-tour-target-ambient');
+        element.style.setProperty('--onboarding-tour-radius', '18px');
+    });
+    onboardingAmbientSpotlightElements = ambientTargets;
 
     const rect = target.getBoundingClientRect();
     const isOffscreen = rect.top < 72 || rect.bottom > window.innerHeight - 120;
@@ -1236,7 +1389,9 @@ function refreshOnboardingTourSurface() {
 
     const surfaceReady = prepareOnboardingSurfaceForStep(stepId, activeMarker);
     if (!surfaceReady) return;
-    applyOnboardingSpotlight(activeMarker);
+    syncOnboardingDashboardMetricForCurrentTime(stepId);
+    syncOnboardingDashboardChartTypeForCurrentTime(stepId);
+    applyOnboardingSpotlight(stepId, activeMarker);
 }
 
 function stopOnboardingVideoSyncTimer() {
@@ -2311,6 +2466,26 @@ function getSelectedStatsMetric(): StatsMetric {
         return metricRaw;
     }
     return 'mensagens';
+}
+
+function setSelectedStatsMetric(metric: StatsMetric) {
+    const statsMetric = document.getElementById('statsMetric') as HTMLSelectElement | null;
+    if (!statsMetric) return false;
+
+    if (statsMetric.value !== metric) {
+        statsMetric.value = metric;
+        void updateStatsPeriodChart();
+    }
+
+    return true;
+}
+
+function setSelectedStatsChartType(type: StatsChartType) {
+    if (statsChartType === type) return true;
+    statsChartType = type;
+    updateChartTypeButtonsState();
+    void updateStatsPeriodChart();
+    return true;
 }
 
 function getStatsRangeFromControls() {

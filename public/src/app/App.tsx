@@ -441,6 +441,14 @@ function GlobalOnboardingTour() {
           border-radius: var(--onboarding-tour-radius, 16px) !important;
           animation: onboardingTourPulse 1.6s ease-in-out infinite;
         }
+        .onboarding-tour-target-ambient {
+          position: relative !important;
+          z-index: 2490 !important;
+          box-shadow:
+            0 0 0 9999px rgba(2, 7, 15, 0.66),
+            0 18px 32px rgba(2, 8, 20, 0.22) !important;
+          border-radius: var(--onboarding-tour-radius, 16px) !important;
+        }
         .onboarding-tour-spotlight-card {
           display: none !important;
         }
