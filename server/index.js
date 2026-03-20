@@ -177,6 +177,7 @@ const { createSettingsRoutes } = require('./routes/settingsRoutes');
 const { createTagRoutes } = require('./routes/tagRoutes');
 const { createTemplateRoutes } = require('./routes/templateRoutes');
 const { createUploadRoutes } = require('./routes/uploadRoutes');
+const { createUserReadRoutes } = require('./routes/userReadRoutes');
 const { createPublicCheckoutRoutes } = require('./routes/publicCheckoutRoutes');
 const { createAuthRoutes } = require('./routes/authRoutes');
 const { createWhatsAppSessionRoutes } = require('./routes/whatsAppSessionRoutes');
@@ -13099,33 +13100,13 @@ function sanitizeUserPayload(user, ownerUserId = 0) {
     };
 }
 
-app.get('/api/users', authenticate, async (req, res) => {
-    try {
-        const requesterRole = String(req.user?.role || '').toLowerCase();
-        const requesterId = Number(req.user?.id || 0);
-        const requesterOwnerUserId = await resolveRequesterOwnerUserId(req);
-        const isAdmin = requesterRole === 'admin';
-
-        let users = [];
-        if (isAdmin) {
-            users = requesterOwnerUserId
-                ? await User.listByOwner(requesterOwnerUserId, { includeInactive: false })
-                : [];
-        } else {
-            const me = await User.findById(requesterId);
-            users = me && isUserActive(me) ? [me] : [];
-        }
-
-        res.json({
-            success: true,
-            users: (users || [])
-                .map((user) => sanitizeUserPayload(user, requesterOwnerUserId))
-                .filter(Boolean)
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Erro ao carregar usuÃ¡rios' });
-    }
-});
+app.use(createUserReadRoutes({
+    authenticate,
+    resolveRequesterOwnerUserId,
+    User,
+    isUserActive,
+    sanitizeUserPayload
+}));
 
 app.post('/api/users', authenticate, async (req, res) => {
     try {
