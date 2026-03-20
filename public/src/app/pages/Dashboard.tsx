@@ -1914,7 +1914,7 @@ function StatsPeriod() {
         <div className="stats-period-controls">
           <input type="date" className="form-input" id="statsStartDate" />
           <input type="date" className="form-input" id="statsEndDate" />
-          <select className="form-select" id="statsMetric" defaultValue="mensagens">
+          <select className="form-select" id="statsMetric" defaultValue="mensagens" data-tour-target="dashboard-stats-metric-select">
             <option value="novos_contatos">Novos Contatos</option>
             <option value="mensagens">Mensagens</option>
             <option value="interacoes">Interações</option>

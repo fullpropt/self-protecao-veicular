@@ -268,7 +268,7 @@ const ONBOARDING_STEP_ROUTES: Record<OnboardingStepId, string> = {
 };
 const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMarker[]> = {
     connect_whatsapp: [
-        { at: 11.0, selector: '[data-tour-target="dashboard-stats-period-card"]', route: '#/dashboard', title: 'Veja o gráfico principal', hint: 'Aqui você acompanha o gráfico do período e o seletor de métricas como mensagens.', radius: 22 },
+        { at: 11.0, selector: '[data-tour-target="dashboard-stats-metric-select"]', route: '#/dashboard', title: 'Veja o gráfico principal', hint: 'Aqui você acompanha o gráfico do período e o seletor de métricas como mensagens.', radius: 16 },
         { at: 16.0, selector: '[data-tour-target="dashboard-chart-bar-toggle"]', route: '#/dashboard', title: 'Alterne o tipo do gráfico', hint: 'Use este toggle para trocar a visualização entre linha e barra.', radius: 18, scroll: 'nearest' },
         { at: 20.0, selector: '[data-tour-target="dashboard-nav-whatsapp"]', route: '#/dashboard', title: 'Abra o WhatsApp', hint: 'Este atalho leva você para a área de conexão das contas.', radius: 18, scroll: 'nearest' },
         { at: 22.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Crie uma nova conta', hint: 'Este botão prepara uma nova sessão para conexão no sistema.', radius: 18 },
@@ -1102,10 +1102,19 @@ function resolveOnboardingAmbientSpotlightTargets(
     const stepId = normalizeOnboardingStepId(stepIdInput);
     const targets: HTMLElement[] = [];
 
-    if (stepId === 'connect_whatsapp' && marker.selector === '[data-tour-target="dashboard-chart-bar-toggle"]') {
-        const chartArea = document.querySelector('[data-tour-target="dashboard-stats-chart-area"]') as HTMLElement | null;
-        if (chartArea && chartArea !== primaryTarget) {
-            targets.push(chartArea);
+    if (stepId === 'connect_whatsapp') {
+        if (marker.selector === '[data-tour-target="dashboard-chart-bar-toggle"]') {
+            const chartArea = document.querySelector('[data-tour-target="dashboard-stats-chart-area"]') as HTMLElement | null;
+            if (chartArea && chartArea !== primaryTarget) {
+                targets.push(chartArea);
+            }
+        }
+
+        if (marker.selector === '[data-tour-target="dashboard-stats-metric-select"]') {
+            const statsCard = document.querySelector('[data-tour-target="dashboard-stats-period-card"]') as HTMLElement | null;
+            if (statsCard && statsCard !== primaryTarget) {
+                targets.push(statsCard);
+            }
         }
     }
 

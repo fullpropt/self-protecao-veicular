@@ -557,7 +557,7 @@ const WHATSAPP_PRESENTATION_BASE_SESSIONS: PresentationSessionRecord[] = [
 ];
 
 const WHATSAPP_PRESENTATION_PLAN_USAGE: PresentationPlanUsage = {
-  planName: 'ZapVender Growth',
+  planName: 'ZapVender Premium',
   current: WHATSAPP_PRESENTATION_BASE_SESSIONS.length,
   max: 5,
   unlimited: false
@@ -608,7 +608,7 @@ const PRESENTATION_CONTACTS: PresentationLead[] = DASHBOARD_PRESENTATION_LEADS.m
 }));
 
 const CONTACTS_PRESENTATION_PLAN_USAGE: PresentationPlanUsage = {
-  planName: 'ZapVender Growth',
+  planName: 'ZapVender Premium',
   current: PRESENTATION_CONTACTS.length,
   max: 500,
   unlimited: false
