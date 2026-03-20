@@ -1,5 +1,18 @@
 // Inbox page logic migrated to module
 import robotFlowIconUrl from '../app/assets/robot-svgrepo-com.svg';
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    appendOnboardingPresentationInboxMessage,
+    getOnboardingPresentationContactFields,
+    getOnboardingPresentationInboxConversations,
+    getOnboardingPresentationInboxLeadById,
+    getOnboardingPresentationInboxLeads,
+    getOnboardingPresentationInboxMessages,
+    getOnboardingPresentationInboxQuickReplies,
+    getOnboardingPresentationWhatsappSessions,
+    isOnboardingPresentationModeEnabled,
+    markOnboardingPresentationConversationRead
+} from '../core/onboardingPresentation';
 
 declare const io:
     | undefined
@@ -154,6 +167,7 @@ let inboxSearchRequestToken = 0;
 let inboxStartConversationLeads: InboxLeadItem[] = [];
 let inboxStartConversationModalBound = false;
 let conversationFlowToggleInFlight = false;
+let onboardingPresentationInboxBridgeBound = false;
 
 const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 const INBOX_OPEN_LEAD_QUERY_KEYS = ['leadId', 'lead_id', 'id'] as const;
@@ -169,6 +183,21 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
     notifyNewMessage: true,
     notifySound: true
 };
+
+function showOnboardingPresentationInboxReadOnlyToast(message = 'No tour, esta acao e apenas demonstrativa e nao altera seus dados reais.') {
+    showToast('info', 'Tour guiado', message);
+}
+
+function bindOnboardingPresentationInboxBridge() {
+    if (onboardingPresentationInboxBridgeBound) return;
+    onboardingPresentationInboxBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        const hasInboxSurface = Boolean(document.getElementById('conversationsList') || document.getElementById('chatPanel'));
+        if (!hasInboxSurface) return;
+        initInbox();
+    });
+}
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', is_default: true, source: 'name' },
@@ -452,6 +481,11 @@ async function ensureSessionConnected(sessionId: string) {
     const normalized = sanitizeSessionId(sessionId);
     if (!normalized) return false;
 
+    if (isOnboardingPresentationModeEnabled()) {
+        const knownPresentationSession = getOnboardingPresentationWhatsappSessions().find((session) => sanitizeSessionId(session.session_id) === normalized);
+        return Boolean(knownPresentationSession?.connected) || String(knownPresentationSession?.status || '').toLowerCase() === 'connected';
+    }
+
     const knownSession = findInboxSessionById(normalized);
     if (knownSession && isInboxSessionConnected(knownSession)) {
         return true;
@@ -582,6 +616,11 @@ function renderInboxHistoryResyncButtonState() {
 async function resyncInboxHistory() {
     if (inboxHistoryResyncInFlight) return;
 
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationInboxReadOnlyToast('No tour, o historico exibido ja e demonstrativo.');
+        return;
+    }
+
     const selectedSessionId = sanitizeSessionId(inboxSessionFilter);
     const targetSessionIds = resolveInboxHistoryResyncSessionTargets();
     if (targetSessionIds.length === 0) {
@@ -690,6 +729,19 @@ async function loadInboxSessionFilters() {
     const storedFilter = getStoredInboxSessionFilter();
     inboxSessionFilter = sanitizeSessionId(storedFilter);
 
+    if (isOnboardingPresentationModeEnabled()) {
+        inboxAvailableSessions = getOnboardingPresentationWhatsappSessions();
+        const sessionIds = new Set(
+            inboxAvailableSessions.map((item) => sanitizeSessionId(item.session_id)).filter(Boolean)
+        );
+        if (inboxSessionFilter && !sessionIds.has(inboxSessionFilter)) {
+            inboxSessionFilter = '';
+            persistInboxSessionFilter('');
+        }
+        renderInboxSessionFilterOptions();
+        return;
+    }
+
     try {
         const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
         inboxAvailableSessions = Array.isArray(response?.sessions) ? response.sessions : [];
@@ -759,6 +811,24 @@ function buildVirtualConversationFromLead(lead: InboxLeadItem): Conversation | n
 }
 
 async function fetchInboxSearchLeads(force = false) {
+    if (isOnboardingPresentationModeEnabled()) {
+        const leads = getOnboardingPresentationInboxLeads(inboxSessionFilter).map((item) => ({
+            id: normalizeInboxLeadId(item.id),
+            name: String(item.name || '').trim(),
+            phone: String(item.phone || '').trim(),
+            avatar_url: '',
+            avatarUrl: '',
+            status: item.status,
+            updated_at: String(item.last_message_at || item.last_interaction_at || item.created_at || '').trim(),
+            created_at: String(item.created_at || '').trim(),
+            last_message_at: String(item.last_message_at || item.last_interaction_at || '').trim()
+        }));
+        inboxSearchLeadsCache = leads;
+        inboxSearchLeadsCacheKey = getInboxSearchLeadsCacheKey();
+        inboxSearchLeadsCacheAt = Date.now();
+        return leads;
+    }
+
     const cacheKey = getInboxSearchLeadsCacheKey();
     const cacheValid =
         !force &&
@@ -827,6 +897,23 @@ async function fetchInboxSearchLeads(force = false) {
 }
 
 async function fetchInboxStartConversationLeads(force = false) {
+    if (isOnboardingPresentationModeEnabled()) {
+        const leads = getOnboardingPresentationInboxLeads().map((item) => ({
+            id: normalizeInboxLeadId(item.id),
+            name: String(item.name || '').trim(),
+            phone: String(item.phone || '').trim(),
+            avatar_url: '',
+            avatarUrl: '',
+            status: item.status,
+            updated_at: String(item.last_message_at || item.last_interaction_at || item.created_at || '').trim(),
+            created_at: String(item.created_at || '').trim(),
+            last_message_at: String(item.last_message_at || item.last_interaction_at || '').trim()
+        }));
+        inboxStartConversationLeadsCache = leads;
+        inboxStartConversationLeadsCacheAt = Date.now();
+        return leads;
+    }
+
     const cacheValid =
         !force &&
         Array.isArray(inboxStartConversationLeadsCache) &&
@@ -1427,6 +1514,7 @@ async function tryOpenPendingLeadConversation() {
 
 function initInbox() {
     pendingInboxOpenLeadId = resolveInboxOpenLeadIdFromRouteParams();
+    bindOnboardingPresentationInboxBridge();
     bindInboxLifecycle();
     syncInboxMobileViewportState();
     bindStartConversationModal();
@@ -1443,11 +1531,17 @@ function initInbox() {
         loadConversations();
     });
     loadQuickReplies();
-    initSocket();
+    if (!isOnboardingPresentationModeEnabled()) {
+        initSocket();
+    }
     renderContactInfoPanel();
     setMobileConversationMode(false);
     setInboxComposerFocusState(false);
-    startInboxAutoRefresh();
+    if (!isOnboardingPresentationModeEnabled()) {
+        startInboxAutoRefresh();
+    } else {
+        stopInboxAutoRefresh();
+    }
 }
 
 onReady(initInbox);
@@ -1988,6 +2082,59 @@ function initSocket() {
 }
 
 async function loadConversations() {
+    if (isOnboardingPresentationModeEnabled()) {
+        const activeOpenConversationId = isCurrentChatVisible()
+            ? Number(currentConversation?.id || 0)
+            : 0;
+
+        inboxSearchVirtualConversations = [];
+        conversations = getOnboardingPresentationInboxConversations(inboxSessionFilter).map((c) => ({
+            sessionId: sanitizeSessionId(c.session_id),
+            id: c.id,
+            leadId: c.lead_id || c.id,
+            sessionLabel: resolveConversationSessionLabel(sanitizeSessionId(c.session_id)),
+            name: c.name || c.phone,
+            phone: c.phone,
+            avatarUrl: sanitizeAvatarUrl(c.avatar_url || ''),
+            lastMessage: c.last_message || INBOX_NEW_CONVERSATION_PREVIEW,
+            lastMessageAt: c.last_message_at,
+            unread: activeOpenConversationId > 0 && Number(c.id) === activeOpenConversationId
+                ? 0
+                : Number(c.unread || 0),
+            status: c.status,
+            hasConversation: true,
+            isBotActive: Number(c.is_bot_active ?? 1) === 1,
+            isFlowRunning: Number(c.flow_is_running ?? 0) === 1,
+            flowRunningId: Number(c.flow_running_id ?? 0) || null
+        }));
+
+        if (currentConversation) {
+            currentConversation =
+                conversations.find((conversation) => Number(conversation.id) === Number(currentConversation?.id || 0))
+                || null;
+        }
+
+        const activeSearch = getInboxSearchValue();
+        if (activeSearch) {
+            await searchConversations();
+        } else if (currentFilter === 'unread') {
+            renderFilteredConversations(conversations.filter((conversation) => (conversation.unread || 0) > 0));
+        } else {
+            renderConversations();
+        }
+
+        updateUnreadBadge();
+
+        if (!currentConversation && conversations.length > 0) {
+            await selectConversation(Number(conversations[0].id || 0));
+        } else if (currentConversation) {
+            renderChat();
+            renderContactInfoPanel();
+        }
+
+        return;
+    }
+
     try {
         const activeOpenConversationId = isCurrentChatVisible()
             ? Number(currentConversation?.id || 0)
@@ -2269,6 +2416,11 @@ async function toggleConversationFlow() {
         return;
     }
 
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationInboxReadOnlyToast('No tour, o fluxo desta conversa nao pode ser alterado.');
+        return;
+    }
+
     if (conversationFlowToggleInFlight) return;
 
     const conversationId = Number(currentConversation.id || 0);
@@ -2496,7 +2648,7 @@ async function selectConversation(id: number) {
     document.querySelector(`.conversation-item[onclick="selectConversation(${id})"]`)?.classList.add('active');
 
     // Persistir no backend que a conversa foi lida apenas para conversas reais
-    if (Number(id) > 0) {
+    if (Number(id) > 0 && !isOnboardingPresentationModeEnabled()) {
         try {
             const conversationSessionId = resolveConversationSessionId(currentConversation);
             socket?.emit('mark-read', {
@@ -2507,6 +2659,8 @@ async function selectConversation(id: number) {
         } catch {
             // Nao bloqueia abertura da conversa se falhar sincronizacao de leitura
         }
+    } else if (Number(id) > 0) {
+        markOnboardingPresentationConversationRead(id);
     }
     // Carregar mensagens e dados completos do contato
     const conversationSessionId = resolveConversationSessionId(currentConversation);
@@ -2528,6 +2682,19 @@ async function selectConversation(id: number) {
 }
 
 async function loadMessages(leadId: number, conversationId?: number, sessionId?: string, contactJid?: string) {
+    if (isOnboardingPresentationModeEnabled()) {
+        messages = getOnboardingPresentationInboxMessages(Number(conversationId || 0)).map((item) => ({
+            ...item,
+            direction: normalizeDirection(item),
+            created_at: item.created_at || new Date().toISOString(),
+            media_type: item.media_type || 'text',
+            media_url: item.media_url || null,
+            media_mime_type: item.media_mime_type || null,
+            media_filename: item.media_filename || null
+        }));
+        return;
+    }
+
     try {
         const params = new URLSearchParams();
         const normalizedConversationId = Number(conversationId);
@@ -2612,6 +2779,22 @@ async function tryAutoRehydrateMissingStickerMedia(conversation: Conversation | 
 }
 
 async function loadContactFields() {
+    if (isOnboardingPresentationModeEnabled()) {
+        const fields = getOnboardingPresentationContactFields();
+        contactFieldsCache = fields.length
+            ? fields
+                .map((field: ContactField) => ({
+                    key: normalizeContactFieldKey(field.key),
+                    label: field.label || field.key,
+                    is_default: Boolean(field.is_default),
+                    source: field.source
+                }))
+                .filter((field: ContactField) => Boolean(field.key))
+            : [...DEFAULT_CONTACT_FIELDS];
+        renderContactInfoPanel();
+        return;
+    }
+
     try {
         const response = await api.get('/api/contact-fields');
         const fields = Array.isArray(response?.fields) ? response.fields : [];
@@ -2638,6 +2821,11 @@ async function loadCurrentLeadDetails(leadId: number) {
         renderContactInfoPanel();
         return;
     }
+    if (isOnboardingPresentationModeEnabled()) {
+        currentLeadDetails = getOnboardingPresentationInboxLeadById(leadId) || null;
+        renderContactInfoPanel();
+        return;
+    }
     try {
         const response = await api.get(`/api/leads/${leadId}`);
         currentLeadDetails = response?.lead || null;
@@ -2648,6 +2836,18 @@ async function loadCurrentLeadDetails(leadId: number) {
 }
 
 async function loadQuickReplies() {
+    if (isOnboardingPresentationModeEnabled()) {
+        quickReplies = getOnboardingPresentationInboxQuickReplies().map((item) => ({
+            id: item.id,
+            name: item.name,
+            content: item.content || '',
+            category: item.category,
+            media_type: item.media_type,
+            media_url: item.media_url
+        }));
+        return;
+    }
+
     try {
         const response: QuickRepliesResponse = await api.get('/api/templates');
         quickReplies = (response.templates || [])
@@ -2821,6 +3021,21 @@ async function sendQuickReplyAudio(quickReply: TemplateItem) {
     const chatMessages = document.getElementById('chatMessages') as HTMLElement | null;
     renderMessagesInto(chatMessages);
     scrollToBottom();
+
+    if (isOnboardingPresentationModeEnabled()) {
+        appendOnboardingPresentationInboxMessage(Number(currentConversation.id || 0), {
+            id: newMessage.id,
+            content: '[audio]',
+            direction: 'outgoing',
+            status: 'sent',
+            created_at: newMessage.created_at,
+            media_type: 'audio',
+            media_url: mediaUrl
+        });
+        newMessage.status = 'sent';
+        renderMessagesInto(chatMessages);
+        return;
+    }
 
     try {
         const sessionId = resolveConversationSessionId(currentConversation);
@@ -3274,6 +3489,13 @@ function triggerMediaPicker() {
 }
 
 async function handleMediaInputChange(event: Event) {
+    if (isOnboardingPresentationModeEnabled()) {
+        const target = event.target as HTMLInputElement | null;
+        if (target) target.value = '';
+        showOnboardingPresentationInboxReadOnlyToast('No tour, o envio de arquivos fica apenas na demonstracao visual.');
+        return;
+    }
+
     const target = event.target as HTMLInputElement | null;
     const file = target?.files?.[0];
     if (!target) return;
@@ -3706,6 +3928,19 @@ async function sendMessage() {
     scrollToBottom();
     if (input) input.value = '';
 
+    if (isOnboardingPresentationModeEnabled()) {
+        appendOnboardingPresentationInboxMessage(Number(activeConversation.id || 0), {
+            id: newMessage.id,
+            content,
+            direction: 'outgoing',
+            status: 'sent',
+            created_at: newMessage.created_at
+        });
+        newMessage.status = 'sent';
+        renderMessagesInto(chatMessages);
+        return;
+    }
+
     try {
         const sendPayload: Record<string, any> = {
             sessionId,
@@ -3767,6 +4002,10 @@ function toggleContactInfo(forceOpen?: boolean) {
 
 async function registerCurrentUser() {
     if (!currentConversation) return;
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationInboxReadOnlyToast('No tour, este cadastro ja aparece preenchido apenas para demonstracao.');
+        return;
+    }
     try {
         showLoading('Cadastrando usuario...');
         await api.post('/api/leads', {

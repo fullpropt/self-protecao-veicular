@@ -1,5 +1,13 @@
 ﻿// Automacao page logic migrated to module
 
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    getOnboardingPresentationAutomations,
+    getOnboardingPresentationTags,
+    getOnboardingPresentationWhatsappSessions,
+    isOnboardingPresentationModeEnabled
+} from '../core/onboardingPresentation';
+
 type SupportedTriggerType = 'status_change' | 'message_received' | 'keyword' | 'inactivity';
 type LegacyTriggerType = 'new_lead' | 'schedule';
 type TriggerType = SupportedTriggerType | LegacyTriggerType;
@@ -48,6 +56,7 @@ let automationTags: TagItem[] = [];
 let pendingAutomationTagFilters: string[] | null = null;
 let automationTagFilterGlobalEventsBound = false;
 let expandedAutomationId: number | null = null;
+let onboardingPresentationAutomacaoBridgeBound = false;
 const RUNTIME_SUPPORTED_TRIGGER_TYPES: SupportedTriggerType[] = [
     'status_change',
     'message_received',
@@ -66,6 +75,23 @@ function appConfirm(message: string, title = 'Confirmacao') {
         return win.showAppConfirm(message, title);
     }
     return Promise.resolve(window.confirm(message));
+}
+
+function showOnboardingPresentationAutomacaoReadOnlyToast(message = 'No tour, esta acao e apenas demonstrativa e nao altera seus dados reais.') {
+    showToast('info', 'Tour guiado', message);
+}
+
+function bindOnboardingPresentationAutomacaoBridge() {
+    if (onboardingPresentationAutomacaoBridgeBound) return;
+    onboardingPresentationAutomacaoBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        const hasAutomationsSurface = Boolean(document.getElementById('automationsList'));
+        if (!hasAutomationsSurface) return;
+        void loadAutomationSessions();
+        void loadAutomationTags();
+        void loadAutomations();
+    });
 }
 
 function isRuntimeSupportedTriggerType(type: string): type is SupportedTriggerType {
@@ -597,6 +623,15 @@ function bindAutomationTagFilterDropdown() {
 }
 
 async function loadAutomationSessions() {
+    if (isOnboardingPresentationModeEnabled()) {
+        automationSessions = getOnboardingPresentationWhatsappSessions();
+        renderAutomationSessionScopeOptions();
+        if (automations.length) {
+            renderAutomations();
+        }
+        return;
+    }
+
     try {
         const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
         automationSessions = Array.isArray(response?.sessions) ? response.sessions : [];
@@ -610,6 +645,16 @@ async function loadAutomationSessions() {
 }
 
 async function loadAutomationTags() {
+    if (isOnboardingPresentationModeEnabled()) {
+        automationTags = getOnboardingPresentationTags();
+        automationTags.sort((a, b) => normalizeAutomationTagLabel(a?.name).localeCompare(normalizeAutomationTagLabel(b?.name), 'pt-BR'));
+        renderAutomationTagFilterOptions();
+        if (automations.length) {
+            renderAutomations();
+        }
+        return;
+    }
+
     try {
         const response = await api.get('/api/tags');
         automationTags = Array.isArray(response?.tags) ? response.tags : [];
@@ -625,6 +670,7 @@ async function loadAutomationTags() {
 }
 
 function initAutomacao() {
+    bindOnboardingPresentationAutomacaoBridge();
     pendingAutomationSessionScope = [];
     pendingAutomationTagFilters = [];
     bindAutomationTagFilterDropdown();
@@ -639,6 +685,13 @@ function initAutomacao() {
 onReady(initAutomacao);
 
 async function loadAutomations() {
+    if (isOnboardingPresentationModeEnabled()) {
+        automations = getOnboardingPresentationAutomations();
+        updateStats();
+        renderAutomations();
+        return;
+    }
+
     try {
         showLoading('Carregando automações...');
         const response: AutomationsResponse = await api.get('/api/automations');
@@ -942,6 +995,12 @@ Variáveis: {{nome}}"></textarea>
 }
 
 async function toggleAutomation(id: number, active: boolean) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationAutomacaoReadOnlyToast('No tour, o status das automacoes fica bloqueado para nao alterar dados reais.');
+        renderAutomations();
+        return;
+    }
+
     const automation = automations.find(a => a.id === id);
     if (!automation) return;
     const previousActive = automation.is_active;
@@ -961,6 +1020,12 @@ async function toggleAutomation(id: number, active: boolean) {
 }
 
 async function saveAutomation() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationAutomacaoReadOnlyToast();
+        closeModal('newAutomationModal');
+        return;
+    }
+
     const automationId = getAutomationId();
     const name = (document.getElementById('automationName') as HTMLInputElement | null)?.value.trim() || '';
     const description = (document.getElementById('automationDescription') as HTMLInputElement | null)?.value.trim() || '';
@@ -1070,6 +1135,11 @@ function editAutomation(id: number) {
 }
 
 async function deleteAutomation(id: number) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationAutomacaoReadOnlyToast();
+        return;
+    }
+
     if (!await appConfirm('Excluir esta automacao?', 'Excluir automacao')) return;
 
     try {

@@ -421,6 +421,12 @@ function GlobalOnboardingTour() {
           color: #062219;
           box-shadow: 0 14px 24px rgba(17, 212, 143, 0.16);
         }
+        .onboarding-video-ended-btn.is-primary:hover:not(:disabled) {
+          border-color: rgba(32, 240, 192, 0.42);
+          background: linear-gradient(135deg, rgba(32, 240, 192, 1), rgba(92, 255, 214, 0.96));
+          color: #041811;
+          box-shadow: 0 16px 28px rgba(17, 212, 143, 0.22);
+        }
         .onboarding-video-ended-btn:focus-visible {
           outline: 2px solid rgba(var(--primary-rgb), 0.34);
           outline-offset: 2px;

@@ -1,5 +1,13 @@
 ﻿// Configuracoes page logic migrated to module
 
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    getOnboardingPresentationWhatsappSessions,
+    isOnboardingPresentationModeEnabled,
+    patchOnboardingPresentationWhatsappSession,
+    removeOnboardingPresentationWhatsappSession
+} from '../core/onboardingPresentation';
+
 type Settings = {
     company?: { name?: string; cnpj?: string; phone?: string; email?: string };
     funnel?: Array<{ name?: string; color?: string; description?: string }>;
@@ -160,6 +168,7 @@ let usersCache: ManagedUser[] = [];
 let usersPresencePollingTimer: number | null = null;
 let planStatusCache: PlanStatusViewModel | null = null;
 let planStatusLoading = false;
+let onboardingPresentationConfiguracoesBridgeBound = false;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true, required: true, placeholder: 'Nome completo' },
@@ -231,7 +240,18 @@ function getPanelFromLocation() {
     return hash.startsWith('#') ? hash.slice(1) : hash;
 }
 
+function bindOnboardingPresentationConfiguracoesBridge() {
+    if (onboardingPresentationConfiguracoesBridgeBound) return;
+    onboardingPresentationConfiguracoesBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        if (!document.getElementById('connectionAccountsList')) return;
+        void refreshWhatsAppAccounts();
+    });
+}
+
 function initConfiguracoes() {
+    bindOnboardingPresentationConfiguracoesBridge();
     loadSettings();
     loadContactFields();
     loadTemplates();
@@ -1982,6 +2002,13 @@ async function refreshWhatsAppAccounts() {
         container.innerHTML = '<p style="color: var(--gray-500); margin: 0;">Carregando contas...</p>';
     }
 
+    if (isOnboardingPresentationModeEnabled()) {
+        whatsappSessionsCache = getOnboardingPresentationWhatsappSessions();
+        renderWhatsAppAccountsManager();
+        renderBusinessHoursAccountsManager();
+        return;
+    }
+
     try {
         const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
         whatsappSessionsCache = Array.isArray(response?.sessions) ? response.sessions : [];
@@ -2013,6 +2040,18 @@ async function saveWhatsAppSessionName(sessionToken: string) {
     const dailyLimit = parseDailyLimit(dailyLimitInput?.value, 0);
     const campaignEnabled = Boolean(enabledInput?.checked);
 
+    if (isOnboardingPresentationModeEnabled()) {
+        patchOnboardingPresentationWhatsappSession(sessionId, {
+            name,
+            campaign_enabled: campaignEnabled,
+            daily_limit: dailyLimit,
+            dispatch_weight: dispatchWeight
+        });
+        showToast('success', 'Sucesso', 'No tour, essa alteração foi aplicada apenas na demonstração.');
+        await refreshWhatsAppAccounts();
+        return;
+    }
+
     try {
         await api.put(`/api/whatsapp/sessions/${encodeURIComponent(sessionId)}`, {
             name,
@@ -2031,6 +2070,13 @@ async function removeWhatsAppSession(sessionToken: string) {
     const sessionId = sanitizeSessionId(decodeSessionToken(sessionToken));
     if (!sessionId) return;
 
+    if (isOnboardingPresentationModeEnabled()) {
+        removeOnboardingPresentationWhatsappSession(sessionId);
+        showToast('success', 'Sucesso', 'No tour, essa remoção foi aplicada apenas na demonstração.');
+        await refreshWhatsAppAccounts();
+        return;
+    }
+
     const confirmed = await appConfirm(`Remover a conta ${sessionId}? Essa acao desconecta e exclui a sessao.`, 'Remover conta WhatsApp');
     if (!confirmed) return;
 
@@ -2048,6 +2094,11 @@ async function removeWhatsAppSession(sessionToken: string) {
 }
 
 async function connectWhatsApp() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showToast('info', 'Info', 'No tour, a conexao do WhatsApp e apenas demonstrativa.');
+        return;
+    }
+
     try {
         showLoading('Gerando QR Code...');
         const response = await api.get('/api/whatsapp/qr');
@@ -2062,6 +2113,11 @@ async function connectWhatsApp() {
 }
 
 async function disconnectWhatsApp() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showToast('info', 'Info', 'No tour, a desconexao do WhatsApp e apenas demonstrativa.');
+        return;
+    }
+
     showToast('info', 'Info', 'Gerencie as contas pela lista de contas WhatsApp.');
 }
 

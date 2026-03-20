@@ -1,3 +1,16 @@
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    disableOnboardingPresentationMode,
+    enableOnboardingPresentationMode,
+    getOnboardingPresentationAccountHealth,
+    getOnboardingPresentationCustomEvents,
+    getOnboardingPresentationDashboardLeads,
+    getOnboardingPresentationDashboardSummary,
+    getOnboardingPresentationStatsSeries,
+    isOnboardingPresentationModeEnabled,
+    updateOnboardingPresentationStep
+} from '../core/onboardingPresentation';
+
 // Dashboard page logic migrated to module
 
 // Dados dos leads
@@ -195,6 +208,7 @@ let onboardingActiveSpotlightElement: HTMLElement | null = null;
 let onboardingActiveSpotlightSelector = '';
 let onboardingActiveSpotlightMarkerKey = '';
 let onboardingSpotlightRefreshTimer: number | null = null;
+let onboardingPresentationDashboardBridgeBound = false;
 
 let statsChartInstance: { destroy?: () => void } | null = null;
 let statsChartType: StatsChartType = 'line';
@@ -202,6 +216,10 @@ let statsChartRequestSeq = 0;
 
 function getErrorCode(error: unknown) {
     return String((error as AppError | null | undefined)?.code || '').trim().toUpperCase();
+}
+
+function showOnboardingPresentationReadOnlyToast(message = 'No tour, esta acao e apenas demonstrativa e nao altera seus dados reais.') {
+    showToast('info', 'Tour guiado', message);
 }
 
 const STATS_METRIC_LABELS: Record<StatsMetric, string> = {
@@ -767,6 +785,7 @@ function toggleOnboardingStep(stepIdInput: string, checked?: boolean) {
 }
 
 function resetOnboardingChecklist() {
+    disableOnboardingPresentationMode();
     onboardingState = {
         completedSteps: [],
         updatedAt: Date.now()
@@ -784,6 +803,7 @@ function resetOnboardingChecklist() {
 }
 
 function resetOnboardingTourState() {
+    disableOnboardingPresentationMode();
     destroyOnboardingYouTubePlayer();
     onboardingTourOpen = false;
     onboardingPlayingStepId = null;
@@ -800,6 +820,12 @@ function startOnboardingTour(stepIdInput?: string) {
         || normalizeOnboardingStepId(onboardingSelectedStepId)
         || getPreferredOnboardingSelectedStepId();
     if (!stepId) return;
+
+    if (!onboardingTourOpen) {
+        enableOnboardingPresentationMode(stepId);
+    } else {
+        updateOnboardingPresentationStep(stepId);
+    }
 
     const hasRouteChanged = ensureOnboardingStepRoute(stepId);
     onboardingSelectedStepId = stepId;
@@ -824,6 +850,7 @@ function startOnboardingTour(stepIdInput?: string) {
 }
 
 function closeOnboardingTour() {
+    disableOnboardingPresentationMode();
     onboardingTourOpen = false;
     onboardingPreparedSurfaceStepId = null;
     onboardingPreparedMarkerActionKey = '';
@@ -1918,6 +1945,17 @@ async function loadOnboardingVideo(_options: { silent?: boolean } = {}) {
     renderOnboardingVideo();
 }
 
+function bindOnboardingPresentationDashboardBridge() {
+    if (onboardingPresentationDashboardBridgeBound) return;
+    onboardingPresentationDashboardBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        const hasDashboardSurface = Boolean(document.getElementById('statsChart') || document.getElementById('dashboardOnboardingCard'));
+        if (!hasDashboardSurface) return;
+        void loadDashboardData();
+    });
+}
+
 function initOnboardingCard() {
     const hasOnboarding = Boolean(document.getElementById('dashboardOnboardingCard'));
     if (!hasOnboarding) return;
@@ -2199,6 +2237,13 @@ async function loadAccountHealth(options: { silent?: boolean } = {}) {
     const hasCard = Boolean(document.getElementById('accountHealthList'));
     if (!hasCard) return;
 
+    if (isOnboardingPresentationModeEnabled()) {
+        const response = getOnboardingPresentationAccountHealth();
+        renderAccountHealthSummary(response.summary, response.generatedAt);
+        renderAccountHealthAccounts(response.accounts);
+        return;
+    }
+
     const hasRenderedContent = Boolean(document.querySelector('#accountHealthList .account-health-account'));
     if (!hasRenderedContent) {
         renderAccountHealthPlaceholder('Carregando saúde das contas...');
@@ -2424,6 +2469,12 @@ function renderStatsChart(labels: string[], values: number[], metric: StatsMetri
 
 async function updateStatsPeriodChart(options: { silent?: boolean } = {}) {
     const metric = getSelectedStatsMetric();
+    if (isOnboardingPresentationModeEnabled()) {
+        const presentationSeries = getOnboardingPresentationStatsSeries(metric);
+        renderStatsChart(presentationSeries.labels, presentationSeries.data, metric);
+        return;
+    }
+
     const range = getStatsRangeFromControls();
     const fallback = buildStatsChartFallback(range.startDate, range.endDate);
     const requestId = ++statsChartRequestSeq;
@@ -2601,6 +2652,11 @@ function setCustomEventsLoading() {
 }
 
 async function loadCustomEvents(options: { silent?: boolean } = {}) {
+    if (isOnboardingPresentationModeEnabled()) {
+        renderCustomEventsList(getOnboardingPresentationCustomEvents(getSelectedCustomEventsPeriod()));
+        return;
+    }
+
     setCustomEventsLoading();
     const period = getSelectedCustomEventsPeriod();
 
@@ -2654,6 +2710,12 @@ function openCustomEventModal(id?: number) {
 }
 
 async function saveCustomEvent() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        closeModal('customEventModal');
+        return;
+    }
+
     const eventIdInput = document.getElementById('customEventId') as HTMLInputElement | null;
     const nameInput = document.getElementById('customEventName') as HTMLInputElement | null;
     const descriptionInput = document.getElementById('customEventDescription') as HTMLTextAreaElement | null;
@@ -2692,6 +2754,11 @@ async function saveCustomEvent() {
 }
 
 async function deleteCustomEvent(id: number) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        return;
+    }
+
     const eventId = Number(id);
     if (!Number.isFinite(eventId) || eventId <= 0) return;
 
@@ -2733,6 +2800,7 @@ function initDashboard() {
     }
     bindStatsPeriodControls();
     bindCustomEventsControls();
+    bindOnboardingPresentationDashboardBridge();
     initStatsChart();
     initOnboardingCard();
     loadDashboardData();
@@ -2744,6 +2812,24 @@ onReady(initDashboard);
 async function loadDashboardData() {
     try {
         showLoading('Carregando dados...');
+
+        if (isOnboardingPresentationModeEnabled()) {
+            dashboardLeadSummary = getOnboardingPresentationDashboardSummary();
+            allLeads = getOnboardingPresentationDashboardLeads();
+            updateStats();
+            updateFunnel();
+            renderLeadsTable();
+
+            await Promise.all([
+                updateStatsPeriodChart({ silent: true }),
+                loadAccountHealth({ silent: true }),
+                loadCustomEvents({ silent: true }),
+                loadOnboardingVideo({ silent: true })
+            ]);
+
+            hideLoading();
+            return;
+        }
 
         const cachedSummary = readDashboardSummaryCache();
         if (cachedSummary) {
@@ -2785,6 +2871,13 @@ async function loadDashboardData() {
 }
 
 async function loadDashboardLeadSummary(options: { silent?: boolean } = {}) {
+    if (isOnboardingPresentationModeEnabled()) {
+        dashboardLeadSummary = getOnboardingPresentationDashboardSummary();
+        updateStats();
+        updateFunnel();
+        return;
+    }
+
     try {
         const response: LeadSummaryResponse = await api.get('/api/leads/summary');
         dashboardLeadSummary = normalizeLeadSummaryResponse(response);
@@ -2800,6 +2893,10 @@ async function loadDashboardLeadSummary(options: { silent?: boolean } = {}) {
 }
 
 async function fetchDashboardTableLeads() {
+    if (isOnboardingPresentationModeEnabled()) {
+        return getOnboardingPresentationDashboardLeads();
+    }
+
     const params = new URLSearchParams();
     params.set('limit', String(DASHBOARD_TABLE_FETCH_LIMIT));
     params.set('offset', '0');
@@ -3027,6 +3124,12 @@ function updateSelection() {
 
 // Salvar novo lead
 async function saveLead() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        closeModal('addLeadModal');
+        return;
+    }
+
     const name = (document.getElementById('leadName') as HTMLInputElement | null)?.value.trim() || '';
     const phone = (document.getElementById('leadPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
     const vehicle = (document.getElementById('leadVehicle') as HTMLInputElement | null)?.value.trim() || '';
@@ -3088,6 +3191,12 @@ function editLead(id: number) {
 
 // Atualizar lead
 async function updateLead() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        closeModal('editLeadModal');
+        return;
+    }
+
     const id = (document.getElementById('editLeadId') as HTMLInputElement | null)?.value || '';
     const name = (document.getElementById('editLeadName') as HTMLInputElement | null)?.value.trim() || '';
     const phone = (document.getElementById('editLeadPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
@@ -3119,6 +3228,11 @@ async function updateLead() {
 
 // Excluir lead
 async function deleteLead(id: number) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        return;
+    }
+
     if (!await appConfirm('Tem certeza que deseja excluir este lead?', 'Excluir lead')) return;
 
     try {
@@ -3147,6 +3261,12 @@ function sendWhatsApp(leadId: number, phone: string) {
 
 // Importar leads
 async function importLeads() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        closeModal('importModal');
+        return;
+    }
+
     const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
     const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value.trim() || '';
     const importTagRaw = (document.getElementById('importTag') as HTMLInputElement | null)?.value.trim() || '';

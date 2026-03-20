@@ -1,4 +1,14 @@
 // Contatos page logic migrated to module
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    getOnboardingPresentationContactFields,
+    getOnboardingPresentationContacts,
+    getOnboardingPresentationContactsPlanUsage,
+    getOnboardingPresentationTags,
+    getOnboardingPresentationTemplates,
+    getOnboardingPresentationWhatsappSessions,
+    isOnboardingPresentationModeEnabled
+} from '../core/onboardingPresentation';
 
 type LeadStatus = 1 | 2 | 3 | 4;
 
@@ -139,6 +149,7 @@ const IMPORT_TAG_COLUMN_ALIAS_CANDIDATES = [
 ];
 let contactsBootstrappedOnce = false;
 let importTagColumnRefreshTimer: number | null = null;
+let onboardingPresentationContactsBridgeBound = false;
 const contactsNumberFormatter = new Intl.NumberFormat('pt-BR');
 let contactsPlanUsageState = {
     loaded: false,
@@ -149,6 +160,21 @@ let contactsPlanUsageState = {
 
 function getErrorCode(error: unknown) {
     return String((error as AppError | null | undefined)?.code || '').trim().toUpperCase();
+}
+
+function showOnboardingPresentationContactsReadOnlyToast(message = 'No tour, esta acao e apenas demonstrativa e nao altera seus dados reais.') {
+    showToast('info', 'Tour guiado', message);
+}
+
+function bindOnboardingPresentationContactsBridge() {
+    if (onboardingPresentationContactsBridgeBound) return;
+    onboardingPresentationContactsBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        const hasContactsSurface = Boolean(document.getElementById('contactsTableBody'));
+        if (!hasContactsSurface) return;
+        initContacts();
+    });
 }
 
 function renderContactsPlanUsage() {
@@ -186,6 +212,18 @@ function renderContactsPlanUsage() {
 }
 
 async function loadContactsPlanUsage() {
+    if (isOnboardingPresentationModeEnabled()) {
+        const presentationUsage = getOnboardingPresentationContactsPlanUsage();
+        contactsPlanUsageState = {
+            loaded: true,
+            planName: presentationUsage.planName,
+            max: presentationUsage.max,
+            unlimited: presentationUsage.unlimited
+        };
+        renderContactsPlanUsage();
+        return;
+    }
+
     try {
         const response = await api.get('/api/plan/status') as PlanStatusApiPayload;
         const metric = response?.plan?.limits?.contacts;
@@ -712,6 +750,19 @@ function renderContactsSessionFilterOptions() {
 async function loadContactsSessionFilters() {
     contactsSessionFilter = sanitizeSessionId(getStoredContactsSessionFilter());
 
+    if (isOnboardingPresentationModeEnabled()) {
+        contactsAvailableSessions = getOnboardingPresentationWhatsappSessions();
+        const knownIds = new Set(
+            contactsAvailableSessions.map((item) => sanitizeSessionId(item.session_id)).filter(Boolean)
+        );
+        if (contactsSessionFilter && !knownIds.has(contactsSessionFilter)) {
+            contactsSessionFilter = '';
+            persistContactsSessionFilter('');
+        }
+        renderContactsSessionFilterOptions();
+        return;
+    }
+
     try {
         const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
         contactsAvailableSessions = Array.isArray(response?.sessions) ? response.sessions : [];
@@ -858,6 +909,7 @@ function bindContactsMobileCascadeBehavior() {
 }
 
 function initContacts() {
+    bindOnboardingPresentationContactsBridge();
     if (!isContactsRouteActive()) {
         return;
     }
@@ -872,6 +924,7 @@ function initContacts() {
     bindContactsPaginationControls();
     bindContactsMobileCascadeBehavior();
     bindImportTagColumnMappingControls();
+    void loadContactsPlanUsage();
     loadContactFields();
     void loadContactsSessionFilters().finally(() => {
         void loadContacts({
@@ -1006,6 +1059,18 @@ function applyContactsSnapshot(nextContacts: Contact[]) {
 }
 
 async function loadContacts(options: LoadContactsOptions = {}) {
+    if (isOnboardingPresentationModeEnabled()) {
+        const contacts = getOnboardingPresentationContacts()
+            .filter((contact) => !contactsSessionFilter || sanitizeSessionId(contact.session_id) === contactsSessionFilter)
+            .map((contact) => ({
+                ...contact,
+                tags: Array.isArray(contact.tags) ? contact.tags.join(', ') : (contact.tags || '')
+            }));
+        applyContactsSnapshot(contacts);
+        renderContactsPlanUsage();
+        return;
+    }
+
     const canRenderContacts = () => isContactsRouteActive() && Boolean(document.getElementById('contactsTableBody'));
     const shouldHandleUi = canRenderContacts();
     const forceRefresh = options.forceRefresh === true;
@@ -1465,6 +1530,31 @@ function bindCreateContactTagsSuggestions() {
 }
 
 async function loadTags() {
+    if (isOnboardingPresentationModeEnabled()) {
+        tags = getOnboardingPresentationTags();
+        const filterSelect = document.getElementById('filterTag') as HTMLSelectElement | null;
+        const importSelect = document.getElementById('importTag') as HTMLSelectElement | null;
+        const bulkTagOptions = document.getElementById('bulkTagOptions') as HTMLDataListElement | null;
+        const bulkRemoveTagSelect = document.getElementById('bulkRemoveTagSelect') as HTMLSelectElement | null;
+        const tagNames = getUniqueTagNames();
+        const tagOptions = tagNames
+            .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+            .join('');
+        const datalistOptions = tagNames
+            .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+            .join('');
+
+        if (filterSelect) filterSelect.innerHTML = `<option value="">Todas as Tags</option>${tagOptions}`;
+        if (importSelect) importSelect.innerHTML = `<option value="">Sem etiqueta</option>${tagOptions}`;
+        if (bulkTagOptions) bulkTagOptions.innerHTML = datalistOptions;
+        if (bulkRemoveTagSelect) bulkRemoveTagSelect.innerHTML = `<option value="">Selecione uma tag...</option>${tagOptions}`;
+
+        renderCreateContactTagSuggestions();
+        renderEditContactTagSuggestions();
+        renderBulkRemoveTagSelectedChips();
+        return;
+    }
+
     try {
         const response: TagsResponse = await api.get('/api/tags');
         tags = response.tags || [];
@@ -1519,6 +1609,17 @@ async function openImportContactsModal() {
 }
 
 async function loadTemplates() {
+    if (isOnboardingPresentationModeEnabled()) {
+        const templates = getOnboardingPresentationTemplates();
+        const select = document.getElementById('bulkTemplate') as HTMLSelectElement | null;
+        if (!select) return;
+        select.innerHTML = `<option value="">Selecione um template...</option>`;
+        templates.forEach((template) => {
+            select.innerHTML += `<option value="${template.id}" data-content="${encodeURIComponent(template.content)}">${template.name}</option>`;
+        });
+        return;
+    }
+
     try {
         const response: TemplatesResponse = await api.get('/api/templates');
         const templates = response.templates || [];
@@ -1560,6 +1661,33 @@ function renderContactCustomFields() {
 }
 
 async function loadContactFields() {
+    if (isOnboardingPresentationModeEnabled()) {
+        const fields = getOnboardingPresentationContactFields();
+        const customFields = fields.filter((field) => !field.is_default);
+        customContactFieldsCache = customFields
+            .map((field) => ({
+                key: normalizeContactFieldKey(field.key),
+                label: String(field.label || field.key || '').trim(),
+                placeholder: String(field.placeholder || '').trim(),
+                is_default: false,
+                source: 'custom'
+            }))
+            .filter((field) => field.key && field.label);
+
+        contactFieldsCache = fields.map((field) => ({
+            key: normalizeContactFieldKey(field.key),
+            label: String(field.label || field.key || '').trim(),
+            placeholder: String(field.placeholder || '').trim(),
+            is_default: Boolean(field.is_default),
+            source: field.source
+        }));
+
+        renderContactCustomFields();
+        renderContactsTableHeader();
+        renderContacts();
+        return;
+    }
+
     try {
         const response: ContactFieldsResponse = await api.get('/api/contact-fields');
         const customFields = Array.isArray(response?.customFields) ? response.customFields : [];
@@ -1846,6 +1974,12 @@ function clearSelection() {
 }
 
 async function saveContact() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast();
+        closeModal('addContactModal');
+        return;
+    }
+
     const contactTags = normalizeUniqueTagArray(createContactSelectedTags);
     const data = {
         name: (document.getElementById('contactName') as HTMLInputElement | null)?.value.trim() || '',
@@ -1934,6 +2068,12 @@ function viewContactInfo(id: number) {
 }
 
 async function updateContact() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast();
+        closeModal('editContactModal');
+        return;
+    }
+
     const id = (document.getElementById('editContactId') as HTMLInputElement | null)?.value || '';
     const numericId = parseInt(id, 10);
     const existingContact = allContacts.find((contact) => contact.id === numericId);
@@ -1993,6 +2133,11 @@ async function updateContact() {
 }
 
 async function deleteContact(id: number) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast();
+        return;
+    }
+
     const contact = allContacts.find((item) => Number(item.id) === Number(id)) || null;
     const hasLinkedConversation = contactHasLinkedConversation(contact);
     const confirmMessage = hasLinkedConversation
@@ -2044,6 +2189,12 @@ function bulkSendMessage() {
 }
 
 async function sendBulkMessage() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast('No tour, o disparo em massa fica bloqueado para nao alterar dados reais.');
+        closeModal('bulkMessageModal');
+        return;
+    }
+
     const message = (document.getElementById('bulkMessage') as HTMLTextAreaElement | null)?.value.trim() || '';
     const delay = parseInt((document.getElementById('bulkDelay') as HTMLInputElement | null)?.value || '0', 10);
 
@@ -2083,6 +2234,11 @@ async function sendBulkMessage() {
 }
 
 async function bulkDelete() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast();
+        return;
+    }
+
     const uniqueLeadIds = Array.from(
         new Set(
             selectedContacts
@@ -2262,6 +2418,11 @@ async function submitBulkRemoveTag() {
 }
 
 async function bulkChangeStatusSelection() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast();
+        return false;
+    }
+
     const uniqueLeadIds = Array.from(
         new Set(
             selectedContacts
@@ -2340,6 +2501,11 @@ async function bulkChangeStatusSelection() {
 }
 
 async function bulkAddTagSelection() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast();
+        return false;
+    }
+
     const uniqueLeadIds = Array.from(
         new Set(
             selectedContacts
@@ -2409,6 +2575,11 @@ async function bulkAddTagSelection() {
 }
 
 async function bulkRemoveTagSelection() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast();
+        return false;
+    }
+
     const uniqueLeadIds = Array.from(
         new Set(
             selectedContacts
@@ -2464,6 +2635,12 @@ async function bulkRemoveTagSelection() {
 }
 
 async function importContacts() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationContactsReadOnlyToast('No tour, a importacao fica disponivel apenas como demonstracao visual.');
+        closeModal('importModal');
+        return;
+    }
+
     if (!contactFieldsCache.length) {
         await loadContactFields();
     }
