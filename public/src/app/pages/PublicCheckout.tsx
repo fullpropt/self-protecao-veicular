@@ -530,8 +530,10 @@ export default function PublicCheckout() {
             </ul>
           </aside>
         </div>
+      </div>
 
-        <footer className="public-checkout-footer" aria-label="Rodape principal">
+      <footer className="public-checkout-footer" aria-label="Rodape principal">
+        <div className="public-checkout-footer-shell">
           <div className="public-checkout-footer-grid">
             <section className="public-checkout-footer-brand-col" aria-label="Marca e posicionamento">
               <a href="#/home" className="public-checkout-footer-brand" aria-label={`${brandName} pagina inicial`}>
@@ -564,8 +566,8 @@ export default function PublicCheckout() {
           <div className="public-checkout-footer-bottom">
             <span>{`© ${currentYear} ${brandName}. Todos os direitos reservados.`}</span>
           </div>
-        </footer>
-      </div>
+        </div>
+      </footer>
     </div>
   );
 }
