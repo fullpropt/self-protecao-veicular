@@ -11,12 +11,15 @@
     linear-gradient(180deg, #020202 0%, #020202 45%, #010101 100%);
   color: var(--zv-text-high);
   padding: 32px 18px 56px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .public-checkout-shell {
   width: 100%;
   max-width: 1340px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .public-checkout-brand {
@@ -40,13 +43,15 @@
   width: min(1320px, 100%);
   margin: 0 auto;
   align-items: start;
+  min-width: 0;
 }
 
 .public-checkout-main {
   display: grid;
   gap: 18px;
-  justify-self: center;
+  justify-self: stretch;
   width: 100%;
+  min-width: 0;
 }
 
 .public-checkout-card,
@@ -205,9 +210,11 @@
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   gap: 20px;
   align-items: start;
+  width: 100%;
   max-width: 940px;
   margin-left: auto;
   margin-right: auto;
+  min-width: 0;
 }
 
 .public-checkout-form-card {
@@ -712,4 +719,3 @@
     font-size: 12px;
   }
 }
-
