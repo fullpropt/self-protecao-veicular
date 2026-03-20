@@ -42,12 +42,23 @@ export default function Login() {
             box-sizing: border-box;
         }
 
+        html,
+        body,
+        #root {
+            width: 100%;
+        }
+
         .login-react {
             min-height: 100vh;
+            width: 100%;
+            min-width: 0;
+            flex: 1 1 auto;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 24px;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
         }
 
         body {
@@ -57,9 +68,7 @@ export default function Login() {
                 radial-gradient(760px 440px at 18% 84%, rgba(0, 240, 255, 0.08) 0%, rgba(0, 240, 255, 0) 62%),
                 linear-gradient(170deg, #04080f 0%, #03060b 48%, #020202 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: block;
         }
 
         .login-container {
@@ -71,8 +80,8 @@ export default function Login() {
                 0 26px 72px rgba(2, 6, 23, 0.7),
                 0 0 0 1px rgba(255, 255, 255, 0.03) inset,
                 0 0 44px rgba(0, 255, 163, 0.12);
-            width: 100%;
-            max-width: 430px;
+            width: min(100%, 430px);
+            min-width: 0;
             position: relative;
             overflow: hidden;
             backdrop-filter: blur(12px);
