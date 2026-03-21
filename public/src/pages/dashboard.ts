@@ -165,6 +165,8 @@ type OnboardingHighlightMarker = {
         | 'open_inbox_session_filter'
         | 'close_inbox_session_filter'
         | 'open_inbox_contact_info_panel'
+        | 'open_contacts_import_modal'
+        | 'close_contacts_import_modal'
         | 'set_dashboard_stats_metric_novos_contatos'
         | 'set_dashboard_stats_metric_mensagens'
         | 'set_dashboard_stats_metric_interacoes';
@@ -301,9 +303,15 @@ const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMa
         { at: 17.0, selector: '[data-tour-target="inbox-contact-info-panel"]', route: '#/inbox', action: 'open_inbox_contact_info_panel', title: 'Consulte os dados do contato', hint: 'Com o painel aberto, você visualiza os dados do lead sem sair da conversa.', radius: 18, scroll: 'nearest' }
     ],
     create_first_contact: [
-        { at: 1.2, selector: '[data-tour-target="contacts-new-button"]', title: 'Crie um novo contato', hint: 'O cadastro começa por este botão na tela de contatos.', radius: 18 },
-        { at: 5.0, selector: '[data-tour-target="contacts-name-field"]', title: 'Preencha o nome', hint: 'O nome do contato é o primeiro campo do cadastro.', radius: 14 },
-        { at: 8.4, selector: '[data-tour-target="contacts-phone-field"]', title: 'Informe o WhatsApp', hint: 'Digite o número com DDD para o contato já nascer pronto para atendimento.', radius: 14 }
+        { at: 4.0, selector: '[data-tour-target="contacts-account-filter"]', title: 'Filtre por conta', hint: 'Esse filtro mostra apenas os contatos vinculados a uma conta específica do WhatsApp.', radius: 14, scroll: 'nearest' },
+        { at: 5.8, selector: '[data-tour-target="contacts-tag-filter"]', title: 'Filtre por tags', hint: 'Use as etiquetas para segmentar rapidamente a base e localizar grupos específicos.', radius: 14, scroll: 'nearest' },
+        { at: 6.8, selector: '[data-tour-target="contacts-status-filter"]', title: 'Filtre por status', hint: 'Aqui você separa novos, em andamento, concluídos ou perdidos.', radius: 14, scroll: 'nearest' },
+        { at: 7.0, selector: '[data-tour-target="contacts-import-button"]', title: 'Importe contatos em lote', hint: 'Esse botão abre o fluxo para subir uma planilha ou colar uma lista de contatos.', radius: 16, scroll: 'nearest' },
+        { at: 8.0, selector: '[data-tour-target="contacts-import-modal"]', action: 'open_contacts_import_modal', title: 'Abra o modal de importação', hint: 'O modal real da aplicação mostra as opções para arquivo, texto e etiquetas de importação.', radius: 20, scroll: 'center' },
+        { at: 9.0, selector: '[data-tour-target="contacts-import-tag-field"]', action: 'open_contacts_import_modal', title: 'Defina a tag da importação', hint: 'Essa etiqueta pode ser aplicada automaticamente a todos os contatos importados.', radius: 14, scroll: 'center' },
+        { at: 10.8, selector: '', action: 'close_contacts_import_modal', title: '', hint: '', clear: true },
+        { at: 11.0, selector: '[data-tour-target="contacts-export-button"]', action: 'close_contacts_import_modal', title: 'Exporte sua base', hint: 'Use este botão para baixar os contatos filtrados e compartilhar a lista em CSV.', radius: 16, scroll: 'nearest' },
+        { at: 12.0, selector: '[data-tour-target="contacts-new-button"]', action: 'close_contacts_import_modal', title: 'Cadastre um contato manualmente', hint: 'Se precisar adicionar um lead individual, o cadastro manual continua disponível aqui.', radius: 16, scroll: 'nearest' }
     ],
     create_tags: [
         { at: 1.0, selector: '[data-tour-target="settings-nav-labels"]', title: 'Abra Tags', hint: 'Esta aba reúne todas as etiquetas usadas em contatos e campanhas.', radius: 14 },
@@ -332,7 +340,7 @@ const ONBOARDING_STEP_LABELS: Record<OnboardingStepId, string> = {
     connect_whatsapp: 'Conecte seu WhatsApp',
     configure_accounts: 'Revise suas contas',
     open_inbox: 'Abra o Inbox',
-    create_first_contact: 'Cadastre um contato',
+    create_first_contact: 'Organize seus contatos',
     create_tags: 'Crie tags',
     configure_dynamic_fields: 'Configure campos dinâmicos',
     create_campaign: 'Monte uma campanha',
@@ -352,7 +360,7 @@ const ONBOARDING_STEP_VIDEO_DESCRIPTIONS: Record<OnboardingStepId, string> = {
     connect_whatsapp: 'Passo a passo para conectar a primeira sessão do WhatsApp no ZapVender.',
     configure_accounts: 'Veja como revisar as contas em Configurações e deixar o ambiente pronto para operar.',
     open_inbox: 'Aprenda a abrir o Inbox e validar o atendimento com uma conversa de teste.',
-    create_first_contact: 'Cadastre um contato de exemplo para testar o fluxo completo da operação.',
+    create_first_contact: 'Veja como filtrar contatos por conta, usar a importação e localizar as ações principais da tela.',
     create_tags: 'Crie etiquetas para organizar contatos, campanhas e automações.',
     configure_dynamic_fields: 'Configure campos personalizados que viram variáveis em mensagens, campanhas e fluxos.',
     create_campaign: 'Monte sua primeira campanha e entenda onde revisar métricas e resultados.',
@@ -372,7 +380,7 @@ const ONBOARDING_STEP_LABELS_UI: Record<OnboardingStepId, string> = {
     connect_whatsapp: 'Conecte seu WhatsApp',
     configure_accounts: 'Revise suas contas',
     open_inbox: 'Abra o Inbox',
-    create_first_contact: 'Cadastre um contato',
+    create_first_contact: 'Organize seus contatos',
     create_tags: 'Crie tags',
     configure_dynamic_fields: 'Configure campos din\u00E2micos',
     create_campaign: 'Monte uma campanha',
@@ -392,7 +400,7 @@ const ONBOARDING_STEP_VIDEO_DESCRIPTIONS_UI: Record<OnboardingStepId, string> = 
     connect_whatsapp: 'Passo a passo para conectar a primeira sess\u00E3o do WhatsApp no ZapVender.',
     configure_accounts: 'Veja como revisar as contas em Configura\u00E7\u00F5es e deixar o ambiente pronto para operar.',
     open_inbox: 'Aprenda a abrir o Inbox e validar o atendimento com uma conversa de teste.',
-    create_first_contact: 'Cadastre um contato de exemplo para testar o fluxo completo da opera\u00E7\u00E3o.',
+    create_first_contact: 'Veja como filtrar contatos por conta, usar a importação e localizar as ações principais da tela.',
     create_tags: 'Crie etiquetas para organizar contatos, campanhas e automa\u00E7\u00F5es.',
     configure_dynamic_fields: 'Configure campos personalizados que viram vari\u00E1veis em mensagens, campanhas e fluxos.',
     create_campaign: 'Monte sua primeira campanha e entenda onde revisar m\u00E9tricas e resultados.',
@@ -1294,6 +1302,9 @@ function performOnboardingHighlightAction(
         createSessionPrompt?: () => Promise<void> | void;
         setInboxSessionFilterMenuOpen?: (forceOpen?: boolean) => void;
         toggleContactInfo?: (forceOpen?: boolean) => void;
+        openImportContactsModal?: () => Promise<void> | void;
+        openModal?: (modalId: string) => void;
+        closeModal?: (modalId: string) => void;
     };
 
     if (action === 'open_whatsapp_new_account_prompt') {
@@ -1366,6 +1377,51 @@ function performOnboardingHighlightAction(
         win.toggleContactInfo(true);
         onboardingPreparedMarkerActionKey = actionKey;
         scheduleOnboardingSpotlightRefresh(180);
+        return false;
+    }
+
+    if (action === 'open_contacts_import_modal') {
+        const modal = document.getElementById('importModal') as HTMLElement | null;
+        if (modal?.classList.contains('active')) {
+            onboardingPreparedMarkerActionKey = actionKey;
+            scheduleOnboardingSpotlightRefresh(120);
+            return true;
+        }
+
+        if (typeof win.openImportContactsModal === 'function') {
+            onboardingPreparedMarkerActionKey = actionKey;
+            void Promise.resolve(win.openImportContactsModal()).catch(() => null);
+            scheduleOnboardingSpotlightRefresh(220);
+            return false;
+        }
+
+        if (typeof win.openModal === 'function') {
+            win.openModal('importModal');
+            onboardingPreparedMarkerActionKey = actionKey;
+            scheduleOnboardingSpotlightRefresh(120);
+            return false;
+        }
+
+        scheduleOnboardingSpotlightRefresh(180);
+        return false;
+    }
+
+    if (action === 'close_contacts_import_modal') {
+        const modal = document.getElementById('importModal') as HTMLElement | null;
+        if (!modal?.classList.contains('active')) {
+            onboardingPreparedMarkerActionKey = actionKey;
+            scheduleOnboardingSpotlightRefresh(90);
+            return true;
+        }
+
+        if (typeof win.closeModal !== 'function') {
+            scheduleOnboardingSpotlightRefresh(180);
+            return false;
+        }
+
+        win.closeModal('importModal');
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(120);
         return false;
     }
 
@@ -1480,6 +1536,7 @@ function prepareOnboardingSurfaceForStep(
     const win = window as Window & {
         showPanel?: (panelId: string) => void;
         openAddContactModal?: () => void;
+        closeModal?: (modalId: string) => void;
         openCampaignModal?: () => void;
         openAutomationModal?: () => void;
     };
@@ -1511,10 +1568,14 @@ function prepareOnboardingSurfaceForStep(
                 didPrepare = false;
             }
         } else if (stepId === 'create_first_contact') {
-            if (typeof win.openAddContactModal === 'function') {
-                win.openAddContactModal();
+            if (typeof win.closeModal === 'function') {
+                win.closeModal('addContactModal');
+                win.closeModal('importModal');
             } else {
-                didPrepare = false;
+                const addContactModal = document.getElementById('addContactModal') as HTMLElement | null;
+                const importModal = document.getElementById('importModal') as HTMLElement | null;
+                addContactModal?.classList.remove('active');
+                importModal?.classList.remove('active');
             }
         } else if (stepId === 'create_campaign') {
             if (typeof win.openCampaignModal === 'function') {
@@ -2258,6 +2319,7 @@ function restartOnboardingVideo() {
     void video.play();
     onboardingVideoCurrentSeconds = 0;
     onboardingVideoPlaybackState = 'playing';
+    onboardingPreparedMarkerActionKey = '';
     startOnboardingVideoSyncTimer();
     renderOnboardingVideoControls();
 }
@@ -2270,6 +2332,7 @@ function seekOnboardingVideo(progressInput: number) {
     const nextSeconds = (normalizedProgress / 1000) * onboardingVideoDurationSeconds;
     video.currentTime = nextSeconds;
     onboardingVideoCurrentSeconds = nextSeconds;
+    onboardingPreparedMarkerActionKey = '';
 
     if (onboardingVideoPlaybackState === 'ended') {
         onboardingVideoPlaybackState = 'paused';
