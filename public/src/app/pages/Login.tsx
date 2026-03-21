@@ -46,17 +46,23 @@ export default function Login() {
         body,
         #root {
             width: 100%;
+            min-height: 100%;
+            background: #020202;
         }
 
         .login-react {
             min-height: 100vh;
+            min-height: var(--app-mobile-vh, 100dvh);
             width: 100%;
             min-width: 0;
             flex: 1 1 auto;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            padding:
+                calc(env(safe-area-inset-top, 0px) + 24px)
+                24px
+                calc(env(safe-area-inset-bottom, 0px) + 24px);
             -webkit-text-size-adjust: 100%;
             text-size-adjust: 100%;
         }
@@ -286,7 +292,10 @@ export default function Login() {
 
         @media (max-width: 640px) {
             .login-react {
-                padding: 14px;
+                padding:
+                    calc(env(safe-area-inset-top, 0px) + 14px)
+                    14px
+                    calc(env(safe-area-inset-bottom, 0px) + 14px);
             }
 
             .login-container {
