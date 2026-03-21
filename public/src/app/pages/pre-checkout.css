@@ -426,7 +426,7 @@
 }
 
 .precheckout-footer {
-  margin-top: 28px;
+  margin-top: 56px;
   margin-left: calc(var(--precheckout-page-pad-x) * -1);
   margin-right: calc(var(--precheckout-page-pad-x) * -1);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -541,6 +541,7 @@
   }
 
   .precheckout-footer {
+    margin-top: 44px;
     padding-bottom: 0;
   }
 
@@ -749,7 +750,7 @@
   }
 
   .precheckout-footer {
-    margin-top: 20px;
+    margin-top: 28px;
     padding-bottom: 0;
   }
 

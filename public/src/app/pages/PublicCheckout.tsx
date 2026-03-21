@@ -430,6 +430,18 @@ export default function PublicCheckout() {
   const renewalLabel = effectiveTrialDays > 0
     ? `Em ${effectiveTrialDays} dias · ${formatCurrencyBRL(effectiveAmountCents)}`
     : `A cada 30 dias · ${formatCurrencyBRL(effectiveAmountCents)}`;
+  const todayAmountLabel = effectiveTrialDays > 0 ? 'R$ 0,00' : formatCurrencyBRL(effectiveAmountCents);
+  const summaryKicker = effectiveTrialDays > 0 ? `${effectiveTrialDays} dias grátis para começar` : 'Ativação imediata';
+  const summaryHighlightLabel = effectiveTrialDays > 0 ? 'Hoje você ativa por' : 'Valor da ativação';
+  const summaryHighlightNote = effectiveTrialDays > 0
+    ? `Primeira cobrança somente em ${effectiveTrialDays} dias.`
+    : 'Assinatura liberada após a confirmação do pagamento.';
+  const summaryNoteTitle = effectiveTrialDays > 0
+    ? 'Você entra hoje sem cobrança do plano.'
+    : 'Finalize agora e libere sua operação.';
+  const summaryNoteBody = effectiveTrialDays > 0
+    ? 'Preencha uma vez, valide o cartão e comece a configurar seu ambiente imediatamente.'
+    : 'Seu checkout fica concluído em uma etapa única, com cobrança recorrente e ambiente profissional.';
   const currentYear = new Date().getFullYear();
 
   return (
@@ -515,19 +527,36 @@ export default function PublicCheckout() {
               <span className="public-checkout-step-number">3</span>
               <span className="public-checkout-step-label">Resumo da compra</span>
             </div>
-            <h2>{plan.name}</h2>
+            <div className="public-checkout-summary-hero">
+              <span className="public-checkout-summary-kicker">{summaryKicker}</span>
+              <h2>{plan.name}</h2>
+              <p>{plan.summary}</p>
+
+              <div className="public-checkout-summary-highlight">
+                <span className="public-checkout-summary-highlight-label">{summaryHighlightLabel}</span>
+                <strong>{todayAmountLabel}</strong>
+                <span className="public-checkout-summary-highlight-note">{summaryHighlightNote}</span>
+              </div>
+            </div>
 
             <div className="public-checkout-plan-card">
-              <div className="public-checkout-price-line"><span>Plano</span><strong>{plan.name}</strong></div>
               <div className="public-checkout-price-line"><span>{effectiveTrialDays > 0 ? 'Cobrança inicial' : 'Cobrança de hoje'}</span><strong>{todayLabel}</strong></div>
               <div className="public-checkout-price-line"><span>{effectiveTrialDays > 0 ? 'Primeira renovação' : 'Renovação'}</span><strong>{renewalLabel}</strong></div>
             </div>
 
-            <ul className="public-checkout-bullets">
-              {plan.bullets.map((bullet) => (
-                <li key={bullet}><span className="public-checkout-bullet-dot" aria-hidden="true"></span><span>{bullet}</span></li>
-              ))}
-            </ul>
+            <div className="public-checkout-summary-note">
+              <strong>{summaryNoteTitle}</strong>
+              <span>{summaryNoteBody}</span>
+            </div>
+
+            <div className="public-checkout-summary-includes">
+              <span className="public-checkout-summary-includes-label">Incluído no plano</span>
+              <ul className="public-checkout-bullets">
+                {plan.bullets.map((bullet) => (
+                  <li key={bullet}><span className="public-checkout-bullet-dot" aria-hidden="true"></span><span>{bullet}</span></li>
+                ))}
+              </ul>
+            </div>
           </aside>
         </div>
       </div>

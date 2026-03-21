@@ -1,5 +1,5 @@
 .premium-footer {
-  margin-top: 34px;
+  margin-top: 56px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   background:
@@ -217,7 +217,7 @@
 
 @media (max-width: 700px) {
   .premium-footer {
-    margin-top: 24px;
+    margin-top: 32px;
   }
 
   .premium-footer-shell {
