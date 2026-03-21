@@ -380,11 +380,13 @@ export default function Whatsapp() {
             gap: 8px;
             padding: 18px 20px;
             border-radius: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(148, 163, 184, 0.14);
             background:
-                radial-gradient(circle at top right, var(--plan-glow, rgba(255, 255, 255, 0.12)), transparent 48%),
-                linear-gradient(135deg, rgba(17, 32, 53, 0.94) 0%, rgba(10, 22, 38, 0.98) 100%);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+                radial-gradient(circle at top right, var(--plan-glow, rgba(255, 255, 255, 0.08)), transparent 44%),
+                linear-gradient(180deg, rgba(11, 23, 38, 0.96) 0%, rgba(8, 18, 31, 0.98) 100%);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.02),
+                0 12px 24px rgba(2, 8, 20, 0.16);
         }
 
         .whatsapp-react .whatsapp-plan-panel::after {
@@ -396,28 +398,28 @@ export default function Whatsapp() {
             border-radius: 50%;
             background: var(--plan-orb, rgba(255, 255, 255, 0.12));
             filter: blur(60px);
-            opacity: 0.5;
+            opacity: 0.28;
             pointer-events: none;
         }
 
         .whatsapp-react .whatsapp-plan-panel--starter {
-            --plan-glow: rgba(34, 197, 94, 0.22);
-            --plan-orb: rgba(34, 197, 94, 0.18);
+            --plan-glow: rgba(34, 197, 94, 0.12);
+            --plan-orb: rgba(34, 197, 94, 0.1);
         }
 
         .whatsapp-react .whatsapp-plan-panel--premium {
-            --plan-glow: rgba(226, 232, 240, 0.2);
-            --plan-orb: rgba(148, 163, 184, 0.18);
+            --plan-glow: rgba(148, 163, 184, 0.12);
+            --plan-orb: rgba(148, 163, 184, 0.1);
         }
 
         .whatsapp-react .whatsapp-plan-panel--advanced {
-            --plan-glow: rgba(245, 158, 11, 0.22);
-            --plan-orb: rgba(251, 191, 36, 0.18);
+            --plan-glow: rgba(245, 158, 11, 0.13);
+            --plan-orb: rgba(251, 191, 36, 0.1);
         }
 
         .whatsapp-react .whatsapp-plan-panel--monster {
-            --plan-glow: rgba(96, 165, 250, 0.24);
-            --plan-orb: rgba(34, 211, 238, 0.18);
+            --plan-glow: rgba(96, 165, 250, 0.14);
+            --plan-orb: rgba(34, 211, 238, 0.1);
         }
 
         .whatsapp-react .whatsapp-plan-label {
