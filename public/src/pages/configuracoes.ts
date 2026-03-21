@@ -1945,6 +1945,9 @@ function renderWhatsAppAccountsManager() {
         const dailyLimitFieldTourTarget = sessionId === 'zv_demo1_session'
             ? ' data-tour-target="settings-account-1-daily-limit-field"'
             : '';
+        const campaignToggleTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-campaign-toggle"'
+            : '';
         const saveButtonTourTarget = sessionId === 'zv_demo1_session'
             ? ' data-tour-target="settings-account-1-save-button"'
             : '';
@@ -1994,7 +1997,7 @@ function renderWhatsAppAccountsManager() {
                             value="${dailyLimit}"
                         />
                     </div>
-                    <label class="connection-campaign-toggle" title="Participa de campanhas e transmissões">
+                    <label class="connection-campaign-toggle" title="Participa de campanhas e transmissões"${campaignToggleTourTarget}>
                         <input
                             type="checkbox"
                             class="connection-session-enabled-input"
