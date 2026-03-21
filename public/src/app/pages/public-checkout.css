@@ -762,6 +762,8 @@
   .public-checkout-footer-grid {
     padding: 10px 0 8px;
     gap: 8px;
+    justify-items: center;
+    text-align: center;
   }
 
   .public-checkout-footer-grid > :nth-child(2) {
@@ -771,6 +773,7 @@
   .public-checkout-footer-brand {
     font-size: 18px;
     gap: 8px;
+    justify-self: center;
   }
 
   .public-checkout-footer-brand img {
@@ -790,6 +793,19 @@
   .public-checkout-footer-col ul {
     margin-top: 8px;
     gap: 6px;
+    justify-items: center;
+  }
+
+  .public-checkout-footer-brand-col,
+  .public-checkout-footer-col {
+    display: grid;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .public-checkout-footer-col a {
+    justify-content: center;
+    text-align: center;
   }
 
   .public-checkout-footer-bottom {
