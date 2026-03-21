@@ -6,6 +6,7 @@ import {
     getOnboardingPresentationCustomEvents,
     getOnboardingPresentationDashboardLeads,
     getOnboardingPresentationDashboardSummary,
+    getOnboardingPresentationReusableWhatsappSessionId,
     getOnboardingPresentationStatsSeries,
     isOnboardingPresentationModeEnabled,
     updateOnboardingPresentationStep
@@ -1221,8 +1222,8 @@ function performOnboardingHighlightAction(
             return false;
         }
 
-        if (input && !String(input.value || '').trim()) {
-            input.value = 'tour_whatsapp_1';
+        if (input) {
+            input.value = getOnboardingPresentationReusableWhatsappSessionId('default_whatsapp_session');
         }
 
         confirmButton.click();

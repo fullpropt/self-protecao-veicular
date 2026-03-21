@@ -555,6 +555,9 @@ const WHATSAPP_PRESENTATION_BASE_SESSIONS: PresentationSessionRecord[] = [
     dispatch_weight: 1
   }
 ];
+const WHATSAPP_PRESENTATION_BASE_SESSION_IDS = new Set(
+  WHATSAPP_PRESENTATION_BASE_SESSIONS.map((session) => String(session.session_id || '').trim()).filter(Boolean)
+);
 
 const WHATSAPP_PRESENTATION_PLAN_USAGE: PresentationPlanUsage = {
   planName: 'Premium',
@@ -1138,6 +1141,15 @@ export function getOnboardingPresentationCustomEvents(period = 'this_month'): Pr
 
 export function getOnboardingPresentationWhatsappSessions(): PresentationSessionRecord[] {
   return cloneSessions(runtime.sessions);
+}
+
+export function getOnboardingPresentationReusableWhatsappSessionId(fallback = 'default_whatsapp_session') {
+  const reusableSession = runtime.sessions.find((session) => {
+    const sessionId = String(session.session_id || '').trim();
+    return Boolean(sessionId) && !WHATSAPP_PRESENTATION_BASE_SESSION_IDS.has(sessionId);
+  });
+
+  return String(reusableSession?.session_id || fallback || '').trim();
 }
 
 export function getOnboardingPresentationWhatsappPlanUsage(): PresentationPlanUsage {

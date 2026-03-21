@@ -2,6 +2,7 @@
 
 import {
     ONBOARDING_PRESENTATION_EVENT,
+    getOnboardingPresentationReusableWhatsappSessionId,
     getOnboardingPresentationWhatsappPlanUsage,
     getOnboardingPresentationWhatsappSessionById,
     getOnboardingPresentationWhatsappSessions,
@@ -802,7 +803,9 @@ function changeSession(sessionId: string, options: { revealReconnectUi?: boolean
 }
 
 async function createSessionPrompt() {
-    const suggestedSessionId = getSuggestedNewSessionId();
+    const suggestedSessionId = isOnboardingPresentationModeEnabled()
+        ? getOnboardingPresentationReusableWhatsappSessionId(getDefaultSessionId())
+        : getSuggestedNewSessionId();
     const rawInput = await appPrompt(
         'Informe o identificador da nova conta WhatsApp (ex: vendas_sp_session):',
         {
