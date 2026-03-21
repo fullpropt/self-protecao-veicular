@@ -24,11 +24,12 @@
 }
 
 .public-checkout-brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  margin-bottom: 22px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 22px;
 }
 
 .public-checkout-brand img {
