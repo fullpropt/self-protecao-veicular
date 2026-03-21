@@ -1647,12 +1647,14 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     }
     if (replayButton) {
         replayButton.hidden = !isFirstStep;
+        replayButton.style.display = isFirstStep ? 'inline-flex' : 'none';
         replayButton.disabled = !hasPlayableVideo || isLoading;
         replayButton.title = 'Ver novamente';
         replayButton.setAttribute('aria-label', replayButton.title);
     }
     if (previousButton) {
         previousButton.hidden = isFirstStep;
+        previousButton.style.display = isFirstStep ? 'none' : 'inline-flex';
         previousButton.disabled = !previousStepId;
     }
     if (nextButton) {
