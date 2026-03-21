@@ -633,7 +633,7 @@ function renderInboxSessionIndicator() {
 
     if (!inboxSessionFilter) {
         if (triggerValueEl) triggerValueEl.textContent = 'Todas as contas';
-        if (triggerSubtitleEl) triggerSubtitleEl.textContent = 'Mostra as conversas de todas as conexoes';
+        if (triggerSubtitleEl) triggerSubtitleEl.textContent = '';
         if (metaEl) metaEl.textContent = 'Mostrando conversas de todas as contas';
         if (statusEl) {
             statusEl.textContent = 'Filtro geral';

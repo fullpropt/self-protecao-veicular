@@ -298,6 +298,9 @@ export default function Inbox() {
             line-height: 1.35;
             word-break: break-word;
         }
+        .inbox-session-highlight-trigger-subtitle:empty {
+            display: none;
+        }
         .inbox-session-highlight-trigger-icon {
             flex-shrink: 0;
             width: 0;
@@ -2361,7 +2364,7 @@ export default function Inbox() {
                       >
                         <span className="inbox-session-highlight-trigger-copy">
                           <span className="inbox-session-highlight-trigger-value" id="inboxSessionFilterTriggerValue">Todas as contas</span>
-                          <span className="inbox-session-highlight-trigger-subtitle" id="inboxSessionFilterTriggerSubtitle">Mostra as conversas de todas as conexoes</span>
+                          <span className="inbox-session-highlight-trigger-subtitle" id="inboxSessionFilterTriggerSubtitle"></span>
                         </span>
                         <span className="inbox-session-highlight-trigger-icon" aria-hidden="true"></span>
                       </button>
