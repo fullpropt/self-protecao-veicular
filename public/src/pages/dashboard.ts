@@ -1748,7 +1748,7 @@ function renderOnboardingVideo() {
         shell.classList.toggle('is-ready', isVideoReady);
     }
     if (kicker) {
-        kicker.textContent = `Etapa ${stepPosition} de ${ONBOARDING_STEP_IDS.length}`;
+        kicker.textContent = `Modo tour \u00b7 Etapa ${stepPosition} de ${ONBOARDING_STEP_IDS.length}`;
     }
     if (title) {
         title.textContent = ONBOARDING_STEP_LABELS_UI[selectedStepId];
@@ -2138,12 +2138,22 @@ function bindOnboardingPresentationDashboardBridge() {
 function initOnboardingCard() {
     const hasOnboarding = Boolean(document.getElementById('dashboardOnboardingCard'));
     if (!hasOnboarding) return;
-    destroyOnboardingYouTubePlayer();
     bindOnboardingTourControls();
     onboardingState = readOnboardingState();
-    onboardingTourOpen = false;
-    onboardingSelectedStepId = normalizeOnboardingStepId(onboardingSelectedStepId) || getPreferredOnboardingSelectedStepId();
-    onboardingPlayingStepId = null;
+    const preservedStepId = onboardingTourOpen
+        ? normalizeOnboardingStepId(onboardingPlayingStepId || onboardingSelectedStepId)
+        : null;
+
+    if (!preservedStepId) {
+        destroyOnboardingYouTubePlayer();
+        onboardingTourOpen = false;
+        onboardingSelectedStepId = normalizeOnboardingStepId(onboardingSelectedStepId) || getPreferredOnboardingSelectedStepId();
+        onboardingPlayingStepId = null;
+    } else {
+        onboardingSelectedStepId = preservedStepId;
+        onboardingPlayingStepId = preservedStepId;
+    }
+
     renderOnboardingChecklist();
     void loadOnboardingVideo({ silent: true });
 }

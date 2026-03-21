@@ -93,6 +93,41 @@ let whatsappPlanUsageState = {
     unlimited: true
 };
 
+function normalizeDisplayedPlanName(value: unknown) {
+    const rawPlanName = String(value || '').trim();
+    if (!rawPlanName) return 'Plano';
+
+    const normalizedPlanName = rawPlanName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+    if (normalizedPlanName.includes('premium') || normalizedPlanName.includes('monster')) {
+        return 'Premium';
+    }
+
+    const withoutBrand = rawPlanName.replace(/^zapvender\s+/i, '').trim();
+    return withoutBrand || rawPlanName;
+}
+
+function buildPresentationSessionName(sessionId: string) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return 'Nova conta';
+
+    const cleaned = normalizedSessionId
+        .replace(/_session(?:_\d+)?$/i, '')
+        .replace(/[_-]+/g, ' ')
+        .trim();
+
+    if (!cleaned) return 'Nova conta';
+
+    return cleaned
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
 function appConfirm(message: string, title = 'Confirmação') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
     if (typeof win.showAppConfirm === 'function') {
@@ -140,7 +175,7 @@ function renderWhatsappPlanUsage() {
         return;
     }
 
-    const planName = String(whatsappPlanUsageState.planName || 'Plano').trim() || 'Plano';
+    const planName = normalizeDisplayedPlanName(whatsappPlanUsageState.planName);
     const normalizedPlanToken = planName
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -429,6 +464,36 @@ function syncConnectionSectionVisibility() {
     if (idleState) idleState.style.display = 'none';
 }
 
+function revealCurrentSessionReconnectUi(options: { scrollToConnectButton?: boolean } = {}) {
+    const currentId = getCurrentSessionId();
+    if (!currentId) return;
+
+    window.requestAnimationFrame(() => {
+        const list = getSessionListElement();
+        const button = list
+            ? Array.from(list.querySelectorAll<HTMLButtonElement>('.whatsapp-session-list-item[data-session-id]'))
+                .find((item) => sanitizeSessionId(item.dataset.sessionId) === currentId) || null
+            : null;
+
+        button?.scrollIntoView({
+            behavior: isOnboardingPresentationModeEnabled() ? 'auto' : 'smooth',
+            block: 'nearest',
+            inline: 'nearest'
+        });
+
+        if (!options.scrollToConnectButton) return;
+
+        const detailsTarget = (document.getElementById(isConnected ? 'connected-state' : 'disconnected-state')
+            || document.getElementById('connect-btn')) as HTMLElement | null;
+
+        detailsTarget?.scrollIntoView({
+            behavior: isOnboardingPresentationModeEnabled() ? 'auto' : 'smooth',
+            block: 'center',
+            inline: 'nearest'
+        });
+    });
+}
+
 function syncCurrentSessionFromSelect() {
     const select = getSessionSelectElement();
     if (!select) return getCurrentSessionId();
@@ -709,6 +774,9 @@ function changeSession(sessionId: string, options: { revealReconnectUi?: boolean
     resetConnectionUi();
     if (isOnboardingPresentationModeEnabled()) {
         syncOnboardingPresentationSessionUi();
+        if (options.revealReconnectUi) {
+            revealCurrentSessionReconnectUi({ scrollToConnectButton: true });
+        }
         return;
     }
     socket?.emit('check-session', { sessionId: normalizedSessionId });
@@ -748,15 +816,29 @@ async function createSessionPrompt() {
     }
 
     if (isOnboardingPresentationModeEnabled()) {
+        currentSessionId = normalized;
+        persistCurrentSessionId(normalized);
+        syncGlobalAppSessionId(normalized);
+        markReconnectUiRequested(normalized);
+
         upsertOnboardingPresentationWhatsappSession({
             session_id: normalized,
-            name: `Conta ${availableSessions.length + 1}`,
+            name: buildPresentationSessionName(normalized),
             status: 'disconnected',
             connected: false,
             campaign_enabled: true,
             daily_limit: 80,
             dispatch_weight: 1
         });
+
+        availableSessions = getOnboardingPresentationWhatsappSessions();
+        updateWhatsappPlanUsageCurrent(availableSessions.length);
+        renderSessionOptions();
+        resetConnectionUi();
+        syncOnboardingPresentationSessionUi();
+        revealCurrentSessionReconnectUi({ scrollToConnectButton: true });
+        showToast('info', `Conta selecionada: ${normalized}`);
+        return;
     }
 
     changeSession(normalized, { revealReconnectUi: true });

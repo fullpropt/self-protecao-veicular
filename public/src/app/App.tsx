@@ -54,6 +54,25 @@ function GlobalOnboardingTour() {
             opacity 180ms ease,
             transform 180ms ease;
         }
+        body.onboarding-presentation-mode::after {
+          content: 'Modo tour ativo';
+          position: fixed;
+          top: 16px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 2900;
+          padding: 7px 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(var(--primary-rgb), 0.34);
+          background: rgba(4, 14, 18, 0.88);
+          color: #ddfff3;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          box-shadow: 0 14px 28px rgba(2, 8, 20, 0.24);
+          pointer-events: none;
+        }
         .onboarding-floating-tour.is-open {
           opacity: 1;
           pointer-events: auto;
@@ -499,6 +518,12 @@ function GlobalOnboardingTour() {
           }
         }
         @media (max-width: 640px) {
+          body.onboarding-presentation-mode::after {
+            top: 12px;
+            font-size: 10px;
+            padding: 6px 12px;
+            max-width: calc(100vw - 24px);
+          }
           .onboarding-floating-tour {
             left: 12px;
             right: 12px;
