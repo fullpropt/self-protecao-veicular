@@ -618,6 +618,7 @@ function bindOnboardingTourControls() {
 
     bindClick('onboardingTourCloseButton', closeOnboardingTour);
     bindClick('onboardingTourPrevButton', goToPreviousOnboardingTourStep);
+    bindClick('onboardingTourReplayButton', restartOnboardingVideo);
     bindClick('onboardingTourNextButton', goToNextOnboardingTourStep);
     bindClick('onboardingVideoToggleButton', toggleOnboardingVideoPlayback);
     bindClick('onboardingVideoMuteButton', toggleOnboardingVideoMute);
@@ -1572,6 +1573,7 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     const endedTitle = document.getElementById('onboardingVideoEndedTitle') as HTMLElement | null;
     const endedHint = document.getElementById('onboardingVideoEndedHint') as HTMLElement | null;
     const headerPreviousButton = document.getElementById('onboardingTourPrevButton') as HTMLButtonElement | null;
+    const headerReplayButton = document.getElementById('onboardingTourReplayButton') as HTMLButtonElement | null;
     const headerNextButton = document.getElementById('onboardingTourNextButton') as HTMLButtonElement | null;
     const previousButton = document.getElementById('onboardingVideoPrevButton') as HTMLButtonElement | null;
     const nextButton = document.getElementById('onboardingVideoNextButton') as HTMLButtonElement | null;
@@ -1589,6 +1591,8 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     const progressValue = canControlTimeline
         ? Math.max(0, Math.min(1000, Math.round((onboardingVideoCurrentSeconds / onboardingVideoDurationSeconds) * 1000)))
         : 0;
+    const firstStepId = ONBOARDING_STEP_IDS[0] || null;
+    const isFirstStep = selectedStepId === firstStepId;
     const previousStepId = selectedStepId ? getAdjacentOnboardingStepId(selectedStepId, -1) : null;
     const nextStepId = selectedStepId ? getAdjacentOnboardingStepId(selectedStepId, 1) : null;
 
@@ -1632,9 +1636,16 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
             : 'Voc\u00ea chegou ao fim do tour e pode rever qualquer etapa.';
     }
     if (headerPreviousButton) {
+        headerPreviousButton.hidden = isFirstStep;
         headerPreviousButton.disabled = !previousStepId;
         headerPreviousButton.title = previousStepId ? 'Etapa anterior' : 'Primeira etapa';
         headerPreviousButton.setAttribute('aria-label', headerPreviousButton.title);
+    }
+    if (headerReplayButton) {
+        headerReplayButton.hidden = !isFirstStep;
+        headerReplayButton.disabled = !hasPlayableVideo || isLoading;
+        headerReplayButton.title = 'Ver novamente';
+        headerReplayButton.setAttribute('aria-label', headerReplayButton.title);
     }
     if (headerNextButton) {
         headerNextButton.disabled = !nextStepId;

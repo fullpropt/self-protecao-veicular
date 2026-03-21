@@ -580,6 +580,17 @@ function GlobalOnboardingTour() {
             <button
               type="button"
               className="onboarding-tour-nav-btn"
+              id="onboardingTourReplayButton"
+              title="Ver novamente"
+              aria-label="Ver novamente"
+              hidden
+            >
+              <span aria-hidden="true">&#8635;</span>
+            </button>
+
+            <button
+              type="button"
+              className="onboarding-tour-nav-btn"
               id="onboardingTourNextButton"
               title="Próxima etapa"
               aria-label="Próxima etapa"
