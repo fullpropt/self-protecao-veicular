@@ -162,6 +162,9 @@ type OnboardingHighlightMarker = {
     action?:
         | 'open_whatsapp_new_account_prompt'
         | 'confirm_whatsapp_new_account_prompt'
+        | 'open_inbox_session_filter'
+        | 'close_inbox_session_filter'
+        | 'open_inbox_contact_info_panel'
         | 'set_dashboard_stats_metric_novos_contatos'
         | 'set_dashboard_stats_metric_mensagens'
         | 'set_dashboard_stats_metric_interacoes';
@@ -260,7 +263,7 @@ const ONBOARDING_STEP_IDS: OnboardingStepId[] = [
 const ONBOARDING_STEP_ROUTES: Record<OnboardingStepId, string> = {
     connect_whatsapp: '#/dashboard',
     configure_accounts: '#/configuracoes?panel=conexao',
-    open_inbox: '#/inbox',
+    open_inbox: '#/configuracoes?panel=conexao',
     create_first_contact: '#/contatos',
     create_tags: '#/configuracoes?panel=labels',
     configure_dynamic_fields: '#/configuracoes?panel=contact-fields',
@@ -289,9 +292,13 @@ const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMa
         { at: 18.0, selector: '[data-tour-target="settings-account-1-save-button"]', title: 'Salve a configuração', hint: 'Depois de revisar os campos, use este botão para salvar as mudanças da Conta 1.', radius: 12, scroll: 'center' }
     ],
     open_inbox: [
-        { at: 1.1, selector: '[data-tour-target="inbox-session-indicator"]', title: 'Conta exibida', hint: 'Use este bloco para filtrar qual conta está sendo exibida no Inbox.', radius: 18 },
-        { at: 6.3, selector: '[data-tour-target="inbox-start-conversation-button"]', title: 'Inicie uma conversa', hint: 'Este botão abre a janela para começar um atendimento manual.', radius: 18 },
-        { at: 11.0, selector: '[data-tour-target="inbox-search-input"]', title: 'Busque conversas', hint: 'Aqui você encontra rapidamente uma conversa específica.', radius: 14 }
+        { at: 3.0, selector: '[data-tour-target="settings-nav-inbox"]', route: '#/configuracoes?panel=conexao', title: 'Abra o Inbox', hint: 'Use o menu lateral para sair das contas e entrar na central de atendimento.', radius: 16, scroll: 'nearest' },
+        { at: 5.0, selector: '', route: '#/inbox', title: '', hint: '', clear: true },
+        { at: 6.0, selector: '[data-tour-target="inbox-conversations-column"]', route: '#/inbox', title: 'Veja a coluna de conversas', hint: 'Aqui ficam as conversas em andamento e os leads aguardando atendimento.', radius: 20, scroll: 'center' },
+        { at: 8.0, selector: '[data-tour-target="inbox-session-indicator"]', route: '#/inbox', action: 'open_inbox_session_filter', title: 'Filtre por conta', hint: 'Abra esta lista para escolher qual conta o Inbox deve exibir.', radius: 18, scroll: 'nearest' },
+        { at: 10.0, selector: '[data-tour-target="inbox-conversation-account-tag"]', route: '#/inbox', action: 'close_inbox_session_filter', title: 'Veja as tags das contas', hint: 'Essas etiquetas mostram rapidamente de qual conta cada conversa veio.', radius: 14, scroll: 'center' },
+        { at: 16.0, selector: '[data-tour-target="inbox-contact-info-button"]', route: '#/inbox', title: 'Abra as informações do contato', hint: 'Esse botão revela o painel lateral com os dados do lead em atendimento.', radius: 16, scroll: 'nearest' },
+        { at: 17.0, selector: '[data-tour-target="inbox-contact-info-panel"]', route: '#/inbox', action: 'open_inbox_contact_info_panel', title: 'Consulte os dados do contato', hint: 'Com o painel aberto, você visualiza os dados do lead sem sair da conversa.', radius: 18, scroll: 'nearest' }
     ],
     create_first_contact: [
         { at: 1.2, selector: '[data-tour-target="contacts-new-button"]', title: 'Crie um novo contato', hint: 'O cadastro começa por este botão na tela de contatos.', radius: 18 },
@@ -1104,6 +1111,10 @@ function resolveOnboardingSpotlightTarget(
         return (directTarget.closest('.nav-item') as HTMLElement | null) || directTarget;
     }
 
+    if (stepId === 'open_inbox' && marker.selector === '[data-tour-target="settings-nav-inbox"]') {
+        return (directTarget.closest('.nav-item') as HTMLElement | null) || directTarget;
+    }
+
     return directTarget;
 }
 
@@ -1134,6 +1145,22 @@ function resolveOnboardingAmbientSpotlightTargets(
             const navSection = primaryTarget.closest('.nav-section') as HTMLElement | null;
             if (navSection && navSection !== primaryTarget) {
                 targets.push(navSection);
+            }
+        }
+    }
+
+    if (stepId === 'open_inbox') {
+        if (marker.selector === '[data-tour-target="settings-nav-inbox"]') {
+            const navSection = primaryTarget.closest('.nav-section') as HTMLElement | null;
+            if (navSection && navSection !== primaryTarget) {
+                targets.push(navSection);
+            }
+        }
+
+        if (marker.selector === '[data-tour-target="inbox-conversation-account-tag"]') {
+            const conversationsColumn = document.querySelector('[data-tour-target="inbox-conversations-column"]') as HTMLElement | null;
+            if (conversationsColumn && conversationsColumn !== primaryTarget) {
+                targets.push(conversationsColumn);
             }
         }
     }
@@ -1200,6 +1227,8 @@ function performOnboardingHighlightAction(
 
     const win = window as Window & {
         createSessionPrompt?: () => Promise<void> | void;
+        setInboxTourSessionFilterExpanded?: (forceOpen?: boolean) => void;
+        toggleContactInfo?: (forceOpen?: boolean) => void;
     };
 
     if (action === 'open_whatsapp_new_account_prompt') {
@@ -1236,6 +1265,42 @@ function performOnboardingHighlightAction(
         });
         onboardingPreparedMarkerActionKey = actionKey;
         scheduleOnboardingSpotlightRefresh(280);
+        return false;
+    }
+
+    if (action === 'open_inbox_session_filter') {
+        if (typeof win.setInboxTourSessionFilterExpanded !== 'function') {
+            scheduleOnboardingSpotlightRefresh(180);
+            return false;
+        }
+
+        win.setInboxTourSessionFilterExpanded(true);
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(120);
+        return false;
+    }
+
+    if (action === 'close_inbox_session_filter') {
+        if (typeof win.setInboxTourSessionFilterExpanded !== 'function') {
+            scheduleOnboardingSpotlightRefresh(160);
+            return false;
+        }
+
+        win.setInboxTourSessionFilterExpanded(false);
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(120);
+        return false;
+    }
+
+    if (action === 'open_inbox_contact_info_panel') {
+        if (typeof win.toggleContactInfo !== 'function') {
+            scheduleOnboardingSpotlightRefresh(180);
+            return false;
+        }
+
+        win.toggleContactInfo(true);
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(180);
         return false;
     }
 
@@ -1357,6 +1422,12 @@ function prepareOnboardingSurfaceForStep(
         let didPrepare = true;
 
         if (stepId === 'configure_accounts') {
+            if (typeof win.showPanel === 'function') {
+                win.showPanel('conexao');
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'open_inbox' && targetRoute.startsWith('#/configuracoes')) {
             if (typeof win.showPanel === 'function') {
                 win.showPanel('conexao');
             } else {

@@ -618,7 +618,7 @@ export default function Configuracoes() {
                   <div className="nav-section">
                       <div className="nav-section-title">Conversas</div>
                       <ul className="nav-menu">
-                          <li className="nav-item"><Link to="/inbox" className="nav-link"><span className="icon icon-inbox"></span>Inbox</Link></li>
+                          <li className="nav-item" data-tour-target="settings-nav-inbox"><Link to="/inbox" className="nav-link"><span className="icon icon-inbox"></span>Inbox</Link></li>
                       </ul>
                   </div>
                   <div className="nav-section">

@@ -231,6 +231,9 @@ export default function Inbox() {
             width: fit-content;
             max-width: 100%;
         }
+        .inbox-session-highlight-select-shell.is-tour-open {
+            z-index: 4;
+        }
         .inbox-session-highlight-select {
             appearance: none;
             -webkit-appearance: none;
@@ -277,6 +280,50 @@ export default function Inbox() {
             border-left: 4px solid transparent;
             border-right: 4px solid transparent;
             border-top: 6px solid rgba(var(--primary-rgb), 0.92);
+        }
+        .inbox-session-highlight-tour-menu {
+            position: absolute;
+            top: calc(100% + 10px);
+            left: 0;
+            min-width: min(280px, calc(100vw - 48px));
+            max-width: min(320px, calc(100vw - 48px));
+            padding: 8px;
+            border-radius: 14px;
+            border: 1px solid rgba(var(--primary-rgb), 0.4);
+            background: linear-gradient(180deg, rgba(9, 16, 31, 0.98) 0%, rgba(12, 22, 34, 0.98) 100%);
+            box-shadow:
+                0 18px 36px rgba(2, 8, 20, 0.42),
+                0 0 0 1px rgba(var(--primary-rgb), 0.08),
+                0 0 18px rgba(var(--primary-rgb), 0.16);
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .inbox-session-highlight-select-shell.is-tour-open .inbox-session-highlight-tour-menu {
+            display: flex;
+        }
+        .inbox-session-highlight-tour-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            color: rgba(232, 241, 247, 0.92);
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.3;
+            background: transparent;
+        }
+        .inbox-session-highlight-tour-option.active {
+            background: rgba(var(--primary-rgb), 0.12);
+            color: #ffffff;
+            box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.28);
+        }
+        .inbox-session-highlight-tour-option small {
+            color: rgba(175, 191, 208, 0.86);
+            font-size: 11px;
+            font-weight: 600;
         }
         .inbox-session-highlight-meta {
             font-size: 12px;
@@ -2238,7 +2285,7 @@ export default function Inbox() {
                     <span className="inbox-session-highlight-status all">Filtro geral</span>
                   </div>
                   <div className="inbox-session-highlight-content">
-                    <div className="inbox-session-highlight-select-shell">
+                    <div className="inbox-session-highlight-select-shell" id="inboxSessionFilterShell">
                       <select
                         id="inboxSessionFilter"
                         className="inbox-session-highlight-select"
@@ -2248,6 +2295,7 @@ export default function Inbox() {
                         <option value="">Todas as contas</option>
                       </select>
                       <span className="inbox-session-highlight-select-icon" aria-hidden="true"></span>
+                      <div className="inbox-session-highlight-tour-menu" id="inboxSessionFilterTourMenu" aria-hidden="true"></div>
                     </div>
                     <div className="inbox-session-highlight-meta">Mostrando conversas de todas as contas</div>
                   </div>
@@ -2288,7 +2336,7 @@ export default function Inbox() {
                 />
               </div>
             </div>
-            <div className="conversations-list" id="conversationsList">
+            <div className="conversations-list" id="conversationsList" data-tour-target="inbox-conversations-column">
               <div className="empty-state" style={{ padding: '40px' }}>
                 <div className="empty-state-icon icon icon-empty icon-lg"></div>
                 <p>Carregando conversas...</p>
@@ -2304,7 +2352,7 @@ export default function Inbox() {
             </div>
           </div>
 
-          <div className="inbox-right-panel" id="inboxRightPanel">
+          <div className="inbox-right-panel" id="inboxRightPanel" data-tour-target="inbox-contact-info-panel">
             <div className="inbox-right-panel-content" id="inboxRightContent">
               <span className="inbox-right-panel-robot icon icon-automation icon-lg"></span>
               <p><strong>Este cliente ainda não está cadastrado na sua audiência.</strong></p>

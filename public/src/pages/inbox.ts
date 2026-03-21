@@ -168,6 +168,7 @@ let inboxStartConversationLeads: InboxLeadItem[] = [];
 let inboxStartConversationModalBound = false;
 let conversationFlowToggleInFlight = false;
 let onboardingPresentationInboxBridgeBound = false;
+let inboxTourSessionFilterExpanded = false;
 
 const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 const INBOX_OPEN_LEAD_QUERY_KEYS = ['leadId', 'lead_id', 'id'] as const;
@@ -534,6 +535,42 @@ function renderInboxSessionFilterOptions() {
     renderInboxSessionIndicator();
 }
 
+function renderInboxSessionFilterTourMenu() {
+    const shell = document.getElementById('inboxSessionFilterShell') as HTMLElement | null;
+    const menu = document.getElementById('inboxSessionFilterTourMenu') as HTMLElement | null;
+    if (!shell || !menu) return;
+
+    const options = [
+        {
+            value: '',
+            label: 'Todas as contas',
+            meta: 'Mostra as conversas de todas as conexoes'
+        },
+        ...inboxAvailableSessions.map((session) => {
+            const sessionId = sanitizeSessionId(session.session_id);
+            const displayName = getSessionDisplayName(session);
+            return {
+                value: sessionId,
+                label: displayName,
+                meta: sessionId
+            };
+        })
+    ];
+
+    shell.classList.toggle('is-tour-open', inboxTourSessionFilterExpanded);
+    menu.setAttribute('aria-hidden', inboxTourSessionFilterExpanded ? 'false' : 'true');
+    menu.innerHTML = options.map((option) => {
+        const isActive = sanitizeSessionId(option.value) === sanitizeSessionId(inboxSessionFilter)
+            || (!option.value && !sanitizeSessionId(inboxSessionFilter));
+        return `
+            <div class="inbox-session-highlight-tour-option ${isActive ? 'active' : ''}">
+                <span>${escapeHtml(option.label)}</span>
+                <small>${escapeHtml(option.meta)}</small>
+            </div>
+        `;
+    }).join('');
+}
+
 function renderInboxSessionIndicator() {
     const container = document.getElementById('inboxSessionIndicator') as HTMLElement | null;
     if (!container) return;
@@ -551,6 +588,7 @@ function renderInboxSessionIndicator() {
             statusEl.textContent = 'Filtro geral';
             statusEl.className = 'inbox-session-highlight-status all';
         }
+        renderInboxSessionFilterTourMenu();
         renderInboxHistoryResyncButtonState();
         return;
     }
@@ -572,7 +610,15 @@ function renderInboxSessionIndicator() {
         statusEl.textContent = statusLabel;
         statusEl.className = `inbox-session-highlight-status ${connected ? 'connected' : 'disconnected'}`;
     }
+    renderInboxSessionFilterTourMenu();
     renderInboxHistoryResyncButtonState();
+}
+
+function setInboxTourSessionFilterExpanded(forceOpen?: boolean) {
+    inboxTourSessionFilterExpanded = typeof forceOpen === 'boolean'
+        ? forceOpen
+        : !inboxTourSessionFilterExpanded;
+    renderInboxSessionFilterTourMenu();
 }
 
 function resolveInboxHistoryResyncSessionTargets() {
@@ -763,6 +809,7 @@ async function loadInboxSessionFilters() {
 function changeInboxSessionFilter(sessionId: string) {
     inboxSessionFilter = sanitizeSessionId(sessionId);
     persistInboxSessionFilter(inboxSessionFilter);
+    inboxTourSessionFilterExpanded = false;
     inboxSearchLeadsCache = [];
     inboxSearchLeadsCacheKey = '';
     inboxSearchLeadsCacheAt = 0;
@@ -1514,6 +1561,7 @@ async function tryOpenPendingLeadConversation() {
 
 function initInbox() {
     pendingInboxOpenLeadId = resolveInboxOpenLeadIdFromRouteParams();
+    inboxTourSessionFilterExpanded = false;
     bindOnboardingPresentationInboxBridge();
     bindInboxLifecycle();
     syncInboxMobileViewportState();
@@ -2501,7 +2549,7 @@ function renderConversations() {
             <div class="conversation-info">
                 <div class="conversation-name-row">
                     <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
-                    ${c.sessionLabel ? `<span class="conversation-session-chip" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
+                    ${c.sessionLabel ? `<span class="conversation-session-chip" data-tour-target="inbox-conversation-account-tag" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
                 </div>
                 <div class="conversation-preview">${renderConversationPreview(c.lastMessage, 'Sem mensagens')}</div>
             </div>
@@ -2554,7 +2602,7 @@ function renderFilteredConversations(filtered: Conversation[]) {
             <div class="conversation-info">
                 <div class="conversation-name-row">
                     <div class="conversation-name">${escapeHtml(c.name || 'Sem nome')}</div>
-                    ${c.sessionLabel ? `<span class="conversation-session-chip" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
+                    ${c.sessionLabel ? `<span class="conversation-session-chip" data-tour-target="inbox-conversation-account-tag" title="${escapeHtml(c.sessionId || '')}">${escapeHtml(c.sessionLabel)}</span>` : ''}
                 </div>
                 <div class="conversation-preview">${renderConversationPreview(c.lastMessage, '')}</div>
             </div>
@@ -3619,7 +3667,7 @@ function renderChat() {
                         ${getConversationFlowToggleButtonLabel(currentConversation)}
                     </button>
                 ` : ''}
-                <button class="btn btn-sm btn-outline btn-icon" onclick="toggleContactInfo()" title="Dados do contato"><span class="icon icon-user icon-sm"></span></button>
+                <button class="btn btn-sm btn-outline btn-icon" data-tour-target="inbox-contact-info-button" onclick="toggleContactInfo()" title="Dados do contato"><span class="icon icon-user icon-sm"></span></button>
             </div>
         </div>
 
@@ -4064,6 +4112,7 @@ const windowAny = window as Window & {
     filterConversations?: (filter: 'all' | 'unread') => void;
     searchConversations?: () => void;
     changeInboxSessionFilter?: (sessionId: string) => void;
+    setInboxTourSessionFilterExpanded?: (forceOpen?: boolean) => void;
     resyncInboxHistory?: () => Promise<void>;
     openStartConversationModal?: () => Promise<void>;
     closeStartConversationModal?: () => void;
@@ -4093,6 +4142,7 @@ windowAny.initInbox = initInbox;
 windowAny.filterConversations = filterConversations;
 windowAny.searchConversations = searchConversations;
 windowAny.changeInboxSessionFilter = changeInboxSessionFilter;
+windowAny.setInboxTourSessionFilterExpanded = setInboxTourSessionFilterExpanded;
 windowAny.resyncInboxHistory = resyncInboxHistory;
 windowAny.openStartConversationModal = openStartConversationModal;
 windowAny.closeStartConversationModal = closeStartConversationModal;
