@@ -1749,7 +1749,7 @@ function renderOnboardingVideo() {
         shell.classList.toggle('is-ready', isVideoReady);
     }
     if (kicker) {
-        kicker.textContent = `Modo tour \u00b7 Etapa ${stepPosition} de ${ONBOARDING_STEP_IDS.length}`;
+        kicker.textContent = `Etapa ${stepPosition} de ${ONBOARDING_STEP_IDS.length}`;
     }
     if (title) {
         title.textContent = ONBOARDING_STEP_LABELS_UI[selectedStepId];
