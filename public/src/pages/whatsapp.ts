@@ -1129,7 +1129,7 @@ function startConnection() {
             patchOnboardingPresentationWhatsappSession(sessionId, {
                 connected: true,
                 status: 'connected',
-                name: String(currentSession?.name || '').trim() || 'ZapVender Comercial',
+                name: String(currentSession?.name || '').trim() || 'Conta conectada',
                 phone: String(currentSession?.phone || '').trim() || '5527998763040'
             });
             availableSessions = getOnboardingPresentationWhatsappSessions();

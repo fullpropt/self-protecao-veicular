@@ -304,8 +304,8 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     status: 3,
     created_at: '2026-03-18T14:00:00.000Z',
     last_interaction_at: '2026-03-20T13:42:00.000Z',
-    session_id: 'zv_demo_principal',
-    session_label: 'ZapVender Comercial',
+    session_id: 'zv_demo1_session',
+    session_label: 'Conta 1',
     notes: 'Prefere atendimento no periodo da tarde.',
     custom_fields: { cidade: 'Vitoria', curso: 'Inscricao 2026', origem: 'Indicacao' }
   },
@@ -320,8 +320,8 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     status: 2,
     created_at: '2026-03-19T11:10:00.000Z',
     last_message_at: '2026-03-20T12:15:00.000Z',
-    session_id: 'zv_demo_principal',
-    session_label: 'ZapVender Comercial',
+    session_id: 'zv_demo1_session',
+    session_label: 'Conta 1',
     notes: 'Solicitou comparativo entre planos.',
     custom_fields: { cidade: 'Serra', curso: 'Renovacao', origem: 'Instagram' }
   },
@@ -336,8 +336,8 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     status: 1,
     created_at: '2026-03-20T09:10:00.000Z',
     last_interaction_at: '2026-03-20T09:18:00.000Z',
-    session_id: 'zv_demo_suporte',
-    session_label: 'ZapVender Suporte',
+    session_id: 'zv_demo2_session',
+    session_label: 'Conta 2',
     notes: 'Vai enviar documentos ate sexta.',
     custom_fields: { cidade: 'Vila Velha', curso: 'Matricula', origem: 'Landing page' }
   },
@@ -352,8 +352,8 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     status: 3,
     created_at: '2026-03-17T16:40:00.000Z',
     last_message_at: '2026-03-20T10:55:00.000Z',
-    session_id: 'zv_demo_principal',
-    session_label: 'ZapVender Comercial',
+    session_id: 'zv_demo1_session',
+    session_label: 'Conta 1',
     notes: 'Cliente em fase final de aprovacao.',
     custom_fields: { cidade: 'Cariacica', curso: 'Transferencia', origem: 'Google' }
   },
@@ -368,8 +368,8 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     status: 2,
     created_at: '2026-03-18T09:32:00.000Z',
     last_message_at: '2026-03-20T11:40:00.000Z',
-    session_id: 'zv_demo_suporte',
-    session_label: 'ZapVender Suporte',
+    session_id: 'zv_demo2_session',
+    session_label: 'Conta 2',
     notes: 'Aguardando confirmar titularidade.',
     custom_fields: { cidade: 'Guarapari', curso: 'Inscricao 2026', origem: 'Anuncio' }
   }
@@ -396,8 +396,8 @@ const DASHBOARD_PRESENTATION_ACCOUNT_HEALTH: PresentationAccountHealthResponse =
   date: '2026-03-20',
   accounts: [
     {
-      session_id: 'zv_demo_principal',
-      session_name: 'ZapVender Comercial',
+      session_id: 'zv_demo1_session',
+      session_name: 'Conta 1',
       phone: '+55 27 99876-1000',
       status: 'connected',
       status_label: 'Conectada',
@@ -432,8 +432,8 @@ const DASHBOARD_PRESENTATION_ACCOUNT_HEALTH: PresentationAccountHealthResponse =
       ]
     },
     {
-      session_id: 'zv_demo_suporte',
-      session_name: 'ZapVender Suporte',
+      session_id: 'zv_demo2_session',
+      session_name: 'Conta 2',
       phone: '+55 27 99876-2000',
       status: 'connected',
       status_label: 'Conectada',
@@ -535,8 +535,8 @@ const DASHBOARD_PRESENTATION_CUSTOM_EVENTS: PresentationCustomEventsResponse = {
 
 const WHATSAPP_PRESENTATION_BASE_SESSIONS: PresentationSessionRecord[] = [
   {
-    session_id: 'zv_demo_principal',
-    name: 'ZapVender Comercial',
+    session_id: 'zv_demo1_session',
+    name: 'Conta 1',
     phone: '5527998761000',
     status: 'connected',
     connected: true,
@@ -545,8 +545,8 @@ const WHATSAPP_PRESENTATION_BASE_SESSIONS: PresentationSessionRecord[] = [
     dispatch_weight: 2
   },
   {
-    session_id: 'zv_demo_suporte',
-    name: 'ZapVender Suporte',
+    session_id: 'zv_demo2_session',
+    name: 'Conta 2',
     phone: '5527998762000',
     status: 'connected',
     connected: true,
@@ -618,7 +618,7 @@ const PRESENTATION_CONVERSATIONS: PresentationConversation[] = [
   {
     id: 5101,
     lead_id: 9101,
-    session_id: 'zv_demo_principal',
+    session_id: 'zv_demo1_session',
     name: 'Fernanda Alves',
     phone: '27981431090',
     avatar_url: '',
@@ -633,7 +633,7 @@ const PRESENTATION_CONVERSATIONS: PresentationConversation[] = [
   {
     id: 5102,
     lead_id: 9102,
-    session_id: 'zv_demo_principal',
+    session_id: 'zv_demo1_session',
     name: 'Carlos Menezes',
     phone: '27998155001',
     avatar_url: '',
@@ -648,7 +648,7 @@ const PRESENTATION_CONVERSATIONS: PresentationConversation[] = [
   {
     id: 5103,
     lead_id: 9103,
-    session_id: 'zv_demo_suporte',
+    session_id: 'zv_demo2_session',
     name: 'Juliana Rocha',
     phone: '27998244077',
     avatar_url: '',
@@ -730,8 +730,8 @@ const PRESENTATION_CAMPAIGNS: PresentationCampaign[] = [
     type: 'broadcast',
     distribution_strategy: 'round_robin',
     sender_accounts: [
-      { session_id: 'zv_demo_principal', weight: 2, daily_limit: 120, is_active: true },
-      { session_id: 'zv_demo_suporte', weight: 1, daily_limit: 90, is_active: true }
+      { session_id: 'zv_demo1_session', weight: 2, daily_limit: 120, is_active: true },
+      { session_id: 'zv_demo2_session', weight: 1, daily_limit: 90, is_active: true }
     ],
     status: 'active',
     sent: 128,
@@ -765,7 +765,7 @@ const PRESENTATION_CAMPAIGNS: PresentationCampaign[] = [
     type: 'drip',
     distribution_strategy: 'single',
     sender_accounts: [
-      { session_id: 'zv_demo_suporte', weight: 1, daily_limit: 90, is_active: true }
+      { session_id: 'zv_demo2_session', weight: 1, daily_limit: 90, is_active: true }
     ],
     status: 'paused',
     sent: 52,
@@ -795,7 +795,7 @@ const PRESENTATION_CAMPAIGNS: PresentationCampaign[] = [
     type: 'broadcast',
     distribution_strategy: 'single',
     sender_accounts: [
-      { session_id: 'zv_demo_principal', weight: 1, daily_limit: 120, is_active: true }
+      { session_id: 'zv_demo1_session', weight: 1, daily_limit: 120, is_active: true }
     ],
     status: 'draft',
     sent: 0,
@@ -893,7 +893,7 @@ const PRESENTATION_AUTOMATIONS: PresentationAutomation[] = [
     action_type: 'send_message',
     action_value: 'Ola {{nome}}! Seja bem-vindo(a) ao atendimento da ZapVender.',
     delay: 0,
-    session_ids: ['zv_demo_principal'],
+    session_ids: ['zv_demo1_session'],
     tag_filters: ['Novo contato'],
     is_active: true,
     executions: 156,
@@ -908,7 +908,7 @@ const PRESENTATION_AUTOMATIONS: PresentationAutomation[] = [
     action_type: 'add_tag',
     action_value: 'Lead quente',
     delay: 0,
-    session_ids: ['zv_demo_principal', 'zv_demo_suporte'],
+    session_ids: ['zv_demo1_session', 'zv_demo2_session'],
     tag_filters: [],
     is_active: true,
     executions: 47,
@@ -923,7 +923,7 @@ const PRESENTATION_AUTOMATIONS: PresentationAutomation[] = [
     action_type: 'change_status',
     action_value: '2',
     delay: 5,
-    session_ids: ['zv_demo_suporte'],
+    session_ids: ['zv_demo2_session'],
     tag_filters: ['Documento recebido'],
     is_active: false,
     executions: 23,
