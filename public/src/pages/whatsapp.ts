@@ -576,11 +576,14 @@ function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
         const isExpanded = shouldShowReconnectUiForSession(sessionId);
         const detail = displayName === sessionId ? statusLabel : sessionId;
 
+        const expandedTargetAttr = isActive && isExpanded ? ' data-tour-target="whatsapp-expanded-session"' : '';
+
         return `
             <button
                 type="button"
-                class="whatsapp-session-list-item${isActive ? ' is-active' : ''}"
+                class="whatsapp-session-list-item${isActive ? ' is-active' : ''}${isExpanded ? ' is-expanded' : ''}"
                 data-session-id="${escapeHtml(sessionId)}"
+                ${expandedTargetAttr}
                 title="Mostrar ou ocultar detalhes da conta ${escapeHtml(displayName)}"
                 aria-expanded="${isExpanded ? 'true' : 'false'}"
             >

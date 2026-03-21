@@ -273,7 +273,8 @@ const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMa
         { at: 20.0, selector: '[data-tour-target="dashboard-nav-whatsapp"]', route: '#/dashboard', title: 'Abra o WhatsApp', hint: 'Este atalho leva você para a área de conexão das contas.', radius: 18, scroll: 'nearest' },
         { at: 22.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Crie uma nova conta', hint: 'Este botão prepara uma nova sessão para conexão no sistema.', radius: 18 },
         { at: 24.0, selector: '[data-tour-target="app-prompt-modal"]', route: '#/whatsapp', action: 'open_whatsapp_new_account_prompt', title: 'Defina a nova conta', hint: 'O modal abre para escolher o identificador da nova conta WhatsApp.', radius: 22, scroll: 'center' },
-        { at: 25.0, selector: '[data-tour-target="whatsapp-connect-button"]', route: '#/whatsapp', action: 'confirm_whatsapp_new_account_prompt', title: 'Conecte o WhatsApp', hint: 'Depois de criar a conta, use este botão para iniciar a conexão.', radius: 18 },
+        { at: 25.0, selector: '[data-tour-target="whatsapp-expanded-session"]', route: '#/whatsapp', action: 'confirm_whatsapp_new_account_prompt', title: 'A nova conta fica expandida', hint: 'Depois de criar a conta, ela já fica aberta para indicar a sessão que vai gerar o QR Code.', radius: 18, scroll: 'center' },
+        { at: 26.2, selector: '[data-tour-target="whatsapp-connect-button"]', route: '#/whatsapp', title: 'Gere o QR Code', hint: 'Agora use este botão para iniciar a conexão e gerar o QR Code da conta criada.', radius: 18, scroll: 'center' },
         { at: 29.0, selector: '', route: '#/whatsapp', title: '', hint: '', clear: true },
         { at: 37.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Você pode repetir o processo', hint: 'Sempre que precisar adicionar outra conta, volte neste mesmo botão.', radius: 18 }
     ],
@@ -1221,7 +1222,7 @@ function performOnboardingHighlightAction(
 
         confirmButton.click();
         onboardingPreparedMarkerActionKey = actionKey;
-        scheduleOnboardingSpotlightRefresh(180);
+        scheduleOnboardingSpotlightRefresh(280);
         return false;
     }
 

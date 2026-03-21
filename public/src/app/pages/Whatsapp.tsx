@@ -272,6 +272,13 @@ export default function Whatsapp() {
             background: rgba(20, 50, 74, 0.96);
             box-shadow: 0 0 0 1px rgba(var(--primary-rgb), 0.28);
         }
+        .whatsapp-react .whatsapp-session-list-item.is-expanded {
+            border-color: rgba(var(--primary-rgb), 0.76);
+            background: linear-gradient(180deg, rgba(20, 47, 72, 0.96) 0%, rgba(17, 41, 64, 0.94) 100%);
+            box-shadow:
+                0 0 0 1px rgba(var(--primary-rgb), 0.24),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
         .whatsapp-react .whatsapp-session-list-main {
             display: flex;
             align-items: center;
