@@ -1936,6 +1936,15 @@ function renderWhatsAppAccountsManager() {
         const campaignEnabled = parseBooleanSetting(session.campaign_enabled, true);
         const dispatchWeight = parseDispatchWeight(session.dispatch_weight, 1);
         const dailyLimit = parseDailyLimit(session.daily_limit, 0);
+        const nameFieldTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-name-field"'
+            : '';
+        const weightFieldTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-weight-field"'
+            : '';
+        const dailyLimitFieldTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-daily-limit-field"'
+            : '';
 
         return `
             <div class="connection-account-item">
@@ -1953,6 +1962,7 @@ function renderWhatsAppAccountsManager() {
                             type="text"
                             class="form-input connection-session-name-input"
                             data-session-id="${escapeHtml(sessionId)}"
+                            ${nameFieldTourTarget}
                             value="${escapeHtml(String(session.name || ''))}"
                             placeholder="Ex: Comercial SP"
                         />
@@ -1965,6 +1975,7 @@ function renderWhatsAppAccountsManager() {
                             step="1"
                             class="form-input connection-session-weight-input"
                             data-session-id="${escapeHtml(sessionId)}"
+                            ${weightFieldTourTarget}
                             value="${dispatchWeight}"
                         />
                     </div>
@@ -1976,6 +1987,7 @@ function renderWhatsAppAccountsManager() {
                             step="1"
                             class="form-input connection-session-daily-limit-input"
                             data-session-id="${escapeHtml(sessionId)}"
+                            ${dailyLimitFieldTourTarget}
                             value="${dailyLimit}"
                         />
                     </div>

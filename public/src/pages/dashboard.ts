@@ -280,7 +280,10 @@ const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMa
     ],
     configure_accounts: [
         { at: 1.0, selector: '[data-tour-target="settings-nav-conexao"]', title: 'Painel de contas', hint: 'Esta aba concentra as contas conectadas e o status de cada uma.', radius: 14 },
-        { at: 5.0, selector: '[data-tour-target="settings-accounts-list"]', title: 'Contas disponíveis', hint: 'Revise aqui o nome, o estado e a disponibilidade das contas de envio.', radius: 22 }
+        { at: 5.0, selector: '[data-tour-target="settings-accounts-list"]', title: 'Contas disponíveis', hint: 'Revise aqui o nome, o estado e a disponibilidade das contas de envio.', radius: 22 },
+        { at: 7.0, selector: '[data-tour-target="settings-account-1-name-field"]', title: 'Ajuste o nome da conta', hint: 'Aqui você define como a Conta 1 aparece no sistema.', radius: 12, scroll: 'center' },
+        { at: 8.0, selector: '[data-tour-target="settings-account-1-weight-field"]', title: 'Controle o peso da Conta 1', hint: 'O peso influencia a distribuição de envios quando há mais de uma conta ativa.', radius: 12, scroll: 'center' },
+        { at: 11.0, selector: '[data-tour-target="settings-account-1-daily-limit-field"]', title: 'Defina o limite diário', hint: 'Esse campo controla quantos envios a Conta 1 pode fazer por dia.', radius: 12, scroll: 'center' }
     ],
     open_inbox: [
         { at: 1.1, selector: '[data-tour-target="inbox-session-indicator"]', title: 'Conta exibida', hint: 'Use este bloco para filtrar qual conta está sendo exibida no Inbox.', radius: 18 },
