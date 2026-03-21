@@ -429,7 +429,7 @@ export default function Whatsapp() {
             font-weight: 700;
             letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: rgba(191, 212, 233, 0.7);
+            color: rgba(148, 163, 184, 0.74);
         }
 
         .whatsapp-react .whatsapp-plan-name {
@@ -440,26 +440,25 @@ export default function Whatsapp() {
             font-weight: 800;
             line-height: 0.95;
             letter-spacing: -0.05em;
-            color: transparent;
-            background: linear-gradient(120deg, #f8fafc 0%, #dbeafe 100%);
-            background-clip: text;
-            -webkit-background-clip: text;
+            color: #dbe4ef;
+            background: none;
+            -webkit-text-fill-color: currentColor;
         }
 
         .whatsapp-react .whatsapp-plan-panel--starter .whatsapp-plan-name {
-            background-image: linear-gradient(120deg, #d1fae5 0%, #4ade80 50%, #15803d 100%);
+            color: #bfe9cf;
         }
 
         .whatsapp-react .whatsapp-plan-panel--premium .whatsapp-plan-name {
-            background-image: linear-gradient(120deg, #ffffff 0%, #dce3eb 40%, #94a3b8 100%);
+            color: #d6deea;
         }
 
         .whatsapp-react .whatsapp-plan-panel--advanced .whatsapp-plan-name {
-            background-image: linear-gradient(120deg, #fef3c7 0%, #fbbf24 45%, #b45309 100%);
+            color: #e9d39a;
         }
 
         .whatsapp-react .whatsapp-plan-panel--monster .whatsapp-plan-name {
-            background-image: linear-gradient(120deg, #e0f2fe 0%, #7dd3fc 28%, #60a5fa 58%, #22d3ee 100%);
+            color: #bedef3;
         }
 
         .whatsapp-react .whatsapp-plan-copy,
@@ -470,13 +469,13 @@ export default function Whatsapp() {
         }
 
         .whatsapp-react .whatsapp-plan-copy {
-            color: var(--dark);
+            color: rgba(221, 230, 240, 0.88);
             font-size: 14px;
             font-weight: 600;
         }
 
         .whatsapp-react .whatsapp-plan-hint {
-            color: rgba(191, 212, 233, 0.82);
+            color: rgba(159, 175, 196, 0.78);
             font-size: 13px;
             line-height: 1.55;
         }
