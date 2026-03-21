@@ -424,6 +424,14 @@ function GlobalOnboardingTour() {
             transform 0.18s ease,
             opacity 0.18s ease;
         }
+        .onboarding-video-ended-btn.is-icon-only {
+          flex: 0 0 44px;
+          width: 44px;
+          min-width: 44px;
+          padding: 0;
+          font-size: 16px;
+          line-height: 1;
+        }
         .onboarding-video-ended-btn:hover:not(:disabled) {
           border-color: rgba(var(--primary-rgb), 0.34);
           background: rgba(12, 31, 49, 0.96);
@@ -580,17 +588,6 @@ function GlobalOnboardingTour() {
             <button
               type="button"
               className="onboarding-tour-nav-btn"
-              id="onboardingTourReplayButton"
-              title="Ver novamente"
-              aria-label="Ver novamente"
-              hidden
-            >
-              <span aria-hidden="true">&#8635;</span>
-            </button>
-
-            <button
-              type="button"
-              className="onboarding-tour-nav-btn"
               id="onboardingTourNextButton"
               title="Próxima etapa"
               aria-label="Próxima etapa"
@@ -684,6 +681,16 @@ function GlobalOnboardingTour() {
                   Vá para o próximo vídeo do tour quando quiser.
                 </span>
                 <div className="onboarding-video-ended-actions">
+                  <button
+                    type="button"
+                    className="onboarding-video-ended-btn is-icon-only"
+                    id="onboardingVideoReplayButton"
+                    title="Ver novamente"
+                    aria-label="Ver novamente"
+                    hidden
+                  >
+                    <span aria-hidden="true">&#8635;</span>
+                  </button>
                   <button
                     type="button"
                     className="onboarding-video-ended-btn"
