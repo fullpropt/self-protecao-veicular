@@ -39,8 +39,8 @@
 
 .public-checkout-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.75fr) minmax(360px, 0.95fr);
-  gap: 30px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
   width: min(1320px, 100%);
   margin: 0 auto;
   align-items: start;
@@ -49,6 +49,7 @@
 
 .public-checkout-main {
   display: grid;
+  grid-column: 1 / span 2;
   gap: 18px;
   justify-self: stretch;
   width: 100%;
@@ -120,6 +121,8 @@
   position: sticky;
   top: 24px;
   align-self: start;
+  width: 100%;
+  min-width: 0;
 }
 
 .public-checkout-form > .public-checkout-form-card:nth-of-type(1) {
@@ -208,13 +211,13 @@
 .public-checkout-form {
   margin-top: 0;
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   align-items: start;
   width: 100%;
-  max-width: 940px;
-  margin-left: auto;
-  margin-right: auto;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
   min-width: 0;
 }
 
@@ -618,6 +621,10 @@
   .public-checkout-grid {
     grid-template-columns: 1fr;
     gap: 22px;
+  }
+
+  .public-checkout-main {
+    grid-column: auto;
   }
 
   .public-checkout-form {
