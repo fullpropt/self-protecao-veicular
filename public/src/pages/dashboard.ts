@@ -1006,6 +1006,7 @@ function scheduleOnboardingSpotlightRefresh(delayMs = 120) {
 function clearOnboardingSpotlight() {
     if (onboardingActiveSpotlightElement) {
         onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active');
+        onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active-soft');
         onboardingActiveSpotlightElement.style.removeProperty('--onboarding-tour-radius');
     }
 
@@ -1091,6 +1092,10 @@ function resolveOnboardingSpotlightTarget(
         return (directTarget.closest('[data-tour-target="dashboard-chart-type-toggle"]') as HTMLElement | null) || directTarget;
     }
 
+    if (stepId === 'connect_whatsapp' && marker.selector === '[data-tour-target="dashboard-nav-whatsapp"]') {
+        return (directTarget.closest('.nav-item') as HTMLElement | null) || directTarget;
+    }
+
     return directTarget;
 }
 
@@ -1114,6 +1119,13 @@ function resolveOnboardingAmbientSpotlightTargets(
             const statsCard = document.querySelector('[data-tour-target="dashboard-stats-period-card"]') as HTMLElement | null;
             if (statsCard && statsCard !== primaryTarget) {
                 targets.push(statsCard);
+            }
+        }
+
+        if (marker.selector === '[data-tour-target="dashboard-nav-whatsapp"]') {
+            const navSection = primaryTarget.closest('.nav-section') as HTMLElement | null;
+            if (navSection && navSection !== primaryTarget) {
+                targets.push(navSection);
             }
         }
     }
@@ -1268,11 +1280,13 @@ function applyOnboardingSpotlight(
 
     const ambientTargets = resolveOnboardingAmbientSpotlightTargets(stepIdInput, marker, target);
     ensureOnboardingSpotlightOverflowVisible([target, ...ambientTargets]);
+    const useSoftActiveTarget = ambientTargets.length > 0;
 
     const markerKey = `${marker.selector}:${marker.at}`;
     if (onboardingActiveSpotlightElement !== target) {
         if (onboardingActiveSpotlightElement) {
             onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active');
+            onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active-soft');
             onboardingActiveSpotlightElement.style.removeProperty('--onboarding-tour-radius');
         }
 
@@ -1280,8 +1294,9 @@ function applyOnboardingSpotlight(
         onboardingActiveSpotlightSelector = marker.selector;
         onboardingActiveSpotlightMarkerKey = markerKey;
         target.classList.add('onboarding-tour-target-active');
-        target.style.setProperty('--onboarding-tour-radius', `${Math.max(8, Math.floor(marker.radius || 16))}px`);
     }
+    target.classList.toggle('onboarding-tour-target-active-soft', useSoftActiveTarget);
+    target.style.setProperty('--onboarding-tour-radius', `${Math.max(8, Math.floor(marker.radius || 16))}px`);
 
     const currentAmbientSet = new Set(ambientTargets);
     onboardingAmbientSpotlightElements.forEach((element) => {
