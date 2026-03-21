@@ -1945,6 +1945,9 @@ function renderWhatsAppAccountsManager() {
         const dailyLimitFieldTourTarget = sessionId === 'zv_demo1_session'
             ? ' data-tour-target="settings-account-1-daily-limit-field"'
             : '';
+        const saveButtonTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-save-button"'
+            : '';
 
         return `
             <div class="connection-account-item">
@@ -2000,7 +2003,7 @@ function renderWhatsAppAccountsManager() {
                         />
                         Usar em campanhas
                     </label>
-                    <button class="btn btn-outline" onclick="saveWhatsAppSessionName('${token}')">Salvar</button>
+                    <button class="btn btn-outline" onclick="saveWhatsAppSessionName('${token}')"${saveButtonTourTarget}>Salvar</button>
                     <button class="btn btn-outline-danger" onclick="removeWhatsAppSession('${token}')">Remover</button>
                 </div>
             </div>
