@@ -1227,7 +1227,7 @@ function performOnboardingHighlightAction(
 
     const win = window as Window & {
         createSessionPrompt?: () => Promise<void> | void;
-        setInboxTourSessionFilterExpanded?: (forceOpen?: boolean) => void;
+        setInboxSessionFilterMenuOpen?: (forceOpen?: boolean) => void;
         toggleContactInfo?: (forceOpen?: boolean) => void;
     };
 
@@ -1269,24 +1269,24 @@ function performOnboardingHighlightAction(
     }
 
     if (action === 'open_inbox_session_filter') {
-        if (typeof win.setInboxTourSessionFilterExpanded !== 'function') {
+        if (typeof win.setInboxSessionFilterMenuOpen !== 'function') {
             scheduleOnboardingSpotlightRefresh(180);
             return false;
         }
 
-        win.setInboxTourSessionFilterExpanded(true);
+        win.setInboxSessionFilterMenuOpen(true);
         onboardingPreparedMarkerActionKey = actionKey;
         scheduleOnboardingSpotlightRefresh(120);
         return false;
     }
 
     if (action === 'close_inbox_session_filter') {
-        if (typeof win.setInboxTourSessionFilterExpanded !== 'function') {
+        if (typeof win.setInboxSessionFilterMenuOpen !== 'function') {
             scheduleOnboardingSpotlightRefresh(160);
             return false;
         }
 
-        win.setInboxTourSessionFilterExpanded(false);
+        win.setInboxSessionFilterMenuOpen(false);
         onboardingPreparedMarkerActionKey = actionKey;
         scheduleOnboardingSpotlightRefresh(120);
         return false;

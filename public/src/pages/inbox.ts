@@ -168,7 +168,8 @@ let inboxStartConversationLeads: InboxLeadItem[] = [];
 let inboxStartConversationModalBound = false;
 let conversationFlowToggleInFlight = false;
 let onboardingPresentationInboxBridgeBound = false;
-let inboxTourSessionFilterExpanded = false;
+let inboxSessionFilterMenuBound = false;
+let inboxSessionFilterMenuOpen = false;
 
 const INBOX_SESSION_FILTER_STORAGE_KEY = 'zapvender_inbox_session_filter';
 const INBOX_OPEN_LEAD_QUERY_KEYS = ['leadId', 'lead_id', 'id'] as const;
@@ -535,12 +536,8 @@ function renderInboxSessionFilterOptions() {
     renderInboxSessionIndicator();
 }
 
-function renderInboxSessionFilterTourMenu() {
-    const shell = document.getElementById('inboxSessionFilterShell') as HTMLElement | null;
-    const menu = document.getElementById('inboxSessionFilterTourMenu') as HTMLElement | null;
-    if (!shell || !menu) return;
-
-    const options = [
+function getInboxSessionFilterMenuOptions() {
+    return [
         {
             value: '',
             label: 'Todas as contas',
@@ -556,19 +553,69 @@ function renderInboxSessionFilterTourMenu() {
             };
         })
     ];
+}
 
-    shell.classList.toggle('is-tour-open', inboxTourSessionFilterExpanded);
-    menu.setAttribute('aria-hidden', inboxTourSessionFilterExpanded ? 'false' : 'true');
-    menu.innerHTML = options.map((option) => {
+function renderInboxSessionFilterMenu() {
+    const shell = document.getElementById('inboxSessionFilterShell') as HTMLElement | null;
+    const trigger = document.getElementById('inboxSessionFilterTrigger') as HTMLButtonElement | null;
+    const menu = document.getElementById('inboxSessionFilterMenu') as HTMLElement | null;
+    if (!shell || !trigger || !menu) return;
+
+    shell.classList.toggle('is-open', inboxSessionFilterMenuOpen);
+    trigger.setAttribute('aria-expanded', inboxSessionFilterMenuOpen ? 'true' : 'false');
+    menu.setAttribute('aria-hidden', inboxSessionFilterMenuOpen ? 'false' : 'true');
+    menu.innerHTML = getInboxSessionFilterMenuOptions().map((option) => {
         const isActive = sanitizeSessionId(option.value) === sanitizeSessionId(inboxSessionFilter)
             || (!option.value && !sanitizeSessionId(inboxSessionFilter));
         return `
-            <div class="inbox-session-highlight-tour-option ${isActive ? 'active' : ''}">
-                <span>${escapeHtml(option.label)}</span>
-                <small>${escapeHtml(option.meta)}</small>
-            </div>
+            <button
+                type="button"
+                class="inbox-session-highlight-menu-option ${isActive ? 'active' : ''}"
+                data-inbox-session-option="${escapeHtml(option.value)}"
+                role="option"
+                aria-selected="${isActive ? 'true' : 'false'}"
+            >
+                <span class="inbox-session-highlight-menu-option-copy">
+                    <span class="inbox-session-highlight-menu-option-title">${escapeHtml(option.label)}</span>
+                    <small>${escapeHtml(option.meta)}</small>
+                </span>
+            </button>
         `;
     }).join('');
+}
+
+function setInboxSessionFilterMenuOpen(forceOpen?: boolean) {
+    inboxSessionFilterMenuOpen = typeof forceOpen === 'boolean'
+        ? forceOpen
+        : !inboxSessionFilterMenuOpen;
+    renderInboxSessionFilterMenu();
+}
+
+function toggleInboxSessionFilterMenu() {
+    setInboxSessionFilterMenuOpen();
+}
+
+function bindInboxSessionFilterMenu() {
+    if (inboxSessionFilterMenuBound) return;
+    inboxSessionFilterMenuBound = true;
+
+    document.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement | null;
+        const optionButton = target?.closest('[data-inbox-session-option]') as HTMLButtonElement | null;
+        if (optionButton) {
+            changeInboxSessionFilter(String(optionButton.dataset.inboxSessionOption || ''));
+            return;
+        }
+
+        if (!inboxSessionFilterMenuOpen) return;
+        if (target?.closest('#inboxSessionFilterShell')) return;
+        setInboxSessionFilterMenuOpen(false);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape' || !inboxSessionFilterMenuOpen) return;
+        setInboxSessionFilterMenuOpen(false);
+    });
 }
 
 function renderInboxSessionIndicator() {
@@ -576,6 +623,8 @@ function renderInboxSessionIndicator() {
     if (!container) return;
 
     const selectEl = container.querySelector('#inboxSessionFilter') as HTMLSelectElement | null;
+    const triggerValueEl = container.querySelector('#inboxSessionFilterTriggerValue') as HTMLElement | null;
+    const triggerSubtitleEl = container.querySelector('#inboxSessionFilterTriggerSubtitle') as HTMLElement | null;
     const metaEl = container.querySelector('.inbox-session-highlight-meta') as HTMLElement | null;
     const statusEl = container.querySelector('.inbox-session-highlight-status') as HTMLElement | null;
     if (selectEl) {
@@ -583,12 +632,14 @@ function renderInboxSessionIndicator() {
     }
 
     if (!inboxSessionFilter) {
+        if (triggerValueEl) triggerValueEl.textContent = 'Todas as contas';
+        if (triggerSubtitleEl) triggerSubtitleEl.textContent = 'Mostra as conversas de todas as conexoes';
         if (metaEl) metaEl.textContent = 'Mostrando conversas de todas as contas';
         if (statusEl) {
             statusEl.textContent = 'Filtro geral';
             statusEl.className = 'inbox-session-highlight-status all';
         }
-        renderInboxSessionFilterTourMenu();
+        renderInboxSessionFilterMenu();
         renderInboxHistoryResyncButtonState();
         return;
     }
@@ -601,6 +652,12 @@ function renderInboxSessionIndicator() {
     if (selectEl) {
         selectEl.value = selectedSession ? sessionId : inboxSessionFilter;
     }
+    if (triggerValueEl) {
+        triggerValueEl.textContent = selectedSession ? (getSessionDisplayName(selectedSession) || sessionId) : inboxSessionFilter;
+    }
+    if (triggerSubtitleEl) {
+        triggerSubtitleEl.textContent = selectedSession ? sessionId : 'Conta nao encontrada na lista';
+    }
     if (metaEl) {
         metaEl.textContent = selectedSession
             ? `${sessionId} • ${statusLabel}`
@@ -610,15 +667,8 @@ function renderInboxSessionIndicator() {
         statusEl.textContent = statusLabel;
         statusEl.className = `inbox-session-highlight-status ${connected ? 'connected' : 'disconnected'}`;
     }
-    renderInboxSessionFilterTourMenu();
+    renderInboxSessionFilterMenu();
     renderInboxHistoryResyncButtonState();
-}
-
-function setInboxTourSessionFilterExpanded(forceOpen?: boolean) {
-    inboxTourSessionFilterExpanded = typeof forceOpen === 'boolean'
-        ? forceOpen
-        : !inboxTourSessionFilterExpanded;
-    renderInboxSessionFilterTourMenu();
 }
 
 function resolveInboxHistoryResyncSessionTargets() {
@@ -809,7 +859,7 @@ async function loadInboxSessionFilters() {
 function changeInboxSessionFilter(sessionId: string) {
     inboxSessionFilter = sanitizeSessionId(sessionId);
     persistInboxSessionFilter(inboxSessionFilter);
-    inboxTourSessionFilterExpanded = false;
+    inboxSessionFilterMenuOpen = false;
     inboxSearchLeadsCache = [];
     inboxSearchLeadsCacheKey = '';
     inboxSearchLeadsCacheAt = 0;
@@ -1561,8 +1611,9 @@ async function tryOpenPendingLeadConversation() {
 
 function initInbox() {
     pendingInboxOpenLeadId = resolveInboxOpenLeadIdFromRouteParams();
-    inboxTourSessionFilterExpanded = false;
+    inboxSessionFilterMenuOpen = false;
     bindOnboardingPresentationInboxBridge();
+    bindInboxSessionFilterMenu();
     bindInboxLifecycle();
     syncInboxMobileViewportState();
     bindStartConversationModal();
@@ -4112,7 +4163,8 @@ const windowAny = window as Window & {
     filterConversations?: (filter: 'all' | 'unread') => void;
     searchConversations?: () => void;
     changeInboxSessionFilter?: (sessionId: string) => void;
-    setInboxTourSessionFilterExpanded?: (forceOpen?: boolean) => void;
+    toggleInboxSessionFilterMenu?: () => void;
+    setInboxSessionFilterMenuOpen?: (forceOpen?: boolean) => void;
     resyncInboxHistory?: () => Promise<void>;
     openStartConversationModal?: () => Promise<void>;
     closeStartConversationModal?: () => void;
@@ -4142,7 +4194,8 @@ windowAny.initInbox = initInbox;
 windowAny.filterConversations = filterConversations;
 windowAny.searchConversations = searchConversations;
 windowAny.changeInboxSessionFilter = changeInboxSessionFilter;
-windowAny.setInboxTourSessionFilterExpanded = setInboxTourSessionFilterExpanded;
+windowAny.toggleInboxSessionFilterMenu = toggleInboxSessionFilterMenu;
+windowAny.setInboxSessionFilterMenuOpen = setInboxSessionFilterMenuOpen;
 windowAny.resyncInboxHistory = resyncInboxHistory;
 windowAny.openStartConversationModal = openStartConversationModal;
 windowAny.closeStartConversationModal = closeStartConversationModal;
