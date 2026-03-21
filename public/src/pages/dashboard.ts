@@ -726,12 +726,34 @@ function bindOnboardingTourControls() {
             if (!onboardingTourOpen) return;
             refreshOnboardingTourSurface();
         };
+        const blockIfNeeded = (event: Event) => {
+            if (isOnboardingInteractionAllowed(event.target)) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof (event as Event & { stopImmediatePropagation?: () => void }).stopImmediatePropagation === 'function') {
+                (event as Event & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+            }
+        };
+        const redirectBlockedFocus = (event: FocusEvent) => {
+            if (isOnboardingInteractionAllowed(event.target)) return;
+
+            const target = resolveOnboardingInteractionElement(event.target);
+            target?.blur?.();
+            focusOnboardingTourFallback();
+        };
         window.addEventListener('resize', refresh);
         window.addEventListener('scroll', refresh, { passive: true });
         window.addEventListener('hashchange', () => {
             onboardingPreparedSurfaceStepId = null;
             scheduleOnboardingSpotlightRefresh(260);
         });
+        document.addEventListener('pointerdown', blockIfNeeded, true);
+        document.addEventListener('click', blockIfNeeded, true);
+        document.addEventListener('contextmenu', blockIfNeeded, true);
+        document.addEventListener('focusin', redirectBlockedFocus, true);
+        window.addEventListener('wheel', blockIfNeeded, { capture: true, passive: false });
+        window.addEventListener('touchmove', blockIfNeeded, { capture: true, passive: false });
         body.dataset.onboardingSpotlightBound = '1';
     }
 }
@@ -1016,6 +1038,49 @@ function scheduleOnboardingSpotlightRefresh(delayMs = 120) {
         onboardingSpotlightRefreshTimer = null;
         refreshOnboardingTourSurface();
     }, Math.max(0, delayMs));
+}
+
+function resolveOnboardingInteractionElement(target: EventTarget | null) {
+    if (target instanceof HTMLElement) return target;
+    if (target instanceof SVGElement) return target as unknown as HTMLElement;
+    if (target instanceof Element) return target as HTMLElement;
+    if (target instanceof Node) return target.parentElement as HTMLElement | null;
+    return null;
+}
+
+function isOnboardingInteractionAllowed(target: EventTarget | null) {
+    if (!onboardingTourOpen) return true;
+
+    const element = resolveOnboardingInteractionElement(target);
+    if (!element) return false;
+
+    if (element.closest('#onboardingFloatingTour')) return true;
+    if (element.closest('#onboardingSpotlightCard')) return true;
+
+    if (onboardingActiveSpotlightElement && (element === onboardingActiveSpotlightElement || onboardingActiveSpotlightElement.contains(element))) {
+        return true;
+    }
+
+    return false;
+}
+
+function focusOnboardingTourFallback() {
+    const fallback = (
+        document.getElementById('onboardingTourCloseButton')
+        || document.getElementById('onboardingVideoToggleButton')
+        || document.querySelector('#onboardingFloatingTour button:not([disabled])')
+    ) as HTMLElement | null;
+
+    if (!fallback) return;
+    if (document.activeElement === fallback) return;
+
+    window.requestAnimationFrame(() => {
+        try {
+            fallback.focus({ preventScroll: true });
+        } catch (_) {
+            fallback.focus();
+        }
+    });
 }
 
 function clearOnboardingSpotlight() {
