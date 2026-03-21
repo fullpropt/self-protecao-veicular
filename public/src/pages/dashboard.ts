@@ -1221,6 +1221,12 @@ function performOnboardingHighlightAction(
         }
 
         confirmButton.click();
+        window.requestAnimationFrame(() => {
+            overlay.classList.remove('active');
+            if (!document.querySelector('.modal-overlay.active')) {
+                document.body.style.overflow = '';
+            }
+        });
         onboardingPreparedMarkerActionKey = actionKey;
         scheduleOnboardingSpotlightRefresh(280);
         return false;

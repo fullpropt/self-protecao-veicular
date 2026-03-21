@@ -32,7 +32,7 @@ function GlobalOnboardingTour() {
           right: 24px;
           bottom: 24px;
           width: min(390px, calc(100vw - 32px));
-          z-index: 3000;
+          z-index: 12000;
           display: flex;
           flex-direction: column;
           gap: 10px;
@@ -60,7 +60,7 @@ function GlobalOnboardingTour() {
           top: 16px;
           left: 50%;
           transform: translateX(-50%);
-          z-index: 2900;
+          z-index: 11900;
           padding: 7px 14px;
           border-radius: 999px;
           border: 1px solid rgba(var(--primary-rgb), 0.34);

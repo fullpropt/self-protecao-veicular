@@ -259,7 +259,18 @@ function bindOnboardingPresentationWhatsappBridge() {
 
     window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
         if (!document.getElementById('whatsapp-session-select')) return;
-        initWhatsapp();
+
+        if (!isOnboardingPresentationModeEnabled()) {
+            initWhatsapp();
+            return;
+        }
+
+        currentSessionId = getStoredSessionId();
+        syncGlobalAppSessionId(currentSessionId);
+        availableSessions = getOnboardingPresentationWhatsappSessions();
+        renderSessionOptions();
+        syncOnboardingPresentationSessionUi();
+        void loadWhatsappPlanUsage();
     });
 }
 
@@ -425,6 +436,11 @@ function markReconnectUiRequested(sessionId: string) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
     if (!normalizedSessionId) return;
     reconnectUiRequestedSessionIds.add(normalizedSessionId);
+}
+
+function setExclusiveReconnectUiRequested(sessionId: string) {
+    reconnectUiRequestedSessionIds.clear();
+    markReconnectUiRequested(sessionId);
 }
 
 function unmarkReconnectUiRequested(sessionId: string) {
@@ -610,7 +626,7 @@ function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
                     unmarkReconnectUiRequested(nextSessionId);
                     syncConnectionSectionVisibility();
                 } else {
-                    markReconnectUiRequested(nextSessionId);
+                    setExclusiveReconnectUiRequested(nextSessionId);
                     if (!isConnected) {
                         resetConnectionUi();
                     } else {
@@ -768,7 +784,7 @@ function resetConnectionUi() {
 function changeSession(sessionId: string, options: { revealReconnectUi?: boolean } = {}) {
     const normalizedSessionId = sanitizeSessionId(sessionId, getDefaultSessionId());
     if (options.revealReconnectUi) {
-        markReconnectUiRequested(normalizedSessionId);
+        setExclusiveReconnectUiRequested(normalizedSessionId);
     }
     currentSessionId = normalizedSessionId;
     persistCurrentSessionId(normalizedSessionId);
@@ -822,7 +838,7 @@ async function createSessionPrompt() {
         currentSessionId = normalized;
         persistCurrentSessionId(normalized);
         syncGlobalAppSessionId(normalized);
-        markReconnectUiRequested(normalized);
+        setExclusiveReconnectUiRequested(normalized);
 
         upsertOnboardingPresentationWhatsappSession({
             session_id: normalized,
@@ -834,6 +850,10 @@ async function createSessionPrompt() {
             dispatch_weight: 1
         });
 
+        currentSessionId = normalized;
+        persistCurrentSessionId(normalized);
+        syncGlobalAppSessionId(normalized);
+        setExclusiveReconnectUiRequested(normalized);
         availableSessions = getOnboardingPresentationWhatsappSessions();
         updateWhatsappPlanUsageCurrent(availableSessions.length);
         renderSessionOptions();
@@ -858,8 +878,6 @@ function initWhatsapp() {
         if (isOnboardingPresentationModeEnabled()) {
             currentSessionId = getStoredSessionId();
             syncGlobalAppSessionId(currentSessionId);
-            renderSessionOptions();
-            renderWhatsappPlanUsage();
             bindPairingCodeCopy();
             await loadWhatsappPlanUsage();
             await loadSessionOptions(currentSessionId);
@@ -1095,7 +1113,7 @@ function initSocket() {
 function startConnection() {
     if (isConnecting) return;
     const sessionId = syncCurrentSessionFromSelect();
-    markReconnectUiRequested(sessionId);
+    setExclusiveReconnectUiRequested(sessionId);
     syncConnectionSectionVisibility();
 
     if (isOnboardingPresentationModeEnabled()) {
@@ -1157,7 +1175,7 @@ function startConnection() {
 function requestPairingCode() {
     if (isConnecting) return;
     const sessionId = syncCurrentSessionFromSelect();
-    markReconnectUiRequested(sessionId);
+    setExclusiveReconnectUiRequested(sessionId);
     syncConnectionSectionVisibility();
 
     if (isOnboardingPresentationModeEnabled()) {
@@ -1226,7 +1244,7 @@ async function disconnectSession() {
                 throw new Error('API indisponivel');
             }
 
-            markReconnectUiRequested(sessionId);
+            setExclusiveReconnectUiRequested(sessionId);
             await api.post('/api/whatsapp/disconnect', { sessionId });
             handleDisconnected();
             await loadSessionOptions(sessionId);
