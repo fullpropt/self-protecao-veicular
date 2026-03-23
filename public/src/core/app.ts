@@ -682,7 +682,7 @@ function ensureAppDialogHost() {
     overlay.id = APP_DIALOG_IDS.overlay;
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
-        <div class="modal app-dialog-modal" role="dialog" aria-modal="true" aria-labelledby="${APP_DIALOG_IDS.title}">
+        <div class="modal app-dialog-modal" data-tour-target="app-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="${APP_DIALOG_IDS.title}">
             <div class="modal-header">
                 <h2 class="modal-title" id="${APP_DIALOG_IDS.title}">Aviso</h2>
                 <button class="modal-close" id="${APP_DIALOG_IDS.closeBtn}" type="button">&times;</button>
@@ -690,7 +690,7 @@ function ensureAppDialogHost() {
             <div class="modal-body app-dialog-body">
                 <p class="app-dialog-message" id="${APP_DIALOG_IDS.message}"></p>
                 <div class="app-dialog-input-wrap" id="${APP_DIALOG_IDS.inputWrap}">
-                    <input class="form-input" id="${APP_DIALOG_IDS.input}" type="text" />
+                    <input class="form-input" id="${APP_DIALOG_IDS.input}" data-tour-target="app-prompt-input" type="text" />
                 </div>
             </div>
             <div class="modal-footer app-dialog-footer">

@@ -1,3 +1,17 @@
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    disableOnboardingPresentationMode,
+    enableOnboardingPresentationMode,
+    getOnboardingPresentationAccountHealth,
+    getOnboardingPresentationCustomEvents,
+    getOnboardingPresentationDashboardLeads,
+    getOnboardingPresentationDashboardSummary,
+    getOnboardingPresentationReusableWhatsappSessionId,
+    getOnboardingPresentationStatsSeries,
+    isOnboardingPresentationModeEnabled,
+    updateOnboardingPresentationStep
+} from '../core/onboardingPresentation';
+
 // Dashboard page logic migrated to module
 
 // Dados dos leads
@@ -128,14 +142,37 @@ type OnboardingState = {
     updatedAt: number;
 };
 type OnboardingVideosMap = Partial<Record<OnboardingStepId, string>>;
-type OnboardingVideoProvider = 'youtube' | 'vimeo' | 'external' | 'none';
+type OnboardingVideoProvider = 'file' | 'youtube' | 'vimeo' | 'external' | 'none';
 type OnboardingVideoPresentation = {
     provider: OnboardingVideoProvider;
     sourceUrl: string;
+    mediaUrl: string;
     embedUrl: string;
     videoId: string;
     posterUrl: string;
     posterFallbackUrl: string;
+};
+type OnboardingHighlightMarker = {
+    at: number;
+    selector: string;
+    ambientSelector?: string;
+    title: string;
+    hint: string;
+    route?: string;
+    action?:
+        | 'open_whatsapp_new_account_prompt'
+        | 'confirm_whatsapp_new_account_prompt'
+        | 'open_inbox_session_filter'
+        | 'close_inbox_session_filter'
+        | 'open_inbox_contact_info_panel'
+        | 'open_contacts_import_modal'
+        | 'close_contacts_import_modal'
+        | 'set_dashboard_stats_metric_novos_contatos'
+        | 'set_dashboard_stats_metric_mensagens'
+        | 'set_dashboard_stats_metric_interacoes';
+    clear?: boolean;
+    radius?: number;
+    scroll?: ScrollLogicalPosition;
 };
 
 let allLeads: Lead[] = [];
@@ -177,6 +214,20 @@ let onboardingVideoDurationSeconds = 0;
 let onboardingVideoCurrentSeconds = 0;
 let onboardingVideoMuted = false;
 let onboardingVideoPlaybackState: 'idle' | 'loading' | 'playing' | 'paused' | 'ended' = 'idle';
+let onboardingPreparedSurfaceStepId: OnboardingStepId | null = null;
+let onboardingPreparedMarkerActionKey = '';
+let onboardingActiveSpotlightElement: HTMLElement | null = null;
+let onboardingAmbientSpotlightElements: HTMLElement[] = [];
+let onboardingActiveSpotlightSelector = '';
+let onboardingActiveSpotlightMarkerKey = '';
+let onboardingSpotlightRefreshTimer: number | null = null;
+let onboardingSpotlightOverflowPatches: Array<{
+    element: HTMLElement;
+    overflow: string;
+    overflowX: string;
+    overflowY: string;
+}> = [];
+let onboardingPresentationDashboardBridgeBound = false;
 
 let statsChartInstance: { destroy?: () => void } | null = null;
 let statsChartType: StatsChartType = 'line';
@@ -184,6 +235,10 @@ let statsChartRequestSeq = 0;
 
 function getErrorCode(error: unknown) {
     return String((error as AppError | null | undefined)?.code || '').trim().toUpperCase();
+}
+
+function showOnboardingPresentationReadOnlyToast(message = 'No tour, esta acao e apenas demonstrativa e nao altera seus dados reais.') {
+    showToast('info', 'Tour guiado', message);
 }
 
 const STATS_METRIC_LABELS: Record<StatsMetric, string> = {
@@ -208,20 +263,84 @@ const ONBOARDING_STEP_IDS: OnboardingStepId[] = [
     'create_automation'
 ];
 const ONBOARDING_STEP_ROUTES: Record<OnboardingStepId, string> = {
-    connect_whatsapp: '#/whatsapp',
+    connect_whatsapp: '#/dashboard',
     configure_accounts: '#/configuracoes?panel=conexao',
-    open_inbox: '#/inbox',
+    open_inbox: '#/configuracoes?panel=conexao',
     create_first_contact: '#/contatos',
     create_tags: '#/configuracoes?panel=labels',
     configure_dynamic_fields: '#/configuracoes?panel=contact-fields',
     create_campaign: '#/campanhas',
     create_automation: '#/automacao'
 };
+const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMarker[]> = {
+    connect_whatsapp: [
+        { at: 11.0, selector: '[data-tour-target="dashboard-stats-metric-select"]', route: '#/dashboard', title: 'Veja o gráfico principal', hint: 'Aqui você acompanha o gráfico do período e o seletor de métricas como mensagens.', radius: 16 },
+        { at: 16.0, selector: '[data-tour-target="dashboard-chart-bar-toggle"]', route: '#/dashboard', title: 'Alterne o tipo do gráfico', hint: 'Use este toggle para trocar a visualização entre linha e barra.', radius: 18, scroll: 'nearest' },
+        { at: 20.0, selector: '[data-tour-target="dashboard-nav-whatsapp"]', route: '#/dashboard', title: 'Abra o WhatsApp', hint: 'Este atalho leva você para a área de conexão das contas.', radius: 18, scroll: 'nearest' },
+        { at: 22.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Crie uma nova conta', hint: 'Este botão prepara uma nova sessão para conexão no sistema.', radius: 18 },
+        { at: 24.0, selector: '[data-tour-target="app-prompt-modal"]', route: '#/whatsapp', action: 'open_whatsapp_new_account_prompt', title: 'Defina a nova conta', hint: 'O modal abre para escolher o identificador da nova conta WhatsApp.', radius: 22, scroll: 'center' },
+        { at: 25.0, selector: '[data-tour-target="whatsapp-expanded-session"]', route: '#/whatsapp', action: 'confirm_whatsapp_new_account_prompt', title: 'A nova conta fica expandida', hint: 'Depois de criar a conta, ela já fica aberta para indicar a sessão que vai gerar o QR Code.', radius: 18, scroll: 'center' },
+        { at: 26.2, selector: '[data-tour-target="whatsapp-connect-button"]', route: '#/whatsapp', title: 'Gere o QR Code', hint: 'Agora use este botão para iniciar a conexão e gerar o QR Code da conta criada.', radius: 18, scroll: 'center' },
+        { at: 29.0, selector: '', route: '#/whatsapp', title: '', hint: '', clear: true },
+        { at: 37.0, selector: '[data-tour-target="whatsapp-new-account-button"]', route: '#/whatsapp', title: 'Você pode repetir o processo', hint: 'Sempre que precisar adicionar outra conta, volte neste mesmo botão.', radius: 18 }
+    ],
+    configure_accounts: [
+        { at: 1.0, selector: '[data-tour-target="settings-nav-conexao"]', title: 'Painel de contas', hint: 'Esta aba concentra as contas conectadas e o status de cada uma.', radius: 14 },
+        { at: 5.0, selector: '[data-tour-target="settings-accounts-list"]', title: 'Contas disponíveis', hint: 'Revise aqui o nome, o estado e a disponibilidade das contas de envio.', radius: 22 },
+        { at: 7.0, selector: '[data-tour-target="settings-account-1-name-field"]', title: 'Ajuste o nome da conta', hint: 'Aqui você define como a Conta 1 aparece no sistema.', radius: 12, scroll: 'center' },
+        { at: 8.0, selector: '[data-tour-target="settings-account-1-weight-field"]', title: 'Controle o peso da Conta 1', hint: 'O peso influencia a distribuição de envios quando há mais de uma conta ativa.', radius: 12, scroll: 'center' },
+        { at: 11.0, selector: '[data-tour-target="settings-account-1-daily-limit-field"]', title: 'Defina o limite diário', hint: 'Esse campo controla quantos envios a Conta 1 pode fazer por dia.', radius: 12, scroll: 'center' },
+        { at: 14.0, selector: '[data-tour-target="settings-account-1-campaign-toggle"]', title: 'Ative o uso em campanhas', hint: 'Essa opção controla se a Conta 1 participa das campanhas e transmissões.', radius: 12, scroll: 'center' },
+        { at: 18.0, selector: '[data-tour-target="settings-account-1-save-button"]', title: 'Salve a configuração', hint: 'Depois de revisar os campos, use este botão para salvar as mudanças da Conta 1.', radius: 12, scroll: 'center' }
+    ],
+    open_inbox: [
+        { at: 3.0, selector: '[data-tour-target="settings-nav-inbox"]', route: '#/configuracoes?panel=conexao', title: 'Abra o Inbox', hint: 'Use o menu lateral para sair das contas e entrar na central de atendimento.', radius: 16, scroll: 'nearest' },
+        { at: 5.0, selector: '', route: '#/inbox', title: '', hint: '', clear: true },
+        { at: 6.0, selector: '[data-tour-target="inbox-conversations-column"]', route: '#/inbox', title: 'Veja a coluna de conversas', hint: 'Aqui ficam as conversas em andamento e os leads aguardando atendimento.', radius: 20, scroll: 'center' },
+        { at: 8.0, selector: '[data-tour-target="inbox-session-indicator"]', route: '#/inbox', action: 'open_inbox_session_filter', title: 'Filtre por conta', hint: 'Abra esta lista para escolher qual conta o Inbox deve exibir.', radius: 18, scroll: 'nearest' },
+        { at: 10.0, selector: '[data-tour-target="inbox-conversation-account-tag"]', route: '#/inbox', action: 'close_inbox_session_filter', title: 'Veja as tags das contas', hint: 'Essas etiquetas mostram rapidamente de qual conta cada conversa veio.', radius: 14, scroll: 'center' },
+        { at: 16.0, selector: '[data-tour-target="inbox-contact-info-button"]', route: '#/inbox', title: 'Abra as informações do contato', hint: 'Esse botão revela o painel lateral com os dados do lead em atendimento.', radius: 16, scroll: 'nearest' },
+        { at: 17.0, selector: '[data-tour-target="inbox-contact-info-panel"]', route: '#/inbox', action: 'open_inbox_contact_info_panel', title: 'Consulte os dados do contato', hint: 'Com o painel aberto, você visualiza os dados do lead sem sair da conversa.', radius: 18, scroll: 'nearest' }
+    ],
+    create_first_contact: [
+        { at: 4.0, selector: '[data-tour-target="contacts-account-filter"]', title: 'Filtre por conta', hint: 'Esse filtro mostra apenas os contatos vinculados a uma conta específica do WhatsApp.', radius: 14, scroll: 'nearest' },
+        { at: 5.8, selector: '[data-tour-target="contacts-tag-filter"]', title: 'Filtre por tags', hint: 'Use as etiquetas para segmentar rapidamente a base e localizar grupos específicos.', radius: 14, scroll: 'nearest' },
+        { at: 6.8, selector: '[data-tour-target="contacts-status-filter"]', title: 'Filtre por status', hint: 'Aqui você separa novos, em andamento, concluídos ou perdidos.', radius: 14, scroll: 'nearest' },
+        { at: 7.0, selector: '[data-tour-target="contacts-import-button"]', title: 'Importe contatos em lote', hint: 'Esse botão abre o fluxo para subir uma planilha ou colar uma lista de contatos.', radius: 16, scroll: 'nearest' },
+        { at: 8.0, selector: '[data-tour-target="contacts-import-modal"]', action: 'open_contacts_import_modal', title: 'Abra o modal de importação', hint: 'O modal real da aplicação mostra as opções para arquivo, texto e etiquetas de importação.', radius: 20, scroll: 'center' },
+        { at: 9.0, selector: '[data-tour-target="contacts-import-tag-field"]', action: 'open_contacts_import_modal', title: 'Defina a tag da importação', hint: 'Essa etiqueta pode ser aplicada automaticamente a todos os contatos importados.', radius: 14, scroll: 'center' },
+        { at: 10.8, selector: '', action: 'close_contacts_import_modal', title: '', hint: '', clear: true },
+        { at: 11.0, selector: '[data-tour-target="contacts-export-button"]', action: 'close_contacts_import_modal', title: 'Exporte sua base', hint: 'Use este botão para baixar os contatos filtrados e compartilhar a lista em CSV.', radius: 16, scroll: 'nearest' },
+        { at: 12.0, selector: '[data-tour-target="contacts-new-button"]', action: 'close_contacts_import_modal', title: 'Cadastre um contato manualmente', hint: 'Se precisar adicionar um lead individual, o cadastro manual continua disponível aqui.', radius: 16, scroll: 'nearest' }
+    ],
+    create_tags: [
+        { at: 1.0, selector: '[data-tour-target="settings-nav-labels"]', title: 'Abra Tags', hint: 'Esta aba reúne todas as etiquetas usadas em contatos e campanhas.', radius: 14 },
+        { at: 4.5, selector: '[data-tour-target="settings-tag-name-field"]', title: 'Cadastre uma nova tag', hint: 'Preencha o nome da etiqueta por aqui.', radius: 14 },
+        { at: 8.2, selector: '[data-tour-target="settings-tags-table"]', title: 'Gerencie as etiquetas', hint: 'As tags criadas aparecem nesta lista para edição e organização.', radius: 20 }
+    ],
+    configure_dynamic_fields: [
+        { at: 1.0, selector: '[data-tour-target="settings-nav-contact-fields"]', title: 'Abra Campos Dinâmicos', hint: 'Esta área guarda os campos personalizados usados em contatos, mensagens e fluxos.', radius: 14 },
+        { at: 4.5, selector: '[data-tour-target="settings-contact-field-name"]', title: 'Crie um campo personalizado', hint: 'Defina aqui o nome do novo campo dinâmico.', radius: 14 },
+        { at: 8.4, selector: '[data-tour-target="settings-contact-fields-table"]', title: 'Revise os campos criados', hint: 'A lista abaixo mostra todas as variáveis disponíveis no sistema.', radius: 20 }
+    ],
+    create_campaign: [
+        { at: 1.2, selector: '[data-tour-target="campaign-new-button"]', title: 'Abra a criação de campanha', hint: 'Este botão inicia uma nova campanha no sistema.', radius: 18 },
+        { at: 5.0, selector: '[data-tour-target="campaign-name-field"]', title: 'Nome da campanha', hint: 'Dê um nome claro para identificar a campanha depois.', radius: 14 },
+        { at: 9.6, selector: '[data-tour-target="campaign-message-tags-button"]', title: 'Insira tags dinâmicas', hint: 'Use este botão para personalizar a mensagem com variáveis do contato.', radius: 16 },
+        { at: 14.2, selector: '[data-tour-target="campaign-variation-button"]', title: 'Crie variações', hint: 'As variações ajudam a distribuir textos diferentes dentro da mesma campanha.', radius: 18 }
+    ],
+    create_automation: [
+        { at: 1.2, selector: '[data-tour-target="automation-new-button"]', title: 'Nova automação', hint: 'É por aqui que você cria uma regra automatizada nova.', radius: 18 },
+        { at: 5.0, selector: '[data-tour-target="automation-name-field"]', title: 'Nome da automação', hint: 'Dê um nome fácil de reconhecer para a regra.', radius: 14 },
+        { at: 9.0, selector: '[data-tour-target="automation-trigger-select"]', title: 'Escolha o gatilho', hint: 'Selecione quando a automação deve ser executada.', radius: 14 },
+        { at: 13.2, selector: '[data-tour-target="automation-action-select"]', title: 'Defina a ação', hint: 'Aqui você escolhe o que a automação vai fazer.', radius: 14 }
+    ]
+};
 const ONBOARDING_STEP_LABELS: Record<OnboardingStepId, string> = {
     connect_whatsapp: 'Conecte seu WhatsApp',
     configure_accounts: 'Revise suas contas',
     open_inbox: 'Abra o Inbox',
-    create_first_contact: 'Cadastre um contato',
+    create_first_contact: 'Organize seus contatos',
     create_tags: 'Crie tags',
     configure_dynamic_fields: 'Configure campos dinâmicos',
     create_campaign: 'Monte uma campanha',
@@ -241,27 +360,27 @@ const ONBOARDING_STEP_VIDEO_DESCRIPTIONS: Record<OnboardingStepId, string> = {
     connect_whatsapp: 'Passo a passo para conectar a primeira sessão do WhatsApp no ZapVender.',
     configure_accounts: 'Veja como revisar as contas em Configurações e deixar o ambiente pronto para operar.',
     open_inbox: 'Aprenda a abrir o Inbox e validar o atendimento com uma conversa de teste.',
-    create_first_contact: 'Cadastre um contato de exemplo para testar o fluxo completo da operação.',
+    create_first_contact: 'Veja como filtrar contatos por conta, usar a importação e localizar as ações principais da tela.',
     create_tags: 'Crie etiquetas para organizar contatos, campanhas e automações.',
     configure_dynamic_fields: 'Configure campos personalizados que viram variáveis em mensagens, campanhas e fluxos.',
     create_campaign: 'Monte sua primeira campanha e entenda onde revisar métricas e resultados.',
     create_automation: 'Publique sua primeira automação e valide o disparo com segurança.'
 };
 const ONBOARDING_STEP_VIDEO_URLS: Record<OnboardingStepId, string> = {
-    connect_whatsapp: 'https://youtu.be/MdTl4xuXWx4',
-    configure_accounts: 'https://youtu.be/jH1ztbHTy4Y',
-    open_inbox: 'https://youtu.be/jh7kbxBNobo',
-    create_first_contact: 'https://youtu.be/ec-u236CrvU',
-    create_tags: 'https://youtu.be/XCtlRPxHCjk',
-    configure_dynamic_fields: 'https://youtu.be/LPJCHUnlaZU',
-    create_campaign: 'https://youtu.be/1J4FDRqwBko',
-    create_automation: 'https://youtu.be/kUaY_wWzzPw'
+    connect_whatsapp: 'https://cdn.zapvender.com/ZV%20-%2001%20Conectar%20Whatsapp%20(Primeiros%20Passos).mp4',
+    configure_accounts: 'https://cdn.zapvender.com/ZV%20-%2002%20Contas%20(Primeiros%20Passos).mp4',
+    open_inbox: 'https://cdn.zapvender.com/ZV%20-%2003%20Inbox%20(Primeiros%20Passos).mp4',
+    create_first_contact: 'https://cdn.zapvender.com/ZV%20-%2004%20Contatos%20(Primeiros%20Passos).mp4',
+    create_tags: 'https://cdn.zapvender.com/ZV%20-%2005%20Tags%20(Primeiros%20Passos).mp4',
+    configure_dynamic_fields: 'https://cdn.zapvender.com/ZV%20-%2006%20Campos%20Din%C3%A2micos%20(Primeiros%20Passos).mp4',
+    create_campaign: 'https://cdn.zapvender.com/ZV%20-%2007%20Campanhas%20(Primeiros%20Passos).mp4',
+    create_automation: 'https://cdn.zapvender.com/ZV%20-%2008%20Automa%C3%A7%C3%B5es%20(Primeiros%20Passos).mp4'
 };
 const ONBOARDING_STEP_LABELS_UI: Record<OnboardingStepId, string> = {
     connect_whatsapp: 'Conecte seu WhatsApp',
     configure_accounts: 'Revise suas contas',
     open_inbox: 'Abra o Inbox',
-    create_first_contact: 'Cadastre um contato',
+    create_first_contact: 'Organize seus contatos',
     create_tags: 'Crie tags',
     configure_dynamic_fields: 'Configure campos din\u00E2micos',
     create_campaign: 'Monte uma campanha',
@@ -281,7 +400,7 @@ const ONBOARDING_STEP_VIDEO_DESCRIPTIONS_UI: Record<OnboardingStepId, string> = 
     connect_whatsapp: 'Passo a passo para conectar a primeira sess\u00E3o do WhatsApp no ZapVender.',
     configure_accounts: 'Veja como revisar as contas em Configura\u00E7\u00F5es e deixar o ambiente pronto para operar.',
     open_inbox: 'Aprenda a abrir o Inbox e validar o atendimento com uma conversa de teste.',
-    create_first_contact: 'Cadastre um contato de exemplo para testar o fluxo completo da opera\u00E7\u00E3o.',
+    create_first_contact: 'Veja como filtrar contatos por conta, usar a importação e localizar as ações principais da tela.',
     create_tags: 'Crie etiquetas para organizar contatos, campanhas e automa\u00E7\u00F5es.',
     configure_dynamic_fields: 'Configure campos personalizados que viram vari\u00E1veis em mensagens, campanhas e fluxos.',
     create_campaign: 'Monte sua primeira campanha e entenda onde revisar m\u00E9tricas e resultados.',
@@ -479,37 +598,17 @@ function markOnboardingStepCompleted(stepIdInput: string | OnboardingStepId | nu
 }
 
 function renderOnboardingTourLauncher() {
-    const selectedStepId = getSelectedOnboardingStepId();
     const totalSteps = ONBOARDING_STEP_IDS.length;
     const completedCount = onboardingState.completedSteps.length;
-    const progress = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
-    const nextRecommendedStepId = getPreferredOnboardingSelectedStepId();
-
-    const progressText = document.getElementById('onboardingProgressText') as HTMLElement | null;
-    const progressFill = document.getElementById('onboardingProgressFill') as HTMLElement | null;
     const completedBadge = document.getElementById('onboardingCompletedBadge') as HTMLElement | null;
     const currentStep = document.getElementById('onboardingTourCurrentStep') as HTMLElement | null;
     const startButtonLabel = document.getElementById('onboardingTourStartButtonLabel') as HTMLElement | null;
 
-    if (progressText) {
-        progressText.textContent = `${completedCount}/${totalSteps} v\u00eddeos vistos`;
-    }
-    if (progressFill) {
-        progressFill.style.width = `${progress}%`;
-    }
     if (completedBadge) {
         completedBadge.style.display = completedCount === totalSteps && totalSteps > 0 ? 'inline-flex' : 'none';
     }
     if (currentStep) {
-        if (completedCount === totalSteps && totalSteps > 0) {
-            currentStep.textContent = 'Tour conclu\u00eddo. Voc\u00ea pode rever qualquer etapa quando quiser.';
-        } else if (onboardingTourOpen && selectedStepId) {
-            currentStep.textContent = `Reproduzindo agora: ${ONBOARDING_STEP_LABELS_UI[selectedStepId]}.`;
-        } else if (nextRecommendedStepId) {
-            currentStep.textContent = `Pr\u00f3ximo v\u00eddeo: ${ONBOARDING_STEP_LABELS_UI[nextRecommendedStepId]}.`;
-        } else {
-            currentStep.textContent = 'Comece pelo tour inicial e avance no seu ritmo.';
-        }
+        currentStep.textContent = 'Inicie o tour e acompanhe cada etapa sem sair da tela.';
     }
     if (startButtonLabel) {
         startButtonLabel.textContent = onboardingTourOpen
@@ -517,6 +616,153 @@ function renderOnboardingTourLauncher() {
             : (completedCount === 0
                 ? 'Iniciar tour'
                 : (completedCount === totalSteps ? 'Rever tour' : 'Continuar tour'));
+    }
+}
+
+function bindOnboardingTourControls() {
+    const bindClick = (id: string, handler: () => void) => {
+        const button = document.getElementById(id) as HTMLButtonElement | null;
+        if (!button || button.dataset.bound === '1') return;
+
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            handler();
+        });
+        button.dataset.bound = '1';
+    };
+
+    bindClick('onboardingTourCloseButton', closeOnboardingTour);
+    bindClick('onboardingTourPrevButton', goToPreviousOnboardingTourStep);
+    bindClick('onboardingTourNextButton', goToNextOnboardingTourStep);
+    bindClick('onboardingVideoToggleButton', toggleOnboardingVideoPlayback);
+    bindClick('onboardingVideoMuteButton', toggleOnboardingVideoMute);
+    bindClick('onboardingVideoReplayButton', restartOnboardingVideo);
+    bindClick('onboardingVideoPrevButton', goToPreviousOnboardingTourStep);
+    bindClick('onboardingVideoNextButton', goToNextOnboardingTourStep);
+
+    const progress = document.getElementById('onboardingVideoProgress') as HTMLInputElement | null;
+    if (progress && progress.dataset.bound !== '1') {
+        progress.addEventListener('input', () => {
+            seekOnboardingVideo(Number(progress.value));
+        });
+        progress.dataset.bound = '1';
+    }
+
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (video && video.dataset.bound !== '1') {
+        const syncFromVideo = () => {
+            onboardingVideoDurationSeconds = Number.isFinite(video.duration) ? Math.max(0, video.duration) : 0;
+            onboardingVideoCurrentSeconds = Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
+            onboardingVideoMuted = video.muted || video.volume === 0;
+        };
+
+        video.addEventListener('loadedmetadata', () => {
+            syncFromVideo();
+            renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
+        });
+
+        video.addEventListener('canplay', () => {
+            syncFromVideo();
+            if (onboardingVideoPlaybackState === 'loading') {
+                onboardingVideoPlaybackState = video.paused ? 'paused' : 'playing';
+            }
+            renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
+        });
+
+        video.addEventListener('play', () => {
+            syncFromVideo();
+            onboardingVideoPlaybackState = 'playing';
+            renderOnboardingVideo();
+            renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
+        });
+
+        video.addEventListener('playing', () => {
+            syncFromVideo();
+            onboardingVideoPlaybackState = 'playing';
+            renderOnboardingVideo();
+            renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
+        });
+
+        video.addEventListener('pause', () => {
+            syncFromVideo();
+            if (video.ended || (video.duration > 0 && video.currentTime >= video.duration)) {
+                onboardingVideoPlaybackState = 'ended';
+            } else if (onboardingVideoPlaybackState !== 'loading') {
+                onboardingVideoPlaybackState = 'paused';
+            }
+            renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
+        });
+
+        video.addEventListener('waiting', () => {
+            syncFromVideo();
+            onboardingVideoPlaybackState = 'loading';
+            renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
+        });
+
+        video.addEventListener('timeupdate', () => {
+            syncFromVideo();
+            renderOnboardingVideoControls();
+            refreshOnboardingTourSurface();
+        });
+
+        video.addEventListener('volumechange', () => {
+            syncFromVideo();
+            renderOnboardingVideoControls();
+        });
+
+        video.addEventListener('ended', () => {
+            syncFromVideo();
+            onboardingVideoPlaybackState = 'ended';
+            markOnboardingStepCompleted(onboardingPlayingStepId || onboardingSelectedStepId);
+            renderOnboardingVideo();
+            renderOnboardingVideoControls();
+            scheduleOnboardingSpotlightRefresh(90);
+        });
+
+        video.dataset.bound = '1';
+    }
+
+    const body = document.body as HTMLBodyElement | null;
+    if (body && body.dataset.onboardingSpotlightBound !== '1') {
+        const refresh = () => {
+            if (!onboardingTourOpen) return;
+            refreshOnboardingTourSurface();
+        };
+        const blockIfNeeded = (event: Event) => {
+            if (isOnboardingInteractionAllowed(event.target)) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof (event as Event & { stopImmediatePropagation?: () => void }).stopImmediatePropagation === 'function') {
+                (event as Event & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.();
+            }
+        };
+        const redirectBlockedFocus = (event: FocusEvent) => {
+            if (isOnboardingInteractionAllowed(event.target)) return;
+
+            const target = resolveOnboardingInteractionElement(event.target);
+            target?.blur?.();
+            focusOnboardingTourFallback();
+        };
+        window.addEventListener('resize', refresh);
+        window.addEventListener('scroll', refresh, { passive: true });
+        window.addEventListener('hashchange', () => {
+            onboardingPreparedSurfaceStepId = null;
+            scheduleOnboardingSpotlightRefresh(260);
+        });
+        document.addEventListener('pointerdown', blockIfNeeded, true);
+        document.addEventListener('click', blockIfNeeded, true);
+        document.addEventListener('contextmenu', blockIfNeeded, true);
+        document.addEventListener('focusin', redirectBlockedFocus, true);
+        window.addEventListener('wheel', blockIfNeeded, { capture: true, passive: false });
+        window.addEventListener('touchmove', blockIfNeeded, { capture: true, passive: false });
+        body.dataset.onboardingSpotlightBound = '1';
     }
 }
 
@@ -597,6 +843,7 @@ function toggleOnboardingStep(stepIdInput: string, checked?: boolean) {
 }
 
 function resetOnboardingChecklist() {
+    disableOnboardingPresentationMode();
     onboardingState = {
         completedSteps: [],
         updatedAt: Date.now()
@@ -605,50 +852,70 @@ function resetOnboardingChecklist() {
     onboardingTourOpen = false;
     onboardingPlayingStepId = null;
     onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
+    onboardingPreparedSurfaceStepId = null;
+    onboardingPreparedMarkerActionKey = '';
     writeOnboardingState(onboardingState);
     renderOnboardingChecklist();
     renderOnboardingVideo();
+    clearOnboardingSpotlight();
+}
+
+function resetOnboardingTourState() {
+    disableOnboardingPresentationMode();
+    destroyOnboardingYouTubePlayer();
+    onboardingTourOpen = false;
+    onboardingPlayingStepId = null;
+    onboardingSelectedStepId = ONBOARDING_STEP_IDS[0] || null;
+    onboardingPreparedSurfaceStepId = null;
+    onboardingPreparedMarkerActionKey = '';
+    renderOnboardingChecklist();
+    renderOnboardingVideo();
+    clearOnboardingSpotlight();
 }
 
 function startOnboardingTour(stepIdInput?: string) {
     const stepId = normalizeOnboardingStepId(stepIdInput)
-        || getPreferredOnboardingSelectedStepId()
-        || getSelectedOnboardingStepId();
+        || normalizeOnboardingStepId(onboardingSelectedStepId)
+        || getPreferredOnboardingSelectedStepId();
     if (!stepId) return;
 
+    if (!onboardingTourOpen) {
+        enableOnboardingPresentationMode(stepId);
+    } else {
+        updateOnboardingPresentationStep(stepId);
+    }
+
+    const hasRouteChanged = ensureOnboardingStepRoute(stepId);
     onboardingSelectedStepId = stepId;
     onboardingPlayingStepId = stepId;
     onboardingTourOpen = true;
+    onboardingPreparedSurfaceStepId = null;
+    onboardingPreparedMarkerActionKey = '';
 
     const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[stepId] || '');
 
     renderOnboardingChecklist();
     renderOnboardingVideo();
+    scheduleOnboardingSpotlightRefresh(hasRouteChanged ? 380 : 180);
 
-    if (!presentation.embedUrl) {
+    if (!presentation.mediaUrl) {
         renderOnboardingVideoControls(presentation);
         return;
     }
 
-    if (presentation.provider === 'youtube' && presentation.videoId) {
-        void ensureOnboardingYouTubePlayback(presentation.videoId);
-        return;
-    }
-
-    const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
-    if (frame && frame.src !== presentation.embedUrl) {
-        frame.src = presentation.embedUrl;
-    }
-
+    void ensureOnboardingYouTubePlayback(presentation.mediaUrl);
     renderOnboardingVideoControls(presentation);
 }
 
 function closeOnboardingTour() {
+    disableOnboardingPresentationMode();
     onboardingTourOpen = false;
-
-    if (onboardingYouTubePlayer && onboardingYouTubePlayerReady) {
+    onboardingPreparedSurfaceStepId = null;
+    onboardingPreparedMarkerActionKey = '';
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (video) {
         try {
-            onboardingYouTubePlayer.pauseVideo?.();
+            video.pause();
         } catch (_) {
             // no-op
         }
@@ -661,6 +928,8 @@ function closeOnboardingTour() {
 
     renderOnboardingChecklist();
     renderOnboardingVideo();
+    stopOnboardingSpotlightRefreshTimer();
+    clearOnboardingSpotlight();
 }
 
 function goToPreviousOnboardingTourStep() {
@@ -711,6 +980,655 @@ function formatOnboardingVideoTime(totalSeconds: number) {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function getCurrentHashRoute() {
+    const rawHash = String(window.location.hash || '#/dashboard').trim();
+    if (!rawHash) return '/dashboard';
+    return rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+}
+
+function getCurrentHashPath() {
+    return String(getCurrentHashRoute().split('?')[0] || '/dashboard').trim() || '/dashboard';
+}
+
+function normalizeOnboardingRoute(routeInput: unknown) {
+    const route = String(routeInput || '').trim();
+    if (!route) return '';
+    return route.startsWith('#') ? route : `#${route}`;
+}
+
+function isOnboardingRouteActive(routeInput: unknown) {
+    const route = normalizeOnboardingRoute(routeInput);
+    if (!route) return false;
+    const routePath = route.slice(1).split('?')[0];
+    return getCurrentHashPath() === routePath;
+}
+
+function ensureOnboardingRoute(routeInput: unknown) {
+    const route = normalizeOnboardingRoute(routeInput);
+    if (!route) return false;
+    if (String(window.location.hash || '').trim() === route) return false;
+    window.location.hash = route;
+    return true;
+}
+
+function isOnboardingStepRouteActive(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (!stepId) return false;
+    return isOnboardingRouteActive(ONBOARDING_STEP_ROUTES[stepId]);
+}
+
+function ensureOnboardingStepRoute(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (!stepId) return false;
+    return ensureOnboardingRoute(ONBOARDING_STEP_ROUTES[stepId]);
+}
+
+function resolveOnboardingHighlightRoute(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker | null
+) {
+    const markerRoute = normalizeOnboardingRoute(marker?.route);
+    if (markerRoute) return markerRoute;
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    return stepId ? normalizeOnboardingRoute(ONBOARDING_STEP_ROUTES[stepId]) : '';
+}
+
+function stopOnboardingSpotlightRefreshTimer() {
+    if (onboardingSpotlightRefreshTimer !== null) {
+        window.clearTimeout(onboardingSpotlightRefreshTimer);
+        onboardingSpotlightRefreshTimer = null;
+    }
+}
+
+function scheduleOnboardingSpotlightRefresh(delayMs = 120) {
+    stopOnboardingSpotlightRefreshTimer();
+    onboardingSpotlightRefreshTimer = window.setTimeout(() => {
+        onboardingSpotlightRefreshTimer = null;
+        refreshOnboardingTourSurface();
+    }, Math.max(0, delayMs));
+}
+
+function resolveOnboardingInteractionElement(target: EventTarget | null) {
+    if (target instanceof HTMLElement) return target;
+    if (target instanceof SVGElement) return target as unknown as HTMLElement;
+    if (target instanceof Element) return target as HTMLElement;
+    if (target instanceof Node) return target.parentElement as HTMLElement | null;
+    return null;
+}
+
+function isOnboardingInteractionAllowed(target: EventTarget | null) {
+    if (!onboardingTourOpen) return true;
+
+    const element = resolveOnboardingInteractionElement(target);
+    if (!element) return false;
+
+    if (element.closest('#onboardingFloatingTour')) return true;
+    if (element.closest('#onboardingSpotlightCard')) return true;
+
+    if (onboardingActiveSpotlightElement && (element === onboardingActiveSpotlightElement || onboardingActiveSpotlightElement.contains(element))) {
+        return true;
+    }
+
+    return false;
+}
+
+function focusOnboardingTourFallback() {
+    const fallback = (
+        document.getElementById('onboardingTourCloseButton')
+        || document.getElementById('onboardingVideoToggleButton')
+        || document.querySelector('#onboardingFloatingTour button:not([disabled])')
+    ) as HTMLElement | null;
+
+    if (!fallback) return;
+    if (document.activeElement === fallback) return;
+
+    window.requestAnimationFrame(() => {
+        try {
+            fallback.focus({ preventScroll: true });
+        } catch (_) {
+            fallback.focus();
+        }
+    });
+}
+
+function clearOnboardingSpotlight() {
+    if (onboardingActiveSpotlightElement) {
+        onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active');
+        onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active-soft');
+        onboardingActiveSpotlightElement.style.removeProperty('--onboarding-tour-radius');
+    }
+
+    if (onboardingAmbientSpotlightElements.length > 0) {
+        onboardingAmbientSpotlightElements.forEach((element) => {
+            element.classList.remove('onboarding-tour-target-ambient');
+            element.style.removeProperty('--onboarding-tour-radius');
+        });
+    }
+
+    if (onboardingSpotlightOverflowPatches.length > 0) {
+        onboardingSpotlightOverflowPatches.forEach((patch) => {
+            patch.element.style.overflow = patch.overflow;
+            patch.element.style.overflowX = patch.overflowX;
+            patch.element.style.overflowY = patch.overflowY;
+        });
+        onboardingSpotlightOverflowPatches = [];
+    }
+
+    onboardingActiveSpotlightElement = null;
+    onboardingAmbientSpotlightElements = [];
+    onboardingActiveSpotlightSelector = '';
+    onboardingActiveSpotlightMarkerKey = '';
+
+    const card = document.getElementById('onboardingSpotlightCard') as HTMLElement | null;
+    if (card) {
+        card.classList.remove('is-visible');
+        card.style.removeProperty('top');
+        card.style.removeProperty('left');
+    }
+}
+
+function ensureOnboardingSpotlightOverflowVisible(targets: HTMLElement[]) {
+    if (onboardingSpotlightOverflowPatches.length > 0) {
+        onboardingSpotlightOverflowPatches.forEach((patch) => {
+            patch.element.style.overflow = patch.overflow;
+            patch.element.style.overflowX = patch.overflowX;
+            patch.element.style.overflowY = patch.overflowY;
+        });
+        onboardingSpotlightOverflowPatches = [];
+    }
+
+    const seen = new Set<HTMLElement>();
+    for (const target of targets) {
+        let current = target.parentElement as HTMLElement | null;
+        while (current && current !== document.body && current !== document.documentElement) {
+            if (seen.has(current)) {
+                current = current.parentElement as HTMLElement | null;
+                continue;
+            }
+
+            seen.add(current);
+            const computed = window.getComputedStyle(current);
+            const overflowValues = [computed.overflow, computed.overflowX, computed.overflowY];
+            const shouldPatch = overflowValues.some((value) => ['hidden', 'clip', 'auto', 'scroll'].includes(String(value || '').trim().toLowerCase()));
+
+            if (shouldPatch) {
+                onboardingSpotlightOverflowPatches.push({
+                    element: current,
+                    overflow: current.style.overflow,
+                    overflowX: current.style.overflowX,
+                    overflowY: current.style.overflowY
+                });
+                current.style.overflow = 'visible';
+                current.style.overflowX = 'visible';
+                current.style.overflowY = 'visible';
+            }
+
+            current = current.parentElement as HTMLElement | null;
+        }
+    }
+}
+
+function resolveOnboardingSpotlightTarget(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker
+) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    const directTarget = document.querySelector(marker.selector) as HTMLElement | null;
+    if (!directTarget) return null;
+
+    if (stepId === 'connect_whatsapp' && marker.selector === '[data-tour-target="dashboard-chart-bar-toggle"]') {
+        return (directTarget.closest('[data-tour-target="dashboard-chart-type-toggle"]') as HTMLElement | null) || directTarget;
+    }
+
+    if (stepId === 'connect_whatsapp' && marker.selector === '[data-tour-target="dashboard-nav-whatsapp"]') {
+        return (directTarget.closest('.nav-item') as HTMLElement | null) || directTarget;
+    }
+
+    if (stepId === 'open_inbox' && marker.selector === '[data-tour-target="settings-nav-inbox"]') {
+        return (directTarget.closest('.nav-item') as HTMLElement | null) || directTarget;
+    }
+
+    return directTarget;
+}
+
+function resolveOnboardingAmbientSpotlightTargets(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker,
+    primaryTarget: HTMLElement
+) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    const targets: HTMLElement[] = [];
+
+    if (stepId === 'connect_whatsapp') {
+        if (marker.selector === '[data-tour-target="dashboard-chart-bar-toggle"]') {
+            const chartArea = document.querySelector('[data-tour-target="dashboard-stats-chart-area"]') as HTMLElement | null;
+            if (chartArea && chartArea !== primaryTarget) {
+                targets.push(chartArea);
+            }
+        }
+
+        if (marker.selector === '[data-tour-target="dashboard-stats-metric-select"]') {
+            const statsCard = document.querySelector('[data-tour-target="dashboard-stats-period-card"]') as HTMLElement | null;
+            if (statsCard && statsCard !== primaryTarget) {
+                targets.push(statsCard);
+            }
+        }
+
+        if (marker.selector === '[data-tour-target="dashboard-nav-whatsapp"]') {
+            const navSection = primaryTarget.closest('.nav-section') as HTMLElement | null;
+            if (navSection && navSection !== primaryTarget) {
+                targets.push(navSection);
+            }
+        }
+    }
+
+    if (stepId === 'open_inbox') {
+        if (marker.selector === '[data-tour-target="settings-nav-inbox"]') {
+            const navSection = primaryTarget.closest('.nav-section') as HTMLElement | null;
+            if (navSection && navSection !== primaryTarget) {
+                targets.push(navSection);
+            }
+        }
+
+        if (marker.selector === '[data-tour-target="inbox-conversation-account-tag"]') {
+            const conversationsColumn = document.querySelector('[data-tour-target="inbox-conversations-column"]') as HTMLElement | null;
+            if (conversationsColumn && conversationsColumn !== primaryTarget) {
+                targets.push(conversationsColumn);
+            }
+        }
+    }
+
+    return targets;
+}
+
+function resolveActiveOnboardingHighlight(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (!stepId) return null;
+
+    const markers = ONBOARDING_STEP_HIGHLIGHTS[stepId] || [];
+    let activeMarker: OnboardingHighlightMarker | null = null;
+    for (const marker of markers) {
+        if (onboardingVideoCurrentSeconds >= marker.at) {
+            activeMarker = marker;
+        } else {
+            break;
+        }
+    }
+    return activeMarker;
+}
+
+function positionOnboardingSpotlightCard(target: HTMLElement, marker: OnboardingHighlightMarker) {
+    const card = document.getElementById('onboardingSpotlightCard') as HTMLElement | null;
+    const kicker = document.getElementById('onboardingSpotlightKicker') as HTMLElement | null;
+    const title = document.getElementById('onboardingSpotlightTitle') as HTMLElement | null;
+    const hint = document.getElementById('onboardingSpotlightHint') as HTMLElement | null;
+    if (!card || !kicker || !title || !hint) return;
+
+    kicker.textContent = 'Na tela agora';
+    title.textContent = marker.title;
+    hint.textContent = marker.hint;
+    card.classList.add('is-visible');
+
+    const rect = target.getBoundingClientRect();
+    const cardWidth = Math.min(280, window.innerWidth - 32);
+    const gap = 12;
+    const cardHeight = card.offsetHeight || 96;
+    const preferredTop = rect.bottom + gap;
+    const fallbackTop = rect.top - cardHeight - gap;
+    const top = preferredTop + cardHeight <= window.innerHeight - 12
+        ? preferredTop
+        : Math.max(12, fallbackTop);
+    const centeredLeft = rect.left + (rect.width / 2) - (cardWidth / 2);
+    const left = Math.max(12, Math.min(window.innerWidth - cardWidth - 12, centeredLeft));
+
+    card.style.top = `${Math.round(top)}px`;
+    card.style.left = `${Math.round(left)}px`;
+}
+
+function performOnboardingHighlightAction(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker | null
+) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    const action = String(marker?.action || '').trim();
+    if (!stepId || !marker || !action) return true;
+
+    const actionKey = `${stepId}:${marker.at}:${action}`;
+    if (onboardingPreparedMarkerActionKey === actionKey) {
+        return true;
+    }
+
+    const win = window as Window & {
+        createSessionPrompt?: () => Promise<void> | void;
+        setInboxSessionFilterMenuOpen?: (forceOpen?: boolean) => void;
+        toggleContactInfo?: (forceOpen?: boolean) => void;
+        openImportContactsModal?: () => Promise<void> | void;
+        openModal?: (modalId: string) => void;
+        closeModal?: (modalId: string) => void;
+    };
+
+    if (action === 'open_whatsapp_new_account_prompt') {
+        if (typeof win.createSessionPrompt !== 'function') {
+            scheduleOnboardingSpotlightRefresh(260);
+            return false;
+        }
+
+        void win.createSessionPrompt();
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(120);
+        return true;
+    }
+
+    if (action === 'confirm_whatsapp_new_account_prompt') {
+        const overlay = document.getElementById('appGlobalDialogModal') as HTMLElement | null;
+        const input = document.getElementById('appGlobalDialogInput') as HTMLInputElement | null;
+        const confirmButton = document.getElementById('appGlobalDialogConfirmBtn') as HTMLButtonElement | null;
+        if (!overlay?.classList.contains('active') || !confirmButton) {
+            scheduleOnboardingSpotlightRefresh(140);
+            return false;
+        }
+
+        if (input) {
+            input.value = getOnboardingPresentationReusableWhatsappSessionId('default_whatsapp_session');
+        }
+
+        confirmButton.click();
+        window.requestAnimationFrame(() => {
+            overlay.classList.remove('active');
+            if (!document.querySelector('.modal-overlay.active')) {
+                document.body.style.overflow = '';
+            }
+        });
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(280);
+        return false;
+    }
+
+    if (action === 'open_inbox_session_filter') {
+        if (typeof win.setInboxSessionFilterMenuOpen !== 'function') {
+            scheduleOnboardingSpotlightRefresh(180);
+            return false;
+        }
+
+        win.setInboxSessionFilterMenuOpen(true);
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(120);
+        return false;
+    }
+
+    if (action === 'close_inbox_session_filter') {
+        if (typeof win.setInboxSessionFilterMenuOpen !== 'function') {
+            scheduleOnboardingSpotlightRefresh(160);
+            return false;
+        }
+
+        win.setInboxSessionFilterMenuOpen(false);
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(120);
+        return false;
+    }
+
+    if (action === 'open_inbox_contact_info_panel') {
+        if (typeof win.toggleContactInfo !== 'function') {
+            scheduleOnboardingSpotlightRefresh(180);
+            return false;
+        }
+
+        win.toggleContactInfo(true);
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(180);
+        return false;
+    }
+
+    if (action === 'open_contacts_import_modal') {
+        const modal = document.getElementById('importModal') as HTMLElement | null;
+        if (modal?.classList.contains('active')) {
+            onboardingPreparedMarkerActionKey = actionKey;
+            scheduleOnboardingSpotlightRefresh(120);
+            return true;
+        }
+
+        if (typeof win.openImportContactsModal === 'function') {
+            onboardingPreparedMarkerActionKey = actionKey;
+            void Promise.resolve(win.openImportContactsModal()).catch(() => null);
+            scheduleOnboardingSpotlightRefresh(220);
+            return false;
+        }
+
+        if (typeof win.openModal === 'function') {
+            win.openModal('importModal');
+            onboardingPreparedMarkerActionKey = actionKey;
+            scheduleOnboardingSpotlightRefresh(120);
+            return false;
+        }
+
+        scheduleOnboardingSpotlightRefresh(180);
+        return false;
+    }
+
+    if (action === 'close_contacts_import_modal') {
+        const modal = document.getElementById('importModal') as HTMLElement | null;
+        if (!modal?.classList.contains('active')) {
+            onboardingPreparedMarkerActionKey = actionKey;
+            scheduleOnboardingSpotlightRefresh(90);
+            return true;
+        }
+
+        if (typeof win.closeModal !== 'function') {
+            scheduleOnboardingSpotlightRefresh(180);
+            return false;
+        }
+
+        win.closeModal('importModal');
+        onboardingPreparedMarkerActionKey = actionKey;
+        scheduleOnboardingSpotlightRefresh(120);
+        return false;
+    }
+
+    return true;
+}
+
+function syncOnboardingDashboardMetricForCurrentTime(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (stepId !== 'connect_whatsapp') return true;
+    if (!isOnboardingRouteActive('#/dashboard')) return true;
+
+    let targetMetric: StatsMetric | null = null;
+    if (onboardingVideoCurrentSeconds >= 14 && onboardingVideoCurrentSeconds < 16) {
+        targetMetric = 'interacoes';
+    } else if (onboardingVideoCurrentSeconds >= 13 && onboardingVideoCurrentSeconds < 14) {
+        targetMetric = 'mensagens';
+    } else if (onboardingVideoCurrentSeconds >= 11 && onboardingVideoCurrentSeconds < 13) {
+        targetMetric = 'novos_contatos';
+    }
+
+    if (!targetMetric) return true;
+    return setSelectedStatsMetric(targetMetric);
+}
+
+function syncOnboardingDashboardChartTypeForCurrentTime(stepIdInput: string | OnboardingStepId | null | undefined) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    if (stepId !== 'connect_whatsapp') return true;
+    if (!isOnboardingRouteActive('#/dashboard')) return true;
+
+    if (onboardingVideoCurrentSeconds >= 16 && onboardingVideoCurrentSeconds < 20) {
+        return setSelectedStatsChartType('bar');
+    }
+
+    return setSelectedStatsChartType('line');
+}
+
+function applyOnboardingSpotlight(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker | null
+) {
+    if (!marker || !onboardingTourOpen) {
+        clearOnboardingSpotlight();
+        return;
+    }
+
+    if (marker.clear === true) {
+        clearOnboardingSpotlight();
+        return;
+    }
+
+    const target = resolveOnboardingSpotlightTarget(stepIdInput, marker);
+    if (!target) {
+        clearOnboardingSpotlight();
+        return;
+    }
+
+    const ambientTargets = resolveOnboardingAmbientSpotlightTargets(stepIdInput, marker, target);
+    ensureOnboardingSpotlightOverflowVisible([target, ...ambientTargets]);
+    const useSoftActiveTarget = ambientTargets.length > 0;
+
+    const markerKey = `${marker.selector}:${marker.at}`;
+    if (onboardingActiveSpotlightElement !== target) {
+        if (onboardingActiveSpotlightElement) {
+            onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active');
+            onboardingActiveSpotlightElement.classList.remove('onboarding-tour-target-active-soft');
+            onboardingActiveSpotlightElement.style.removeProperty('--onboarding-tour-radius');
+        }
+
+        onboardingActiveSpotlightElement = target;
+        onboardingActiveSpotlightSelector = marker.selector;
+        onboardingActiveSpotlightMarkerKey = markerKey;
+        target.classList.add('onboarding-tour-target-active');
+    }
+    target.classList.toggle('onboarding-tour-target-active-soft', useSoftActiveTarget);
+    target.style.setProperty('--onboarding-tour-radius', `${Math.max(8, Math.floor(marker.radius || 16))}px`);
+
+    const currentAmbientSet = new Set(ambientTargets);
+    onboardingAmbientSpotlightElements.forEach((element) => {
+        if (!currentAmbientSet.has(element)) {
+            element.classList.remove('onboarding-tour-target-ambient');
+            element.style.removeProperty('--onboarding-tour-radius');
+        }
+    });
+    ambientTargets.forEach((element) => {
+        element.classList.add('onboarding-tour-target-ambient');
+        element.style.setProperty('--onboarding-tour-radius', '18px');
+    });
+    onboardingAmbientSpotlightElements = ambientTargets;
+
+    const rect = target.getBoundingClientRect();
+    const isOffscreen = rect.top < 72 || rect.bottom > window.innerHeight - 120;
+    if (isOffscreen || onboardingActiveSpotlightMarkerKey !== markerKey) {
+        target.scrollIntoView({
+            behavior: 'smooth',
+            block: marker.scroll || 'center',
+            inline: 'nearest'
+        });
+        onboardingActiveSpotlightMarkerKey = markerKey;
+    }
+
+    positionOnboardingSpotlightCard(target, marker);
+}
+
+function prepareOnboardingSurfaceForStep(
+    stepIdInput: string | OnboardingStepId | null | undefined,
+    marker: OnboardingHighlightMarker | null = null
+) {
+    const stepId = normalizeOnboardingStepId(stepIdInput);
+    const targetRoute = resolveOnboardingHighlightRoute(stepId, marker);
+    if (!stepId || !isOnboardingRouteActive(targetRoute)) return false;
+
+    const win = window as Window & {
+        showPanel?: (panelId: string) => void;
+        openAddContactModal?: () => void;
+        closeModal?: (modalId: string) => void;
+        openCampaignModal?: () => void;
+        openAutomationModal?: () => void;
+    };
+    if (onboardingPreparedSurfaceStepId !== stepId) {
+        let didPrepare = true;
+
+        if (stepId === 'configure_accounts') {
+            if (typeof win.showPanel === 'function') {
+                win.showPanel('conexao');
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'open_inbox' && targetRoute.startsWith('#/configuracoes')) {
+            if (typeof win.showPanel === 'function') {
+                win.showPanel('conexao');
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'create_tags') {
+            if (typeof win.showPanel === 'function') {
+                win.showPanel('labels');
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'configure_dynamic_fields') {
+            if (typeof win.showPanel === 'function') {
+                win.showPanel('contact-fields');
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'create_first_contact') {
+            if (typeof win.closeModal === 'function') {
+                win.closeModal('addContactModal');
+                win.closeModal('importModal');
+            } else {
+                const addContactModal = document.getElementById('addContactModal') as HTMLElement | null;
+                const importModal = document.getElementById('importModal') as HTMLElement | null;
+                addContactModal?.classList.remove('active');
+                importModal?.classList.remove('active');
+            }
+        } else if (stepId === 'create_campaign') {
+            if (typeof win.openCampaignModal === 'function') {
+                win.openCampaignModal();
+            } else {
+                didPrepare = false;
+            }
+        } else if (stepId === 'create_automation') {
+            if (typeof win.openAutomationModal === 'function') {
+                win.openAutomationModal();
+            } else {
+                didPrepare = false;
+            }
+        }
+
+        if (!didPrepare) {
+            scheduleOnboardingSpotlightRefresh(260);
+            return false;
+        }
+
+        onboardingPreparedSurfaceStepId = stepId;
+        scheduleOnboardingSpotlightRefresh(180);
+    }
+
+    return performOnboardingHighlightAction(stepId, marker);
+}
+
+function refreshOnboardingTourSurface() {
+    const stepId = normalizeOnboardingStepId(onboardingPlayingStepId || onboardingSelectedStepId);
+    if (!stepId || !onboardingTourOpen) {
+        clearOnboardingSpotlight();
+        return;
+    }
+
+    const activeMarker = resolveActiveOnboardingHighlight(stepId);
+    const targetRoute = resolveOnboardingHighlightRoute(stepId, activeMarker);
+    if (targetRoute && !isOnboardingRouteActive(targetRoute)) {
+        clearOnboardingSpotlight();
+        onboardingPreparedSurfaceStepId = null;
+        const hasRouteChanged = ensureOnboardingRoute(targetRoute);
+        if (hasRouteChanged) {
+            scheduleOnboardingSpotlightRefresh(360);
+            return;
+        }
+    }
+
+    const surfaceReady = prepareOnboardingSurfaceForStep(stepId, activeMarker);
+    if (!surfaceReady) return;
+    syncOnboardingDashboardMetricForCurrentTime(stepId);
+    syncOnboardingDashboardChartTypeForCurrentTime(stepId);
+    applyOnboardingSpotlight(stepId, activeMarker);
+}
+
 function stopOnboardingVideoSyncTimer() {
     if (onboardingVideoSyncTimer !== null) {
         window.clearInterval(onboardingVideoSyncTimer);
@@ -719,24 +1637,12 @@ function stopOnboardingVideoSyncTimer() {
 }
 
 function syncOnboardingYouTubeMetrics() {
-    if (!onboardingYouTubePlayerReady || !onboardingYouTubePlayer) return;
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (!video) return;
 
-    try {
-        const nextDuration = Number(onboardingYouTubePlayer.getDuration?.() || 0);
-        const nextCurrentTime = Number(onboardingYouTubePlayer.getCurrentTime?.() || 0);
-        const nextMuted = Boolean(onboardingYouTubePlayer.isMuted?.());
-
-        if (nextDuration > 0) {
-            onboardingVideoDurationSeconds = nextDuration;
-        }
-        if (nextCurrentTime >= 0) {
-            onboardingVideoCurrentSeconds = nextCurrentTime;
-        }
-        onboardingVideoMuted = nextMuted;
-    } catch (_) {
-        return;
-    }
-
+    onboardingVideoDurationSeconds = Number.isFinite(video.duration) ? Math.max(0, video.duration) : 0;
+    onboardingVideoCurrentSeconds = Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
+    onboardingVideoMuted = video.muted || video.volume === 0;
     renderOnboardingVideoControls();
 }
 
@@ -757,18 +1663,59 @@ function resetOnboardingVideoRuntime() {
 
 function destroyOnboardingYouTubePlayer() {
     stopOnboardingVideoSyncTimer();
-
-    if (onboardingYouTubePlayer?.destroy) {
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (video) {
         try {
-            onboardingYouTubePlayer.destroy();
+            video.pause();
         } catch (_) {
             // no-op
         }
+        video.removeAttribute('src');
+        try {
+            video.load();
+        } catch (_) {
+            // no-op
+        }
+        video.style.display = 'none';
     }
 
     onboardingYouTubePlayer = null;
     onboardingYouTubePlayerReady = false;
     resetOnboardingVideoRuntime();
+}
+
+function getOnboardingYouTubeIframe() {
+    const host = document.getElementById('onboardingVideoPlayerHost') as HTMLElement | null;
+    if (!host) return null;
+    if (host instanceof HTMLIFrameElement) {
+        return host;
+    }
+    return host.querySelector('iframe') as HTMLIFrameElement | null;
+}
+
+function sendOnboardingYouTubeCommand(func: string, args: unknown[] = []) {
+    const frame = getOnboardingYouTubeIframe();
+    const targetWindow = frame?.contentWindow;
+    if (!frame || !targetWindow) return false;
+
+    const payload = JSON.stringify({
+        event: 'command',
+        func,
+        args
+    });
+
+    try {
+        const targetOrigin = new URL(frame.src).origin;
+        targetWindow.postMessage(payload, targetOrigin || '*');
+        return true;
+    } catch (_) {
+        try {
+            targetWindow.postMessage(payload, '*');
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
 }
 
 function ensureOnboardingYouTubeApi() {
@@ -822,6 +1769,9 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     const endedOverlay = document.getElementById('onboardingVideoEndedOverlay') as HTMLElement | null;
     const endedTitle = document.getElementById('onboardingVideoEndedTitle') as HTMLElement | null;
     const endedHint = document.getElementById('onboardingVideoEndedHint') as HTMLElement | null;
+    const headerPreviousButton = document.getElementById('onboardingTourPrevButton') as HTMLButtonElement | null;
+    const headerNextButton = document.getElementById('onboardingTourNextButton') as HTMLButtonElement | null;
+    const replayButton = document.getElementById('onboardingVideoReplayButton') as HTMLButtonElement | null;
     const previousButton = document.getElementById('onboardingVideoPrevButton') as HTMLButtonElement | null;
     const nextButton = document.getElementById('onboardingVideoNextButton') as HTMLButtonElement | null;
 
@@ -829,21 +1779,23 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     const presentation = presentationInput ?? (selectedStepId
         ? buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '')
         : null);
-    const hasYouTubeVideo = Boolean(presentation?.provider === 'youtube' && presentation.videoId);
-    const isActivePlayer = Boolean(onboardingTourOpen && selectedStepId && onboardingPlayingStepId === selectedStepId && hasYouTubeVideo);
+    const hasPlayableVideo = Boolean(presentation?.mediaUrl || presentation?.embedUrl);
+    const isActivePlayer = Boolean(onboardingTourOpen && selectedStepId && onboardingPlayingStepId === selectedStepId && hasPlayableVideo);
     const isLoading = isActivePlayer && onboardingVideoPlaybackState === 'loading';
     const isPlaying = isActivePlayer && onboardingVideoPlaybackState === 'playing';
     const isEnded = isActivePlayer && onboardingVideoPlaybackState === 'ended';
-    const canControlTimeline = isActivePlayer && onboardingYouTubePlayerReady && onboardingVideoDurationSeconds > 0;
+    const canControlTimeline = isActivePlayer && onboardingVideoDurationSeconds > 0;
     const progressValue = canControlTimeline
         ? Math.max(0, Math.min(1000, Math.round((onboardingVideoCurrentSeconds / onboardingVideoDurationSeconds) * 1000)))
         : 0;
+    const firstStepId = ONBOARDING_STEP_IDS[0] || null;
+    const isFirstStep = selectedStepId === firstStepId;
     const previousStepId = selectedStepId ? getAdjacentOnboardingStepId(selectedStepId, -1) : null;
     const nextStepId = selectedStepId ? getAdjacentOnboardingStepId(selectedStepId, 1) : null;
 
     if (toggleButton) {
-        toggleButton.disabled = !hasYouTubeVideo || isLoading;
-        toggleButton.title = !hasYouTubeVideo
+        toggleButton.disabled = !hasPlayableVideo || isLoading;
+        toggleButton.title = !hasPlayableVideo
             ? 'V\u00eddeo indispon\u00edvel'
             : (isPlaying ? 'Pausar v\u00eddeo' : (isEnded ? 'Reiniciar v\u00eddeo' : 'Reproduzir v\u00eddeo'));
         toggleButton.setAttribute('aria-label', toggleButton.title);
@@ -852,7 +1804,7 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
         toggleIcon.className = `icon ${isPlaying ? 'icon-pause' : 'icon-play'} icon-sm`;
     }
     if (muteButton) {
-        muteButton.disabled = !isActivePlayer || !onboardingYouTubePlayerReady;
+        muteButton.disabled = !isActivePlayer;
         muteButton.title = onboardingVideoMuted ? 'Ativar som' : 'Silenciar v\u00eddeo';
         muteButton.setAttribute('aria-label', muteButton.title);
         muteButton.classList.toggle('is-muted', onboardingVideoMuted);
@@ -880,7 +1832,26 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
             ? 'Siga para o pr\u00f3ximo v\u00eddeo quando quiser.'
             : 'Voc\u00ea chegou ao fim do tour e pode rever qualquer etapa.';
     }
+    if (headerPreviousButton) {
+        headerPreviousButton.disabled = !previousStepId;
+        headerPreviousButton.title = previousStepId ? 'Etapa anterior' : 'Primeira etapa';
+        headerPreviousButton.setAttribute('aria-label', headerPreviousButton.title);
+    }
+    if (headerNextButton) {
+        headerNextButton.disabled = !nextStepId;
+        headerNextButton.title = nextStepId ? 'Pr\u00f3xima etapa' : 'Fim do tour';
+        headerNextButton.setAttribute('aria-label', headerNextButton.title);
+    }
+    if (replayButton) {
+        replayButton.hidden = false;
+        replayButton.style.display = 'inline-flex';
+        replayButton.disabled = !hasPlayableVideo || isLoading;
+        replayButton.title = 'Ver novamente';
+        replayButton.setAttribute('aria-label', replayButton.title);
+    }
     if (previousButton) {
+        previousButton.hidden = isFirstStep;
+        previousButton.style.display = isFirstStep ? 'none' : 'inline-flex';
         previousButton.disabled = !previousStepId;
     }
     if (nextButton) {
@@ -888,96 +1859,35 @@ function renderOnboardingVideoControls(presentationInput?: OnboardingVideoPresen
     }
 }
 
-async function ensureOnboardingYouTubePlayback(videoId: string) {
-    if (!videoId) return;
+async function ensureOnboardingYouTubePlayback(videoUrl: string) {
+    if (!videoUrl) return;
 
-    const host = document.getElementById('onboardingVideoPlayerHost') as HTMLElement | null;
-    if (!host) return;
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (!video) return;
 
+    onboardingYouTubePlayerReady = true;
+    onboardingYouTubePlayerVideoId = videoUrl;
     onboardingVideoPlaybackState = 'loading';
+    renderOnboardingVideo();
     renderOnboardingVideoControls();
 
-    await ensureOnboardingYouTubeApi();
-
-    const windowWithYoutube = window as Window & {
-        YT?: {
-            Player?: new (elementId: string, options: Record<string, unknown>) => typeof onboardingYouTubePlayer;
-        };
-    };
-    const PlayerCtor = windowWithYoutube.YT?.Player;
-    if (!PlayerCtor) return;
-
-    if (!onboardingYouTubePlayer) {
-        onboardingYouTubePlayerVideoId = videoId;
-        onboardingYouTubePlayerReady = false;
-        onboardingYouTubePlayer = new PlayerCtor('onboardingVideoPlayerHost', {
-            videoId,
-            playerVars: {
-                autoplay: 1,
-                controls: 0,
-                rel: 0,
-                playsinline: 1,
-                iv_load_policy: 3,
-                modestbranding: 1,
-                fs: 0,
-                enablejsapi: 1,
-                origin: window.location.origin
-            },
-            events: {
-                onReady: () => {
-                    onboardingYouTubePlayerReady = true;
-                    onboardingVideoPlaybackState = 'playing';
-                    try {
-                        onboardingYouTubePlayer?.playVideo?.();
-                    } catch (_) {
-                        // no-op
-                    }
-                    startOnboardingVideoSyncTimer();
-                    renderOnboardingVideo();
-                    renderOnboardingVideoControls();
-                },
-                onStateChange: (event: { data?: number }) => {
-                    const nextState = Number(event?.data);
-                    if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.playing) {
-                        onboardingVideoPlaybackState = 'playing';
-                    } else if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.paused) {
-                        onboardingVideoPlaybackState = 'paused';
-                    } else if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.ended) {
-                        onboardingVideoPlaybackState = 'ended';
-                        markOnboardingStepCompleted(onboardingPlayingStepId || onboardingSelectedStepId);
-                    } else if (nextState === ONBOARDING_YOUTUBE_PLAYER_STATE.buffering) {
-                        onboardingVideoPlaybackState = 'loading';
-                    }
-
-                    syncOnboardingYouTubeMetrics();
-                    renderOnboardingVideo();
-                    renderOnboardingVideoControls();
-                },
-                onError: () => {
-                    onboardingVideoPlaybackState = 'idle';
-                    renderOnboardingVideo();
-                    renderOnboardingVideoControls();
-                }
-            }
-        });
-
-        return;
+    if (video.src !== videoUrl) {
+        video.src = videoUrl;
+        video.load();
+        onboardingVideoCurrentSeconds = 0;
+    } else if (video.ended) {
+        video.currentTime = 0;
     }
 
-    if (!onboardingYouTubePlayerReady) {
-        onboardingYouTubePlayerVideoId = videoId;
-        return;
+    try {
+        await video.play();
+        onboardingVideoPlaybackState = 'playing';
+        startOnboardingVideoSyncTimer();
+    } catch (_) {
+        onboardingVideoPlaybackState = 'paused';
     }
 
-    if (onboardingYouTubePlayerVideoId !== videoId) {
-        onboardingYouTubePlayerVideoId = videoId;
-        onboardingYouTubePlayer.loadVideoById?.(videoId);
-    } else {
-        onboardingYouTubePlayer.playVideo?.();
-    }
-
-    onboardingVideoPlaybackState = 'playing';
-    startOnboardingVideoSyncTimer();
+    syncOnboardingYouTubeMetrics();
     renderOnboardingVideo();
     renderOnboardingVideoControls();
 }
@@ -988,6 +1898,7 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
         return {
             provider: 'none',
             sourceUrl: '',
+            mediaUrl: '',
             embedUrl: '',
             videoId: '',
             posterUrl: '',
@@ -997,60 +1908,23 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
 
     try {
         const parsed = new URL(sourceUrl);
-        const hostname = parsed.hostname.replace(/^www\./i, '').toLowerCase();
-        const pathParts = parsed.pathname.split('/').filter(Boolean);
+        const pathname = parsed.pathname.toLowerCase();
+        const isDirectVideo = ['.mp4', '.webm', '.ogg', '.mov', '.m4v'].some((extension) => pathname.endsWith(extension));
 
-        if (hostname === 'youtu.be') {
-            const videoId = pathParts[0];
-            if (videoId) {
-                return {
-                    provider: 'youtube',
-                    sourceUrl,
-                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=0&iv_load_policy=3&modestbranding=1&fs=0&enablejsapi=1`,
-                    videoId,
-                    posterUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
-                    posterFallbackUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
-                };
-            }
-        }
-
-        if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
-            let videoId = '';
-            if (pathParts[0] === 'embed' && pathParts[1]) {
-                videoId = pathParts[1];
-            } else if (pathParts[0] === 'shorts' && pathParts[1]) {
-                videoId = pathParts[1];
-            } else {
-                videoId = String(parsed.searchParams.get('v') || '').trim();
-            }
-
-            if (videoId) {
-                return {
-                    provider: 'youtube',
-                    sourceUrl,
-                    embedUrl: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&playsinline=1&rel=0&controls=0&iv_load_policy=3&modestbranding=1&fs=0&enablejsapi=1`,
-                    videoId,
-                    posterUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`,
-                    posterFallbackUrl: `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`
-                };
-            }
-        }
-
-        if (hostname === 'vimeo.com' || hostname === 'player.vimeo.com') {
-            const videoId = pathParts.find((part) => /^\d+$/.test(part));
-            return {
-                provider: 'vimeo',
-                sourceUrl,
-                embedUrl: videoId ? `https://player.vimeo.com/video/${videoId}?autoplay=1` : '',
-                videoId: videoId || '',
-                posterUrl: '',
-                posterFallbackUrl: ''
-            };
-        }
+        return {
+            provider: isDirectVideo ? 'file' : 'external',
+            sourceUrl,
+            mediaUrl: sourceUrl,
+            embedUrl: sourceUrl,
+            videoId: '',
+            posterUrl: '',
+            posterFallbackUrl: ''
+        };
     } catch (_) {
         return {
             provider: 'none',
             sourceUrl: '',
+            mediaUrl: '',
             embedUrl: '',
             videoId: '',
             posterUrl: '',
@@ -1061,7 +1935,8 @@ function buildOnboardingVideoPresentation(videoUrl: string): OnboardingVideoPres
     return {
         provider: 'external',
         sourceUrl,
-        embedUrl: '',
+        mediaUrl: sourceUrl,
+        embedUrl: sourceUrl,
         videoId: '',
         posterUrl: '',
         posterFallbackUrl: ''
@@ -1078,8 +1953,7 @@ function renderOnboardingVideo() {
     const placeholderTitle = document.getElementById('onboardingVideoPlaceholderTitle') as HTMLElement | null;
     const hint = document.getElementById('onboardingVideoHint') as HTMLElement | null;
     const posterBackdrop = document.getElementById('onboardingVideoPosterBackdrop') as HTMLElement | null;
-    const playerHost = document.getElementById('onboardingVideoPlayerHost') as HTMLElement | null;
-    const frame = document.getElementById('onboardingVideoFrame') as HTMLIFrameElement | null;
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
     const kicker = document.getElementById('onboardingVideoKicker') as HTMLElement | null;
     const title = document.getElementById('onboardingVideoTitle') as HTMLElement | null;
     const description = document.getElementById('onboardingVideoDescription') as HTMLElement | null;
@@ -1087,18 +1961,14 @@ function renderOnboardingVideo() {
     const stepPosition = Math.max(0, ONBOARDING_STEP_IDS.indexOf(selectedStepId)) + 1;
     const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
     const isCurrentStepOpen = onboardingTourOpen && onboardingPlayingStepId === selectedStepId;
-    const shouldRenderVideo = isCurrentStepOpen && Boolean(presentation.embedUrl);
-    const isVideoReady = shouldRenderVideo && (
-        presentation.provider !== 'youtube'
-        || (onboardingYouTubePlayerReady && onboardingYouTubePlayerVideoId === presentation.videoId)
-    );
+    const shouldRenderVideo = isCurrentStepOpen && Boolean(presentation.mediaUrl);
+    const isVideoReady = shouldRenderVideo && onboardingVideoPlaybackState !== 'loading';
 
     if (tour) {
         tour.classList.toggle('is-open', onboardingTourOpen);
     }
     if (shell) {
         shell.classList.toggle('is-ready', isVideoReady);
-        shell.classList.toggle('is-youtube', presentation.provider === 'youtube');
     }
     if (kicker) {
         kicker.textContent = `Etapa ${stepPosition} de ${ONBOARDING_STEP_IDS.length}`;
@@ -1114,7 +1984,7 @@ function renderOnboardingVideo() {
         posterBackdrop.style.backgroundImage = backdropUrl ? `url("${backdropUrl}")` : '';
     }
 
-    if (!presentation.embedUrl) {
+    if (!presentation.mediaUrl) {
         if (placeholder) {
             placeholder.style.display = 'flex';
         }
@@ -1124,12 +1994,8 @@ function renderOnboardingVideo() {
         if (hint) {
             hint.textContent = 'Este passo a passo ainda n\u00e3o est\u00e1 dispon\u00edvel para exibi\u00e7\u00e3o.';
         }
-        if (playerHost) {
-            playerHost.style.display = 'none';
-        }
-        if (frame) {
-            frame.style.display = 'none';
-            frame.removeAttribute('src');
+        if (video) {
+            video.style.display = 'none';
         }
         renderOnboardingVideoControls(presentation);
         return;
@@ -1159,22 +2025,23 @@ function renderOnboardingVideo() {
         placeholder.style.display = 'none';
     }
 
-    if (playerHost) {
-        playerHost.style.display = shouldRenderVideo && presentation.provider === 'youtube' ? 'block' : 'none';
-    }
-    if (frame) {
-        if (shouldRenderVideo && presentation.provider !== 'youtube') {
-            if (frame.src !== presentation.embedUrl) {
-                frame.src = presentation.embedUrl;
+    if (video) {
+        if (shouldRenderVideo) {
+            if (video.src !== presentation.mediaUrl) {
+                video.src = presentation.mediaUrl;
+                onboardingVideoPlaybackState = 'loading';
             }
-            frame.style.display = 'block';
+            video.style.display = 'block';
         } else {
-            frame.style.display = 'none';
-            frame.removeAttribute('src');
+            video.pause();
+            video.style.display = 'none';
         }
     }
 
     renderOnboardingVideoControls(presentation);
+    if (onboardingTourOpen) {
+        scheduleOnboardingSpotlightRefresh(120);
+    }
 }
 
 function renderOnboardingVideoLegacy() {
@@ -1343,16 +2210,14 @@ function playOnboardingVideoLegacy() {
     if (!selectedStepId) return;
 
     const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
-    if (!presentation.embedUrl) return;
+    if (!presentation.mediaUrl) return;
 
     onboardingSelectedStepId = selectedStepId;
     onboardingPlayingStepId = selectedStepId;
     renderOnboardingChecklist();
     renderOnboardingVideo();
 
-    if (presentation.provider === 'youtube' && presentation.videoId) {
-        void ensureOnboardingYouTubePlayback(presentation.videoId);
-    }
+    void ensureOnboardingYouTubePlayback(presentation.mediaUrl);
 }
 
 function toggleOnboardingVideoPlayback() {
@@ -1360,14 +2225,10 @@ function toggleOnboardingVideoPlayback() {
     if (!selectedStepId) return;
 
     const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
-    if (!presentation.embedUrl) return;
+    if (!presentation.mediaUrl) return;
 
-    if (presentation.provider !== 'youtube' || !presentation.videoId) {
-        startOnboardingTour(selectedStepId);
-        return;
-    }
-
-    if (!onboardingTourOpen || onboardingPlayingStepId !== selectedStepId || !onboardingYouTubePlayer || !onboardingYouTubePlayerReady) {
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (!onboardingTourOpen || onboardingPlayingStepId !== selectedStepId || !video) {
         startOnboardingTour(selectedStepId);
         return;
     }
@@ -1377,17 +2238,23 @@ function toggleOnboardingVideoPlayback() {
     try {
         const isCurrentlyPlaying = onboardingVideoPlaybackState === 'playing' || onboardingVideoPlaybackState === 'loading';
         if (isCurrentlyPlaying) {
-            onboardingYouTubePlayer.pauseVideo?.();
+            video.pause();
             onboardingVideoPlaybackState = 'paused';
             stopOnboardingVideoSyncTimer();
         } else {
             if (onboardingVideoPlaybackState === 'ended') {
-                onboardingYouTubePlayer.seekTo?.(0, true);
+                video.currentTime = 0;
                 onboardingVideoCurrentSeconds = 0;
             }
-            onboardingYouTubePlayer.playVideo?.();
-            onboardingVideoPlaybackState = 'playing';
-            startOnboardingVideoSyncTimer();
+            void video.play().then(() => {
+                onboardingVideoPlaybackState = 'playing';
+                startOnboardingVideoSyncTimer();
+                syncOnboardingYouTubeMetrics();
+                renderOnboardingVideoControls(presentation);
+            }).catch(() => {
+                onboardingVideoPlaybackState = 'paused';
+                renderOnboardingVideoControls(presentation);
+            });
         }
     } catch (_) {
         startOnboardingTour(selectedStepId);
@@ -1405,25 +2272,19 @@ function toggleOnboardingVideoPlaybackLegacy() {
     if (!selectedStepId) return;
 
     const presentation = buildOnboardingVideoPresentation(onboardingVideoUrls[selectedStepId] || '');
-    if (!presentation.embedUrl) return;
+    if (!presentation.mediaUrl) return;
 
-    if (presentation.provider !== 'youtube' || !presentation.videoId) {
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (onboardingPlayingStepId !== selectedStepId || !video) {
         playOnboardingVideo();
         return;
     }
 
-    if (onboardingPlayingStepId !== selectedStepId || !onboardingYouTubePlayer || !onboardingYouTubePlayerReady) {
-        playOnboardingVideo();
-        return;
-    }
-
-    const currentState = Number(onboardingYouTubePlayer.getPlayerState?.() ?? -1);
-    if (currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.playing || currentState === ONBOARDING_YOUTUBE_PLAYER_STATE.buffering) {
-        onboardingYouTubePlayer.pauseVideo?.();
+    if (!video.paused && !video.ended) {
+        video.pause();
         onboardingVideoPlaybackState = 'paused';
     } else {
-        onboardingYouTubePlayer.playVideo?.();
-        onboardingVideoPlaybackState = 'playing';
+        void video.play();
     }
 
     syncOnboardingYouTubeMetrics();
@@ -1431,19 +2292,14 @@ function toggleOnboardingVideoPlaybackLegacy() {
 }
 
 function toggleOnboardingVideoMute() {
-    if (!onboardingYouTubePlayer || !onboardingYouTubePlayerReady) return;
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (!video) return;
 
     syncOnboardingYouTubeMetrics();
 
     try {
-        const isMuted = Boolean(onboardingYouTubePlayer.isMuted?.());
-        if (isMuted) {
-            onboardingYouTubePlayer.unMute?.();
-            onboardingVideoMuted = false;
-        } else {
-            onboardingYouTubePlayer.mute?.();
-            onboardingVideoMuted = true;
-        }
+        video.muted = !video.muted;
+        onboardingVideoMuted = video.muted;
     } catch (_) {
         return;
     }
@@ -1453,26 +2309,30 @@ function toggleOnboardingVideoMute() {
 }
 
 function restartOnboardingVideo() {
-    if (!onboardingYouTubePlayer || !onboardingYouTubePlayerReady) {
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (!video) {
         playOnboardingVideo();
         return;
     }
 
-    onboardingYouTubePlayer.seekTo?.(0, true);
-    onboardingYouTubePlayer.playVideo?.();
+    video.currentTime = 0;
+    void video.play();
     onboardingVideoCurrentSeconds = 0;
     onboardingVideoPlaybackState = 'playing';
+    onboardingPreparedMarkerActionKey = '';
     startOnboardingVideoSyncTimer();
     renderOnboardingVideoControls();
 }
 
 function seekOnboardingVideo(progressInput: number) {
-    if (!onboardingYouTubePlayer || !onboardingYouTubePlayerReady || onboardingVideoDurationSeconds <= 0) return;
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (!video || onboardingVideoDurationSeconds <= 0) return;
 
     const normalizedProgress = Math.max(0, Math.min(1000, Number(progressInput) || 0));
     const nextSeconds = (normalizedProgress / 1000) * onboardingVideoDurationSeconds;
-    onboardingYouTubePlayer.seekTo?.(nextSeconds, true);
+    video.currentTime = nextSeconds;
     onboardingVideoCurrentSeconds = nextSeconds;
+    onboardingPreparedMarkerActionKey = '';
 
     if (onboardingVideoPlaybackState === 'ended') {
         onboardingVideoPlaybackState = 'paused';
@@ -1489,14 +2349,36 @@ async function loadOnboardingVideo(_options: { silent?: boolean } = {}) {
     renderOnboardingVideo();
 }
 
+function bindOnboardingPresentationDashboardBridge() {
+    if (onboardingPresentationDashboardBridgeBound) return;
+    onboardingPresentationDashboardBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        const hasDashboardSurface = Boolean(document.getElementById('statsChart') || document.getElementById('dashboardOnboardingCard'));
+        if (!hasDashboardSurface) return;
+        void loadDashboardData();
+    });
+}
+
 function initOnboardingCard() {
     const hasOnboarding = Boolean(document.getElementById('dashboardOnboardingCard'));
     if (!hasOnboarding) return;
-    destroyOnboardingYouTubePlayer();
+    bindOnboardingTourControls();
     onboardingState = readOnboardingState();
-    onboardingTourOpen = false;
-    onboardingSelectedStepId = getPreferredOnboardingSelectedStepId();
-    onboardingPlayingStepId = null;
+    const preservedStepId = onboardingTourOpen
+        ? normalizeOnboardingStepId(onboardingPlayingStepId || onboardingSelectedStepId)
+        : null;
+
+    if (!preservedStepId) {
+        destroyOnboardingYouTubePlayer();
+        onboardingTourOpen = false;
+        onboardingSelectedStepId = normalizeOnboardingStepId(onboardingSelectedStepId) || getPreferredOnboardingSelectedStepId();
+        onboardingPlayingStepId = null;
+    } else {
+        onboardingSelectedStepId = preservedStepId;
+        onboardingPlayingStepId = preservedStepId;
+    }
+
     renderOnboardingChecklist();
     void loadOnboardingVideo({ silent: true });
 }
@@ -1769,6 +2651,13 @@ async function loadAccountHealth(options: { silent?: boolean } = {}) {
     const hasCard = Boolean(document.getElementById('accountHealthList'));
     if (!hasCard) return;
 
+    if (isOnboardingPresentationModeEnabled()) {
+        const response = getOnboardingPresentationAccountHealth();
+        renderAccountHealthSummary(response.summary, response.generatedAt);
+        renderAccountHealthAccounts(response.accounts);
+        return;
+    }
+
     const hasRenderedContent = Boolean(document.querySelector('#accountHealthList .account-health-account'));
     if (!hasRenderedContent) {
         renderAccountHealthPlaceholder('Carregando saúde das contas...');
@@ -1836,6 +2725,26 @@ function getSelectedStatsMetric(): StatsMetric {
         return metricRaw;
     }
     return 'mensagens';
+}
+
+function setSelectedStatsMetric(metric: StatsMetric) {
+    const statsMetric = document.getElementById('statsMetric') as HTMLSelectElement | null;
+    if (!statsMetric) return false;
+
+    if (statsMetric.value !== metric) {
+        statsMetric.value = metric;
+        void updateStatsPeriodChart();
+    }
+
+    return true;
+}
+
+function setSelectedStatsChartType(type: StatsChartType) {
+    if (statsChartType === type) return true;
+    statsChartType = type;
+    updateChartTypeButtonsState();
+    void updateStatsPeriodChart();
+    return true;
 }
 
 function getStatsRangeFromControls() {
@@ -1994,6 +2903,12 @@ function renderStatsChart(labels: string[], values: number[], metric: StatsMetri
 
 async function updateStatsPeriodChart(options: { silent?: boolean } = {}) {
     const metric = getSelectedStatsMetric();
+    if (isOnboardingPresentationModeEnabled()) {
+        const presentationSeries = getOnboardingPresentationStatsSeries(metric);
+        renderStatsChart(presentationSeries.labels, presentationSeries.data, metric);
+        return;
+    }
+
     const range = getStatsRangeFromControls();
     const fallback = buildStatsChartFallback(range.startDate, range.endDate);
     const requestId = ++statsChartRequestSeq;
@@ -2171,6 +3086,11 @@ function setCustomEventsLoading() {
 }
 
 async function loadCustomEvents(options: { silent?: boolean } = {}) {
+    if (isOnboardingPresentationModeEnabled()) {
+        renderCustomEventsList(getOnboardingPresentationCustomEvents(getSelectedCustomEventsPeriod()));
+        return;
+    }
+
     setCustomEventsLoading();
     const period = getSelectedCustomEventsPeriod();
 
@@ -2224,6 +3144,12 @@ function openCustomEventModal(id?: number) {
 }
 
 async function saveCustomEvent() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        closeModal('customEventModal');
+        return;
+    }
+
     const eventIdInput = document.getElementById('customEventId') as HTMLInputElement | null;
     const nameInput = document.getElementById('customEventName') as HTMLInputElement | null;
     const descriptionInput = document.getElementById('customEventDescription') as HTMLTextAreaElement | null;
@@ -2262,6 +3188,11 @@ async function saveCustomEvent() {
 }
 
 async function deleteCustomEvent(id: number) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        return;
+    }
+
     const eventId = Number(id);
     if (!Number.isFinite(eventId) || eventId <= 0) return;
 
@@ -2303,6 +3234,7 @@ function initDashboard() {
     }
     bindStatsPeriodControls();
     bindCustomEventsControls();
+    bindOnboardingPresentationDashboardBridge();
     initStatsChart();
     initOnboardingCard();
     loadDashboardData();
@@ -2314,6 +3246,24 @@ onReady(initDashboard);
 async function loadDashboardData() {
     try {
         showLoading('Carregando dados...');
+
+        if (isOnboardingPresentationModeEnabled()) {
+            dashboardLeadSummary = getOnboardingPresentationDashboardSummary();
+            allLeads = getOnboardingPresentationDashboardLeads();
+            updateStats();
+            updateFunnel();
+            renderLeadsTable();
+
+            await Promise.all([
+                updateStatsPeriodChart({ silent: true }),
+                loadAccountHealth({ silent: true }),
+                loadCustomEvents({ silent: true }),
+                loadOnboardingVideo({ silent: true })
+            ]);
+
+            hideLoading();
+            return;
+        }
 
         const cachedSummary = readDashboardSummaryCache();
         if (cachedSummary) {
@@ -2355,6 +3305,13 @@ async function loadDashboardData() {
 }
 
 async function loadDashboardLeadSummary(options: { silent?: boolean } = {}) {
+    if (isOnboardingPresentationModeEnabled()) {
+        dashboardLeadSummary = getOnboardingPresentationDashboardSummary();
+        updateStats();
+        updateFunnel();
+        return;
+    }
+
     try {
         const response: LeadSummaryResponse = await api.get('/api/leads/summary');
         dashboardLeadSummary = normalizeLeadSummaryResponse(response);
@@ -2370,6 +3327,10 @@ async function loadDashboardLeadSummary(options: { silent?: boolean } = {}) {
 }
 
 async function fetchDashboardTableLeads() {
+    if (isOnboardingPresentationModeEnabled()) {
+        return getOnboardingPresentationDashboardLeads();
+    }
+
     const params = new URLSearchParams();
     params.set('limit', String(DASHBOARD_TABLE_FETCH_LIMIT));
     params.set('offset', '0');
@@ -2597,6 +3558,12 @@ function updateSelection() {
 
 // Salvar novo lead
 async function saveLead() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        closeModal('addLeadModal');
+        return;
+    }
+
     const name = (document.getElementById('leadName') as HTMLInputElement | null)?.value.trim() || '';
     const phone = (document.getElementById('leadPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
     const vehicle = (document.getElementById('leadVehicle') as HTMLInputElement | null)?.value.trim() || '';
@@ -2658,6 +3625,12 @@ function editLead(id: number) {
 
 // Atualizar lead
 async function updateLead() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        closeModal('editLeadModal');
+        return;
+    }
+
     const id = (document.getElementById('editLeadId') as HTMLInputElement | null)?.value || '';
     const name = (document.getElementById('editLeadName') as HTMLInputElement | null)?.value.trim() || '';
     const phone = (document.getElementById('editLeadPhone') as HTMLInputElement | null)?.value.replace(/\D/g, '') || '';
@@ -2689,6 +3662,11 @@ async function updateLead() {
 
 // Excluir lead
 async function deleteLead(id: number) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        return;
+    }
+
     if (!await appConfirm('Tem certeza que deseja excluir este lead?', 'Excluir lead')) return;
 
     try {
@@ -2717,6 +3695,12 @@ function sendWhatsApp(leadId: number, phone: string) {
 
 // Importar leads
 async function importLeads() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationReadOnlyToast();
+        closeModal('importModal');
+        return;
+    }
+
     const fileInput = document.getElementById('importFile') as HTMLInputElement | null;
     const textInput = (document.getElementById('importText') as HTMLTextAreaElement | null)?.value.trim() || '';
     const importTagRaw = (document.getElementById('importTag') as HTMLInputElement | null)?.value.trim() || '';
@@ -2824,6 +3808,7 @@ async function confirmReset() {
 const windowAny = window as Window & {
     initDashboard?: () => void;
     initOnboardingCard?: () => void;
+    resetOnboardingTourState?: () => void;
     loadDashboardData?: () => Promise<void>;
     loadCustomEvents?: (options?: { silent?: boolean }) => Promise<void>;
     startOnboardingTour?: (stepId?: string) => void;
@@ -2842,6 +3827,7 @@ const windowAny = window as Window & {
     openCustomEventModal?: (id?: number) => void;
     saveCustomEvent?: () => Promise<void>;
     deleteCustomEvent?: (id: number) => Promise<void>;
+    refreshOnboardingTourSurface?: () => void;
     updateStats?: () => void;
     updateFunnel?: () => void;
     renderLeadsTable?: (leads?: Lead[] | null) => void;
@@ -2859,10 +3845,12 @@ const windowAny = window as Window & {
 };
 windowAny.initDashboard = initDashboard;
 windowAny.initOnboardingCard = initOnboardingCard;
+windowAny.resetOnboardingTourState = resetOnboardingTourState;
 windowAny.loadDashboardData = loadDashboardData;
 windowAny.loadCustomEvents = loadCustomEvents;
 windowAny.startOnboardingTour = startOnboardingTour;
 windowAny.closeOnboardingTour = closeOnboardingTour;
+windowAny.refreshOnboardingTourSurface = refreshOnboardingTourSurface;
 windowAny.goToPreviousOnboardingTourStep = goToPreviousOnboardingTourStep;
 windowAny.goToNextOnboardingTourStep = goToNextOnboardingTourStep;
 windowAny.toggleOnboardingStep = toggleOnboardingStep;

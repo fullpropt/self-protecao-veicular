@@ -35,6 +35,8 @@ type CheckoutFormValues = {
   cardCvv: string;
 };
 
+type CheckoutField = keyof CheckoutFormValues;
+
 type CheckoutConfigResponse = {
   success?: boolean;
   plan?: {
@@ -167,7 +169,7 @@ function isValidEmail(value: string) {
 }
 
 function validateForm(values: CheckoutFormValues) {
-  const errors: Partial<Record<keyof CheckoutFormValues, string>> = {};
+  const errors: Partial<Record<CheckoutField, string>> = {};
 
   if (String(values.fullName || '').trim().length < 3) errors.fullName = 'Informe seu nome completo.';
   if (!isValidEmail(values.email)) errors.email = 'Informe um e-mail válido.';
@@ -308,6 +310,8 @@ export default function PublicCheckout() {
 
   const [values, setValues] = useState<CheckoutFormValues>(initialState.values);
   const [leadCaptureId, setLeadCaptureId] = useState<number | null>(initialState.leadCaptureId);
+  const [touchedFields, setTouchedFields] = useState<Partial<Record<CheckoutField, boolean>>>({});
+  const [showAllErrors, setShowAllErrors] = useState(false);
   const [config, setConfig] = useState<CheckoutConfigResponse | null>(null);
   const [configError, setConfigError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -317,6 +321,8 @@ export default function PublicCheckout() {
   useEffect(() => {
     setValues(initialState.values);
     setLeadCaptureId(initialState.leadCaptureId);
+    setTouchedFields({});
+    setShowAllErrors(false);
     setSubmitError('');
   }, [initialState]);
 
@@ -357,13 +363,24 @@ export default function PublicCheckout() {
   const pagarmePublicKey = String(config?.pagarme?.public_key || '').trim();
   const isPublicKeyConfigured = Boolean(config?.pagarme?.public_key_configured && pagarmePublicKey);
   const validationErrors = useMemo(() => validateForm(values), [values]);
+  const visibleErrors = useMemo<Partial<Record<CheckoutField, string>>>(() => {
+    const nextErrors: Partial<Record<CheckoutField, string>> = {};
+    const entries = Object.entries(validationErrors) as Array<[CheckoutField, string]>;
+    for (const [field, message] of entries) {
+      if (!message) continue;
+      if (showAllErrors || touchedFields[field]) {
+        nextErrors[field] = message;
+      }
+    }
+    return nextErrors;
+  }, [showAllErrors, touchedFields, validationErrors]);
 
   const themeStyle = useMemo<CSSProperties>(() => ({
     '--checkout-accent': plan.accent,
     '--checkout-accent-soft': plan.accentSoft
   } as CSSProperties), [plan.accent, plan.accentSoft]);
 
-  const handleChange = (field: keyof CheckoutFormValues, nextValue: string) => {
+  const handleChange = (field: CheckoutField, nextValue: string) => {
     setSubmitError('');
     setValues((current) => {
       if (field === 'email') return { ...current, email: String(nextValue || '').trim().toLowerCase() };
@@ -380,9 +397,16 @@ export default function PublicCheckout() {
     });
   };
 
+  const handleFieldBlur = (field: CheckoutField) => {
+    setTouchedFields((current) => ({ ...current, [field]: true }));
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSubmitting) return;
+
+    setShowAllErrors(true);
+    setSubmitError('');
 
     if (Object.keys(validationErrors).length > 0) {
       setSubmitError('Revise os campos destacados antes de continuar.');
@@ -390,7 +414,6 @@ export default function PublicCheckout() {
     }
 
     setIsSubmitting(true);
-    setSubmitError('');
 
     try {
       const cardToken = isPublicKeyConfigured
@@ -430,6 +453,11 @@ export default function PublicCheckout() {
   const renewalLabel = effectiveTrialDays > 0
     ? `Em ${effectiveTrialDays} dias · ${formatCurrencyBRL(effectiveAmountCents)}`
     : `A cada 30 dias · ${formatCurrencyBRL(effectiveAmountCents)}`;
+  const todayAmountLabel = effectiveTrialDays > 0 ? 'R$ 0,00' : formatCurrencyBRL(effectiveAmountCents);
+  const summaryHighlightLabel = effectiveTrialDays > 0 ? 'Hoje você ativa por' : 'Valor da ativação';
+  const summaryHighlightNote = effectiveTrialDays > 0
+    ? `Primeira cobrança somente em ${effectiveTrialDays} dias.`
+    : 'Assinatura liberada após a confirmação do pagamento.';
   const currentYear = new Date().getFullYear();
 
   return (
@@ -449,26 +477,26 @@ export default function PublicCheckout() {
                 </div>
                 <div className="public-checkout-section-title sr-only" id="checkoutAccountDataTitle">Dados da conta</div>
                 <div className="public-checkout-form-grid">
-                  <Field label="Nome completo" error={validationErrors.fullName} full>
-                    <input className="public-checkout-input" autoComplete="name" value={values.fullName} onChange={(event) => handleChange('fullName', event.target.value)} />
+                  <Field label="Nome completo" error={visibleErrors.fullName} full>
+                    <input className="public-checkout-input" autoComplete="name" value={values.fullName} onChange={(event) => handleChange('fullName', event.target.value)} onBlur={() => handleFieldBlur('fullName')} />
                   </Field>
-                  <Field label="E-mail" error={validationErrors.email}>
-                    <input className="public-checkout-input" type="email" autoComplete="email" value={values.email} onChange={(event) => handleChange('email', event.target.value)} />
+                  <Field label="E-mail" error={visibleErrors.email}>
+                    <input className="public-checkout-input" type="email" autoComplete="email" value={values.email} onChange={(event) => handleChange('email', event.target.value)} onBlur={() => handleFieldBlur('email')} />
                   </Field>
-                  <Field label="Celular com DDD" error={validationErrors.whatsapp}>
-                    <input className="public-checkout-input" type="tel" autoComplete="tel" value={values.whatsapp} onChange={(event) => handleChange('whatsapp', event.target.value)} />
+                  <Field label="Celular com DDD" error={visibleErrors.whatsapp}>
+                    <input className="public-checkout-input" type="tel" autoComplete="tel" value={values.whatsapp} onChange={(event) => handleChange('whatsapp', event.target.value)} onBlur={() => handleFieldBlur('whatsapp')} />
                   </Field>
                   <Field label="Empresa" full>
                     <input className="public-checkout-input" autoComplete="organization" value={values.companyName} onChange={(event) => handleChange('companyName', event.target.value)} />
                   </Field>
                   <Field label="Documento">
-                    <select className="public-checkout-select" value={values.documentType} onChange={(event) => handleChange('documentType', event.target.value)}>
+                    <select className="public-checkout-select" value={values.documentType} onChange={(event) => handleChange('documentType', event.target.value)} onBlur={() => handleFieldBlur('documentNumber')}>
                       <option value="cpf">CPF</option>
                       <option value="cnpj">CNPJ</option>
                     </select>
                   </Field>
-                  <Field label="Número do documento" error={validationErrors.documentNumber}>
-                    <input className="public-checkout-input" inputMode="numeric" value={values.documentNumber} onChange={(event) => handleChange('documentNumber', event.target.value)} />
+                  <Field label="Número do documento" error={visibleErrors.documentNumber}>
+                    <input className="public-checkout-input" inputMode="numeric" value={values.documentNumber} onChange={(event) => handleChange('documentNumber', event.target.value)} onBlur={() => handleFieldBlur('documentNumber')} />
                   </Field>
                 </div>
               </section>
@@ -480,17 +508,17 @@ export default function PublicCheckout() {
                 </div>
                 <div className="public-checkout-section-title sr-only" id="checkoutPaymentDataTitle">Pagamento</div>
                 <div className="public-checkout-form-grid">
-                  <Field label="Nome impresso no cartão" error={validationErrors.cardHolderName} full>
-                    <input className="public-checkout-input" autoComplete="cc-name" value={values.cardHolderName} onChange={(event) => handleChange('cardHolderName', event.target.value)} />
+                  <Field label="Nome impresso no cartão" error={visibleErrors.cardHolderName} full>
+                    <input className="public-checkout-input" autoComplete="cc-name" value={values.cardHolderName} onChange={(event) => handleChange('cardHolderName', event.target.value)} onBlur={() => handleFieldBlur('cardHolderName')} />
                   </Field>
-                  <Field label="Número do cartão" error={validationErrors.cardNumber} full>
-                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-number" value={values.cardNumber} onChange={(event) => handleChange('cardNumber', event.target.value)} />
+                  <Field label="Número do cartão" error={visibleErrors.cardNumber} full>
+                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-number" value={values.cardNumber} onChange={(event) => handleChange('cardNumber', event.target.value)} onBlur={() => handleFieldBlur('cardNumber')} />
                   </Field>
-                  <Field label="Validade (MM/AA)" error={validationErrors.cardExpiry}>
-                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-exp" value={values.cardExpiry} onChange={(event) => handleChange('cardExpiry', event.target.value)} />
+                  <Field label="Validade (MM/AA)" error={visibleErrors.cardExpiry}>
+                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-exp" value={values.cardExpiry} onChange={(event) => handleChange('cardExpiry', event.target.value)} onBlur={() => handleFieldBlur('cardExpiry')} />
                   </Field>
-                  <Field label="CVV" error={validationErrors.cardCvv}>
-                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-csc" value={values.cardCvv} onChange={(event) => handleChange('cardCvv', event.target.value)} />
+                  <Field label="CVV" error={visibleErrors.cardCvv}>
+                    <input className="public-checkout-input" inputMode="numeric" autoComplete="cc-csc" value={values.cardCvv} onChange={(event) => handleChange('cardCvv', event.target.value)} onBlur={() => handleFieldBlur('cardCvv')} />
                   </Field>
                 </div>
 
@@ -515,23 +543,35 @@ export default function PublicCheckout() {
               <span className="public-checkout-step-number">3</span>
               <span className="public-checkout-step-label">Resumo da compra</span>
             </div>
-            <h2>{plan.name}</h2>
+            <div className="public-checkout-summary-hero">
+              <h2>{plan.name}</h2>
+
+              <div className="public-checkout-summary-highlight">
+                <span className="public-checkout-summary-highlight-label">{summaryHighlightLabel}</span>
+                <strong>{todayAmountLabel}</strong>
+                <span className="public-checkout-summary-highlight-note">{summaryHighlightNote}</span>
+              </div>
+            </div>
 
             <div className="public-checkout-plan-card">
-              <div className="public-checkout-price-line"><span>Plano</span><strong>{plan.name}</strong></div>
               <div className="public-checkout-price-line"><span>{effectiveTrialDays > 0 ? 'Cobrança inicial' : 'Cobrança de hoje'}</span><strong>{todayLabel}</strong></div>
               <div className="public-checkout-price-line"><span>{effectiveTrialDays > 0 ? 'Primeira renovação' : 'Renovação'}</span><strong>{renewalLabel}</strong></div>
             </div>
 
-            <ul className="public-checkout-bullets">
-              {plan.bullets.map((bullet) => (
-                <li key={bullet}><span className="public-checkout-bullet-dot" aria-hidden="true"></span><span>{bullet}</span></li>
-              ))}
-            </ul>
+            <div className="public-checkout-summary-includes">
+              <span className="public-checkout-summary-includes-label">Incluído no plano</span>
+              <ul className="public-checkout-bullets">
+                {plan.bullets.map((bullet) => (
+                  <li key={bullet}><span className="public-checkout-bullet-dot" aria-hidden="true"></span><span>{bullet}</span></li>
+                ))}
+              </ul>
+            </div>
           </aside>
         </div>
+      </div>
 
-        <footer className="public-checkout-footer" aria-label="Rodape principal">
+      <footer className="public-checkout-footer" aria-label="Rodape principal">
+        <div className="public-checkout-footer-shell">
           <div className="public-checkout-footer-grid">
             <section className="public-checkout-footer-brand-col" aria-label="Marca e posicionamento">
               <a href="#/home" className="public-checkout-footer-brand" aria-label={`${brandName} pagina inicial`}>
@@ -564,8 +604,8 @@ export default function PublicCheckout() {
           <div className="public-checkout-footer-bottom">
             <span>{`© ${currentYear} ${brandName}. Todos os direitos reservados.`}</span>
           </div>
-        </footer>
-      </div>
+        </div>
+      </footer>
     </div>
   );
 }

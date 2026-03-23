@@ -7,6 +7,8 @@ type InboxGlobals = {
   filterConversations?: (filter: string) => void;
   searchConversations?: () => void;
   changeInboxSessionFilter?: (sessionId: string) => void;
+  toggleInboxSessionFilterMenu?: () => void;
+  setInboxSessionFilterMenuOpen?: (forceOpen?: boolean) => void;
   resyncInboxHistory?: () => void | Promise<void>;
   openStartConversationModal?: () => void | Promise<void>;
   closeStartConversationModal?: () => void;
@@ -231,52 +233,151 @@ export default function Inbox() {
             width: fit-content;
             max-width: 100%;
         }
-        .inbox-session-highlight-select {
-            appearance: none;
-            -webkit-appearance: none;
-            border: 1px solid transparent;
-            background: transparent;
-            color: var(--dark);
-            color-scheme: dark;
-            font-size: 15px;
-            font-weight: 700;
-            line-height: 1.2;
-            border-radius: 10px;
-            padding: 4px 22px 4px 8px;
-            margin-left: -8px;
-            cursor: pointer;
-            transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
-            max-width: 100%;
+        .inbox-session-highlight-select-shell.is-open {
+            z-index: 4;
         }
-        .inbox-session-highlight-select:hover {
-            border-color: rgba(var(--primary-rgb), 0.42);
-            background: rgba(var(--primary-rgb), 0.08);
-        }
-        .inbox-session-highlight-select:focus {
-            outline: none;
-            border-color: rgba(var(--primary-rgb), 0.62);
-            background: rgba(var(--primary-rgb), 0.1);
-        }
-        .inbox-session-highlight-select option,
-        .inbox-session-highlight-select optgroup {
-            background: #102129;
-            color: #ecf7f5;
-        }
-        .inbox-session-highlight-select option:checked {
-            background: #1f5fc4;
-            color: #ffffff;
-        }
-        .inbox-session-highlight-select-icon {
+        .inbox-session-highlight-native-select {
             position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
+            inset: 0;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
             pointer-events: none;
+        }
+        .inbox-session-highlight-trigger {
+            width: 100%;
+            min-width: min(280px, calc(100vw - 64px));
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(var(--primary-rgb), 0.34);
+            background: rgba(7, 15, 27, 0.72);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.03),
+                0 0 0 1px rgba(var(--primary-rgb), 0.04);
+            color: #f2faf9;
+            padding: 12px 14px;
+            cursor: pointer;
+            text-align: left;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .inbox-session-highlight-trigger:hover {
+            border-color: rgba(var(--primary-rgb), 0.48);
+            background: rgba(9, 19, 31, 0.9);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                0 0 0 1px rgba(var(--primary-rgb), 0.08),
+                0 10px 18px rgba(2, 8, 20, 0.18);
+        }
+        .inbox-session-highlight-trigger:focus-visible {
+            outline: none;
+            border-color: rgba(var(--primary-rgb), 0.72);
+            box-shadow:
+                0 0 0 3px rgba(var(--primary-rgb), 0.14),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+        .inbox-session-highlight-trigger-copy {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .inbox-session-highlight-trigger-value {
+            color: #f3fbfa;
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1.15;
+            word-break: break-word;
+        }
+        .inbox-session-highlight-trigger-subtitle {
+            color: rgba(188, 202, 216, 0.88);
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+        .inbox-session-highlight-trigger-subtitle:empty {
+            display: none;
+        }
+        .inbox-session-highlight-trigger-icon {
+            flex-shrink: 0;
             width: 0;
             height: 0;
             border-left: 4px solid transparent;
             border-right: 4px solid transparent;
             border-top: 6px solid rgba(var(--primary-rgb), 0.92);
+            transition: transform 0.2s ease;
+        }
+        .inbox-session-highlight-select-shell.is-open .inbox-session-highlight-trigger-icon {
+            transform: rotate(180deg);
+        }
+        .inbox-session-highlight-menu {
+            position: absolute;
+            top: calc(100% + 10px);
+            left: 0;
+            min-width: min(280px, calc(100vw - 48px));
+            max-width: min(320px, calc(100vw - 48px));
+            padding: 8px;
+            border-radius: 14px;
+            border: 1px solid rgba(var(--primary-rgb), 0.4);
+            background: linear-gradient(180deg, rgba(9, 16, 31, 0.98) 0%, rgba(12, 22, 34, 0.98) 100%);
+            box-shadow:
+                0 18px 36px rgba(2, 8, 20, 0.42),
+                0 0 0 1px rgba(var(--primary-rgb), 0.08),
+                0 0 18px rgba(var(--primary-rgb), 0.16);
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .inbox-session-highlight-select-shell.is-open .inbox-session-highlight-menu {
+            display: flex;
+        }
+        .inbox-session-highlight-menu-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: none;
+            color: rgba(232, 241, 247, 0.92);
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.3;
+            background: transparent;
+            cursor: pointer;
+            text-align: left;
+        }
+        .inbox-session-highlight-menu-option:hover,
+        .inbox-session-highlight-menu-option:focus-visible {
+            outline: none;
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .inbox-session-highlight-menu-option.active {
+            background: rgba(var(--primary-rgb), 0.12);
+            color: #ffffff;
+            box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), 0.28);
+        }
+        .inbox-session-highlight-menu-option-copy {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .inbox-session-highlight-menu-option-title {
+            color: inherit;
+            font-size: 13px;
+            font-weight: 800;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+        .inbox-session-highlight-menu-option small {
+            color: rgba(175, 191, 208, 0.86);
+            font-size: 11px;
+            font-weight: 600;
         }
         .inbox-session-highlight-meta {
             font-size: 12px;
@@ -2035,11 +2136,22 @@ export default function Inbox() {
             }
             .inbox-session-highlight-select-shell {
                 max-width: 100%;
+                width: 100%;
             }
-            .inbox-session-highlight-select {
-                font-size: 13px;
-                padding: 4px 20px 4px 8px;
-                margin-left: 0;
+            .inbox-session-highlight-trigger {
+                min-width: 0;
+                width: 100%;
+                padding: 10px 12px;
+            }
+            .inbox-session-highlight-trigger-value {
+                font-size: 14px;
+            }
+            .inbox-session-highlight-trigger-subtitle {
+                font-size: 11px;
+            }
+            .inbox-session-highlight-menu {
+                min-width: 100%;
+                max-width: 100%;
             }
             .inbox-session-highlight-status {
                 font-size: 10px;
@@ -2231,29 +2343,39 @@ export default function Inbox() {
                 </button>
                 <span className="icon icon-inbox icon-sm"></span> Inbox
               </h2>
-              <div className="inbox-session-highlight inbox-session-unified" id="inboxSessionIndicator">
+              <div className="inbox-session-highlight inbox-session-unified" id="inboxSessionIndicator" data-tour-target="inbox-session-indicator">
                 <div className="inbox-session-highlight-main">
                   <div className="inbox-session-highlight-top">
                     <div className="inbox-session-highlight-label">Conta exibida</div>
                     <span className="inbox-session-highlight-status all">Filtro geral</span>
                   </div>
                   <div className="inbox-session-highlight-content">
-                    <div className="inbox-session-highlight-select-shell">
-                      <select
-                        id="inboxSessionFilter"
-                        className="inbox-session-highlight-select"
-                        defaultValue=""
-                        onChange={(event) => globals.changeInboxSessionFilter?.((event.target as HTMLSelectElement).value)}
-                      >
+                    <div className="inbox-session-highlight-select-shell" id="inboxSessionFilterShell">
+                      <select id="inboxSessionFilter" className="inbox-session-highlight-native-select" defaultValue="" tabIndex={-1} aria-hidden="true">
                         <option value="">Todas as contas</option>
                       </select>
-                      <span className="inbox-session-highlight-select-icon" aria-hidden="true"></span>
+                      <button
+                        id="inboxSessionFilterTrigger"
+                        className="inbox-session-highlight-trigger"
+                        type="button"
+                        aria-haspopup="listbox"
+                        aria-expanded="false"
+                        onClick={() => globals.toggleInboxSessionFilterMenu?.()}
+                      >
+                        <span className="inbox-session-highlight-trigger-copy">
+                          <span className="inbox-session-highlight-trigger-value" id="inboxSessionFilterTriggerValue">Todas as contas</span>
+                          <span className="inbox-session-highlight-trigger-subtitle" id="inboxSessionFilterTriggerSubtitle"></span>
+                        </span>
+                        <span className="inbox-session-highlight-trigger-icon" aria-hidden="true"></span>
+                      </button>
+                      <div className="inbox-session-highlight-menu" id="inboxSessionFilterMenu" role="listbox" aria-hidden="true"></div>
                     </div>
                     <div className="inbox-session-highlight-meta">Mostrando conversas de todas as contas</div>
                   </div>
                   <div className="inbox-session-highlight-actions">
                     <button
                       id="inboxStartConversationBtn"
+                      data-tour-target="inbox-start-conversation-button"
                       className="inbox-session-start-btn"
                       type="button"
                       onClick={() => globals.openStartConversationModal?.()}
@@ -2281,12 +2403,13 @@ export default function Inbox() {
                 <input
                   type="text"
                   id="searchConversations"
+                  data-tour-target="inbox-search-input"
                   placeholder="Buscar conversa..."
                   onKeyUp={() => globals.searchConversations?.()}
                 />
               </div>
             </div>
-            <div className="conversations-list" id="conversationsList">
+            <div className="conversations-list" id="conversationsList" data-tour-target="inbox-conversations-column">
               <div className="empty-state" style={{ padding: '40px' }}>
                 <div className="empty-state-icon icon icon-empty icon-lg"></div>
                 <p>Carregando conversas...</p>
@@ -2302,7 +2425,7 @@ export default function Inbox() {
             </div>
           </div>
 
-          <div className="inbox-right-panel" id="inboxRightPanel">
+          <div className="inbox-right-panel" id="inboxRightPanel" data-tour-target="inbox-contact-info-panel">
             <div className="inbox-right-panel-content" id="inboxRightContent">
               <span className="inbox-right-panel-robot icon icon-automation icon-lg"></span>
               <p><strong>Este cliente ainda não está cadastrado na sua audiência.</strong></p>

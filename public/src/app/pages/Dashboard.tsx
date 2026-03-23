@@ -1,11 +1,11 @@
 ﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useRef } from 'react';
 import { brandLogoUrl, brandName } from '../lib/brand';
 
 type DashboardGlobals = {
   initDashboard?: () => void;
   initOnboardingCard?: () => void;
+  resetOnboardingTourState?: () => void;
   loadDashboardData?: () => void;
   loadCustomEvents?: (options?: { silent?: boolean }) => void;
   startOnboardingTour?: (stepId?: string) => void;
@@ -997,6 +997,18 @@ function DashboardStyles() {
             linear-gradient(90deg, rgba(4, 64, 90, 0.34), rgba(6, 26, 46, 0.14) 34%, rgba(4, 13, 26, 0) 62%),
             linear-gradient(165deg, rgba(6, 22, 42, 0.98), rgba(4, 13, 28, 0.99));
         }
+        .onboarding-card.onboarding-card-inline {
+          width: clamp(480px, 34vw, 620px);
+          flex: 0 0 auto;
+          margin-bottom: 0;
+          padding: 14px 16px;
+        }
+        .onboarding-inline-dismiss {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 3;
+        }
         .onboarding-card-header {
           display: flex;
           justify-content: space-between;
@@ -1018,6 +1030,17 @@ function DashboardStyles() {
         }
         .dashboard-subtitle-row p {
           margin: 0;
+        }
+        .dashboard-page-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 24px;
+          margin-bottom: 24px;
+        }
+        .dashboard-page-header .page-title {
+          min-width: 0;
+          flex: 1 1 auto;
         }
         .onboarding-toggle-btn {
           width: 30px;
@@ -1061,6 +1084,15 @@ function DashboardStyles() {
         .onboarding-dismiss-btn {
           font-size: 16px;
         }
+        .onboarding-inline-dismiss .onboarding-dismiss-btn {
+          width: 22px;
+          height: 22px;
+          border: none;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+          color: rgba(231, 248, 242, 0.72);
+        }
         .onboarding-restore-btn {
           font-size: 17px;
           box-shadow:
@@ -1076,6 +1108,12 @@ function DashboardStyles() {
             0 0 0 1px rgba(0, 240, 255, 0.06),
             0 0 20px rgba(0, 240, 255, 0.14);
         }
+        .onboarding-inline-dismiss .onboarding-dismiss-btn:hover {
+          border: none;
+          background: transparent;
+          box-shadow: none;
+          color: #f4fffd;
+        }
         .onboarding-toggle-btn:focus-visible {
           outline: 2px solid rgba(0, 240, 255, 0.34);
           outline-offset: 2px;
@@ -1084,6 +1122,9 @@ function DashboardStyles() {
         .onboarding-restore-btn:focus-visible {
           outline: 2px solid rgba(0, 240, 255, 0.34);
           outline-offset: 2px;
+        }
+        .onboarding-inline-dismiss .onboarding-dismiss-btn:focus-visible {
+          outline-offset: 1px;
         }
         .onboarding-card-header h3 {
           margin: 0;
@@ -1111,31 +1152,23 @@ function DashboardStyles() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 18px;
-          padding: 16px 18px;
-          border-radius: 18px;
-          border: 1px solid rgba(var(--primary-rgb), 0.2);
-          background:
-            radial-gradient(circle at right top, rgba(var(--primary-rgb), 0.12), transparent 26%),
-            linear-gradient(180deg, rgba(11, 27, 46, 0.92) 0%, rgba(7, 18, 33, 0.96) 100%);
-          box-shadow:
-            inset 0 1px 0 rgba(var(--primary-rgb), 0.1),
-            0 18px 36px rgba(2, 8, 20, 0.18);
+          gap: 14px;
+          min-width: 0;
         }
         .onboarding-tour-copy-wrap {
           min-width: 0;
           display: flex;
           align-items: center;
-          gap: 14px;
+          gap: 12px;
         }
         .onboarding-tour-icon {
-          width: 52px;
-          height: 52px;
+          width: 46px;
+          height: 46px;
           flex-shrink: 0;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          border-radius: 16px;
+          border-radius: 14px;
           border: 1px solid rgba(var(--primary-rgb), 0.24);
           background:
             radial-gradient(circle at top, rgba(17, 212, 143, 0.22), transparent 60%),
@@ -1155,6 +1188,9 @@ function DashboardStyles() {
           flex-direction: column;
           gap: 6px;
         }
+        .onboarding-card.onboarding-card-inline .onboarding-tour-copy {
+          flex: 1 1 auto;
+        }
         .onboarding-tour-badge-row {
           display: flex;
           align-items: center;
@@ -1164,6 +1200,9 @@ function DashboardStyles() {
         .onboarding-tour-badge,
         .onboarding-video-kicker {
           display: inline-flex;
+          width: fit-content;
+          max-width: 100%;
+          align-self: flex-start;
           align-items: center;
           padding: 3px 10px;
           border-radius: 999px;
@@ -1178,7 +1217,7 @@ function DashboardStyles() {
         .onboarding-tour-title {
           margin: 0;
           color: #f4fbf8;
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 700;
           line-height: 1.25;
         }
@@ -1186,19 +1225,28 @@ function DashboardStyles() {
           margin: 0;
           color: rgba(204, 225, 233, 0.86);
           font-size: 12px;
-          line-height: 1.45;
+          line-height: 1.35;
         }
         .onboarding-tour-start-button {
-          min-height: 50px;
-          padding: 0 22px;
-          gap: 10px;
-          border-radius: 16px;
+          min-height: 46px;
+          padding: 0 18px;
+          gap: 8px;
+          border-radius: 14px;
           white-space: nowrap;
           box-shadow: 0 18px 28px rgba(17, 212, 143, 0.18);
         }
         .onboarding-tour-start-button .icon {
           width: 16px;
           height: 16px;
+        }
+        .onboarding-card.onboarding-card-inline .onboarding-tour-launcher {
+          padding-right: 24px;
+        }
+        .onboarding-card.onboarding-card-inline .onboarding-tour-title,
+        .onboarding-card.onboarding-card-inline .onboarding-tour-description {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .onboarding-floating-tour {
           position: fixed;
@@ -1234,7 +1282,7 @@ function DashboardStyles() {
         }
         .onboarding-floating-tour-head {
           display: flex;
-          align-items: flex-start;
+          align-items: center;
           justify-content: space-between;
           gap: 12px;
         }
@@ -1251,12 +1299,13 @@ function DashboardStyles() {
           font-weight: 700;
           line-height: 1.25;
         }
-        .onboarding-floating-tour-description {
-          margin: 0;
-          color: rgba(210, 232, 241, 0.8);
-          font-size: 12px;
-          line-height: 1.45;
+        .onboarding-floating-tour-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
         }
+        .onboarding-tour-nav-btn,
         .onboarding-tour-close-btn {
           width: 32px;
           height: 32px;
@@ -1276,11 +1325,21 @@ function DashboardStyles() {
             background 180ms ease,
             color 180ms ease;
         }
+        .onboarding-tour-nav-btn {
+          font-size: 16px;
+          font-weight: 700;
+        }
+        .onboarding-tour-nav-btn:disabled {
+          opacity: 0.42;
+          cursor: not-allowed;
+        }
+        .onboarding-tour-nav-btn:hover:not(:disabled),
         .onboarding-tour-close-btn:hover {
           border-color: rgba(var(--primary-rgb), 0.38);
           background: rgba(0, 240, 255, 0.12);
           color: #f4fffd;
         }
+        .onboarding-tour-nav-btn:focus-visible,
         .onboarding-tour-close-btn:focus-visible {
           outline: 2px solid rgba(var(--primary-rgb), 0.4);
           outline-offset: 2px;
@@ -1330,15 +1389,8 @@ function DashboardStyles() {
           display: block;
           background: #02070f;
         }
-        .onboarding-video-player-host {
-          pointer-events: none;
-        }
-        .onboarding-video-player-host iframe {
-          width: 100%;
-          height: 100%;
-          border: 0;
-          display: block;
-          background: #02070f;
+        .onboarding-video-element {
+          object-fit: contain;
           pointer-events: none;
         }
         .onboarding-video-placeholder {
@@ -1365,6 +1417,7 @@ function DashboardStyles() {
           right: 0;
           bottom: 0;
           z-index: 6;
+          pointer-events: auto;
           display: grid;
           grid-template-columns: auto auto minmax(0, 1fr);
           align-items: center;
@@ -1383,6 +1436,7 @@ function DashboardStyles() {
           border: 1px solid rgba(var(--primary-rgb), 0.18);
           background: rgba(10, 25, 42, 0.88);
           color: #eaf8f4;
+          pointer-events: auto;
           transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, opacity 180ms ease;
         }
         .onboarding-video-control-btn:hover:not(:disabled) {
@@ -1457,6 +1511,7 @@ function DashboardStyles() {
           -webkit-appearance: none;
           accent-color: rgb(var(--primary-rgb));
           cursor: pointer;
+          pointer-events: auto;
           height: 4px;
           border-radius: 999px;
           background: rgba(220, 236, 243, 0.16);
@@ -1576,6 +1631,22 @@ function DashboardStyles() {
           outline-offset: 2px;
         }
         @media (max-width: 980px) {
+          .dashboard-page-header {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .onboarding-card.onboarding-card-inline {
+            width: 100%;
+          }
+          .onboarding-card.onboarding-card-inline .onboarding-tour-launcher {
+            padding-right: 0;
+          }
+          .onboarding-card.onboarding-card-inline .onboarding-tour-title,
+          .onboarding-card.onboarding-card-inline .onboarding-tour-description {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+          }
           .onboarding-tour-launcher {
             flex-direction: column;
             align-items: stretch;
@@ -1606,10 +1677,10 @@ function DashboardStyles() {
           .onboarding-card { padding: 14px; border-radius: 12px; margin-bottom: 16px; }
           .onboarding-card-header { margin-bottom: 12px; }
           .onboarding-card-header h3 { font-size: 18px; }
-          .onboarding-tour-launcher { padding: 14px; border-radius: 14px; }
           .onboarding-tour-copy-wrap { gap: 12px; }
           .onboarding-tour-icon { width: 48px; height: 48px; border-radius: 14px; }
           .onboarding-tour-title { font-size: 17px; }
+          .onboarding-inline-dismiss { top: 10px; right: 10px; }
           .onboarding-floating-tour {
             left: 12px;
             right: 12px;
@@ -1792,15 +1863,17 @@ function DashboardHeader({
   currentDate,
   headerUserName,
   isOnboardingDismissed,
-  onRestoreOnboarding
+  onRestoreOnboarding,
+  onDismissedChange
 }: {
   currentDate: string;
   headerUserName: string;
   isOnboardingDismissed: boolean;
   onRestoreOnboarding: () => void;
+  onDismissedChange: (nextValue: boolean) => void;
 }) {
   return (
-    <div className="page-header">
+    <div className="page-header dashboard-page-header">
       <div className="page-title">
         <h1>Painel de Controle</h1>
         <div className="dashboard-subtitle-row">
@@ -1816,11 +1889,17 @@ function DashboardHeader({
               title="Reativar primeiros passos"
               aria-label="Reativar primeiros passos"
             >
-              <span aria-hidden="true">+</span>
+              <span aria-hidden="true">?</span>
             </button>
           ) : null}
         </div>
       </div>
+      {!isOnboardingDismissed ? (
+        <OnboardingCard
+          isDismissed={isOnboardingDismissed}
+          onDismissedChange={onDismissedChange}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1830,28 +1909,28 @@ function StatsPeriod() {
 
   return (
     <div className="dashboard-botconversa">
-      <div className="stats-period-card">
+      <div className="stats-period-card" data-tour-target="dashboard-stats-period-card">
         <h3>Estatísticas por período</h3>
         <div className="stats-period-controls">
           <input type="date" className="form-input" id="statsStartDate" />
           <input type="date" className="form-input" id="statsEndDate" />
-          <select className="form-select" id="statsMetric" defaultValue="mensagens">
+          <select className="form-select" id="statsMetric" defaultValue="mensagens" data-tour-target="dashboard-stats-metric-select">
             <option value="novos_contatos">Novos Contatos</option>
             <option value="mensagens">Mensagens</option>
             <option value="interacoes">Interações</option>
           </select>
-          <div className="chart-type-toggle">
+          <div className="chart-type-toggle" data-tour-target="dashboard-chart-type-toggle">
             <button type="button" className="chart-btn active" data-chart-type="line" title="Gráfico de linhas">
               <span className="icon icon-chart-line icon-sm"></span>
               <span className="chart-btn-label">Linha</span>
             </button>
-            <button type="button" className="chart-btn" data-chart-type="bar" title="Gráfico de barras">
+            <button type="button" className="chart-btn" data-chart-type="bar" data-tour-target="dashboard-chart-bar-toggle" title="Gráfico de barras">
               <span className="icon icon-chart-bar icon-sm"></span>
               <span className="chart-btn-label">Barras</span>
             </button>
           </div>
         </div>
-        <div className="stats-period-chart" id="statsPeriodChart">
+        <div className="stats-period-chart" id="statsPeriodChart" data-tour-target="dashboard-stats-chart-area">
           <canvas id="statsChart" style={{ maxHeight: '200px' }}></canvas>
         </div>
       </div>
@@ -1992,18 +2071,7 @@ function OnboardingCard({
   onDismissedChange: (nextValue: boolean) => void;
 }) {
   const globals = window as Window & DashboardGlobals;
-  const collapseStorageKey = buildOnboardingCollapseStorageKey();
   const dismissStorageKey = buildOnboardingDismissedStorageKey();
-  const [isCollapsed, setIsCollapsed] = useState(() => readStoredOnboardingFlag(collapseStorageKey));
-  const wasDismissedRef = useRef(isDismissed);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(collapseStorageKey, isCollapsed ? '1' : '0');
-    } catch (_) {
-      // ignore storage failures
-    }
-  }, [collapseStorageKey, isCollapsed]);
 
   useEffect(() => {
     try {
@@ -2014,24 +2082,19 @@ function OnboardingCard({
   }, [dismissStorageKey, isDismissed]);
 
   useEffect(() => {
-    if (wasDismissedRef.current && !isDismissed) {
-      const rehydrateOnboarding = () => {
-        globals.initOnboardingCard?.();
-      };
+    const rehydrateOnboarding = () => {
+      globals.initOnboardingCard?.();
+    };
 
-      if (typeof window.requestAnimationFrame === 'function') {
-        window.requestAnimationFrame(rehydrateOnboarding);
-      } else {
-        window.setTimeout(rehydrateOnboarding, 0);
-      }
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(rehydrateOnboarding);
+    } else {
+      window.setTimeout(rehydrateOnboarding, 0);
     }
-
-    wasDismissedRef.current = isDismissed;
-  }, [globals, isDismissed]);
+  }, [globals]);
 
   const handleDismiss = () => {
-    globals.closeOnboardingTour?.();
-    setIsCollapsed(false);
+    globals.resetOnboardingTourState?.();
     onDismissedChange(true);
   };
 
@@ -2040,38 +2103,18 @@ function OnboardingCard({
   }
 
   return (
-    <section className={`onboarding-card${isCollapsed ? ' is-collapsed' : ''}`} id="dashboardOnboardingCard">
-      <div className="onboarding-card-header">
-        <div>
-          <h3>Primeiros passos no ZapVender</h3>
-          <p>Faça um tour rápido pelos recursos principais sem disputar espaço com o restante da tela.</p>
-        </div>
-        <div className="onboarding-card-controls">
-          <span className="badge badge-success" id="onboardingCompletedBadge" style={{ display: 'none' }}>
-            Tour concluído
-          </span>
-          <button
-            type="button"
-            className="onboarding-toggle-btn"
-            onClick={() => setIsCollapsed((prev) => !prev)}
-            title={isCollapsed ? 'Exibir primeiros passos' : 'Ocultar primeiros passos'}
-            aria-label={isCollapsed ? 'Exibir primeiros passos' : 'Ocultar primeiros passos'}
-            aria-expanded={!isCollapsed}
-          >
-            <span aria-hidden="true">{isCollapsed ? '\u25B8' : '\u25BE'}</span>
-          </button>
-          <button
-            type="button"
-            className="onboarding-dismiss-btn"
-            onClick={handleDismiss}
-            title="Fechar primeiros passos"
-            aria-label="Fechar primeiros passos"
-          >
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
+    <section className="onboarding-card onboarding-card-inline" id="dashboardOnboardingCard">
+      <div className="onboarding-inline-dismiss">
+        <button
+          type="button"
+          className="onboarding-dismiss-btn"
+          onClick={handleDismiss}
+          title="Fechar primeiros passos"
+          aria-label="Fechar primeiros passos"
+        >
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
-
       <div className="onboarding-content">
         <div className="onboarding-tour-launcher">
           <div className="onboarding-tour-copy-wrap">
@@ -2080,9 +2123,11 @@ function OnboardingCard({
             </div>
             <div className="onboarding-tour-copy">
               <div className="onboarding-tour-badge-row">
-                <span className="onboarding-tour-badge">Tour guiado</span>
+                <span className="badge badge-success" id="onboardingCompletedBadge" style={{ display: 'none' }}>
+                  Tour concluído
+                </span>
               </div>
-              <p className="onboarding-tour-title">Explore o ZapVender em {ONBOARDING_STEPS.length} vídeos rápidos</p>
+              <p className="onboarding-tour-title">Entenda como funciona o ZapVender</p>
               <p className="onboarding-tour-description" id="onboardingTourCurrentStep">
                 Inicie o tour e acompanhe cada etapa sem sair da tela.
               </p>
@@ -2100,131 +2145,6 @@ function OnboardingCard({
           </button>
         </div>
 
-        <div className="onboarding-floating-tour" id="onboardingFloatingTour" aria-live="polite">
-          <div className="onboarding-floating-tour-head">
-            <div className="onboarding-floating-tour-meta">
-              <span className="onboarding-video-kicker" id="onboardingVideoKicker">Etapa 1 de 8</span>
-              <p className="onboarding-floating-tour-title" id="onboardingVideoTitle">Conecte seu WhatsApp</p>
-            </div>
-
-            <button
-              type="button"
-              className="onboarding-tour-close-btn"
-              onClick={() => globals.closeOnboardingTour?.()}
-              title="Fechar tour"
-              aria-label="Fechar tour"
-            >
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-
-          <p className="onboarding-floating-tour-description" id="onboardingVideoDescription">
-            Passo a passo para conectar a primeira sessão do WhatsApp no ZapVender.
-          </p>
-
-          <div className="onboarding-floating-player">
-            <div className="onboarding-video-shell" id="onboardingVideoShell">
-              <div className="onboarding-preview-backdrop" id="onboardingVideoPosterBackdrop"></div>
-              <div
-                id="onboardingVideoPlayerHost"
-                className="onboarding-video-frame onboarding-video-player-host"
-                style={{ display: 'none' }}
-              ></div>
-              <iframe
-                id="onboardingVideoFrame"
-                className="onboarding-video-frame onboarding-video-fallback-frame"
-                title="Tour guiado do ZapVender"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-                style={{ display: 'none' }}
-              ></iframe>
-
-              <div className="onboarding-video-placeholder" id="onboardingVideoPlaceholder">
-                <strong id="onboardingVideoPlaceholderTitle">Carregando tour</strong>
-                <span id="onboardingVideoHint">Seu vídeo vai aparecer aqui em instantes.</span>
-              </div>
-
-              <div className="onboarding-video-controls" id="onboardingVideoControls">
-                <button
-                  type="button"
-                  className="onboarding-video-control-btn is-primary"
-                  id="onboardingVideoToggleButton"
-                  onClick={() => globals.toggleOnboardingVideoPlayback?.()}
-                  disabled
-                  aria-label="Reproduzir vídeo"
-                  title="Reproduzir vídeo"
-                >
-                  <span className="icon icon-play icon-sm" id="onboardingVideoToggleIcon"></span>
-                </button>
-
-                <button
-                  type="button"
-                  className="onboarding-video-control-btn"
-                  id="onboardingVideoMuteButton"
-                  onClick={() => globals.toggleOnboardingVideoMute?.()}
-                  disabled
-                  aria-label="Silenciar vídeo"
-                  title="Silenciar vídeo"
-                >
-                  <span className="onboarding-video-sound-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <path d="M5 10v4h4l5 4V6l-5 4H5z"></path>
-                      <path className="onboarding-video-sound-wave" d="M18 9a4 4 0 0 1 0 6"></path>
-                      <path className="onboarding-video-sound-wave" d="M20.5 7a7 7 0 0 1 0 10"></path>
-                      <path className="onboarding-video-sound-off" d="M18 9l4 6"></path>
-                      <path className="onboarding-video-sound-off" d="M22 9l-4 6"></path>
-                    </svg>
-                  </span>
-                </button>
-
-                <div className="onboarding-video-timeline">
-                  <span className="onboarding-video-time" id="onboardingVideoCurrentTime">00:00</span>
-                  <input
-                    type="range"
-                    id="onboardingVideoProgress"
-                    className="onboarding-video-progress"
-                    min={0}
-                    max={1000}
-                    step={1}
-                    defaultValue={0}
-                    onInput={(event) => globals.seekOnboardingVideo?.(Number(event.currentTarget.value))}
-                    disabled
-                  />
-                  <span className="onboarding-video-time" id="onboardingVideoDuration">00:00</span>
-                </div>
-              </div>
-
-              <div className="onboarding-video-ended-overlay" id="onboardingVideoEndedOverlay" aria-live="polite">
-                <div className="onboarding-video-ended-card">
-                  <span className="onboarding-video-ended-kicker">Etapa concluída</span>
-                  <strong className="onboarding-video-ended-title" id="onboardingVideoEndedTitle">Pronto para seguir</strong>
-                  <span className="onboarding-video-ended-hint" id="onboardingVideoEndedHint">
-                    Vá para o próximo vídeo do tour quando quiser.
-                  </span>
-                  <div className="onboarding-video-ended-actions">
-                    <button
-                      type="button"
-                      className="onboarding-video-ended-btn"
-                      id="onboardingVideoPrevButton"
-                      onClick={() => globals.goToPreviousOnboardingTourStep?.()}
-                    >
-                      Anterior
-                    </button>
-                    <button
-                      type="button"
-                      className="onboarding-video-ended-btn is-primary"
-                      id="onboardingVideoNextButton"
-                      onClick={() => globals.goToNextOnboardingTourStep?.()}
-                    >
-                      Próximo
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -2687,7 +2607,7 @@ export default function Dashboard() {
             <div className="nav-section-title">Sistema</div>
             <ul className="nav-menu">
               <li className="nav-item">
-                <Link to="/whatsapp" className="nav-link">
+                <Link to="/whatsapp" className="nav-link" data-tour-target="dashboard-nav-whatsapp">
                   <span className="icon icon-whatsapp"></span>
                   WhatsApp
                 </Link>
@@ -2718,9 +2638,6 @@ export default function Dashboard() {
           headerUserName={dashboardUserName}
           isOnboardingDismissed={isOnboardingDismissed}
           onRestoreOnboarding={() => setIsOnboardingDismissed(false)}
-        />
-        <OnboardingCard
-          isDismissed={isOnboardingDismissed}
           onDismissedChange={setIsOnboardingDismissed}
         />
         <StatsPeriod />

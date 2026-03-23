@@ -567,14 +567,19 @@ export default function Contatos() {
             </button>
             <button
               className="btn btn-outline btn-import-contacts"
+              data-tour-target="contacts-import-button"
               onClick={() => globals.openImportContactsModal?.() ?? globals.openModal?.('importModal')}
             >
               <span className="icon icon-import icon-sm"></span> Importar
             </button>
-            <button className="btn btn-success btn-export-contacts" onClick={() => globals.exportContacts?.()}>
+            <button
+              className="btn btn-success btn-export-contacts"
+              data-tour-target="contacts-export-button"
+              onClick={() => globals.exportContacts?.()}
+            >
               <span className="icon icon-export icon-sm"></span> Exportar
             </button>
-            <button className="btn btn-primary" onClick={() => globals.openAddContactModal?.() || globals.openModal?.('addContactModal')}>
+            <button className="btn btn-primary" data-tour-target="contacts-new-button" onClick={() => globals.openAddContactModal?.() || globals.openModal?.('addContactModal')}>
               <span className="icon icon-add icon-sm"></span> Novo Contato
             </button>
           </div>
@@ -643,19 +648,30 @@ export default function Contatos() {
                 <span className="search-icon icon icon-search icon-sm"></span>
                 <input type="text" id="searchContacts" placeholder="Buscar..." onKeyUp={() => globals.filterContacts?.()} />
               </div>
-              <select className="form-select contacts-filter-select" id="filterStatus" onChange={() => globals.filterContacts?.()}>
+              <select
+                className="form-select contacts-filter-select"
+                id="filterStatus"
+                data-tour-target="contacts-status-filter"
+                onChange={() => globals.filterContacts?.()}
+              >
                 <option value="">Todos os Status</option>
                 <option value="1">Novo</option>
                 <option value="2">Em Andamento</option>
                 <option value="3">Concluído</option>
                 <option value="4">Perdido</option>
               </select>
-              <select className="form-select contacts-filter-select" id="filterTag" onChange={() => globals.filterContacts?.()}>
+              <select
+                className="form-select contacts-filter-select"
+                id="filterTag"
+                data-tour-target="contacts-tag-filter"
+                onChange={() => globals.filterContacts?.()}
+              >
                 <option value="">Todas as Tags</option>
               </select>
               <select
                 className="form-select contacts-filter-select"
                 id="filterSession"
+                data-tour-target="contacts-account-filter"
                 onChange={(event) => globals.changeContactsSessionFilter?.(event.currentTarget.value)}
               >
                 <option value="">Todas as contas</option>
@@ -714,11 +730,11 @@ export default function Contatos() {
             <form id="addContactForm">
               <div className="form-group">
                 <label className="form-label required">Nome Completo</label>
-                <input type="text" className="form-input" id="contactName" required placeholder="Digite o nome" />
+                <input type="text" className="form-input" id="contactName" data-tour-target="contacts-name-field" required placeholder="Digite o nome" />
               </div>
               <div className="form-group">
                 <label className="form-label required">WhatsApp</label>
-                <input type="tel" className="form-input" id="contactPhone" required placeholder="27999999999" />
+                <input type="tel" className="form-input" id="contactPhone" data-tour-target="contacts-phone-field" required placeholder="27999999999" />
                 <p className="form-help">Apenas números com DDD</p>
               </div>
               <div className="form-group">
@@ -884,7 +900,7 @@ export default function Contatos() {
       </div>
 
       <div className="modal-overlay" id="importModal">
-        <div className="modal modal-lg">
+        <div className="modal modal-lg" data-tour-target="contacts-import-modal">
           <div className="modal-header">
             <h3 className="modal-title"><span className="icon icon-import icon-sm"></span> Importar Contatos</h3>
             <button className="modal-close" onClick={() => globals.closeModal?.('importModal')}>×</button>
@@ -914,7 +930,7 @@ João Silva,27999999999,joao@email.com`}
             </div>
             <div className="form-group">
               <label className="form-label">Tag para importação (opcional)</label>
-              <select className="form-select" id="importTag" defaultValue="">
+              <select className="form-select" id="importTag" data-tour-target="contacts-import-tag-field" defaultValue="">
                 <option value="">Sem etiqueta</option>
               </select>
               <p className="form-help">Aplicada em todos os contatos importados.</p>

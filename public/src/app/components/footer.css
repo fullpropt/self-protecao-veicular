@@ -1,16 +1,16 @@
 .premium-footer {
-  margin-top: 34px;
+  margin-top: 56px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   background:
     radial-gradient(700px 260px at 80% 0%, rgba(35, 198, 111, 0.07), rgba(35, 198, 111, 0)),
     linear-gradient(180deg, rgba(6, 15, 16, 0.94), rgba(3, 9, 10, 0.98));
-  border-radius: 20px 20px 0 0;
 }
 
 .premium-footer-shell {
-  width: min(1160px, calc(100% - 24px));
+  width: min(1160px, 100%);
   margin: 0 auto;
-  padding: 28px 0 14px;
+  padding: 28px 12px 14px;
 }
 
 .premium-footer-grid {
@@ -217,12 +217,10 @@
 
 @media (max-width: 700px) {
   .premium-footer {
-    margin-top: 24px;
-    border-radius: 16px 16px 0 0;
+    margin-top: 32px;
   }
 
   .premium-footer-shell {
-    width: calc(100% - 16px);
     padding-top: 18px;
     padding-bottom: 10px;
   }

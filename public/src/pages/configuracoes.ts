@@ -1,5 +1,13 @@
 ﻿// Configuracoes page logic migrated to module
 
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    getOnboardingPresentationWhatsappSessions,
+    isOnboardingPresentationModeEnabled,
+    patchOnboardingPresentationWhatsappSession,
+    removeOnboardingPresentationWhatsappSession
+} from '../core/onboardingPresentation';
+
 type Settings = {
     company?: { name?: string; cnpj?: string; phone?: string; email?: string };
     funnel?: Array<{ name?: string; color?: string; description?: string }>;
@@ -160,6 +168,7 @@ let usersCache: ManagedUser[] = [];
 let usersPresencePollingTimer: number | null = null;
 let planStatusCache: PlanStatusViewModel | null = null;
 let planStatusLoading = false;
+let onboardingPresentationConfiguracoesBridgeBound = false;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true, required: true, placeholder: 'Nome completo' },
@@ -231,7 +240,18 @@ function getPanelFromLocation() {
     return hash.startsWith('#') ? hash.slice(1) : hash;
 }
 
+function bindOnboardingPresentationConfiguracoesBridge() {
+    if (onboardingPresentationConfiguracoesBridgeBound) return;
+    onboardingPresentationConfiguracoesBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        if (!document.getElementById('connectionAccountsList')) return;
+        void refreshWhatsAppAccounts();
+    });
+}
+
 function initConfiguracoes() {
+    bindOnboardingPresentationConfiguracoesBridge();
     loadSettings();
     loadContactFields();
     loadTemplates();
@@ -1916,6 +1936,21 @@ function renderWhatsAppAccountsManager() {
         const campaignEnabled = parseBooleanSetting(session.campaign_enabled, true);
         const dispatchWeight = parseDispatchWeight(session.dispatch_weight, 1);
         const dailyLimit = parseDailyLimit(session.daily_limit, 0);
+        const nameFieldTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-name-field"'
+            : '';
+        const weightFieldTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-weight-field"'
+            : '';
+        const dailyLimitFieldTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-daily-limit-field"'
+            : '';
+        const campaignToggleTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-campaign-toggle"'
+            : '';
+        const saveButtonTourTarget = sessionId === 'zv_demo1_session'
+            ? ' data-tour-target="settings-account-1-save-button"'
+            : '';
 
         return `
             <div class="connection-account-item">
@@ -1933,6 +1968,7 @@ function renderWhatsAppAccountsManager() {
                             type="text"
                             class="form-input connection-session-name-input"
                             data-session-id="${escapeHtml(sessionId)}"
+                            ${nameFieldTourTarget}
                             value="${escapeHtml(String(session.name || ''))}"
                             placeholder="Ex: Comercial SP"
                         />
@@ -1945,6 +1981,7 @@ function renderWhatsAppAccountsManager() {
                             step="1"
                             class="form-input connection-session-weight-input"
                             data-session-id="${escapeHtml(sessionId)}"
+                            ${weightFieldTourTarget}
                             value="${dispatchWeight}"
                         />
                     </div>
@@ -1956,10 +1993,11 @@ function renderWhatsAppAccountsManager() {
                             step="1"
                             class="form-input connection-session-daily-limit-input"
                             data-session-id="${escapeHtml(sessionId)}"
+                            ${dailyLimitFieldTourTarget}
                             value="${dailyLimit}"
                         />
                     </div>
-                    <label class="connection-campaign-toggle" title="Participa de campanhas e transmissões">
+                    <label class="connection-campaign-toggle" title="Participa de campanhas e transmissões"${campaignToggleTourTarget}>
                         <input
                             type="checkbox"
                             class="connection-session-enabled-input"
@@ -1968,7 +2006,7 @@ function renderWhatsAppAccountsManager() {
                         />
                         Usar em campanhas
                     </label>
-                    <button class="btn btn-outline" onclick="saveWhatsAppSessionName('${token}')">Salvar</button>
+                    <button class="btn btn-outline" onclick="saveWhatsAppSessionName('${token}')"${saveButtonTourTarget}>Salvar</button>
                     <button class="btn btn-outline-danger" onclick="removeWhatsAppSession('${token}')">Remover</button>
                 </div>
             </div>
@@ -1980,6 +2018,13 @@ async function refreshWhatsAppAccounts() {
     const container = document.getElementById('connectionAccountsList') as HTMLElement | null;
     if (container) {
         container.innerHTML = '<p style="color: var(--gray-500); margin: 0;">Carregando contas...</p>';
+    }
+
+    if (isOnboardingPresentationModeEnabled()) {
+        whatsappSessionsCache = getOnboardingPresentationWhatsappSessions();
+        renderWhatsAppAccountsManager();
+        renderBusinessHoursAccountsManager();
+        return;
     }
 
     try {
@@ -2013,6 +2058,18 @@ async function saveWhatsAppSessionName(sessionToken: string) {
     const dailyLimit = parseDailyLimit(dailyLimitInput?.value, 0);
     const campaignEnabled = Boolean(enabledInput?.checked);
 
+    if (isOnboardingPresentationModeEnabled()) {
+        patchOnboardingPresentationWhatsappSession(sessionId, {
+            name,
+            campaign_enabled: campaignEnabled,
+            daily_limit: dailyLimit,
+            dispatch_weight: dispatchWeight
+        });
+        showToast('success', 'Sucesso', 'No tour, essa alteração foi aplicada apenas na demonstração.');
+        await refreshWhatsAppAccounts();
+        return;
+    }
+
     try {
         await api.put(`/api/whatsapp/sessions/${encodeURIComponent(sessionId)}`, {
             name,
@@ -2031,6 +2088,13 @@ async function removeWhatsAppSession(sessionToken: string) {
     const sessionId = sanitizeSessionId(decodeSessionToken(sessionToken));
     if (!sessionId) return;
 
+    if (isOnboardingPresentationModeEnabled()) {
+        removeOnboardingPresentationWhatsappSession(sessionId);
+        showToast('success', 'Sucesso', 'No tour, essa remoção foi aplicada apenas na demonstração.');
+        await refreshWhatsAppAccounts();
+        return;
+    }
+
     const confirmed = await appConfirm(`Remover a conta ${sessionId}? Essa acao desconecta e exclui a sessao.`, 'Remover conta WhatsApp');
     if (!confirmed) return;
 
@@ -2048,6 +2112,11 @@ async function removeWhatsAppSession(sessionToken: string) {
 }
 
 async function connectWhatsApp() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showToast('info', 'Info', 'No tour, a conexao do WhatsApp e apenas demonstrativa.');
+        return;
+    }
+
     try {
         showLoading('Gerando QR Code...');
         const response = await api.get('/api/whatsapp/qr');
@@ -2062,6 +2131,11 @@ async function connectWhatsApp() {
 }
 
 async function disconnectWhatsApp() {
+    if (isOnboardingPresentationModeEnabled()) {
+        showToast('info', 'Info', 'No tour, a desconexao do WhatsApp e apenas demonstrativa.');
+        return;
+    }
+
     showToast('info', 'Info', 'Gerencie as contas pela lista de contas WhatsApp.');
 }
 

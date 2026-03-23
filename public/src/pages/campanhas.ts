@@ -1,5 +1,15 @@
 ﻿// Campanhas page logic migrated to module
 
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    getOnboardingPresentationCampaignRecipients,
+    getOnboardingPresentationCampaigns,
+    getOnboardingPresentationContactFields,
+    getOnboardingPresentationTags,
+    getOnboardingPresentationWhatsappSessions,
+    isOnboardingPresentationModeEnabled
+} from '../core/onboardingPresentation';
+
 type CampaignStatus = 'active' | 'paused' | 'completed' | 'draft';
 type CampaignType = 'broadcast' | 'drip';
 
@@ -132,6 +142,7 @@ let campaignMessageVariationsDrafts: string[] = [];
 let campaignMessageVariationEditingIndex: number | null = null;
 let campaignDripStepsDrafts: string[] = [];
 let expandedCampaignId: number | null = null;
+let onboardingPresentationCampaignsBridgeBound = false;
 
 function appConfirm(message: string, title = 'Confirmacao') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -139,6 +150,26 @@ function appConfirm(message: string, title = 'Confirmacao') {
         return win.showAppConfirm(message, title);
     }
     return Promise.resolve(window.confirm(message));
+}
+
+function showOnboardingPresentationCampaignsReadOnlyToast(message = 'No tour, esta acao e apenas demonstrativa e nao altera seus dados reais.') {
+    showToast('info', 'Tour guiado', message);
+}
+
+function bindOnboardingPresentationCampaignsBridge() {
+    if (onboardingPresentationCampaignsBridgeBound) return;
+    onboardingPresentationCampaignsBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        const hasCampaignsSurface = Boolean(document.getElementById('campaignsList'));
+        if (!hasCampaignsSurface) return;
+        void Promise.all([
+            loadCampaigns({ silent: true, skipLoading: true, source: 'presentation' }),
+            loadSenderSessions(),
+            loadCampaignTags(),
+            loadCampaignMessageVariables()
+        ]);
+    });
 }
 
 const DEFAULT_DELAY_MIN_SECONDS = 5;
@@ -575,6 +606,12 @@ function bindCampaignTagFilterDropdown() {
 }
 
 async function loadCampaignTags() {
+    if (isOnboardingPresentationModeEnabled()) {
+        campaignTagsCache = getOnboardingPresentationTags();
+        renderCampaignTagFilterOptions();
+        return;
+    }
+
     try {
         const response = await api.get('/api/tags');
         campaignTagsCache = Array.isArray(response?.tags) ? response.tags : [];
@@ -798,6 +835,12 @@ function bindCampaignMessageVariablePicker() {
 }
 
 async function loadCampaignMessageVariables() {
+    if (isOnboardingPresentationModeEnabled()) {
+        campaignContactFieldsCache = getOnboardingPresentationContactFields();
+        renderCampaignMessageVariableOptions();
+        return;
+    }
+
     try {
         const response: ContactFieldsResponse = await api.get('/api/contact-fields');
         campaignContactFieldsCache = Array.isArray(response?.fields) ? response.fields : [];
@@ -1336,6 +1379,12 @@ function toBooleanFlag(value: unknown, fallback = true) {
 
 async function loadSenderSessions() {
     const selectedBeforeRefresh = collectCampaignSenderAccountsFromForm();
+    if (isOnboardingPresentationModeEnabled()) {
+        senderSessions = getOnboardingPresentationWhatsappSessions();
+        renderCampaignSenderAccountsSelector(normalizeCampaignSenderAccounts(selectedBeforeRefresh));
+        return;
+    }
+
     try {
         const response: WhatsappSessionsResponse = await api.get('/api/whatsapp/sessions?includeDisabled=true');
         senderSessions = Array.isArray(response.sessions) ? response.sessions : [];
@@ -1680,6 +1729,57 @@ async function loadCampaignRecipients(campaign: Campaign, options: { preserveCon
         campaignRecipients.innerHTML = '<p style="color: var(--gray-500);">Carregando destinatários...</p>';
     }
 
+    if (isOnboardingPresentationModeEnabled()) {
+        const recipients = getOnboardingPresentationCampaignRecipients(campaign.id);
+        const total = recipients.length;
+        const segmentLabel = getCampaignSegmentLabel(campaign.segment);
+        const tagLabel = getCampaignTagFilterSummary(campaign);
+
+        if (!recipients.length) {
+            campaignRecipients.innerHTML = `
+                <p style="margin-bottom: 8px;"><strong>Segmentacao:</strong> ${escapeCampaignText(segmentLabel)}</p>
+                <p style="margin-bottom: 8px;"><strong>Tags:</strong> ${escapeCampaignText(tagLabel)}</p>
+                <p style="color: var(--gray-500);">Nenhum contato encontrado com esses filtros.</p>
+            `;
+            return;
+        }
+
+        const rows = recipients.map((lead) => {
+            const tags = parseTagsForDisplay(lead.tags).join(', ') || '-';
+            const deliveryBadge = getRecipientDeliveryBadge(lead);
+            return `
+                <tr>
+                    <td>${escapeCampaignText(lead.name || 'Sem nome')}</td>
+                    <td>${escapeCampaignText(formatCampaignPhone(lead.phone))}</td>
+                    <td>${escapeCampaignText(getLeadStatusLabel(Number(lead.status || 0)))}</td>
+                    <td>${deliveryBadge}</td>
+                    <td>${escapeCampaignText(tags)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        campaignRecipients.innerHTML = `
+            <p style="margin-bottom: 8px;"><strong>Segmentacao:</strong> ${escapeCampaignText(segmentLabel)}</p>
+            <p style="margin-bottom: 8px;"><strong>Tags:</strong> ${escapeCampaignText(tagLabel)}</p>
+            <p style="margin-bottom: 12px;"><strong>Total filtrado:</strong> ${formatNumber(total)}</p>
+            <div style="overflow-x: auto;">
+                <table class="table" style="min-width: 560px;">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>WhatsApp</th>
+                            <th>Status</th>
+                            <th>Recebeu</th>
+                            <th>Tags</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+        return;
+    }
+
     try {
         const response: CampaignRecipientsResponse = await api.get(`/api/campaigns/${campaign.id}/recipients?limit=200`);
         if (requestToken !== campaignRecipientsRequestToken) return;
@@ -1982,6 +2082,7 @@ function openBroadcastModal() {
 }
 
 async function initCampanhas() {
+    bindOnboardingPresentationCampaignsBridge();
     campaignsPageActive = true;
     pendingCampaignTagFilters = [];
     syncCampaignSegmentOptions();
@@ -2021,6 +2122,21 @@ function shouldUseLocalCampaignFallback(error: unknown) {
 }
 
 async function loadCampaigns(options: { silent?: boolean; skipLoading?: boolean; source?: string } = {}) {
+    if (isOnboardingPresentationModeEnabled()) {
+        campaigns = getOnboardingPresentationCampaigns();
+        updateStats();
+        renderCampaigns();
+        const viewedCampaign = activeCampaignDetailsId != null
+            ? campaigns.find((campaign) => campaign.id === activeCampaignDetailsId)
+            : undefined;
+        if (viewedCampaign) {
+            syncCampaignDetailsModal(viewedCampaign, {
+                refreshRecipients: shouldRefreshCampaignRecipientsInRealtime(viewedCampaign)
+            });
+        }
+        return;
+    }
+
     const cachedCampaigns = readCampaignsCache();
     if (Array.isArray(cachedCampaigns) && cachedCampaigns.length > 0) {
         campaigns = cachedCampaigns;
@@ -2229,6 +2345,12 @@ function renderCampaigns() {
 }
 
 async function saveCampaign(statusOverride?: CampaignStatus) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationCampaignsReadOnlyToast();
+        closeModal('newCampaignModal');
+        return;
+    }
+
     const campaignId = getCampaignId();
     const existingStatus = campaignId
         ? (campaigns.find((campaign) => campaign.id === campaignId)?.status || 'draft')
@@ -2387,6 +2509,11 @@ function editCampaign(id: number) {
 }
 
 async function startCampaign(id: number, options: StartCampaignOptions = {}) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationCampaignsReadOnlyToast('No tour, o status das campanhas fica bloqueado para nao alterar dados reais.');
+        return;
+    }
+
     const restart = options.restart === true;
     const confirmationAccepted = restart
         ? await appConfirm(
@@ -2446,6 +2573,11 @@ async function restartCampaign(id: number) {
 }
 
 async function pauseCampaign(id: number) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationCampaignsReadOnlyToast('No tour, o status das campanhas fica bloqueado para nao alterar dados reais.');
+        return;
+    }
+
     if (!await appConfirm('Pausar esta campanha?', 'Pausar campanha')) return;
     try {
         await api.put(`/api/campaigns/${id}`, { status: 'paused' });
@@ -2466,6 +2598,11 @@ async function pauseCampaign(id: number) {
 }
 
 async function deleteCampaign(id: number) {
+    if (isOnboardingPresentationModeEnabled()) {
+        showOnboardingPresentationCampaignsReadOnlyToast();
+        return;
+    }
+
     if (!await appConfirm('Excluir esta campanha?', 'Excluir campanha')) return;
     try {
         await api.delete(`/api/campaigns/${id}`);

@@ -6150,6 +6150,10 @@ function normalizeAutomationText(value = '') {
 
         .replace(/[\u0300-\u036f]/g, '')
 
+        .replace(/[^a-z0-9\s]/g, ' ')
+
+        .replace(/\s+/g, ' ')
+
         .trim();
 
 }
@@ -6169,24 +6173,13 @@ function extractAutomationKeywords(value = '') {
 }
 
 
-
-function escapeAutomationRegex(value = '') {
-
-    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-}
-
-
-
 function matchesAutomationKeyword(normalizedText = '', keyword = '') {
 
-    const text = String(normalizedText || '').trim();
+    const text = normalizeAutomationText(normalizedText);
     const normalizedKeyword = normalizeAutomationText(keyword);
     if (!text || !normalizedKeyword) return false;
 
-    const keywordPattern = escapeAutomationRegex(normalizedKeyword).replace(/\s+/g, '\\s+');
-    const regex = new RegExp(`(?:^|[^a-z0-9])${keywordPattern}(?:$|[^a-z0-9])`, 'i');
-    return regex.test(text);
+    return ` ${text} `.includes(` ${normalizedKeyword} `);
 
 }
 
@@ -6711,8 +6704,10 @@ function shouldAutomationRunForSession(automation, sessionId) {
 }
 
 function shouldAutomationRunForLeadTags(automation, lead) {
+    const tagFilters = parseAutomationTagFilters(automation?.tag_filter);
+    if (!tagFilters.length) return true;
     if (!lead) return false;
-    return leadMatchesUnifiedTagFilter(lead?.tags, automation?.tag_filter);
+    return leadMatchesUnifiedTagFilter(lead?.tags, tagFilters);
 }
 
 async function resolveAutomationConversation(lead, baseConversation = null, sessionId = DEFAULT_AUTOMATION_SESSION_ID) {

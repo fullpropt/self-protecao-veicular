@@ -290,8 +290,10 @@ export default function PreCheckout() {
             onSubmit={handleSubmit}
           />
         </section>
+      </div>
 
-        <footer className="precheckout-footer" aria-label="Rodapé principal">
+      <footer className="precheckout-footer" aria-label="Rodapé principal">
+        <div className="precheckout-footer-shell">
           <div className="precheckout-footer-grid">
             <section className="precheckout-footer-brand-col" aria-label="Marca e posicionamento">
               <a href="#/home" className="precheckout-footer-brand" aria-label={`${brandName} pagina inicial`}>
@@ -325,8 +327,8 @@ export default function PreCheckout() {
           <div className="precheckout-footer-bottom">
             <span>{`© ${currentYear} ${brandName} Networks. Todos os direitos reservados.`}</span>
           </div>
-        </footer>
-      </div>
+        </div>
+      </footer>
     </main>
   );
 }

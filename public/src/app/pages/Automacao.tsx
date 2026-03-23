@@ -374,7 +374,7 @@ export default function Automacao() {
                   </div>
                   <div className="page-actions">
                       <button className="btn btn-outline btn-refresh-outline" onClick={() => globals.loadAutomations?.()}><span className="icon icon-refresh icon-sm"></span> Atualizar</button>
-                      <button className="btn btn-primary" onClick={() => (globals.openAutomationModal ? globals.openAutomationModal() : globals.openModal?.('newAutomationModal'))}><span className="icon icon-add icon-sm"></span> Nova Automação</button>
+                      <button className="btn btn-primary" data-tour-target="automation-new-button" onClick={() => (globals.openAutomationModal ? globals.openAutomationModal() : globals.openModal?.('newAutomationModal'))}><span className="icon icon-add icon-sm"></span> Nova Automação</button>
                   </div>
               </div>
       
@@ -428,7 +428,7 @@ export default function Automacao() {
                           <input type="hidden" id="automationId" />
                           <div className="form-group">
                               <label className="form-label required">Nome da Automação</label>
-                              <input type="text" className="form-input" id="automationName" required placeholder="Ex: Boas-vindas automática" />
+                              <input type="text" className="form-input" id="automationName" data-tour-target="automation-name-field" required placeholder="Ex: Boas-vindas automática" />
                           </div>
                           
                           <div className="form-group">
@@ -442,7 +442,7 @@ export default function Automacao() {
                           
                           <div className="form-group">
                               <label className="form-label required">Tipo de Gatilho</label>
-                              <select className="form-select" id="triggerType" onChange={() => globals.updateTriggerOptions?.()}>
+                              <select className="form-select" id="triggerType" data-tour-target="automation-trigger-select" onChange={() => globals.updateTriggerOptions?.()}>
                                   <option value="message_received">Mensagem recebida</option>
                                   <option value="keyword">Palavra-chave detectada</option>
                                   <option value="inactivity">Inatividade</option>
@@ -458,7 +458,7 @@ export default function Automacao() {
                           
                           <div className="form-group">
                               <label className="form-label required">Tipo de Ação</label>
-                              <select className="form-select" id="actionType" onChange={() => globals.updateActionOptions?.()}>
+                              <select className="form-select" id="actionType" data-tour-target="automation-action-select" onChange={() => globals.updateActionOptions?.()}>
                                   <option value="send_message">Enviar mensagem</option>
                                   <option value="change_status">Alterar status</option>
                                   <option value="add_tag">Adicionar tag</option>

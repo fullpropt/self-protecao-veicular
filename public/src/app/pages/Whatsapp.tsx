@@ -272,6 +272,13 @@ export default function Whatsapp() {
             background: rgba(20, 50, 74, 0.96);
             box-shadow: 0 0 0 1px rgba(var(--primary-rgb), 0.28);
         }
+        .whatsapp-react .whatsapp-session-list-item.is-expanded {
+            border-color: rgba(var(--primary-rgb), 0.76);
+            background: linear-gradient(180deg, rgba(20, 47, 72, 0.96) 0%, rgba(17, 41, 64, 0.94) 100%);
+            box-shadow:
+                0 0 0 1px rgba(var(--primary-rgb), 0.24),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
         .whatsapp-react .whatsapp-session-list-main {
             display: flex;
             align-items: center;
@@ -373,11 +380,13 @@ export default function Whatsapp() {
             gap: 8px;
             padding: 18px 20px;
             border-radius: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(148, 163, 184, 0.14);
             background:
-                radial-gradient(circle at top right, var(--plan-glow, rgba(255, 255, 255, 0.12)), transparent 48%),
-                linear-gradient(135deg, rgba(17, 32, 53, 0.94) 0%, rgba(10, 22, 38, 0.98) 100%);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+                radial-gradient(circle at top right, var(--plan-glow, rgba(255, 255, 255, 0.08)), transparent 44%),
+                linear-gradient(180deg, rgba(11, 23, 38, 0.96) 0%, rgba(8, 18, 31, 0.98) 100%);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.02),
+                0 12px 24px rgba(2, 8, 20, 0.16);
         }
 
         .whatsapp-react .whatsapp-plan-panel::after {
@@ -389,28 +398,28 @@ export default function Whatsapp() {
             border-radius: 50%;
             background: var(--plan-orb, rgba(255, 255, 255, 0.12));
             filter: blur(60px);
-            opacity: 0.5;
+            opacity: 0.28;
             pointer-events: none;
         }
 
         .whatsapp-react .whatsapp-plan-panel--starter {
-            --plan-glow: rgba(34, 197, 94, 0.22);
-            --plan-orb: rgba(34, 197, 94, 0.18);
+            --plan-glow: rgba(34, 197, 94, 0.12);
+            --plan-orb: rgba(34, 197, 94, 0.1);
         }
 
         .whatsapp-react .whatsapp-plan-panel--premium {
-            --plan-glow: rgba(226, 232, 240, 0.2);
-            --plan-orb: rgba(148, 163, 184, 0.18);
+            --plan-glow: rgba(148, 163, 184, 0.12);
+            --plan-orb: rgba(148, 163, 184, 0.1);
         }
 
         .whatsapp-react .whatsapp-plan-panel--advanced {
-            --plan-glow: rgba(245, 158, 11, 0.22);
-            --plan-orb: rgba(251, 191, 36, 0.18);
+            --plan-glow: rgba(245, 158, 11, 0.13);
+            --plan-orb: rgba(251, 191, 36, 0.1);
         }
 
         .whatsapp-react .whatsapp-plan-panel--monster {
-            --plan-glow: rgba(96, 165, 250, 0.24);
-            --plan-orb: rgba(34, 211, 238, 0.18);
+            --plan-glow: rgba(96, 165, 250, 0.14);
+            --plan-orb: rgba(34, 211, 238, 0.1);
         }
 
         .whatsapp-react .whatsapp-plan-label {
@@ -420,7 +429,7 @@ export default function Whatsapp() {
             font-weight: 700;
             letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: rgba(191, 212, 233, 0.7);
+            color: rgba(148, 163, 184, 0.74);
         }
 
         .whatsapp-react .whatsapp-plan-name {
@@ -431,26 +440,25 @@ export default function Whatsapp() {
             font-weight: 800;
             line-height: 0.95;
             letter-spacing: -0.05em;
-            color: transparent;
-            background: linear-gradient(120deg, #f8fafc 0%, #dbeafe 100%);
-            background-clip: text;
-            -webkit-background-clip: text;
+            color: #dbe4ef;
+            background: none;
+            -webkit-text-fill-color: currentColor;
         }
 
         .whatsapp-react .whatsapp-plan-panel--starter .whatsapp-plan-name {
-            background-image: linear-gradient(120deg, #d1fae5 0%, #4ade80 50%, #15803d 100%);
+            color: #bfe9cf;
         }
 
         .whatsapp-react .whatsapp-plan-panel--premium .whatsapp-plan-name {
-            background-image: linear-gradient(120deg, #ffffff 0%, #dce3eb 40%, #94a3b8 100%);
+            color: #d6deea;
         }
 
         .whatsapp-react .whatsapp-plan-panel--advanced .whatsapp-plan-name {
-            background-image: linear-gradient(120deg, #fef3c7 0%, #fbbf24 45%, #b45309 100%);
+            color: #e9d39a;
         }
 
         .whatsapp-react .whatsapp-plan-panel--monster .whatsapp-plan-name {
-            background-image: linear-gradient(120deg, #e0f2fe 0%, #7dd3fc 28%, #60a5fa 58%, #22d3ee 100%);
+            color: #bedef3;
         }
 
         .whatsapp-react .whatsapp-plan-copy,
@@ -461,13 +469,13 @@ export default function Whatsapp() {
         }
 
         .whatsapp-react .whatsapp-plan-copy {
-            color: var(--dark);
+            color: rgba(221, 230, 240, 0.88);
             font-size: 14px;
             font-weight: 600;
         }
 
         .whatsapp-react .whatsapp-plan-hint {
-            color: rgba(191, 212, 233, 0.82);
+            color: rgba(159, 175, 196, 0.78);
             font-size: 13px;
             line-height: 1.55;
         }
@@ -1051,6 +1059,7 @@ export default function Whatsapp() {
                           <div className="session-controls">
                               <select
                                   id="whatsapp-session-select"
+                                  data-tour-target="whatsapp-session-select"
                                   className="form-select"
                                   defaultValue=""
                                   onChange={(event) => {
@@ -1060,7 +1069,12 @@ export default function Whatsapp() {
                               >
                                   <option value="">Carregando contas...</option>
                               </select>
-                              <button type="button" className="btn btn-outline" onClick={() => globals.createSessionPrompt?.()}>
+                              <button
+                                  type="button"
+                                  className="btn btn-outline"
+                                  data-tour-target="whatsapp-new-account-button"
+                                  onClick={() => globals.createSessionPrompt?.()}
+                              >
                                   + Nova Conta
                               </button>
                           </div>
@@ -1095,11 +1109,11 @@ export default function Whatsapp() {
                                       Por segurança, o QR Code será atualizado em <strong id="timer-countdown">30</strong> segundos
                                   </p>
                                   
-                                  <button className="btn btn-whatsapp" id="connect-btn" onClick={() => globals.startConnection?.()}>Conectar WhatsApp</button>
+                                  <button className="btn btn-whatsapp" id="connect-btn" data-tour-target="whatsapp-connect-button" onClick={() => globals.startConnection?.()}>Conectar WhatsApp</button>
 
                               </div>
                               
-                              <div className="instructions">
+                              <div className="instructions" data-tour-target="whatsapp-instructions">
                                   <h3>Como conectar</h3>
                                   <div className="instruction-step">
                                       <span className="step-number">1</span>

@@ -12,8 +12,9 @@
   --pc-primary-dark: #00c77f;
   --pc-cyan: #00f0ff;
   --pc-danger: #ff7979;
+  --precheckout-page-pad-x: 24px;
   min-height: 100vh;
-  padding: 24px;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) 24px 0;
   position: relative;
   overflow-x: hidden;
   background:
@@ -425,15 +426,19 @@
 }
 
 .precheckout-footer {
-  margin-top: 28px;
-  border-radius: 20px;
-  border: 1px solid var(--pc-border);
-  border-top-color: rgba(255, 255, 255, 0.12);
+  margin-top: 56px;
+  margin-left: calc(var(--precheckout-page-pad-x) * -1);
+  margin-right: calc(var(--precheckout-page-pad-x) * -1);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: #0C0C0E;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-    0 18px 42px rgba(1, 4, 12, 0.46);
-  padding: 0 28px 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  padding: 0 var(--precheckout-page-pad-x) env(safe-area-inset-bottom, 0px);
+}
+
+.precheckout-footer-shell {
+  width: min(1120px, 100%);
+  margin: 0 auto;
 }
 
 .precheckout-footer-grid {
@@ -518,7 +523,8 @@
 
 @media (max-width: 1024px) {
   .precheckout-page {
-    padding: 18px;
+    --precheckout-page-pad-x: 18px;
+    padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px 0;
   }
 
   .precheckout-content {
@@ -535,7 +541,8 @@
   }
 
   .precheckout-footer {
-    padding: 0 20px 10px;
+    margin-top: 44px;
+    padding-bottom: 0;
   }
 
   .precheckout-footer-grid {
@@ -569,7 +576,8 @@
 
 @media (max-width: 680px) {
   .precheckout-page {
-    padding: 12px;
+    --precheckout-page-pad-x: 12px;
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 12px 0;
   }
 
   .precheckout-header {
@@ -742,14 +750,15 @@
   }
 
   .precheckout-footer {
-    margin-top: 20px;
-    border-radius: 12px;
-    padding: 0 14px 10px;
+    margin-top: 28px;
+    padding-bottom: 0;
   }
 
   .precheckout-footer-grid {
     padding: 12px 0 10px;
     gap: 10px;
+    justify-items: center;
+    text-align: center;
   }
 
   .precheckout-footer-grid > :nth-child(2) {
@@ -758,6 +767,7 @@
 
   .precheckout-footer-brand {
     font-size: 18px;
+    justify-self: center;
   }
 
   .precheckout-footer-brand img {
@@ -777,6 +787,19 @@
   .precheckout-footer-col ul {
     margin-top: 9px;
     gap: 6px;
+    justify-items: center;
+  }
+
+  .precheckout-footer-brand-col,
+  .precheckout-footer-col {
+    display: grid;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .precheckout-footer-col a {
+    justify-content: center;
+    text-align: center;
   }
 
   .precheckout-footer-bottom {
@@ -789,4 +812,3 @@
     font-size: 12px;
   }
 }
-

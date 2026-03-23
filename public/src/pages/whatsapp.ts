@@ -1,5 +1,17 @@
 ﻿// WhatsApp page logic migrated to module
 
+import {
+    ONBOARDING_PRESENTATION_EVENT,
+    getOnboardingPresentationReusableWhatsappSessionId,
+    getOnboardingPresentationWhatsappPlanUsage,
+    getOnboardingPresentationWhatsappSessionById,
+    getOnboardingPresentationWhatsappSessions,
+    isOnboardingPresentationModeEnabled,
+    patchOnboardingPresentationWhatsappSession,
+    removeOnboardingPresentationWhatsappSession,
+    upsertOnboardingPresentationWhatsappSession
+} from '../core/onboardingPresentation';
+
 declare const io:
     | undefined
     | ((url: string, options?: Record<string, unknown>) => {
@@ -70,6 +82,8 @@ let pairingCodeHideTimer: number | null = null;
 let pairingCodeVisible = false;
 let lastPairingCode = '';
 let qrGenerationWatchdog: number | null = null;
+let onboardingPresentationWhatsappBridgeBound = false;
+let onboardingPresentationConnectTimer: number | null = null;
 const reconnectUiRequestedSessionIds = new Set<string>();
 const numberFormatter = new Intl.NumberFormat('pt-BR');
 let whatsappPlanUsageState = {
@@ -79,6 +93,41 @@ let whatsappPlanUsageState = {
     max: null as number | null,
     unlimited: true
 };
+
+function normalizeDisplayedPlanName(value: unknown) {
+    const rawPlanName = String(value || '').trim();
+    if (!rawPlanName) return 'Plano';
+
+    const normalizedPlanName = rawPlanName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+    if (normalizedPlanName.includes('premium') || normalizedPlanName.includes('monster')) {
+        return 'Premium';
+    }
+
+    const withoutBrand = rawPlanName.replace(/^zapvender\s+/i, '').trim();
+    return withoutBrand || rawPlanName;
+}
+
+function buildPresentationSessionName(sessionId: string) {
+    const normalizedSessionId = sanitizeSessionId(sessionId);
+    if (!normalizedSessionId) return 'Nova conta';
+
+    const cleaned = normalizedSessionId
+        .replace(/_session(?:_\d+)?$/i, '')
+        .replace(/[_-]+/g, ' ')
+        .trim();
+
+    if (!cleaned) return 'Nova conta';
+
+    return cleaned
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
 
 function appConfirm(message: string, title = 'Confirmação') {
     const win = window as Window & { showAppConfirm?: (message: string, title?: string) => Promise<boolean> };
@@ -127,7 +176,7 @@ function renderWhatsappPlanUsage() {
         return;
     }
 
-    const planName = String(whatsappPlanUsageState.planName || 'Plano').trim() || 'Plano';
+    const planName = normalizeDisplayedPlanName(whatsappPlanUsageState.planName);
     const normalizedPlanToken = planName
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -166,6 +215,19 @@ function updateWhatsappPlanUsageCurrent(current: number) {
 }
 
 async function loadWhatsappPlanUsage() {
+    if (isOnboardingPresentationModeEnabled()) {
+        const presentationUsage = getOnboardingPresentationWhatsappPlanUsage();
+        whatsappPlanUsageState = {
+            loaded: true,
+            planName: presentationUsage.planName,
+            current: presentationUsage.current,
+            max: presentationUsage.max,
+            unlimited: presentationUsage.unlimited
+        };
+        renderWhatsappPlanUsage();
+        return;
+    }
+
     try {
         if (!api?.get) throw new Error('API indisponível');
         const response = await api.get('/api/plan/status') as PlanStatusApiPayload;
@@ -183,6 +245,67 @@ async function loadWhatsappPlanUsage() {
         whatsappPlanUsageState.loaded = true;
     }
     renderWhatsappPlanUsage();
+}
+
+function clearOnboardingPresentationConnectTimer() {
+    if (onboardingPresentationConnectTimer !== null) {
+        window.clearTimeout(onboardingPresentationConnectTimer);
+        onboardingPresentationConnectTimer = null;
+    }
+}
+
+function bindOnboardingPresentationWhatsappBridge() {
+    if (onboardingPresentationWhatsappBridgeBound) return;
+    onboardingPresentationWhatsappBridgeBound = true;
+
+    window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        if (!document.getElementById('whatsapp-session-select')) return;
+
+        if (!isOnboardingPresentationModeEnabled()) {
+            initWhatsapp();
+            return;
+        }
+
+        currentSessionId = getStoredSessionId();
+        syncGlobalAppSessionId(currentSessionId);
+        availableSessions = getOnboardingPresentationWhatsappSessions();
+        renderSessionOptions();
+        syncOnboardingPresentationSessionUi();
+        void loadWhatsappPlanUsage();
+    });
+}
+
+function syncOnboardingPresentationSessionUi() {
+    if (!isOnboardingPresentationModeEnabled()) return;
+
+    const currentPresentationSession = getOnboardingPresentationWhatsappSessionById(getCurrentSessionId())
+        || getOnboardingPresentationWhatsappSessions()[0]
+        || null;
+
+    if (!currentPresentationSession) {
+        resetConnectionUi();
+        return;
+    }
+
+    const nextSessionId = sanitizeSessionId(currentPresentationSession.session_id, getDefaultSessionId());
+    if (nextSessionId && nextSessionId !== currentSessionId) {
+        currentSessionId = nextSessionId;
+        persistCurrentSessionId(currentSessionId);
+        syncGlobalAppSessionId(currentSessionId);
+    }
+
+    if (isConnectedSession(currentPresentationSession)) {
+        handleConnected(
+            {
+                name: currentPresentationSession.name || getSessionDisplayName(currentPresentationSession),
+                phone: String(currentPresentationSession.phone || '')
+            },
+            { force: true }
+        );
+        return;
+    }
+
+    handleDisconnected({ force: true });
 }
 
 // InicializaÃ§Ã£o
@@ -316,6 +439,11 @@ function markReconnectUiRequested(sessionId: string) {
     reconnectUiRequestedSessionIds.add(normalizedSessionId);
 }
 
+function setExclusiveReconnectUiRequested(sessionId: string) {
+    reconnectUiRequestedSessionIds.clear();
+    markReconnectUiRequested(sessionId);
+}
+
 function unmarkReconnectUiRequested(sessionId: string) {
     const normalizedSessionId = sanitizeSessionId(sessionId);
     if (!normalizedSessionId) return;
@@ -351,6 +479,36 @@ function syncConnectionSectionVisibility() {
     if (connected) connected.style.display = 'none';
     if (disconnected) disconnected.style.display = 'block';
     if (idleState) idleState.style.display = 'none';
+}
+
+function revealCurrentSessionReconnectUi(options: { scrollToConnectButton?: boolean } = {}) {
+    const currentId = getCurrentSessionId();
+    if (!currentId) return;
+
+    window.requestAnimationFrame(() => {
+        const list = getSessionListElement();
+        const button = list
+            ? Array.from(list.querySelectorAll<HTMLButtonElement>('.whatsapp-session-list-item[data-session-id]'))
+                .find((item) => sanitizeSessionId(item.dataset.sessionId) === currentId) || null
+            : null;
+
+        button?.scrollIntoView({
+            behavior: isOnboardingPresentationModeEnabled() ? 'auto' : 'smooth',
+            block: 'nearest',
+            inline: 'nearest'
+        });
+
+        if (!options.scrollToConnectButton) return;
+
+        const detailsTarget = (document.getElementById(isConnected ? 'connected-state' : 'disconnected-state')
+            || document.getElementById('connect-btn')) as HTMLElement | null;
+
+        detailsTarget?.scrollIntoView({
+            behavior: isOnboardingPresentationModeEnabled() ? 'auto' : 'smooth',
+            block: 'center',
+            inline: 'nearest'
+        });
+    });
 }
 
 function syncCurrentSessionFromSelect() {
@@ -435,11 +593,14 @@ function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
         const isExpanded = shouldShowReconnectUiForSession(sessionId);
         const detail = displayName === sessionId ? statusLabel : sessionId;
 
+        const expandedTargetAttr = isActive && isExpanded ? ' data-tour-target="whatsapp-expanded-session"' : '';
+
         return `
             <button
                 type="button"
-                class="whatsapp-session-list-item${isActive ? ' is-active' : ''}"
+                class="whatsapp-session-list-item${isActive ? ' is-active' : ''}${isExpanded ? ' is-expanded' : ''}"
                 data-session-id="${escapeHtml(sessionId)}"
+                ${expandedTargetAttr}
                 title="Mostrar ou ocultar detalhes da conta ${escapeHtml(displayName)}"
                 aria-expanded="${isExpanded ? 'true' : 'false'}"
             >
@@ -466,7 +627,7 @@ function renderSessionList(sessions: WhatsappSessionItem[], currentId: string) {
                     unmarkReconnectUiRequested(nextSessionId);
                     syncConnectionSectionVisibility();
                 } else {
-                    markReconnectUiRequested(nextSessionId);
+                    setExclusiveReconnectUiRequested(nextSessionId);
                     if (!isConnected) {
                         resetConnectionUi();
                     } else {
@@ -538,6 +699,27 @@ function renderSessionOptions() {
 
 async function loadSessionOptions(preferredSessionId?: string) {
     const fallbackSessionId = sanitizeSessionId(preferredSessionId, getCurrentSessionId());
+    if (isOnboardingPresentationModeEnabled()) {
+        availableSessions = getOnboardingPresentationWhatsappSessions();
+        updateWhatsappPlanUsageCurrent(availableSessions.length);
+
+        const availableSessionIds = new Set(
+            (availableSessions || [])
+                .map((session) => sanitizeSessionId(session?.session_id))
+                .filter(Boolean)
+        );
+        const nextSessionId = availableSessionIds.has(fallbackSessionId)
+            ? fallbackSessionId
+            : sanitizeSessionId(availableSessions[0]?.session_id, getDefaultSessionId());
+
+        currentSessionId = sanitizeSessionId(nextSessionId, getDefaultSessionId());
+        persistCurrentSessionId(currentSessionId);
+        syncGlobalAppSessionId(currentSessionId);
+        renderSessionOptions();
+        syncOnboardingPresentationSessionUi();
+        return;
+    }
+
     try {
         if (!api?.get) throw new Error('API indisponível');
         const response = await api.get('/api/whatsapp/sessions?includeDisabled=true');
@@ -603,18 +785,27 @@ function resetConnectionUi() {
 function changeSession(sessionId: string, options: { revealReconnectUi?: boolean } = {}) {
     const normalizedSessionId = sanitizeSessionId(sessionId, getDefaultSessionId());
     if (options.revealReconnectUi) {
-        markReconnectUiRequested(normalizedSessionId);
+        setExclusiveReconnectUiRequested(normalizedSessionId);
     }
     currentSessionId = normalizedSessionId;
     persistCurrentSessionId(normalizedSessionId);
     syncGlobalAppSessionId(normalizedSessionId);
     renderSessionOptions();
     resetConnectionUi();
+    if (isOnboardingPresentationModeEnabled()) {
+        syncOnboardingPresentationSessionUi();
+        if (options.revealReconnectUi) {
+            revealCurrentSessionReconnectUi({ scrollToConnectButton: true });
+        }
+        return;
+    }
     socket?.emit('check-session', { sessionId: normalizedSessionId });
 }
 
 async function createSessionPrompt() {
-    const suggestedSessionId = getSuggestedNewSessionId();
+    const suggestedSessionId = isOnboardingPresentationModeEnabled()
+        ? getOnboardingPresentationReusableWhatsappSessionId(getDefaultSessionId())
+        : getSuggestedNewSessionId();
     const rawInput = await appPrompt(
         'Informe o identificador da nova conta WhatsApp (ex: vendas_sp_session):',
         {
@@ -638,12 +829,42 @@ async function createSessionPrompt() {
     }
 
     const alreadyExists = availableSessions.some((session) => sanitizeSessionId(session.session_id) === normalized);
-    if (!alreadyExists) {
+    if (!alreadyExists && !isOnboardingPresentationModeEnabled()) {
         availableSessions.push({
             session_id: normalized,
             status: 'disconnected',
             connected: false
         });
+    }
+
+    if (isOnboardingPresentationModeEnabled()) {
+        currentSessionId = normalized;
+        persistCurrentSessionId(normalized);
+        syncGlobalAppSessionId(normalized);
+        setExclusiveReconnectUiRequested(normalized);
+
+        upsertOnboardingPresentationWhatsappSession({
+            session_id: normalized,
+            name: buildPresentationSessionName(normalized),
+            status: 'disconnected',
+            connected: false,
+            campaign_enabled: true,
+            daily_limit: 80,
+            dispatch_weight: 1
+        });
+
+        currentSessionId = normalized;
+        persistCurrentSessionId(normalized);
+        syncGlobalAppSessionId(normalized);
+        setExclusiveReconnectUiRequested(normalized);
+        availableSessions = getOnboardingPresentationWhatsappSessions();
+        updateWhatsappPlanUsageCurrent(availableSessions.length);
+        renderSessionOptions();
+        resetConnectionUi();
+        syncOnboardingPresentationSessionUi();
+        revealCurrentSessionReconnectUi({ scrollToConnectButton: true });
+        showToast('info', `Conta selecionada: ${normalized}`);
+        return;
     }
 
     changeSession(normalized, { revealReconnectUi: true });
@@ -653,8 +874,19 @@ async function createSessionPrompt() {
 // Inicializa??o
 function initWhatsapp() {
     if (!checkAuth()) return;
+    bindOnboardingPresentationWhatsappBridge();
+    clearOnboardingPresentationConnectTimer();
 
     void (async () => {
+        if (isOnboardingPresentationModeEnabled()) {
+            currentSessionId = getStoredSessionId();
+            syncGlobalAppSessionId(currentSessionId);
+            bindPairingCodeCopy();
+            await loadWhatsappPlanUsage();
+            await loadSessionOptions(currentSessionId);
+            return;
+        }
+
         await resolvePreferredDefaultSessionId();
         currentSessionId = getStoredSessionId();
         syncGlobalAppSessionId(currentSessionId);
@@ -741,6 +973,7 @@ function initSocket() {
     socketBound = true;
 
     socket.on('connect', function() {
+        if (isOnboardingPresentationModeEnabled()) return;
         console.log('âœ… Socket conectado');
         showToast('success', 'Conectado ao servidor');
         
@@ -750,11 +983,13 @@ function initSocket() {
     });
     
     socket.on('disconnect', function() {
+        if (isOnboardingPresentationModeEnabled()) return;
         console.log('âŒ Socket desconectado');
         showToast('warning', 'ConexÃ£o com servidor perdida');
     });
     
     socket.on('connect_error', function(error) {
+        if (isOnboardingPresentationModeEnabled()) return;
         console.error('âŒ Erro de conexÃ£o:', error);
         showToast('error', 'Erro ao conectar com servidor');
         if (isConnecting) {
@@ -764,6 +999,7 @@ function initSocket() {
     
     // Eventos do WhatsApp
     socket.on('session-status', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         console.log('ðŸ“± Status da sessÃ£o:', data);
         const normalizedStatus = String(data?.status || '').trim().toLowerCase();
@@ -785,6 +1021,7 @@ function initSocket() {
     });
     
     socket.on('qr', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         console.log('ðŸ“· QR Code recebido');
         clearQrGenerationWatchdog();
@@ -799,6 +1036,7 @@ function initSocket() {
     });
 
     socket.on('pairing-code', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         console.log('Pairing code recebido');
         clearQrGenerationWatchdog();
@@ -810,6 +1048,7 @@ function initSocket() {
     });
     
     socket.on('connecting', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         console.log('ðŸ”„ Conectando...');
         updateStatus('connecting', 'Conectando...');
@@ -817,12 +1056,14 @@ function initSocket() {
     });
 
     socket.on('reconnecting', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         updateStatus('connecting', 'Reconectando...');
         showQRLoading('Reconectando sessão...');
     });
     
     socket.on('connected', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         console.log('âœ… WhatsApp conectado:', data);
         clearQrGenerationWatchdog();
@@ -831,6 +1072,7 @@ function initSocket() {
     });
     
     socket.on('disconnected', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         console.log('âŒ WhatsApp desconectado');
         clearQrGenerationWatchdog();
@@ -839,6 +1081,7 @@ function initSocket() {
     });
 
     socket.on('qr-expired', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         if (isConnected) return;
         showQRLoading('QR expirado. Gerando novo QR Code...');
@@ -846,6 +1089,7 @@ function initSocket() {
     });
     
     socket.on('error', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         console.error('âŒ Erro:', data);
         clearQrGenerationWatchdog();
         showToast('error', data.message || 'Erro na operaÃ§Ã£o');
@@ -859,6 +1103,7 @@ function initSocket() {
     });
     
     socket.on('auth-failure', function(data) {
+        if (isOnboardingPresentationModeEnabled()) return;
         if (!isPayloadForCurrentSession(data)) return;
         console.error('âŒ Falha na autenticaÃ§Ã£o');
         showToast('error', 'Falha na autenticaÃ§Ã£o. Tente novamente.');
@@ -871,8 +1116,33 @@ function initSocket() {
 function startConnection() {
     if (isConnecting) return;
     const sessionId = syncCurrentSessionFromSelect();
-    markReconnectUiRequested(sessionId);
+    setExclusiveReconnectUiRequested(sessionId);
     syncConnectionSectionVisibility();
+
+    if (isOnboardingPresentationModeEnabled()) {
+        isConnecting = true;
+        updateConnectButton(true);
+        updatePairingButton(true);
+        hidePairingCode();
+        showQRLoading('Simulando conexão do tour...');
+        clearOnboardingPresentationConnectTimer();
+        onboardingPresentationConnectTimer = window.setTimeout(() => {
+            onboardingPresentationConnectTimer = null;
+            const currentSession = getOnboardingPresentationWhatsappSessionById(sessionId);
+            patchOnboardingPresentationWhatsappSession(sessionId, {
+                connected: true,
+                status: 'connected',
+                name: String(currentSession?.name || '').trim() || 'Conta conectada',
+                phone: String(currentSession?.phone || '').trim() || '5527998763040'
+            });
+            availableSessions = getOnboardingPresentationWhatsappSessions();
+            renderSessionOptions();
+            syncOnboardingPresentationSessionUi();
+            showToast('info', 'No tour, esta conexão e apenas demonstrativa.');
+        }, 900);
+        return;
+    }
+
     if (!socket) {
         initSocket();
     }
@@ -908,8 +1178,14 @@ function startConnection() {
 function requestPairingCode() {
     if (isConnecting) return;
     const sessionId = syncCurrentSessionFromSelect();
-    markReconnectUiRequested(sessionId);
+    setExclusiveReconnectUiRequested(sessionId);
     syncConnectionSectionVisibility();
+
+    if (isOnboardingPresentationModeEnabled()) {
+        showToast('info', 'No tour, o pareamento e apenas demonstrativo.');
+        return;
+    }
+
     if (!socket) {
         initSocket();
     }
@@ -953,13 +1229,25 @@ async function disconnectSession() {
         return;
     }
 
+    if (isOnboardingPresentationModeEnabled()) {
+        patchOnboardingPresentationWhatsappSession(sessionId, {
+            connected: false,
+            status: 'disconnected'
+        });
+        availableSessions = getOnboardingPresentationWhatsappSessions();
+        renderSessionOptions();
+        syncOnboardingPresentationSessionUi();
+        showToast('info', 'No tour, esta desconexão e apenas demonstrativa.');
+        return;
+    }
+
     if (await appConfirm(`Tem certeza que deseja desconectar a conta ${sessionId}? Ela permanecera cadastrada para reconectar depois.`, 'Desconectar conta WhatsApp')) {
         try {
             if (typeof api?.post !== 'function') {
                 throw new Error('API indisponivel');
             }
 
-            markReconnectUiRequested(sessionId);
+            setExclusiveReconnectUiRequested(sessionId);
             await api.post('/api/whatsapp/disconnect', { sessionId });
             handleDisconnected();
             await loadSessionOptions(sessionId);
@@ -978,6 +1266,20 @@ async function removeSession() {
     const sessionId = syncCurrentSessionFromSelect();
     if (!sessionId) {
         showToast('warning', 'Nenhuma conta selecionada.');
+        return;
+    }
+
+    if (isOnboardingPresentationModeEnabled()) {
+        removeOnboardingPresentationWhatsappSession(sessionId);
+        const nextSessions = getOnboardingPresentationWhatsappSessions();
+        const fallbackSessionId = sanitizeSessionId(nextSessions[0]?.session_id, getDefaultSessionId());
+        currentSessionId = fallbackSessionId;
+        persistCurrentSessionId(currentSessionId);
+        syncGlobalAppSessionId(currentSessionId);
+        availableSessions = nextSessions;
+        renderSessionOptions();
+        syncOnboardingPresentationSessionUi();
+        showToast('info', 'No tour, esta remoção e apenas demonstrativa.');
         return;
     }
 
@@ -1149,7 +1451,8 @@ function startQRTimer() {
 }
 
 // Handle conexÃ£o estabelecida
-function handleConnected(user: { name?: string; phone?: string } | undefined) {
+function handleConnected(user: { name?: string; phone?: string } | undefined, options: { force?: boolean } = {}) {
+    if (isOnboardingPresentationModeEnabled() && !options.force) return;
     const wasConnected = isConnected;
     isConnected = true;
     isConnecting = false;
@@ -1177,7 +1480,8 @@ function handleConnected(user: { name?: string; phone?: string } | undefined) {
 }
 
 // Handle desconexÃ£o
-function handleDisconnected() {
+function handleDisconnected(options: { force?: boolean } = {}) {
+    if (isOnboardingPresentationModeEnabled() && !options.force) return;
     isConnected = false;
     isConnecting = false;
     clearQrGenerationWatchdog();
