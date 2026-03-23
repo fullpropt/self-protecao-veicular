@@ -762,7 +762,7 @@ export default function Contatos() {
                 <input type="hidden" id="contactTags" />
                 <p className="form-help">Selecione uma ou mais tags na lista.</p>
               </div>
-              <div className="form-row" id="contactCustomFields"></div>
+              <div className="form-row" id="contactCustomFields" data-tour-target="contacts-custom-fields-row"></div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Status</label>

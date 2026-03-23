@@ -306,7 +306,7 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     session_id: 'zv_demo1_session',
     session_label: 'Conta 1',
     notes: 'Prefere atendimento no periodo da tarde.',
-    custom_fields: { cidade: 'Vitoria', curso: 'Inscricao 2026', origem: 'Indicacao' }
+    custom_fields: { cidade: 'Vitoria', idade: '34', estado: 'ES' }
   },
   {
     id: 9102,
@@ -321,7 +321,7 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     session_id: 'zv_demo1_session',
     session_label: 'Conta 1',
     notes: 'Solicitou comparativo entre planos.',
-    custom_fields: { cidade: 'Serra', curso: 'Renovacao', origem: 'Instagram' }
+    custom_fields: { cidade: 'Serra', idade: '29', estado: 'ES' }
   },
   {
     id: 9103,
@@ -336,7 +336,7 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     session_id: 'zv_demo2_session',
     session_label: 'Conta 2',
     notes: 'Vai enviar documentos ate sexta.',
-    custom_fields: { cidade: 'Vila Velha', curso: 'Matricula', origem: 'Landing page' }
+    custom_fields: { cidade: 'Vila Velha', idade: '41', estado: 'ES' }
   },
   {
     id: 9104,
@@ -351,7 +351,7 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     session_id: 'zv_demo1_session',
     session_label: 'Conta 1',
     notes: 'Cliente em fase final de aprovacao.',
-    custom_fields: { cidade: 'Cariacica', curso: 'Transferencia', origem: 'Google' }
+    custom_fields: { cidade: 'Cariacica', idade: '37', estado: 'ES' }
   },
   {
     id: 9105,
@@ -366,7 +366,7 @@ const DASHBOARD_PRESENTATION_LEADS: PresentationLead[] = [
     session_id: 'zv_demo2_session',
     session_label: 'Conta 2',
     notes: 'Aguardando confirmar titularidade.',
-    custom_fields: { cidade: 'Guarapari', curso: 'Inscricao 2026', origem: 'Anuncio' }
+    custom_fields: { cidade: 'Guarapari', idade: '32', estado: 'ES' }
   }
 ];
 
@@ -575,9 +575,8 @@ const PRESENTATION_CONTACT_FIELDS: PresentationContactField[] = [
   { key: 'telefone', label: 'Telefone', is_default: true, source: 'phone' },
   { key: 'email', label: 'Email', is_default: true, source: 'email' },
   { key: 'cidade', label: 'Cidade', placeholder: 'Ex.: Vitoria', is_default: false, source: 'custom' },
-  { key: 'curso', label: 'Curso', placeholder: 'Ex.: Inscricao 2026', is_default: false, source: 'custom' },
-  { key: 'origem', label: 'Origem', placeholder: 'Ex.: Instagram', is_default: false, source: 'custom' },
-  { key: 'observacoes', label: 'Observacoes', placeholder: 'Anotacoes do contato', is_default: false, source: 'custom' }
+  { key: 'idade', label: 'Idade', placeholder: 'Ex.: 34', is_default: false, source: 'custom' },
+  { key: 'estado', label: 'Estado', placeholder: 'Ex.: ES', is_default: false, source: 'custom' }
 ];
 
 const PRESENTATION_TEMPLATES: PresentationTemplate[] = [

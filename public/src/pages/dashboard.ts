@@ -167,6 +167,7 @@ type OnboardingHighlightMarker = {
         | 'open_inbox_contact_info_panel'
         | 'open_contacts_import_modal'
         | 'close_contacts_import_modal'
+        | 'open_contacts_add_modal'
         | 'set_dashboard_stats_metric_novos_contatos'
         | 'set_dashboard_stats_metric_mensagens'
         | 'set_dashboard_stats_metric_interacoes';
@@ -321,7 +322,8 @@ const ONBOARDING_STEP_HIGHLIGHTS: Record<OnboardingStepId, OnboardingHighlightMa
     configure_dynamic_fields: [
         { at: 1.0, selector: '[data-tour-target="settings-nav-contact-fields"]', title: 'Abra Campos Dinâmicos', hint: 'Esta área guarda os campos personalizados usados em contatos, mensagens e fluxos.', radius: 14 },
         { at: 4.5, selector: '[data-tour-target="settings-contact-field-name"]', title: 'Crie um campo personalizado', hint: 'Defina aqui o nome do novo campo dinâmico.', radius: 14 },
-        { at: 8.4, selector: '[data-tour-target="settings-contact-fields-table"]', title: 'Revise os campos criados', hint: 'A lista abaixo mostra todas as variáveis disponíveis no sistema.', radius: 20 }
+        { at: 8.4, selector: '[data-tour-target="settings-contact-fields-table"]', title: 'Revise os campos criados', hint: 'A lista abaixo mostra todas as variáveis disponíveis no sistema.', radius: 20 },
+        { at: 13.0, selector: '[data-tour-target="contacts-custom-fields-row"]', route: '#/contatos', action: 'open_contacts_add_modal', title: 'Confira no cadastro de contato', hint: 'No modo tour, os campos de exemplo aparecem aqui no formulário de novo contato.', radius: 18, scroll: 'center' }
     ],
     create_campaign: [
         { at: 1.2, selector: '[data-tour-target="campaign-new-button"]', title: 'Abra a criação de campanha', hint: 'Este botão inicia uma nova campanha no sistema.', radius: 18 },
@@ -1303,6 +1305,7 @@ function performOnboardingHighlightAction(
         setInboxSessionFilterMenuOpen?: (forceOpen?: boolean) => void;
         toggleContactInfo?: (forceOpen?: boolean) => void;
         openImportContactsModal?: () => Promise<void> | void;
+        openAddContactModal?: () => Promise<void> | void;
         openModal?: (modalId: string) => void;
         closeModal?: (modalId: string) => void;
     };
@@ -1422,6 +1425,32 @@ function performOnboardingHighlightAction(
         win.closeModal('importModal');
         onboardingPreparedMarkerActionKey = actionKey;
         scheduleOnboardingSpotlightRefresh(120);
+        return false;
+    }
+
+    if (action === 'open_contacts_add_modal') {
+        const modal = document.getElementById('addContactModal') as HTMLElement | null;
+        if (modal?.classList.contains('active')) {
+            onboardingPreparedMarkerActionKey = actionKey;
+            scheduleOnboardingSpotlightRefresh(90);
+            return true;
+        }
+
+        if (typeof win.openAddContactModal === 'function') {
+            onboardingPreparedMarkerActionKey = actionKey;
+            void Promise.resolve(win.openAddContactModal()).catch(() => null);
+            scheduleOnboardingSpotlightRefresh(240);
+            return false;
+        }
+
+        if (typeof win.openModal === 'function') {
+            win.openModal('addContactModal');
+            onboardingPreparedMarkerActionKey = actionKey;
+            scheduleOnboardingSpotlightRefresh(140);
+            return false;
+        }
+
+        scheduleOnboardingSpotlightRefresh(180);
         return false;
     }
 
@@ -1561,7 +1590,7 @@ function prepareOnboardingSurfaceForStep(
             } else {
                 didPrepare = false;
             }
-        } else if (stepId === 'configure_dynamic_fields') {
+        } else if (stepId === 'configure_dynamic_fields' && targetRoute.startsWith('#/configuracoes')) {
             if (typeof win.showPanel === 'function') {
                 win.showPanel('contact-fields');
             } else {
