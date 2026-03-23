@@ -2,6 +2,7 @@
 
 import {
     ONBOARDING_PRESENTATION_EVENT,
+    getOnboardingPresentationSnapshot,
     getOnboardingPresentationWhatsappSessions,
     isOnboardingPresentationModeEnabled,
     patchOnboardingPresentationWhatsappSession,
@@ -178,6 +179,7 @@ const DEFAULT_CONTACT_FIELDS: ContactField[] = [
 const TOUR_QUERY_TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'sim', 'on']);
 const DYNAMIC_FIELDS_TOUR_STEP_ID = 'configure_dynamic_fields';
 const TOUR_CONTACT_FIELDS: ContactField[] = [
+    { key: 'cidade', label: 'Cidade', placeholder: 'Ex.: São Paulo', source: 'tour' },
     { key: 'idade', label: 'Idade', placeholder: 'Ex.: 34 anos', source: 'tour' },
     { key: 'estado', label: 'Estado', placeholder: 'Ex.: SP', source: 'tour' }
 ];
@@ -258,6 +260,7 @@ function bindOnboardingPresentationConfiguracoesBridge() {
     onboardingPresentationConfiguracoesBridgeBound = true;
 
     window.addEventListener(ONBOARDING_PRESENTATION_EVENT, () => {
+        renderContactFieldsSection();
         if (!document.getElementById('connectionAccountsList')) return;
         void refreshWhatsAppAccounts();
     });
@@ -266,11 +269,45 @@ function bindOnboardingPresentationConfiguracoesBridge() {
 function isDynamicFieldsTourMode() {
     const params = getLocationHashQueryParams();
     const panel = String(params.get('panel') || '').trim();
-    if (panel !== 'contact-fields') return false;
-    if (!isTruthyQueryParam(params.get('tour'))) return false;
+    const isContactFieldsPanel = panel === 'contact-fields'
+        || Boolean(document.getElementById('panel-contact-fields')?.classList.contains('active'));
+    if (!isContactFieldsPanel) return false;
 
-    const normalizedStep = String(params.get('tourStep') || '').trim().toLowerCase();
-    return !normalizedStep || normalizedStep === DYNAMIC_FIELDS_TOUR_STEP_ID;
+    if (isTruthyQueryParam(params.get('tour'))) {
+        const normalizedStep = String(params.get('tourStep') || '').trim().toLowerCase();
+        return !normalizedStep || normalizedStep === DYNAMIC_FIELDS_TOUR_STEP_ID;
+    }
+
+    if (!isOnboardingPresentationModeEnabled()) return false;
+
+    const snapshotStep = String(getOnboardingPresentationSnapshot().stepId || '').trim().toLowerCase();
+    if (snapshotStep) return snapshotStep === DYNAMIC_FIELDS_TOUR_STEP_ID;
+
+    const bodyStep = String(document.body?.dataset?.onboardingPresentationStep || '').trim().toLowerCase();
+    if (bodyStep) return bodyStep === DYNAMIC_FIELDS_TOUR_STEP_ID;
+
+    const bodyTourEnabled = String(document.body?.dataset?.onboardingPresentation || '').trim();
+    if (bodyTourEnabled === '1') return true;
+
+    const routeTourFlag = String(params.get('onboardingPresentation') || '').trim().toLowerCase();
+    if (isTruthyQueryParam(routeTourFlag)) return true;
+
+    return false;
+}
+
+function getContactFieldsTableTourHint() {
+    if (!isDynamicFieldsTourMode()) return '';
+    return `
+        <tr>
+            <td colspan="4" style="padding: 10px 12px; border-bottom: 1px solid var(--border-color); background: rgba(56, 189, 248, 0.08); color: var(--gray-700); font-size: 12px;">
+                Campos fictícios do tour: cidade, idade e estado.
+            </td>
+        </tr>
+    `;
+}
+
+function isTourOnlyField(field: ContactField) {
+    return String(field.source || '').trim().toLowerCase() === 'tour';
 }
 
 function initConfiguracoes() {
@@ -1428,11 +1465,11 @@ function renderContactFieldsTable() {
         return;
     }
 
-    tbody.innerHTML = displayCustomFields.map((field) => {
+    const rowsHtml = displayCustomFields.map((field) => {
         const fieldKey = escapeHtml(field.key);
-        const isTourOnlyField = String(field.source || '').trim().toLowerCase() === 'tour';
+        const tourOnly = isTourOnlyField(field);
 
-        if (isTourOnlyField) {
+        if (tourOnly) {
             return `
                 <tr data-field-key="${fieldKey}">
                     <td><code>{{${fieldKey}}}</code></td>
@@ -1459,6 +1496,8 @@ function renderContactFieldsTable() {
             </tr>
         `;
     }).join('');
+
+    tbody.innerHTML = `${getContactFieldsTableTourHint()}${rowsHtml}`;
 }
 
 function renderContactFieldsSection() {
