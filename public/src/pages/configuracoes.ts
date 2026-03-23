@@ -170,6 +170,8 @@ let usersPresencePollingTimer: number | null = null;
 let planStatusCache: PlanStatusViewModel | null = null;
 let planStatusLoading = false;
 let onboardingPresentationConfiguracoesBridgeBound = false;
+let dynamicFieldsTourPlaybackBridgeBound = false;
+let dynamicFieldsTourLastPlaybackSecond = -1;
 
 const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'nome', label: 'Nome', source: 'name', is_default: true, required: true, placeholder: 'Nome completo' },
@@ -178,6 +180,7 @@ const DEFAULT_CONTACT_FIELDS: ContactField[] = [
 ];
 const TOUR_QUERY_TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'sim', 'on']);
 const DYNAMIC_FIELDS_TOUR_STEP_ID = 'configure_dynamic_fields';
+const DYNAMIC_FIELDS_TOUR_REVEAL_SECONDS = 10;
 const TOUR_CONTACT_FIELDS: ContactField[] = [
     { key: 'cidade', label: 'Cidade', placeholder: 'Ex.: São Paulo', source: 'tour' },
     { key: 'idade', label: 'Idade', placeholder: 'Ex.: 34 anos', source: 'tour' },
@@ -295,8 +298,63 @@ function isDynamicFieldsTourMode() {
     return false;
 }
 
+function getTourVideoCurrentSeconds() {
+    const video = document.getElementById('onboardingVideoElement') as HTMLVideoElement | null;
+    if (video && Number.isFinite(video.currentTime)) {
+        return Math.max(0, Number(video.currentTime));
+    }
+
+    const text = String((document.getElementById('onboardingVideoCurrentTime') as HTMLElement | null)?.textContent || '').trim();
+    const match = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (!match) return 0;
+
+    if (match[3] !== undefined) {
+        const hh = Number(match[1] || 0);
+        const mm = Number(match[2] || 0);
+        const ss = Number(match[3] || 0);
+        return Math.max(0, (hh * 3600) + (mm * 60) + ss);
+    }
+
+    const mm = Number(match[1] || 0);
+    const ss = Number(match[2] || 0);
+    return Math.max(0, (mm * 60) + ss);
+}
+
+function hasReachedDynamicFieldsTourRevealMoment() {
+    if (!isOnboardingPresentationModeEnabled()) return true;
+    return getTourVideoCurrentSeconds() >= DYNAMIC_FIELDS_TOUR_REVEAL_SECONDS;
+}
+
+function bindDynamicFieldsTourPlaybackBridge() {
+    if (dynamicFieldsTourPlaybackBridgeBound) return;
+    dynamicFieldsTourPlaybackBridgeBound = true;
+
+    window.setInterval(() => {
+        const panel = document.getElementById('panel-contact-fields') as HTMLElement | null;
+        if (!panel?.classList.contains('active')) return;
+        if (!isDynamicFieldsTourMode()) return;
+
+        const currentSecond = Math.floor(getTourVideoCurrentSeconds());
+        if (currentSecond === dynamicFieldsTourLastPlaybackSecond) return;
+
+        dynamicFieldsTourLastPlaybackSecond = currentSecond;
+        renderContactFieldsSection();
+    }, 250);
+}
+
 function getContactFieldsTableTourHint() {
     if (!isDynamicFieldsTourMode()) return '';
+
+    if (!hasReachedDynamicFieldsTourRevealMoment()) {
+        return `
+            <tr>
+                <td colspan="4" style="padding: 10px 12px; border-bottom: 1px solid var(--border-color); background: rgba(56, 189, 248, 0.08); color: var(--gray-700); font-size: 12px;">
+                    No tour, os campos fictícios aparecem a partir de 0:10 do vídeo.
+                </td>
+            </tr>
+        `;
+    }
+
     return `
         <tr>
             <td colspan="4" style="padding: 10px 12px; border-bottom: 1px solid var(--border-color); background: rgba(56, 189, 248, 0.08); color: var(--gray-700); font-size: 12px;">
@@ -312,6 +370,7 @@ function isTourOnlyField(field: ContactField) {
 
 function initConfiguracoes() {
     bindOnboardingPresentationConfiguracoesBridge();
+    bindDynamicFieldsTourPlaybackBridge();
     loadSettings();
     loadContactFields();
     loadTemplates();
@@ -354,6 +413,8 @@ function showPanel(panelId: string) {
 
     if (nextPanelId === 'conexao') {
         refreshWhatsAppAccounts();
+    } else if (nextPanelId === 'contact-fields') {
+        renderContactFieldsSection();
     } else if (nextPanelId === 'users') {
         loadUsers();
     } else if (nextPanelId === 'plan') {
@@ -1410,6 +1471,7 @@ function sanitizeCustomContactFields(fields: ContactField[]) {
 
 function getTourOnlyContactFields() {
     if (!isDynamicFieldsTourMode()) return [] as ContactField[];
+    if (!hasReachedDynamicFieldsTourRevealMoment()) return [] as ContactField[];
 
     const existingKeys = new Set<string>();
     for (const defaultField of DEFAULT_CONTACT_FIELDS) {
