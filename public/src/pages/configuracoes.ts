@@ -175,6 +175,12 @@ const DEFAULT_CONTACT_FIELDS: ContactField[] = [
     { key: 'telefone', label: 'Telefone', source: 'phone', is_default: true, required: true, placeholder: 'Somente n\u00FAmeros com DDD' },
     { key: 'email', label: 'Email', source: 'email', is_default: true, required: false, placeholder: 'email@exemplo.com' }
 ];
+const TOUR_QUERY_TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'sim', 'on']);
+const DYNAMIC_FIELDS_TOUR_STEP_ID = 'configure_dynamic_fields';
+const TOUR_CONTACT_FIELDS: ContactField[] = [
+    { key: 'idade', label: 'Idade', placeholder: 'Ex.: 34 anos', source: 'tour' },
+    { key: 'estado', label: 'Estado', placeholder: 'Ex.: SP', source: 'tour' }
+];
 
 const DEFAULT_BUSINESS_HOURS_SETTINGS = {
     enabled: false,
@@ -224,17 +230,24 @@ function normalizePanelForMobile(panelId: string | null | undefined) {
 }
 
 
+function getLocationHashQueryParams() {
+    const hash = String(window.location.hash || '');
+    if (!hash.startsWith('#/')) return new URLSearchParams();
+    const queryIndex = hash.indexOf('?');
+    if (queryIndex < 0) return new URLSearchParams();
+    return new URLSearchParams(hash.slice(queryIndex + 1));
+}
+
+function isTruthyQueryParam(value: string | null | undefined) {
+    return TOUR_QUERY_TRUTHY_VALUES.has(String(value || '').trim().toLowerCase());
+}
+
 function getPanelFromLocation() {
     const hash = window.location.hash || '';
     if (!hash) return null;
 
     if (hash.startsWith('#/')) {
-        const queryIndex = hash.indexOf('?');
-        if (queryIndex >= 0) {
-            const params = new URLSearchParams(hash.slice(queryIndex + 1));
-            return params.get('panel');
-        }
-        return null;
+        return getLocationHashQueryParams().get('panel');
     }
 
     return hash.startsWith('#') ? hash.slice(1) : hash;
@@ -248,6 +261,16 @@ function bindOnboardingPresentationConfiguracoesBridge() {
         if (!document.getElementById('connectionAccountsList')) return;
         void refreshWhatsAppAccounts();
     });
+}
+
+function isDynamicFieldsTourMode() {
+    const params = getLocationHashQueryParams();
+    const panel = String(params.get('panel') || '').trim();
+    if (panel !== 'contact-fields') return false;
+    if (!isTruthyQueryParam(params.get('tour'))) return false;
+
+    const normalizedStep = String(params.get('tourStep') || '').trim().toLowerCase();
+    return !normalizedStep || normalizedStep === DYNAMIC_FIELDS_TOUR_STEP_ID;
 }
 
 function initConfiguracoes() {
@@ -1348,6 +1371,26 @@ function sanitizeCustomContactFields(fields: ContactField[]) {
     return result;
 }
 
+function getTourOnlyContactFields() {
+    if (!isDynamicFieldsTourMode()) return [] as ContactField[];
+
+    const existingKeys = new Set<string>();
+    for (const defaultField of DEFAULT_CONTACT_FIELDS) {
+        existingKeys.add(defaultField.key);
+    }
+    for (const customField of customContactFieldsCache) {
+        existingKeys.add(normalizeContactFieldKey(customField.key));
+    }
+
+    return sanitizeCustomContactFields(TOUR_CONTACT_FIELDS)
+        .filter((field) => !existingKeys.has(field.key))
+        .map((field) => ({ ...field, source: 'tour' }));
+}
+
+function getDisplayCustomContactFields() {
+    return [...customContactFieldsCache, ...getTourOnlyContactFields()];
+}
+
 function renderContactVariableTags() {
     const container = document.getElementById('contactVariablesList') as HTMLElement | null;
     if (!container) return;
@@ -1371,7 +1414,9 @@ function renderContactFieldsTable() {
     const tbody = document.getElementById('contactFieldsTableBody') as HTMLElement | null;
     if (!tbody) return;
 
-    if (!customContactFieldsCache.length) {
+    const displayCustomFields = getDisplayCustomContactFields();
+
+    if (!displayCustomFields.length) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="4" class="table-empty">
@@ -1383,19 +1428,37 @@ function renderContactFieldsTable() {
         return;
     }
 
-    tbody.innerHTML = customContactFieldsCache.map((field) => `
-        <tr data-field-key="${escapeHtml(field.key)}">
-            <td><code>{{${escapeHtml(field.key)}}}</code></td>
-            <td><input type="text" class="form-input contact-field-label" value="${escapeHtml(field.label || '')}" /></td>
-            <td><input type="text" class="form-input contact-field-placeholder" value="${escapeHtml(field.placeholder || '')}" placeholder="Opcional" /></td>
-            <td style="width: 180px;">
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-sm btn-outline" onclick="updateContactField('${escapeHtml(field.key)}')">Salvar</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteContactField('${escapeHtml(field.key)}')">Remover</button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    tbody.innerHTML = displayCustomFields.map((field) => {
+        const fieldKey = escapeHtml(field.key);
+        const isTourOnlyField = String(field.source || '').trim().toLowerCase() === 'tour';
+
+        if (isTourOnlyField) {
+            return `
+                <tr data-field-key="${fieldKey}">
+                    <td><code>{{${fieldKey}}}</code></td>
+                    <td><input type="text" class="form-input contact-field-label" value="${escapeHtml(field.label || '')}" readonly aria-readonly="true" /></td>
+                    <td><input type="text" class="form-input contact-field-placeholder" value="${escapeHtml(field.placeholder || '')}" placeholder="Opcional" readonly aria-readonly="true" /></td>
+                    <td style="width: 180px;">
+                        <span class="badge badge-info">Exemplo do tour</span>
+                    </td>
+                </tr>
+            `;
+        }
+
+        return `
+            <tr data-field-key="${fieldKey}">
+                <td><code>{{${fieldKey}}}</code></td>
+                <td><input type="text" class="form-input contact-field-label" value="${escapeHtml(field.label || '')}" /></td>
+                <td><input type="text" class="form-input contact-field-placeholder" value="${escapeHtml(field.placeholder || '')}" placeholder="Opcional" /></td>
+                <td style="width: 180px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-outline" onclick="updateContactField('${fieldKey}')">Salvar</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteContactField('${fieldKey}')">Remover</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 function renderContactFieldsSection() {

@@ -268,7 +268,7 @@ const ONBOARDING_STEP_ROUTES: Record<OnboardingStepId, string> = {
     open_inbox: '#/configuracoes?panel=conexao',
     create_first_contact: '#/contatos',
     create_tags: '#/configuracoes?panel=labels',
-    configure_dynamic_fields: '#/configuracoes?panel=contact-fields',
+    configure_dynamic_fields: '#/configuracoes?panel=contact-fields&tour=1&tourStep=configure_dynamic_fields',
     create_campaign: '#/campanhas',
     create_automation: '#/automacao'
 };
